@@ -93,7 +93,8 @@ try {
   firebaseConfig = DEFAULT_FIREBASE_CONFIG;
 }
 
-const appId = typeof __app_id !== 'undefined' && __app_id ? __app_id : 'default-app-id';
+const appId =
+  typeof __app_id !== 'undefined' && __app_id ? __app_id : 'muzakkirati-edu-app';
 
 let db = null;
 let auth = null;
@@ -3660,54 +3661,77 @@ export default function App() {
     const unsubAuth = onAuthStateChanged(auth, (user) => {
       if (!user) return;
       const basePath = ['artifacts', appId, 'public', 'data'];
+      const handleSnapErr = (err) => {
+        console.warn('Firestore listener notice:', err?.code || err?.message);
+      };
 
-      unsubConfig = onSnapshot(doc(db, ...basePath, 'config', 'main'), (snap) => {
-        if (snap.exists()) {
-          const data = snap.data();
-          if (data.settings) {
-            setSettings((prev) => ({ ...DEFAULT_SETTINGS, ...prev, ...data.settings }));
-            localStorage.setItem('muzakkirati_settings', JSON.stringify(data.settings));
+      unsubConfig = onSnapshot(
+        doc(db, ...basePath, 'config', 'main'),
+        (snap) => {
+          if (snap.exists()) {
+            const data = snap.data();
+            if (data.settings) {
+              setSettings((prev) => ({ ...DEFAULT_SETTINGS, ...prev, ...data.settings }));
+              localStorage.setItem('muzakkirati_settings', JSON.stringify(data.settings));
+            }
+            if (data.categories) setCategories(data.categories);
+            if (data.stages) setStages(data.stages);
+            if (data.grades) setGrades(data.grades);
+            if (data.subjects) setSubjects(data.subjects);
+            if (data.adminCreds) {
+              localStorage.setItem('muzakkirati_admin_creds', JSON.stringify(data.adminCreds));
+              setAdminCredsExists(true);
+            }
           }
-          if (data.categories) setCategories(data.categories);
-          if (data.stages) setStages(data.stages);
-          if (data.grades) setGrades(data.grades);
-          if (data.subjects) setSubjects(data.subjects);
-          if (data.adminCreds) {
-            localStorage.setItem('muzakkirati_admin_creds', JSON.stringify(data.adminCreds));
-            setAdminCredsExists(true);
+        },
+        handleSnapErr
+      );
+
+      unsubNotebooks = onSnapshot(
+        collection(db, ...basePath, 'notebooks'),
+        (snap) => {
+          if (!snap.empty) {
+            const list = snap.docs.map((d) => d.data());
+            setNotebooks(list);
+            localStorage.setItem('muzakkirati_notebooks', JSON.stringify(list));
           }
-        }
-      });
+        },
+        handleSnapErr
+      );
 
-      unsubNotebooks = onSnapshot(collection(db, ...basePath, 'notebooks'), (snap) => {
-        if (!snap.empty) {
+      unsubOrders = onSnapshot(
+        collection(db, ...basePath, 'orders'),
+        (snap) => {
           const list = snap.docs.map((d) => d.data());
-          setNotebooks(list);
-          localStorage.setItem('muzakkirati_notebooks', JSON.stringify(list));
-        }
-      });
+          setOrders(list);
+          localStorage.setItem('muzakkirati_orders', JSON.stringify(list));
+        },
+        handleSnapErr
+      );
 
-      unsubOrders = onSnapshot(collection(db, ...basePath, 'orders'), (snap) => {
-        const list = snap.docs.map((d) => d.data());
-        setOrders(list);
-        localStorage.setItem('muzakkirati_orders', JSON.stringify(list));
-      });
+      unsubCoupons = onSnapshot(
+        collection(db, ...basePath, 'coupons'),
+        (snap) => {
+          if (!snap.empty) {
+            const list = snap.docs.map((d) => d.data());
+            setCoupons(list);
+            localStorage.setItem('muzakkirati_coupons', JSON.stringify(list));
+          }
+        },
+        handleSnapErr
+      );
 
-      unsubCoupons = onSnapshot(collection(db, ...basePath, 'coupons'), (snap) => {
-        if (!snap.empty) {
-          const list = snap.docs.map((d) => d.data());
-          setCoupons(list);
-          localStorage.setItem('muzakkirati_coupons', JSON.stringify(list));
-        }
-      });
-
-      unsubBundles = onSnapshot(collection(db, ...basePath, 'bundles'), (snap) => {
-        if (!snap.empty) {
-          const list = snap.docs.map((d) => d.data());
-          setBundles(list);
-          localStorage.setItem('muzakkirati_bundles', JSON.stringify(list));
-        }
-      });
+      unsubBundles = onSnapshot(
+        collection(db, ...basePath, 'bundles'),
+        (snap) => {
+          if (!snap.empty) {
+            const list = snap.docs.map((d) => d.data());
+            setBundles(list);
+            localStorage.setItem('muzakkirati_bundles', JSON.stringify(list));
+          }
+        },
+        handleSnapErr
+      );
     });
 
     return () => {
