@@ -330,6 +330,37 @@ function fileToCompressedDataUrl(file, maxWidth = 900, quality = 0.72) {
   });
 }
 
+async function fitNotebookPayloadToCloud(nb) {
+  const MAX_BYTES = 820 * 1024;
+  let result = { ...nb };
+  const estimateSize = (obj) => new Blob([JSON.stringify(obj)]).size;
+
+  if (estimateSize(result) <= MAX_BYTES) return result;
+
+  const presets = [
+    { coverW: 680, sampleW: 620, q: 0.56 },
+    { coverW: 580, sampleW: 520, q: 0.48 },
+    { coverW: 500, sampleW: 440, q: 0.42 },
+    { coverW: 440, sampleW: 380, q: 0.36 }
+  ];
+
+  for (const preset of presets) {
+    if (result.coverImage?.startsWith('data:image')) {
+      result.coverImage = await compressImageDataUrl(result.coverImage, preset.coverW, preset.q);
+    }
+    if (Array.isArray(result.sampleImages) && result.sampleImages.length > 0) {
+      result.sampleImages = await Promise.all(
+        result.sampleImages.map((img) =>
+          img?.startsWith('data:image') ? compressImageDataUrl(img, preset.sampleW, preset.q) : img
+        )
+      );
+    }
+    if (estimateSize(result) <= MAX_BYTES) break;
+  }
+
+  return result;
+}
+
 /**
  * ============================================================================
  * MAIN APPLICATION COMPONENT
@@ -656,15 +687,16 @@ export default function App() {
   };
 
   const handleSaveNotebook = async (nb) => {
-    const updatedList = notebooks.some((item) => item.id === nb.id)
-      ? notebooks.map((item) => (item.id === nb.id ? nb : item))
-      : [nb, ...notebooks];
+    const optimizedNb = await fitNotebookPayloadToCloud(nb);
+    const updatedList = notebooks.some((item) => item.id === optimizedNb.id)
+      ? notebooks.map((item) => (item.id === optimizedNb.id ? optimizedNb : item))
+      : [optimizedNb, ...notebooks];
     setNotebooks(updatedList);
     try {
       localStorage.setItem('muzakkirati_notebooks', JSON.stringify(updatedList));
     } catch {}
     try {
-      await saveCloudDoc(['notebooks', nb.id], nb);
+      await saveCloudDoc(['notebooks', optimizedNb.id], optimizedNb);
       showToast('تم حفظ المذكرة ومزامنتها بنجاح');
     } catch (err) {
       showToast(`تعذر رفع المذكرة للسحابة: ${err?.code || err?.message}`);
@@ -795,17 +827,7 @@ export default function App() {
       await saveCloudDoc(['config', 'subjects'], { items: subjects });
 
       for (const nb of notebooks) {
-        const cleanNb = { ...nb };
-        if (cleanNb.coverImage?.startsWith('data:image')) {
-          cleanNb.coverImage = await compressImageDataUrl(cleanNb.coverImage, 760, 0.68);
-        }
-        if (Array.isArray(cleanNb.sampleImages)) {
-          cleanNb.sampleImages = await Promise.all(
-            cleanNb.sampleImages.map((img) =>
-              img?.startsWith('data:image') ? compressImageDataUrl(img, 720, 0.62) : img
-            )
-          );
-        }
+        const cleanNb = await fitNotebookPayloadToCloud(nb);
         await saveCloudDoc(['notebooks', cleanNb.id], cleanNb);
       }
 
@@ -3105,6 +3127,49 @@ function AdminPortal({
             settings={settings}
             categories={categories}
             onSaveSettings={onSaveSettings}
+            onExportBackup={() => {
+              const payload = {
+                exportedAt: new Date().toISOString(),
+                settings,
+                categories,
+                stages,
+                grades,
+                subjects,
+                notebooks,
+                coupons,
+                orders
+              };
+              const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `el3bakera-backup-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              showToast('تم تحميل النسخة الاحتياطية الكاملة على جهازك بنجاح!');
+            }}
+            onImportBackup={async (backupData) => {
+              try {
+                if (backupData.settings) await onSaveSettings({ ...DEFAULT_SETTINGS, ...backupData.settings });
+                if (Array.isArray(backupData.categories)) await onSaveStructure('categories', backupData.categories);
+                if (Array.isArray(backupData.stages)) await onSaveStructure('stages', backupData.stages);
+                if (Array.isArray(backupData.grades)) await onSaveStructure('grades', backupData.grades);
+                if (Array.isArray(backupData.subjects)) await onSaveStructure('subjects', backupData.subjects);
+                if (Array.isArray(backupData.notebooks)) {
+                  for (const nb of backupData.notebooks) {
+                    await onSaveNotebook(nb);
+                  }
+                }
+                if (Array.isArray(backupData.coupons)) {
+                  for (const cpn of backupData.coupons) {
+                    await onSaveCoupon(cpn);
+                  }
+                }
+                showToast('تمت استعادة النسخة الاحتياطية ومزامنتها بنجاح!');
+              } catch (err) {
+                showToast(`تعذر استعادة الملف: ${err?.message || 'صيغة غير صالحة'}`);
+              }
+            }}
           />
         )}
       </div>
@@ -3771,7 +3836,7 @@ function AdminStructureTab({ categories, stages, grades, subjects, onSaveStructu
   );
 }
 
-function AdminSettingsTab({ settings, categories = [], onSaveSettings }) {
+function AdminSettingsTab({ settings, categories = [], onSaveSettings, onExportBackup, onImportBackup }) {
   const safeOrderFields = useMemo(() => {
     if (Array.isArray(settings?.orderFormFields) && settings.orderFormFields.length > 0) {
       return settings.orderFormFields.filter((f) => f && typeof f === 'object').map((f, i) => ({
@@ -4670,6 +4735,54 @@ function AdminSettingsTab({ settings, categories = [], onSaveSettings }) {
       >
         حفظ جميع الإعدادات ومزامنتها مع السحابة
       </button>
+
+      {/* Local Backup & Restore on Admin Device */}
+      <div className="border-t border-slate-200 pt-6">
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h4 className="text-xs sm:text-sm font-black text-slate-900">النسخ الاحتياطي والاستعادة على جهازك (JSON)</h4>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              احفظ نسخة كاملة من جميع مذكراتك وإعداداتك وطلباتك في ملف واحد على جهازك للرجوع إليه في أي وقت
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={onExportBackup}
+              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl text-xs font-black transition cursor-pointer"
+            >
+              <Download className="w-4 h-4 text-amber-400" />
+              <span>تنزيل نسخة احتياطية على جهازي</span>
+            </button>
+
+            <label className="flex items-center gap-1.5 bg-white hover:bg-blue-50 border border-slate-300 text-slate-800 px-4 py-2.5 rounded-xl text-xs font-black transition cursor-pointer">
+              <Upload className="w-4 h-4 text-blue-700" />
+              <span>استعادة نسخة من جهازي</span>
+              <input
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file || !onImportBackup) return;
+                  const reader = new FileReader();
+                  reader.onload = (ev) => {
+                    try {
+                      const parsed = JSON.parse(ev.target.result);
+                      onImportBackup(parsed);
+                    } catch {
+                      alert('ملف النسخة الاحتياطية غير صالح');
+                    }
+                  };
+                  reader.readAsText(file);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+          </div>
+        </div>
+      </div>
     </form>
   );
 }
