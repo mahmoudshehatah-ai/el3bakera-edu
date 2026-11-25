@@ -58,7 +58,13 @@ import {
   ZoomOut
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import {
+  getAuth,
+  signInAnonymously,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged
+} from 'firebase/auth';
 import {
   getFirestore,
   collection,
@@ -3735,10 +3741,6 @@ export default function App() {
           if (data.stages) setStages(data.stages);
           if (data.grades) setGrades(data.grades);
           if (data.subjects) setSubjects(data.subjects);
-          if (data.adminCreds) {
-            localStorage.setItem('muzakkirati_admin_creds', JSON.stringify(data.adminCreds));
-            setAdminCredsExists(true);
-          }
         }
       },
       handleSnapErr
@@ -4023,38 +4025,23 @@ export default function App() {
     if (!loginEmail.trim() || !loginPassword) {
       return showToast('يرجى إدخال البريد الإلكتروني وكلمة المرور', 'error');
     }
-    const rawCreds = localStorage.getItem('muzakkirati_admin_creds');
-    if (!rawCreds) {
-      if (loginPassword.length < 6) {
-        return showToast('يرجى اختيار كلمة مرور من 6 أحرف على الأقل', 'error');
-      }
-      const salt = generateSalt();
-      const hash = await hashPasswordWithSalt(loginPassword, salt);
-      const credsObj = { email: loginEmail.trim().toLowerCase(), salt, hash };
-      localStorage.setItem('muzakkirati_admin_creds', JSON.stringify(credsObj));
-      await persistConfigDoc({ adminCreds: credsObj });
+    if (!auth) {
+      return showToast('خدمة المصادقة غير مفعلة حاليًا', 'error');
+    }
+    try {
+      await signInWithEmailAndPassword(auth, loginEmail.trim(), loginPassword);
       localStorage.setItem(
         'muzakkirati_admin_session',
         JSON.stringify({ expiresAt: Date.now() + 86400000 })
       );
-      setAdminCredsExists(true);
       setAdminAuthenticated(true);
-      showToast('تم إنشاء حساب المدير وتأمين لوحة التحكم بنجاح!', 'success');
-    } else {
-      const parsed = JSON.parse(rawCreds);
-      const attemptHash = await hashPasswordWithSalt(loginPassword, parsed.salt);
-      if (
-        loginEmail.trim().toLowerCase() === parsed.email &&
-        attemptHash === parsed.hash
-      ) {
-        localStorage.setItem(
-          'muzakkirati_admin_session',
-          JSON.stringify({ expiresAt: Date.now() + 86400000 })
-        );
-        setAdminAuthenticated(true);
-        showToast('مرحبًا بك في لوحة التحكم!', 'success');
+      showToast('تم التحقق من خادم Firebase! مرحبًا بك في لوحة التحكم', 'success');
+    } catch (err) {
+      const code = err?.code || '';
+      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
+        showToast('البريد الإلكتروني أو كلمة المرور غير صحيحة', 'error');
       } else {
-        showToast('بيانات الدخول غير صحيحة', 'error');
+        showToast(`تعذر تسجيل الدخول: ${code || err?.message}`, 'error');
       }
     }
   };
@@ -4200,14 +4187,14 @@ export default function App() {
           orders={orders}
           onUpdateOrder={handleUpdateOrder}
           onDeleteOrder={handleDeleteOrder}
-          coupons={coupons}
-          onSaveCoupon={handleSaveCoupon}
-          onDeleteCoupon={handleDeleteCoupon}
-          bundles={bundles}
-          onSaveBundle={handleSaveBundle}
-          onDeleteBundle={handleDeleteBundle}
-          onLogout={() => {
+          onLogout={async () => {
             localStorage.removeItem('muzakkirati_admin_session');
+            if (auth) {
+              try {
+                await signOut(auth);
+                await signInAnonymously(auth);
+              } catch (_) {}
+            }
             setAdminAuthenticated(false);
             setPage('home');
           }}
