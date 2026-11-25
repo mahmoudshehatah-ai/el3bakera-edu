@@ -2913,35 +2913,80 @@ function AdminStructureTab({ categories, stages, grades, subjects, onSaveStructu
 }
 
 function AdminSettingsTab({ settings, onSaveSettings }) {
-  const [form, setForm] = useState(settings);
+  const safeOrderFields = useMemo(() => {
+    if (Array.isArray(settings?.orderFormFields) && settings.orderFormFields.length > 0) {
+      return settings.orderFormFields.filter((f) => f && typeof f === 'object').map((f, i) => ({
+        id: f.id || `field_${i}`,
+        label: f.label || '',
+        placeholder: f.placeholder || '',
+        type: f.type || 'text',
+        visible: f.visible !== false,
+        required: Boolean(f.required)
+      }));
+    }
+    return DEFAULT_SETTINGS.orderFormFields;
+  }, [settings]);
+
+  const [form, setForm] = useState(() => ({
+    ...DEFAULT_SETTINGS,
+    ...(settings || {}),
+    orderFormFields: safeOrderFields
+  }));
+
+  useEffect(() => {
+    setForm((prev) => ({
+      ...DEFAULT_SETTINGS,
+      ...prev,
+      ...(settings || {}),
+      orderFormFields: safeOrderFields
+    }));
+  }, [settings, safeOrderFields]);
 
   const handleImageUpload = async (field, e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const maxW = field === 'logoUrl' ? 400 : 1200;
     const compressed = await fileToCompressedDataUrl(file, maxW, 0.75);
-    setForm({ ...form, [field]: compressed });
+    setForm((prev) => ({ ...prev, [field]: compressed }));
   };
 
   const updateOrderField = (idx, patch) => {
-    const updated = [...(form.orderFormFields || [])];
-    updated[idx] = { ...updated[idx], ...patch };
-    setForm({ ...form, orderFormFields: updated });
+    setForm((prev) => {
+      const current = Array.isArray(prev.orderFormFields) ? prev.orderFormFields : safeOrderFields;
+      const updated = [...current];
+      updated[idx] = { ...updated[idx], ...patch };
+      return { ...prev, orderFormFields: updated };
+    });
   };
 
   const addOrderField = () => {
-    const updated = [
-      ...(form.orderFormFields || []),
-      {
-        id: `custom_${Date.now()}`,
-        label: 'حقل إضافي جديد',
-        placeholder: 'اكتب هنا...',
-        type: 'text',
-        visible: true,
-        required: false
-      }
-    ];
-    setForm({ ...form, orderFormFields: updated });
+    setForm((prev) => {
+      const current = Array.isArray(prev.orderFormFields) ? prev.orderFormFields : safeOrderFields;
+      return {
+        ...prev,
+        orderFormFields: [
+          ...current,
+          {
+            id: `custom_${Date.now()}`,
+            label: 'حقل إضافي جديد',
+            placeholder: 'اكتب هنا...',
+            type: 'text',
+            visible: true,
+            required: false
+          }
+        ]
+      };
+    });
+  };
+
+  const removeOrderField = (idx) => {
+    setForm((prev) => {
+      const current = Array.isArray(prev.orderFormFields) ? prev.orderFormFields : safeOrderFields;
+      return {
+        ...prev,
+        orderFormFields: current.filter((_, i) => i !== idx)
+      };
+    });
   };
 
   return (
@@ -3115,12 +3160,12 @@ function AdminSettingsTab({ settings, onSaveSettings }) {
         </div>
 
         <div className="space-y-3">
-          {(form.orderFormFields || []).map((field, idx) => (
-            <div key={field.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+          {(Array.isArray(form.orderFormFields) ? form.orderFormFields : safeOrderFields).map((field, idx) => (
+            <div key={field.id || idx} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
               <div className="sm:col-span-5">
                 <input
                   type="text"
-                  value={field.label}
+                  value={field.label || ''}
                   onChange={(e) => updateOrderField(idx, { label: e.target.value })}
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold bg-white"
                 />
@@ -3138,7 +3183,7 @@ function AdminSettingsTab({ settings, onSaveSettings }) {
                 <label className="flex items-center gap-1 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={field.visible}
+                    checked={Boolean(field.visible)}
                     onChange={(e) => updateOrderField(idx, { visible: e.target.checked })}
                   />
                   <span>إظهار</span>
@@ -3146,11 +3191,21 @@ function AdminSettingsTab({ settings, onSaveSettings }) {
                 <label className="flex items-center gap-1 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={field.required}
+                    checked={Boolean(field.required)}
                     onChange={(e) => updateOrderField(idx, { required: e.target.checked })}
                   />
                   <span>إلزامي</span>
                 </label>
+                {String(field.id || '').startsWith('custom_') && (
+                  <button
+                    type="button"
+                    onClick={() => removeOrderField(idx)}
+                    className="text-rose-600 hover:text-rose-700 cursor-pointer"
+                    title="حذف الحقل"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           ))}
