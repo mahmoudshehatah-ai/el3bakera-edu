@@ -3711,93 +3711,87 @@ export default function App() {
 
   // Firebase Auth & Real-time Listeners
   useEffect(() => {
-    if (!auth || !db) return;
-    let unsubConfig = () => {};
-    let unsubNotebooks = () => {};
-    let unsubOrders = () => {};
-    let unsubCoupons = () => {};
-    let unsubBundles = () => {};
+    if (!db) return;
+    if (auth) {
+      signInAnonymously(auth).catch(() => {});
+    }
 
-    signInAnonymously(auth).catch(() => {});
-    const unsubAuth = onAuthStateChanged(auth, (user) => {
-      if (!user) return;
-      setCloudStatus('connected');
-      const basePath = ['artifacts', appId, 'public', 'data'];
-      const handleSnapErr = (err) => {
-        console.warn('Firestore listener notice:', err?.code || err?.message);
-      };
+    const basePath = ['artifacts', appId, 'public', 'data'];
+    const handleSnapErr = (err) => {
+      console.warn('Firestore listener notice:', err?.code || err?.message);
+    };
 
-      unsubConfig = onSnapshot(
-        doc(db, ...basePath, 'config', 'main'),
-        (snap) => {
-          if (snap.exists()) {
-            const data = snap.data();
-            if (data.settings) {
-              setSettings((prev) => ({ ...DEFAULT_SETTINGS, ...prev, ...data.settings }));
-              localStorage.setItem('muzakkirati_settings', JSON.stringify(data.settings));
-            }
-            if (data.categories) setCategories(data.categories);
-            if (data.stages) setStages(data.stages);
-            if (data.grades) setGrades(data.grades);
-            if (data.subjects) setSubjects(data.subjects);
-            if (data.adminCreds) {
-              localStorage.setItem('muzakkirati_admin_creds', JSON.stringify(data.adminCreds));
-              setAdminCredsExists(true);
-            }
+    const unsubConfig = onSnapshot(
+      doc(db, ...basePath, 'config', 'main'),
+      (snap) => {
+        setCloudStatus('connected');
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.settings) {
+            setSettings((prev) => ({ ...DEFAULT_SETTINGS, ...prev, ...data.settings }));
+            localStorage.setItem('muzakkirati_settings', JSON.stringify(data.settings));
           }
-        },
-        handleSnapErr
-      );
-
-      unsubNotebooks = onSnapshot(
-        collection(db, ...basePath, 'notebooks'),
-        (snap) => {
-          if (!snap.empty) {
-            const list = snap.docs.map((d) => d.data());
-            setNotebooks(list);
-            localStorage.setItem('muzakkirati_notebooks', JSON.stringify(list));
+          if (data.categories) setCategories(data.categories);
+          if (data.stages) setStages(data.stages);
+          if (data.grades) setGrades(data.grades);
+          if (data.subjects) setSubjects(data.subjects);
+          if (data.adminCreds) {
+            localStorage.setItem('muzakkirati_admin_creds', JSON.stringify(data.adminCreds));
+            setAdminCredsExists(true);
           }
-        },
-        handleSnapErr
-      );
+        }
+      },
+      handleSnapErr
+    );
 
-      unsubOrders = onSnapshot(
-        collection(db, ...basePath, 'orders'),
-        (snap) => {
+    const unsubNotebooks = onSnapshot(
+      collection(db, ...basePath, 'notebooks'),
+      (snap) => {
+        setCloudStatus('connected');
+        if (!snap.empty) {
           const list = snap.docs.map((d) => d.data());
-          setOrders(list);
-          localStorage.setItem('muzakkirati_orders', JSON.stringify(list));
-        },
-        handleSnapErr
-      );
+          setNotebooks(list);
+          localStorage.setItem('muzakkirati_notebooks', JSON.stringify(list));
+        }
+      },
+      handleSnapErr
+    );
 
-      unsubCoupons = onSnapshot(
-        collection(db, ...basePath, 'coupons'),
-        (snap) => {
-          if (!snap.empty) {
-            const list = snap.docs.map((d) => d.data());
-            setCoupons(list);
-            localStorage.setItem('muzakkirati_coupons', JSON.stringify(list));
-          }
-        },
-        handleSnapErr
-      );
+    const unsubOrders = onSnapshot(
+      collection(db, ...basePath, 'orders'),
+      (snap) => {
+        const list = snap.docs.map((d) => d.data());
+        setOrders(list);
+        localStorage.setItem('muzakkirati_orders', JSON.stringify(list));
+      },
+      handleSnapErr
+    );
 
-      unsubBundles = onSnapshot(
-        collection(db, ...basePath, 'bundles'),
-        (snap) => {
-          if (!snap.empty) {
-            const list = snap.docs.map((d) => d.data());
-            setBundles(list);
-            localStorage.setItem('muzakkirati_bundles', JSON.stringify(list));
-          }
-        },
-        handleSnapErr
-      );
-    });
+    const unsubCoupons = onSnapshot(
+      collection(db, ...basePath, 'coupons'),
+      (snap) => {
+        if (!snap.empty) {
+          const list = snap.docs.map((d) => d.data());
+          setCoupons(list);
+          localStorage.setItem('muzakkirati_coupons', JSON.stringify(list));
+        }
+      },
+      handleSnapErr
+    );
+
+    const unsubBundles = onSnapshot(
+      collection(db, ...basePath, 'bundles'),
+      (snap) => {
+        if (!snap.empty) {
+          const list = snap.docs.map((d) => d.data());
+          setBundles(list);
+          localStorage.setItem('muzakkirati_bundles', JSON.stringify(list));
+        }
+      },
+      handleSnapErr
+    );
 
     return () => {
-      unsubAuth();
       unsubConfig();
       unsubNotebooks();
       unsubOrders();
