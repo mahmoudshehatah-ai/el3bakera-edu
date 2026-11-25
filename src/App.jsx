@@ -196,6 +196,7 @@ const DEFAULT_NOTEBOOKS = [
     badge: 'الأكثر طلبًا',
     description:
       'شرح مبسط وشامل لجميع دروس النحو والقراءة والنصوص وفق أحدث تعديلات الوزارة، مع تدريبات متدرجة وامتحانات شاملة على كل وحدة.',
+    driveUrl: '',
     coverImage: '',
     sampleImages: [],
     hidden: false,
@@ -725,12 +726,12 @@ export default function App() {
       for (const nb of notebooks) {
         const cleanNb = { ...nb };
         if (cleanNb.coverImage?.startsWith('data:image')) {
-          cleanNb.coverImage = await compressImageDataUrl(cleanNb.coverImage, 800, 0.72);
+          cleanNb.coverImage = await compressImageDataUrl(cleanNb.coverImage, 760, 0.68);
         }
         if (Array.isArray(cleanNb.sampleImages)) {
           cleanNb.sampleImages = await Promise.all(
             cleanNb.sampleImages.map((img) =>
-              img?.startsWith('data:image') ? compressImageDataUrl(img, 800, 0.7) : img
+              img?.startsWith('data:image') ? compressImageDataUrl(img, 720, 0.62) : img
             )
           );
         }
@@ -2099,7 +2100,7 @@ function OrderModal({ notebook, settings, coupons, onClose, onSubmitOrder, showT
 
 /**
  * ============================================================================
- * PROTECTED SAMPLE PREVIEWER MODAL
+ * PROTECTED SAMPLE PREVIEWER MODAL (SWIPE + ARROWS + DRIVE LINK)
  * ============================================================================
  */
 function ProtectedPreviewModal({ notebook, platformName, onClose, onOrderNow }) {
@@ -2115,6 +2116,58 @@ function ProtectedPreviewModal({ notebook, platformName, onClose, onOrderNow }) 
   }, [notebook]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
+  const pointerStartXRef = useRef(null);
+
+  const goNext = () => {
+    if (images.length <= 1) return;
+    setCurrentIndex((prev) => (prev + 1) % images.length);
+  };
+
+  const goPrev = () => {
+    if (images.length <= 1) return;
+    setCurrentIndex((prev) => (prev - 1 + images.length) % images.length);
+  };
+
+  const handleTouchStart = (e) => {
+    if (e.touches && e.touches.length > 0) {
+      pointerStartXRef.current = e.touches[0].clientX;
+    }
+  };
+
+  const handleTouchEnd = (e) => {
+    if (pointerStartXRef.current === null) return;
+    const endX = e.changedTouches?.[0]?.clientX;
+    if (typeof endX === 'number') {
+      const diffX = endX - pointerStartXRef.current;
+      if (Math.abs(diffX) > 40) {
+        if (diffX > 0) {
+          goNext();
+        } else {
+          goPrev();
+        }
+      }
+    }
+    pointerStartXRef.current = null;
+  };
+
+  const handleMouseDown = (e) => {
+    pointerStartXRef.current = e.clientX;
+  };
+
+  const handleMouseUp = (e) => {
+    if (pointerStartXRef.current === null) return;
+    const diffX = e.clientX - pointerStartXRef.current;
+    if (Math.abs(diffX) > 45) {
+      if (diffX > 0) {
+        goNext();
+      } else {
+        goPrev();
+      }
+    }
+    pointerStartXRef.current = null;
+  };
+
+  const driveLink = normalizeExternalUrl(notebook?.driveUrl);
 
   return (
     <div
@@ -2145,7 +2198,7 @@ function ProtectedPreviewModal({ notebook, platformName, onClose, onOrderNow }) 
 
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50 space-y-5">
           {/* Notebook Description & Details Card */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-2">
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs font-black text-blue-700 bg-blue-50 px-3 py-1 rounded-full">
                 وصف ومحتوى المذكرة
@@ -2159,40 +2212,99 @@ function ProtectedPreviewModal({ notebook, platformName, onClose, onOrderNow }) 
             <p className="text-sm text-slate-700 leading-relaxed">
               {notebook.description || 'مذكرة دراسية منسقة ومحدثة بالكامل وجاهزة للطباعة باسم المعلم وشعاره الخاص.'}
             </p>
+
+            {driveLink && (
+              <div className="pt-2">
+                <a
+                  href={driveLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs font-black transition shadow-sm"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>مطالعة النسخة الكاملة على Google Drive</span>
+                </a>
+              </div>
+            )}
           </div>
 
-          {/* Sample Pages Viewer */}
+          {/* Swipeable Sample Pages Viewer */}
           {images.length > 0 && (
             <div className="flex flex-col items-center">
-              <div className="relative max-w-lg w-full rounded-2xl overflow-hidden shadow-xl border border-slate-300 bg-white">
+              {images.length > 1 && (
+                <div className="w-full max-w-lg flex items-center justify-between mb-2.5 px-1">
+                  <span className="text-[11px] font-extrabold text-slate-500">
+                    اسحب يمينًا أو يسارًا للتنقل بين الصفحات
+                  </span>
+                  <span className="text-xs font-black text-blue-700 bg-blue-50 px-3 py-1 rounded-full">
+                    {currentIndex === 0 && notebook.coverImage
+                      ? `الغلاف (1 / ${images.length})`
+                      : `صفحة ${currentIndex + 1} من ${images.length}`}
+                  </span>
+                </div>
+              )}
+
+              <div
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
+                onMouseDown={handleMouseDown}
+                onMouseUp={handleMouseUp}
+                className="relative max-w-lg w-full rounded-2xl overflow-hidden shadow-xl border border-slate-300 bg-white touch-pan-y cursor-grab active:cursor-grabbing"
+              >
                 <img
                   src={images[currentIndex] || images[0]}
                   alt="عينة معاينة"
                   draggable={false}
-                  className="w-full h-auto pointer-events-none"
+                  className="w-full h-auto pointer-events-none select-none"
                 />
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden">
                   <span className="text-slate-900/15 font-black text-2xl sm:text-3xl -rotate-30 whitespace-nowrap">
                     {platformName} • نسخة معاينة
                   </span>
                 </div>
+
+                {images.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        goPrev();
+                      }}
+                      title="الصفحة السابقة"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-900/75 hover:bg-slate-900 text-white flex items-center justify-center shadow-lg transition cursor-pointer"
+                    >
+                      <span className="text-lg font-black leading-none">›</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        goNext();
+                      }}
+                      title="الصفحة التالية"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-900/75 hover:bg-slate-900 text-white flex items-center justify-center shadow-lg transition cursor-pointer"
+                    >
+                      <span className="text-lg font-black leading-none">‹</span>
+                    </button>
+                  </>
+                )}
               </div>
 
               {images.length > 1 && (
-                <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
+                <div className="flex flex-wrap items-center justify-center gap-1.5 mt-4">
                   {images.map((_, idx) => (
                     <button
                       key={idx}
                       type="button"
                       onClick={() => setCurrentIndex(idx)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${
+                      className={`h-2.5 rounded-full transition-all cursor-pointer ${
                         currentIndex === idx
-                          ? 'bg-blue-700 text-white'
-                          : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-100'
+                          ? 'w-7 bg-blue-700'
+                          : 'w-2.5 bg-slate-300 hover:bg-slate-400'
                       }`}
-                    >
-                      {idx === 0 && notebook.coverImage ? 'الغلاف' : `صفحة ${idx + 1}`}
-                    </button>
+                      title={idx === 0 && notebook.coverImage ? 'الغلاف' : `صفحة ${idx + 1}`}
+                    />
                   ))}
                 </div>
               )}
@@ -2548,6 +2660,7 @@ function AdminNotebooksTab({
   const [pagesCount, setPagesCount] = useState(80);
   const [badge, setBadge] = useState('');
   const [description, setDescription] = useState('');
+  const [driveUrl, setDriveUrl] = useState('');
   const [coverImage, setCoverImage] = useState('');
   const [sampleImages, setSampleImages] = useState([]);
 
@@ -2559,6 +2672,7 @@ function AdminNotebooksTab({
     setPagesCount(80);
     setBadge('');
     setDescription('');
+    setDriveUrl('');
     setCoverImage('');
     setSampleImages([]);
   };
@@ -2575,6 +2689,7 @@ function AdminNotebooksTab({
     setPagesCount(nb.pagesCount || 0);
     setBadge(nb.badge || '');
     setDescription(nb.description || '');
+    setDriveUrl(nb.driveUrl || '');
     setCoverImage(nb.coverImage || '');
     setSampleImages(nb.sampleImages || []);
   };
@@ -2582,15 +2697,15 @@ function AdminNotebooksTab({
   const handleCoverChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const compressed = await fileToCompressedDataUrl(file, 800, 0.72);
+    const compressed = await fileToCompressedDataUrl(file, 760, 0.68);
     setCoverImage(compressed);
   };
 
   const handleSamplesChange = async (e) => {
-    const files = Array.from(e.target.files || []).slice(0, 8);
+    const files = Array.from(e.target.files || []).slice(0, 15);
     if (files.length === 0) return;
     const compressedList = await Promise.all(
-      files.map((f) => fileToCompressedDataUrl(f, 800, 0.7))
+      files.map((f) => fileToCompressedDataUrl(f, 720, 0.62))
     );
     setSampleImages(compressedList);
   };
@@ -2610,6 +2725,7 @@ function AdminNotebooksTab({
       pagesCount: Number(pagesCount) || 0,
       badge: badge.trim(),
       description: description.trim(),
+      driveUrl: driveUrl.trim(),
       coverImage,
       sampleImages,
       hidden: false,
@@ -2726,12 +2842,28 @@ function AdminNotebooksTab({
           />
 
           <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              رابط Google Drive لمطالعة نسخة المذكرة (اختياري)
+            </label>
+            <input
+              type="url"
+              dir="ltr"
+              value={driveUrl}
+              onChange={(e) => setDriveUrl(e.target.value)}
+              placeholder="https://drive.google.com/file/d/..."
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs text-left"
+            />
+          </div>
+
+          <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">صورة غلاف المذكرة</label>
             <input type="file" accept="image/*" onChange={handleCoverChange} className="text-xs" />
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">صور صفحات عينة المعاينة (حتى 8 صفحات)</label>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              صور صفحات عينة المعاينة (حتى 15 صفحة) {sampleImages.length > 0 && `— مختار (${sampleImages.length})`}
+            </label>
             <input type="file" accept="image/*" multiple onChange={handleSamplesChange} className="text-xs" />
           </div>
 
