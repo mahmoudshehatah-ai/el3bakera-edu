@@ -34,7 +34,12 @@ import {
   EyeOff,
   AlertTriangle,
   RefreshCw,
-  Cloud
+  Cloud,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
@@ -116,6 +121,35 @@ const DEFAULT_SETTINGS = {
   promoBannerText: '🎉 عرض خاص للمعلمين: خصم 15% على جميع مذكرات الترم الأول + إضافة الشعار مجانًا لفترة محدودة!',
   showNotices: true,
   allowTeacherLogo: true,
+  showHomeSections: true,
+  homeSectionsTitle: 'أقسام المذكرات والكورسات الرئيسية',
+  homeSectionsSubtitle: 'اختر القسم المناسب لبدء تصفح المذكرات المنسقة والجاهزة باسمك وشعارك',
+  homeSections: [
+    {
+      id: 'sec-term-1',
+      title: 'مذكرات الترم الأول',
+      description: 'مذكرات شرح وتدريبات شاملة لجميع المواد والمراحل الدراسية للفصل الدراسي الأول.',
+      categoryId: 'cat-1',
+      badge: 'متاح الآن',
+      buttonText: 'تصفح مذكرات الترم الأول'
+    },
+    {
+      id: 'sec-term-2',
+      title: 'مذكرات الترم الثاني',
+      description: 'مذكرات محدثة ومنسقة للفصل الدراسي الثاني جاهزة للطباعة باسمك وشعارك الخاص.',
+      categoryId: 'cat-2',
+      badge: 'محدّث',
+      buttonText: 'تصفح مذكرات الترم الثاني'
+    },
+    {
+      id: 'sec-foundation',
+      title: 'كورسات التأسيس',
+      description: 'سلاسل تأسيس احترافية لبناء مهارات الطلاب في القراءة والكتابة والقواعد والرياضيات.',
+      categoryId: 'cat-3',
+      badge: 'تأسيس شامل',
+      buttonText: 'استعرض كورسات التأسيس'
+    }
+  ],
   notices: [
     'جميع المذكرات تُسلّم بصيغة إلكترونية PDF عالية الدقة جاهزة للطباعة (لا يوجد شحن ورقي).',
     'يتم تخصيص الغلاف والصفحات الداخلية باسم المعلم ورقم هاتفه وشعاره الخاص خلال 24 ساعة.'
@@ -159,7 +193,8 @@ const DEFAULT_SETTINGS = {
 const DEFAULT_CATEGORIES = [
   { id: 'cat-1', name: 'مذكرات الترم الأول' },
   { id: 'cat-2', name: 'مذكرات الترم الثاني' },
-  { id: 'cat-3', name: 'مراجعات نهائية وبوكليت' }
+  { id: 'cat-3', name: 'كورسات التأسيس' },
+  { id: 'cat-4', name: 'مراجعات نهائية وبوكليت' }
 ];
 
 const DEFAULT_STAGES = [
@@ -375,6 +410,7 @@ export default function App() {
   const [selectedNotebookForOrder, setSelectedNotebookForOrder] = useState(null);
   const [previewNotebook, setPreviewNotebook] = useState(null);
   const [customOrderModalOpen, setCustomOrderModalOpen] = useState(false);
+  const [initialCatalogCategory, setInitialCatalogCategory] = useState('all');
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -962,7 +998,10 @@ export default function App() {
             stages={stages}
             grades={grades}
             subjects={subjects}
-            onExploreCatalog={() => setActivePage('catalog')}
+            onExploreCatalog={(catId = 'all') => {
+              setInitialCatalogCategory(catId || 'all');
+              setActivePage('catalog');
+            }}
             onOpenCustomOrder={() => setCustomOrderModalOpen(true)}
             onOrderNotebook={(nb) => setSelectedNotebookForOrder(nb)}
             onPreviewNotebook={(nb) => setPreviewNotebook(nb)}
@@ -977,6 +1016,7 @@ export default function App() {
             stages={stages}
             grades={grades}
             subjects={subjects}
+            initialCategory={initialCatalogCategory}
             onOrderNotebook={(nb) => setSelectedNotebookForOrder(nb)}
             onPreviewNotebook={(nb) => setPreviewNotebook(nb)}
             onOpenCustomOrder={() => setCustomOrderModalOpen(true)}
@@ -1187,6 +1227,9 @@ function HomePage({
   const overlayColor = settings.heroOverlayColor || '#020617';
   const heroMinHeight = Number(settings.heroMinHeight) || 540;
   const heroBgFit = settings.heroBgFit === 'contain' ? 'object-contain' : 'object-cover';
+  const homeSections = Array.isArray(settings.homeSections)
+    ? settings.homeSections
+    : DEFAULT_SETTINGS.homeSections;
 
   return (
     <div>
@@ -1228,7 +1271,7 @@ function HomePage({
 
             <div className="flex flex-wrap items-center gap-4 pt-2">
               <button
-                onClick={onExploreCatalog}
+                onClick={() => onExploreCatalog('all')}
                 className="flex items-center gap-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 px-7 py-4 rounded-2xl text-sm sm:text-base font-black transition shadow-xl shadow-amber-400/20 cursor-pointer"
               >
                 <BookOpen className="w-5 h-5" />
@@ -1274,6 +1317,86 @@ function HomePage({
         </div>
       </section>
 
+      {/* Main Home Sections (Term 1, Term 2, Foundation Courses, etc.) */}
+      {settings.showHomeSections !== false && homeSections.length > 0 && (
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14">
+          <div className="text-center max-w-2xl mx-auto mb-9">
+            <span className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-900 px-3.5 py-1 rounded-full text-xs font-black mb-2">
+              <Layers className="w-3.5 h-3.5" />
+              <span>الأقسام الرئيسية</span>
+            </span>
+            <h3 className="text-2xl sm:text-3xl font-black text-slate-900">
+              {settings.homeSectionsTitle || 'أقسام المذكرات والكورسات الرئيسية'}
+            </h3>
+            {settings.homeSectionsSubtitle && (
+              <p className="text-sm text-slate-500 mt-1.5">{settings.homeSectionsSubtitle}</p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {homeSections.map((sec, idx) => {
+              const sectionCount = sec.categoryId
+                ? notebooks.filter((n) => n.categoryId === sec.categoryId).length
+                : notebooks.length;
+              const accentStyles = [
+                'from-blue-700 to-indigo-800 shadow-blue-700/20',
+                'from-emerald-600 to-teal-800 shadow-emerald-700/20',
+                'from-amber-500 to-orange-600 shadow-amber-600/20'
+              ];
+              const badgeStyles = [
+                'bg-blue-50 text-blue-700',
+                'bg-emerald-50 text-emerald-700',
+                'bg-amber-50 text-amber-800'
+              ];
+              return (
+                <div
+                  key={sec.id || idx}
+                  onClick={() => onExploreCatalog(sec.categoryId || 'all')}
+                  className="bg-white rounded-3xl p-7 border border-slate-200/80 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between cursor-pointer group"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-5">
+                      <div
+                        className={`w-13 h-13 rounded-2xl bg-gradient-to-br ${
+                          accentStyles[idx % accentStyles.length]
+                        } text-white flex items-center justify-center shadow-lg group-hover:scale-105 transition`}
+                      >
+                        <BookOpen className="w-6 h-6" />
+                      </div>
+                      {sec.badge && (
+                        <span
+                          className={`text-xs font-black px-3 py-1 rounded-full ${
+                            badgeStyles[idx % badgeStyles.length]
+                          }`}
+                        >
+                          {sec.badge}
+                        </span>
+                      )}
+                    </div>
+
+                    <h4 className="text-xl font-black text-slate-900 group-hover:text-blue-700 transition mb-2">
+                      {sec.title}
+                    </h4>
+                    <p className="text-xs sm:text-sm text-slate-600 leading-relaxed mb-5">
+                      {sec.description}
+                    </p>
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+                    <span className="text-xs font-extrabold text-slate-500">
+                      {sectionCount > 0 ? `${sectionCount} مذكرة متاحة` : 'استعرض القسم'}
+                    </span>
+                    <span className="text-xs sm:text-sm font-black text-blue-700 group-hover:translate-x-[-4px] transition-transform">
+                      {sec.buttonText || 'تصفح القسم'} ←
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {/* About Section */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
         <div className="bg-white rounded-3xl p-8 sm:p-12 border border-slate-200/80 shadow-sm grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
@@ -1290,7 +1413,7 @@ function HomePage({
             </p>
             <div className="flex flex-wrap gap-3 pt-2">
               <button
-                onClick={onExploreCatalog}
+                onClick={() => onExploreCatalog('all')}
                 className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-xl text-sm font-extrabold transition cursor-pointer"
               >
                 تصفح أحدث المذكرات المتاحة
@@ -1350,7 +1473,7 @@ function HomePage({
             <p className="text-sm text-slate-500 mt-1">اختر المذكرة المناسبة لمرحلتك واطلبها باسمك وشعارك الآن</p>
           </div>
           <button
-            onClick={onExploreCatalog}
+            onClick={() => onExploreCatalog('all')}
             className="text-blue-700 hover:text-blue-800 font-extrabold text-sm flex items-center gap-1.5 cursor-pointer"
           >
             <span>عرض الكل ({notebooks.length})</span>
@@ -1387,15 +1510,20 @@ function CatalogPage({
   stages,
   grades,
   subjects,
+  initialCategory = 'all',
   onOrderNotebook,
   onPreviewNotebook,
   onOpenCustomOrder
 }) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedCategory, setSelectedCategory] = useState(initialCategory || 'all');
   const [selectedStage, setSelectedStage] = useState('all');
   const [selectedGrade, setSelectedGrade] = useState('all');
   const [selectedSubject, setSelectedSubject] = useState('all');
+
+  useEffect(() => {
+    setSelectedCategory(initialCategory || 'all');
+  }, [initialCategory]);
 
   const availableGrades = useMemo(() => {
     if (selectedStage === 'all') return grades;
@@ -2113,7 +2241,7 @@ function OrderModal({ notebook, settings, coupons, onClose, onSubmitOrder, showT
 
 /**
  * ============================================================================
- * PROTECTED SAMPLE PREVIEWER MODAL (SWIPE + ARROWS + DRIVE LINK)
+ * PROTECTED SAMPLE PREVIEWER MODAL (ZOOM + SWIPE + ARROWS + DRIVE LINK)
  * ============================================================================
  */
 function ProtectedPreviewModal({ notebook, settings, onClose, onOrderNow }) {
@@ -2131,26 +2259,41 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onOrderNow }) {
   }, [notebook]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const pointerStartXRef = useRef(null);
+
+  const changePage = (newIdx) => {
+    setCurrentIndex(newIdx);
+    setZoomLevel(1);
+  };
 
   const goNext = () => {
     if (images.length <= 1) return;
-    setCurrentIndex((prev) => (prev + 1) % images.length);
+    changePage((currentIndex + 1) % images.length);
   };
 
   const goPrev = () => {
     if (images.length <= 1) return;
-    setCurrentIndex((prev) => (prev - 1 + images.length) % images.length);
+    changePage((currentIndex - 1 + images.length) % images.length);
+  };
+
+  const handleZoomIn = () => setZoomLevel((z) => Math.min(2.6, Number((z + 0.35).toFixed(2))));
+  const handleZoomOut = () => setZoomLevel((z) => Math.max(1, Number((z - 0.35).toFixed(2))));
+  const handleResetZoom = () => setZoomLevel(1);
+  const handleToggleDoubleClickZoom = () => {
+    setZoomLevel((z) => (z > 1 ? 1 : 1.85));
   };
 
   const handleTouchStart = (e) => {
+    if (zoomLevel > 1) return;
     if (e.touches && e.touches.length > 0) {
       pointerStartXRef.current = e.touches[0].clientX;
     }
   };
 
   const handleTouchEnd = (e) => {
-    if (pointerStartXRef.current === null) return;
+    if (zoomLevel > 1 || pointerStartXRef.current === null) return;
     const endX = e.changedTouches?.[0]?.clientX;
     if (typeof endX === 'number') {
       const diffX = endX - pointerStartXRef.current;
@@ -2166,11 +2309,12 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onOrderNow }) {
   };
 
   const handleMouseDown = (e) => {
+    if (zoomLevel > 1) return;
     pointerStartXRef.current = e.clientX;
   };
 
   const handleMouseUp = (e) => {
-    if (pointerStartXRef.current === null) return;
+    if (zoomLevel > 1 || pointerStartXRef.current === null) return;
     const diffX = e.clientX - pointerStartXRef.current;
     if (Math.abs(diffX) > 45) {
       if (diffX > 0) {
@@ -2186,32 +2330,44 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onOrderNow }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 select-none"
+      className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 select-none"
       onContextMenu={(e) => e.preventDefault()}
       onClick={onClose}
       dir="rtl"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-white w-full max-w-3xl rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+        className={`bg-white w-full ${
+          isFullscreen ? 'max-w-6xl h-[96vh]' : 'max-w-3xl max-h-[92vh]'
+        } rounded-3xl overflow-hidden shadow-2xl flex flex-col transition-all`}
       >
-        <div className="p-5 border-b border-slate-200 flex items-center justify-between gap-4">
+        <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between gap-4">
           <div>
-            <h3 className="font-black text-slate-900 text-base">{notebook.title}</h3>
+            <h3 className="font-black text-slate-900 text-sm sm:text-base">{notebook.title}</h3>
             <p className="text-xs text-slate-500">
               تفاصيل ومعاينة المذكرة {notebook.pagesCount > 0 ? `• ${notebook.pagesCount} صفحة` : ''}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsFullscreen((f) => !f)}
+              title={isFullscreen ? 'تصغير النافذة' : 'تكبير النافذة لملء الشاشة'}
+              className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700 cursor-pointer"
+            >
+              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-50 space-y-5">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50 space-y-5">
           {/* Notebook Description & Details Card */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2260,13 +2416,48 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onOrderNow }) {
             </div>
           )}
 
-          {/* Swipeable Sample Pages Viewer */}
+          {/* Interactive Zoomable & Swipeable Sample Pages Viewer */}
           {images.length > 0 && (
             <div className="flex flex-col items-center">
-              {images.length > 1 && (
-                <div className="w-full max-w-lg flex items-center justify-between mb-2.5 px-1">
-                  <span className="text-[11px] font-extrabold text-slate-500">
-                    اسحب يمينًا أو يسارًا للتنقل بين الصفحات
+              {/* Zoom & Navigation Toolbar */}
+              <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-2xl p-2.5 mb-3 flex flex-wrap items-center justify-between gap-2 shadow-sm">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={handleZoomIn}
+                    disabled={zoomLevel >= 2.6}
+                    title="تكبير الصفحة"
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 disabled:opacity-40 text-blue-700 text-xs font-black transition cursor-pointer"
+                  >
+                    <ZoomIn className="w-4 h-4" />
+                    <span>تكبير</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleZoomOut}
+                    disabled={zoomLevel <= 1}
+                    title="تصغير الصفحة"
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-black transition cursor-pointer"
+                  >
+                    <ZoomOut className="w-4 h-4" />
+                    <span>تصغير</span>
+                  </button>
+                  {zoomLevel > 1 && (
+                    <button
+                      type="button"
+                      onClick={handleResetZoom}
+                      title="إعادة الحجم الطبيعي"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-black transition cursor-pointer"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>{Math.round(zoomLevel * 100)}%</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-slate-500 hidden sm:inline">
+                    {zoomLevel > 1 ? 'اسحب داخل الصفحة للتصفح أو انقر مرتين للتصغير' : 'انقر مرتين للتكبير أو اسحب للتنقل'}
                   </span>
                   <span className="text-xs font-black text-blue-700 bg-blue-50 px-3 py-1 rounded-full">
                     {currentIndex === 0 && notebook.coverImage
@@ -2274,28 +2465,43 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onOrderNow }) {
                       : `صفحة ${currentIndex + 1} من ${images.length}`}
                   </span>
                 </div>
-              )}
+              </div>
 
               <div
                 onTouchStart={handleTouchStart}
                 onTouchEnd={handleTouchEnd}
                 onMouseDown={handleMouseDown}
                 onMouseUp={handleMouseUp}
-                className="relative max-w-lg w-full rounded-2xl overflow-hidden shadow-xl border border-slate-300 bg-white touch-pan-y cursor-grab active:cursor-grabbing"
+                onDoubleClick={handleToggleDoubleClickZoom}
+                className={`relative ${
+                  isFullscreen ? 'max-w-4xl' : 'max-w-xl'
+                } w-full rounded-2xl shadow-xl border border-slate-300 bg-white ${
+                  zoomLevel > 1
+                    ? 'overflow-auto max-h-[65vh] cursor-zoom-out'
+                    : 'overflow-hidden touch-pan-y cursor-zoom-in'
+                }`}
               >
-                <img
-                  src={images[currentIndex] || images[0]}
-                  alt="عينة معاينة"
-                  draggable={false}
-                  className="w-full h-auto pointer-events-none select-none"
-                />
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden">
-                  <span className="text-slate-900/15 font-black text-2xl sm:text-3xl -rotate-30 whitespace-nowrap">
-                    {platformName} • نسخة معاينة
-                  </span>
+                <div
+                  style={{
+                    width: `${zoomLevel * 100}%`,
+                    transition: 'width 0.2s ease-out'
+                  }}
+                  className="relative"
+                >
+                  <img
+                    src={images[currentIndex] || images[0]}
+                    alt="عينة معاينة"
+                    draggable={false}
+                    className="w-full h-auto pointer-events-none select-none block"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden">
+                    <span className="text-slate-900/15 font-black text-2xl sm:text-3xl -rotate-30 whitespace-nowrap">
+                      {platformName} • نسخة معاينة
+                    </span>
+                  </div>
                 </div>
 
-                {images.length > 1 && (
+                {images.length > 1 && zoomLevel === 1 && (
                   <>
                     <button
                       type="button"
@@ -2329,7 +2535,7 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onOrderNow }) {
                     <button
                       key={idx}
                       type="button"
-                      onClick={() => setCurrentIndex(idx)}
+                      onClick={() => changePage(idx)}
                       className={`h-2.5 rounded-full transition-all cursor-pointer ${
                         currentIndex === idx
                           ? 'w-7 bg-blue-700'
@@ -2558,6 +2764,7 @@ function AdminPortal({
         {adminView === 'settings' && (
           <AdminSettingsTab
             settings={settings}
+            categories={categories}
             onSaveSettings={onSaveSettings}
           />
         )}
@@ -3188,7 +3395,7 @@ function AdminStructureTab({ categories, stages, grades, subjects, onSaveStructu
   );
 }
 
-function AdminSettingsTab({ settings, onSaveSettings }) {
+function AdminSettingsTab({ settings, categories = [], onSaveSettings }) {
   const safeOrderFields = useMemo(() => {
     if (Array.isArray(settings?.orderFormFields) && settings.orderFormFields.length > 0) {
       return settings.orderFormFields.filter((f) => f && typeof f === 'object').map((f, i) => ({
@@ -3203,10 +3410,25 @@ function AdminSettingsTab({ settings, onSaveSettings }) {
     return DEFAULT_SETTINGS.orderFormFields;
   }, [settings]);
 
+  const safeHomeSections = useMemo(() => {
+    if (Array.isArray(settings?.homeSections)) {
+      return settings.homeSections.filter((s) => s && typeof s === 'object').map((s, i) => ({
+        id: s.id || `sec_${i}`,
+        title: s.title || '',
+        description: s.description || '',
+        categoryId: s.categoryId || '',
+        badge: s.badge || '',
+        buttonText: s.buttonText || 'تصفح القسم'
+      }));
+    }
+    return DEFAULT_SETTINGS.homeSections;
+  }, [settings]);
+
   const [form, setForm] = useState(() => ({
     ...DEFAULT_SETTINGS,
     ...(settings || {}),
-    orderFormFields: safeOrderFields
+    orderFormFields: safeOrderFields,
+    homeSections: safeHomeSections
   }));
 
   useEffect(() => {
@@ -3214,9 +3436,10 @@ function AdminSettingsTab({ settings, onSaveSettings }) {
       ...DEFAULT_SETTINGS,
       ...prev,
       ...(settings || {}),
-      orderFormFields: safeOrderFields
+      orderFormFields: safeOrderFields,
+      homeSections: safeHomeSections
     }));
-  }, [settings, safeOrderFields]);
+  }, [settings, safeOrderFields, safeHomeSections]);
 
   const handleImageUpload = async (field, e) => {
     const file = e.target.files?.[0];
@@ -3261,6 +3484,45 @@ function AdminSettingsTab({ settings, onSaveSettings }) {
       return {
         ...prev,
         orderFormFields: current.filter((_, i) => i !== idx)
+      };
+    });
+  };
+
+  const updateHomeSection = (idx, patch) => {
+    setForm((prev) => {
+      const current = Array.isArray(prev.homeSections) ? prev.homeSections : safeHomeSections;
+      const updated = [...current];
+      updated[idx] = { ...updated[idx], ...patch };
+      return { ...prev, homeSections: updated };
+    });
+  };
+
+  const addHomeSection = () => {
+    setForm((prev) => {
+      const current = Array.isArray(prev.homeSections) ? prev.homeSections : safeHomeSections;
+      return {
+        ...prev,
+        homeSections: [
+          ...current,
+          {
+            id: `sec_${Date.now()}`,
+            title: 'قسم جديد في الصفحة الرئيسية',
+            description: 'وصف مختصر لمحتوى هذا القسم...',
+            categoryId: categories[0]?.id || '',
+            badge: 'جديد',
+            buttonText: 'استعرض القسم'
+          }
+        ]
+      };
+    });
+  };
+
+  const removeHomeSection = (idx) => {
+    setForm((prev) => {
+      const current = Array.isArray(prev.homeSections) ? prev.homeSections : safeHomeSections;
+      return {
+        ...prev,
+        homeSections: current.filter((_, i) => i !== idx)
       };
     });
   };
@@ -3528,6 +3790,119 @@ function AdminSettingsTab({ settings, onSaveSettings }) {
             onChange={(e) => setForm({ ...form, promoBannerText: e.target.value })}
             className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
           />
+        </div>
+      </div>
+
+      {/* Manage Home Page Main Sections (Term 1, Term 2, Foundation Courses, etc.) */}
+      <div className="border-t border-slate-200 pt-6 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h4 className="font-black text-slate-900">إدارة بطاقات الأقسام الرئيسية في الصفحة الرئيسية</h4>
+            <p className="text-[11px] text-slate-500">
+              تحكم كامل بالحذف أو التعديل أو الإضافة في بطاقات الصفحة الرئيسية (مثل: مذكرات الترم الأول، مذكرات الترم الثاني، كورسات التأسيس)
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2 text-xs font-extrabold text-blue-800 bg-blue-50 border border-blue-200 px-3 py-2 rounded-xl cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.showHomeSections !== false}
+                onChange={(e) => setForm({ ...form, showHomeSections: e.target.checked })}
+                className="w-4 h-4 accent-blue-700"
+              />
+              <span>{form.showHomeSections !== false ? 'ظاهرة في الرئيسية' : 'مخفية'}</span>
+            </label>
+            <button
+              type="button"
+              onClick={addHomeSection}
+              className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-extrabold cursor-pointer"
+            >
+              + إضافة بطاقة قسم
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-extrabold text-slate-700 mb-1">عنوان قسم البطاقات في الرئيسية</label>
+            <input
+              type="text"
+              value={form.homeSectionsTitle || ''}
+              onChange={(e) => setForm({ ...form, homeSectionsTitle: e.target.value })}
+              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-extrabold text-slate-700 mb-1">الوصف الفرعي أسفل العنوان</label>
+            <input
+              type="text"
+              value={form.homeSectionsSubtitle || ''}
+              onChange={(e) => setForm({ ...form, homeSectionsSubtitle: e.target.value })}
+              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {(Array.isArray(form.homeSections) ? form.homeSections : safeHomeSections).map((sec, idx) => (
+            <div key={sec.id || idx} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-black text-blue-700">بطاقة رقم #{idx + 1}</span>
+                <button
+                  type="button"
+                  onClick={() => removeHomeSection(idx)}
+                  className="flex items-center gap-1 text-xs font-bold text-rose-600 hover:text-rose-700 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>حذف البطاقة</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <input
+                  type="text"
+                  value={sec.title || ''}
+                  onChange={(e) => updateHomeSection(idx, { title: e.target.value })}
+                  placeholder="عنوان البطاقة (مثال: مذكرات الترم الأول)"
+                  className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold bg-white"
+                />
+                <input
+                  type="text"
+                  value={sec.badge || ''}
+                  onChange={(e) => updateHomeSection(idx, { badge: e.target.value })}
+                  placeholder="شارة صغيرة (مثال: متاح الآن)"
+                  className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white"
+                />
+                <select
+                  value={sec.categoryId || ''}
+                  onChange={(e) => updateHomeSection(idx, { categoryId: e.target.value })}
+                  className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold bg-white"
+                >
+                  <option value="">عرض كل المذكرات عند الضغط</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>ربط بتصنيف: {c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <input
+                  type="text"
+                  value={sec.description || ''}
+                  onChange={(e) => updateHomeSection(idx, { description: e.target.value })}
+                  placeholder="وصف البطاقة..."
+                  className="sm:col-span-2 px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white"
+                />
+                <input
+                  type="text"
+                  value={sec.buttonText || ''}
+                  onChange={(e) => updateHomeSection(idx, { buttonText: e.target.value })}
+                  placeholder="نص الرابط (مثال: تصفح القسم)"
+                  className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold bg-white"
+                />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
