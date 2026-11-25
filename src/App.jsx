@@ -81,7 +81,7 @@ import {
  * ============================================================================
  */
 const DEFAULT_FIREBASE_CONFIG = {
-  apiKey: 'AIzaSyD_du5VY8nJGDJ169Fof9EALi9x2W2d-14',
+  apiKey: 'AIzaSyD_du5VY8nJGDJ169Fof9EAlI9x2W2d-14',
   authDomain: 'el3bakera-edu.firebaseapp.com',
   projectId: 'el3bakera-edu',
   storageBucket: 'el3bakera-edu.firebasestorage.app',
