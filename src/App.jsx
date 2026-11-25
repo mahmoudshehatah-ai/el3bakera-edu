@@ -109,6 +109,7 @@ const DEFAULT_SETTINGS = {
   paymentInstructions: 'فودافون كاش / إنستاباي: 01068481536',
   promoBannerText: '🎉 عرض خاص للمعلمين: خصم 15% على جميع مذكرات الترم الأول + إضافة الشعار مجانًا لفترة محدودة!',
   showNotices: true,
+  allowTeacherLogo: true,
   notices: [
     'جميع المذكرات تُسلّم بصيغة إلكترونية PDF عالية الدقة جاهزة للطباعة (لا يوجد شحن ورقي).',
     'يتم تخصيص الغلاف والصفحات الداخلية باسم المعلم ورقم هاتفه وشعاره الخاص خلال 24 ساعة.'
@@ -686,6 +687,22 @@ export default function App() {
     }
   };
 
+  const handleDeleteOrder = async (orderId) => {
+    const updatedOrders = orders.filter((o) => o.id !== orderId);
+    setOrders(updatedOrders);
+    try {
+      localStorage.setItem('muzakkirati_orders', JSON.stringify(updatedOrders));
+    } catch {}
+    if (db) {
+      try {
+        await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'orders', orderId));
+        showToast('تم حذف الطلب بنجاح');
+      } catch (err) {
+        showToast(`خطأ أثناء حذف الطلب: ${err?.code || err?.message}`);
+      }
+    }
+  };
+
   const handleSyncAllToCloud = async () => {
     if (!db) {
       showToast('قاعدة البيانات غير متصلة');
@@ -788,6 +805,7 @@ export default function App() {
           onDeleteCoupon={handleDeleteCoupon}
           orders={orders}
           onUpdateOrder={handleUpdateOrder}
+          onDeleteOrder={handleDeleteOrder}
           showToast={showToast}
         />
         {toastMessage && (
@@ -1517,12 +1535,15 @@ function NotebookCard({ notebook, stages, grades, subjects, onOrder, onPreview }
   return (
     <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm hover:shadow-xl transition overflow-hidden flex flex-col">
       {/* Cover Image */}
-      <div className="relative h-56 bg-gradient-to-br from-slate-800 to-blue-950 flex items-center justify-center overflow-hidden">
+      <div
+        onClick={onPreview}
+        className="relative h-56 bg-gradient-to-br from-slate-800 to-blue-950 flex items-center justify-center overflow-hidden cursor-pointer group"
+      >
         {notebook.coverImage ? (
           <img
             src={notebook.coverImage}
             alt={notebook.title}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
           />
         ) : (
           <div className="text-center p-6 text-white">
@@ -1564,7 +1585,10 @@ function NotebookCard({ notebook, stages, grades, subjects, onOrder, onPreview }
           )}
         </div>
 
-        <h3 className="text-base font-black text-slate-900 mb-2 leading-snug">
+        <h3
+          onClick={onPreview}
+          className="text-base font-black text-slate-900 hover:text-blue-700 transition mb-2 leading-snug cursor-pointer"
+        >
           {notebook.title}
         </h3>
 
@@ -2020,17 +2044,19 @@ function OrderModal({ notebook, settings, coupons, onClose, onSubmitOrder, showT
             </div>
           ))}
 
-          <div>
-            <label className="block text-xs font-extrabold text-slate-700 mb-1.5">
-              رفع شعار المعلم أو السنتر (اختياري)
-            </label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleLogoUpload}
-              className="w-full text-xs text-slate-600 file:ml-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-extrabold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-            />
-          </div>
+          {settings.allowTeacherLogo !== false && (
+            <div>
+              <label className="block text-xs font-extrabold text-slate-700 mb-1.5">
+                رفع شعار المعلم أو السنتر (اختياري)
+              </label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleLogoUpload}
+                className="w-full text-xs text-slate-600 file:ml-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-extrabold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              />
+            </div>
+          )}
 
           {!notebook.isCustom && coupons.length > 0 && (
             <div className="flex gap-2">
@@ -2077,27 +2103,39 @@ function OrderModal({ notebook, settings, coupons, onClose, onSubmitOrder, showT
  * ============================================================================
  */
 function ProtectedPreviewModal({ notebook, platformName, onClose, onOrderNow }) {
-  const images =
-    Array.isArray(notebook.sampleImages) && notebook.sampleImages.length > 0
-      ? notebook.sampleImages
-      : notebook.coverImage
-      ? [notebook.coverImage]
-      : [];
+  const images = useMemo(() => {
+    const list = [];
+    if (notebook?.coverImage) list.push(notebook.coverImage);
+    if (Array.isArray(notebook?.sampleImages)) {
+      notebook.sampleImages.forEach((img) => {
+        if (img && img !== notebook.coverImage) list.push(img);
+      });
+    }
+    return list;
+  }, [notebook]);
+
   const [currentIndex, setCurrentIndex] = useState(0);
 
   return (
     <div
       className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 select-none"
       onContextMenu={(e) => e.preventDefault()}
+      onClick={onClose}
       dir="rtl"
     >
-      <div className="bg-white w-full max-w-3xl rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white w-full max-w-3xl rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+      >
         <div className="p-5 border-b border-slate-200 flex items-center justify-between gap-4">
           <div>
             <h3 className="font-black text-slate-900 text-base">{notebook.title}</h3>
-            <p className="text-xs text-slate-500">معاينة محمية للصفحات — جميع الحقوق محفوظة لـ {platformName}</p>
+            <p className="text-xs text-slate-500">
+              تفاصيل ومعاينة المذكرة {notebook.pagesCount > 0 ? `• ${notebook.pagesCount} صفحة` : ''}
+            </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center cursor-pointer"
           >
@@ -2105,51 +2143,74 @@ function ProtectedPreviewModal({ notebook, platformName, onClose, onOrderNow }) 
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-100 flex flex-col items-center justify-center relative">
-          {images.length > 0 ? (
-            <div className="relative max-w-lg w-full rounded-2xl overflow-hidden shadow-xl border border-slate-300 bg-white">
-              <img
-                src={images[currentIndex]}
-                alt="عينة معاينة"
-                draggable={false}
-                className="w-full h-auto pointer-events-none"
-              />
-              {/* Diagonal Watermark Overlay */}
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden">
-                <span className="text-slate-900/15 font-black text-2xl sm:text-3xl -rotate-30 whitespace-nowrap">
-                  {platformName} • نسخة معاينة
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-50 space-y-5">
+          {/* Notebook Description & Details Card */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-black text-blue-700 bg-blue-50 px-3 py-1 rounded-full">
+                وصف ومحتوى المذكرة
+              </span>
+              {notebook.pagesCount > 0 && (
+                <span className="text-xs font-extrabold text-slate-600">
+                  عدد الصفحات: {notebook.pagesCount} صفحة
                 </span>
-              </div>
+              )}
             </div>
-          ) : (
-            <div className="text-center p-10 bg-white rounded-2xl border border-slate-200 max-w-md">
-              <BookOpen className="w-12 h-12 text-blue-700 mx-auto mb-3" />
-              <p className="text-sm text-slate-700 leading-relaxed">{notebook.description}</p>
-            </div>
-          )}
+            <p className="text-sm text-slate-700 leading-relaxed">
+              {notebook.description || 'مذكرة دراسية منسقة ومحدثة بالكامل وجاهزة للطباعة باسم المعلم وشعاره الخاص.'}
+            </p>
+          </div>
 
-          {images.length > 1 && (
-            <div className="flex items-center gap-3 mt-4">
-              {images.map((_, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setCurrentIndex(idx)}
-                  className={`w-8 h-8 rounded-lg text-xs font-black transition cursor-pointer ${
-                    currentIndex === idx
-                      ? 'bg-blue-700 text-white'
-                      : 'bg-white text-slate-700 border border-slate-300'
-                  }`}
-                >
-                  {idx + 1}
-                </button>
-              ))}
+          {/* Sample Pages Viewer */}
+          {images.length > 0 && (
+            <div className="flex flex-col items-center">
+              <div className="relative max-w-lg w-full rounded-2xl overflow-hidden shadow-xl border border-slate-300 bg-white">
+                <img
+                  src={images[currentIndex] || images[0]}
+                  alt="عينة معاينة"
+                  draggable={false}
+                  className="w-full h-auto pointer-events-none"
+                />
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden">
+                  <span className="text-slate-900/15 font-black text-2xl sm:text-3xl -rotate-30 whitespace-nowrap">
+                    {platformName} • نسخة معاينة
+                  </span>
+                </div>
+              </div>
+
+              {images.length > 1 && (
+                <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
+                  {images.map((_, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setCurrentIndex(idx)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${
+                        currentIndex === idx
+                          ? 'bg-blue-700 text-white'
+                          : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-100'
+                      }`}
+                    >
+                      {idx === 0 && notebook.coverImage ? 'الغلاف' : `صفحة ${idx + 1}`}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
 
         <div className="p-4 border-t border-slate-200 bg-white flex items-center justify-between gap-4">
-          <span className="font-black text-blue-700 text-lg">{notebook.price} ج.م</span>
+          <div>
+            <span className="font-black text-blue-700 text-lg">{notebook.price} ج.م</span>
+            {notebook.oldPrice > notebook.price && (
+              <span className="text-xs text-slate-400 line-through mr-2 font-bold">
+                {notebook.oldPrice} ج.م
+              </span>
+            )}
+          </div>
           <button
+            type="button"
             onClick={onOrderNow}
             className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-xl text-sm font-black transition cursor-pointer"
           >
@@ -2191,6 +2252,7 @@ function AdminPortal({
   onDeleteCoupon,
   orders,
   onUpdateOrder,
+  onDeleteOrder,
   showToast
 }) {
   if (!isAdminAuthenticated) {
@@ -2312,7 +2374,11 @@ function AdminPortal({
         )}
 
         {adminView === 'orders' && (
-          <AdminOrdersTab orders={orders} onUpdateOrder={onUpdateOrder} />
+          <AdminOrdersTab
+            orders={orders}
+            onUpdateOrder={onUpdateOrder}
+            onDeleteOrder={onDeleteOrder}
+          />
         )}
 
         {adminView === 'notebooks' && (
@@ -2356,12 +2422,9 @@ function AdminPortal({
   );
 }
 
-/**
- * ============================================================================
- * ADMIN SUB-TABS
- * ============================================================================
- */
-function AdminOrdersTab({ orders, onUpdateOrder }) {
+function AdminOrdersTab({ orders, onUpdateOrder, onDeleteOrder }) {
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
   return (
     <div className="space-y-4 pb-12">
       {orders.length === 0 ? (
@@ -2376,15 +2439,48 @@ function AdminOrdersTab({ orders, onUpdateOrder }) {
                 <span className="font-mono font-black text-blue-700 text-sm">{ord.id}</span>
                 <h4 className="font-black text-slate-900 text-base mt-0.5">{ord.notebookTitle}</h4>
               </div>
-              <select
-                value={ord.status}
-                onChange={(e) => onUpdateOrder({ ...ord, status: e.target.value })}
-                className="px-4 py-2 rounded-xl border border-slate-300 text-xs font-extrabold bg-slate-50"
-              >
-                {ORDER_STATUSES.map((st) => (
-                  <option key={st.value} value={st.value}>{st.label}</option>
-                ))}
-              </select>
+              <div className="flex items-center gap-2">
+                <select
+                  value={ord.status}
+                  onChange={(e) => onUpdateOrder({ ...ord, status: e.target.value })}
+                  className="px-4 py-2 rounded-xl border border-slate-300 text-xs font-extrabold bg-slate-50"
+                >
+                  {ORDER_STATUSES.map((st) => (
+                    <option key={st.value} value={st.value}>{st.label}</option>
+                  ))}
+                </select>
+
+                {confirmDeleteId === ord.id ? (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onDeleteOrder(ord.id);
+                        setConfirmDeleteId(null);
+                      }}
+                      className="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black cursor-pointer"
+                    >
+                      تأكيد الحذف
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteId(null)}
+                      className="px-2.5 py-2 rounded-xl bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
+                    >
+                      إلغاء
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteId(ord.id)}
+                    className="p-2 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 transition cursor-pointer"
+                    title="حذف الطلب"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-slate-50 p-4 rounded-2xl">
@@ -2394,6 +2490,22 @@ function AdminOrdersTab({ orders, onUpdateOrder }) {
               {ord.centerAddress && <p><span className="text-slate-500">العنوان:</span> <strong>{ord.centerAddress}</strong></p>}
               {ord.notes && <p className="sm:col-span-2"><span className="text-slate-500">ملاحظات:</span> <strong>{ord.notes}</strong></p>}
             </div>
+
+            {ord.teacherLogo && (
+              <div className="flex items-center gap-3 bg-blue-50/60 border border-blue-100 p-3 rounded-2xl">
+                <img src={ord.teacherLogo} alt="شعار المعلم" className="w-12 h-12 rounded-xl object-contain bg-white border border-slate-200" />
+                <div className="text-xs">
+                  <p className="font-extrabold text-slate-800">شعار المعلم المرفق مع الطلب</p>
+                  <a
+                    href={ord.teacherLogo}
+                    download={`logo-${ord.id}.png`}
+                    className="text-blue-700 font-bold hover:underline"
+                  >
+                    تحميل الشعار
+                  </a>
+                </div>
+              </div>
+            )}
 
             <div className="flex flex-col sm:flex-row gap-2">
               <input
@@ -3148,7 +3260,7 @@ function AdminSettingsTab({ settings, onSaveSettings }) {
 
       {/* Customizable Order Form Fields */}
       <div className="border-t border-slate-200 pt-6 space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h4 className="font-black text-slate-900">تخصيص حقول نموذج الطلب</h4>
           <button
             type="button"
@@ -3157,6 +3269,23 @@ function AdminSettingsTab({ settings, onSaveSettings }) {
           >
             + إضافة حقل جديد
           </button>
+        </div>
+
+        {/* Toggle for Teacher Logo Upload Field */}
+        <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-black text-slate-900">حقل رفع شعار المعلم أو السنتر</p>
+            <p className="text-[11px] text-slate-600">التحكم في إظهار أو إخفاء خانة رفع الشعار للعميل داخل نموذج الطلب</p>
+          </div>
+          <label className="flex items-center gap-2 text-xs font-extrabold text-blue-800 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={form.allowTeacherLogo !== false}
+              onChange={(e) => setForm({ ...form, allowTeacherLogo: e.target.checked })}
+              className="w-4 h-4 accent-blue-700"
+            />
+            <span>{form.allowTeacherLogo !== false ? 'ظاهر في النموذج' : 'مخفي'}</span>
+          </label>
         </div>
 
         <div className="space-y-3">
