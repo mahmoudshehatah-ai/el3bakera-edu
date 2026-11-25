@@ -191,9 +191,8 @@ async function compressImageFile(file, maxWidth = 750, quality = 0.72) {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
         let dataUrl = canvas.toDataURL('image/jpeg', quality);
-        // Ensure Firestore document stays well below 1MB limit
-        if (dataUrl.length > 480000) {
-          dataUrl = canvas.toDataURL('image/jpeg', 0.5);
+        if (dataUrl.length > 220000) {
+          dataUrl = canvas.toDataURL('image/jpeg', 0.45);
         }
         resolve(dataUrl);
       };
@@ -202,6 +201,38 @@ async function compressImageFile(file, maxWidth = 750, quality = 0.72) {
     };
     reader.onerror = reject;
     reader.readAsDataURL(file);
+  });
+}
+
+async function shrinkDataUrlIfNeeded(dataUrl, maxWidth = 800) {
+  if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) {
+    return dataUrl;
+  }
+  if (dataUrl.startsWith('data:image/svg') || dataUrl.length <= 220000) {
+    return dataUrl;
+  }
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
+      }
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      let out = canvas.toDataURL('image/jpeg', 0.55);
+      if (out.length > 220000) {
+        out = canvas.toDataURL('image/jpeg', 0.35);
+      }
+      resolve(out);
+    };
+    img.onerror = () => resolve('');
+    img.src = dataUrl;
   });
 }
 
@@ -3777,16 +3808,25 @@ export default function App() {
 
   // Persistence helpers
   const persistConfigDoc = async (partial) => {
+    const sanitized = { ...partial };
+    if (sanitized.settings) {
+      sanitized.settings = {
+        ...sanitized.settings,
+        logoUrl: await shrinkDataUrlIfNeeded(sanitized.settings.logoUrl, 360),
+        heroBannerUrl: await shrinkDataUrlIfNeeded(sanitized.settings.heroBannerUrl, 900)
+      };
+    }
     if (db) {
       try {
         await setDoc(
           doc(db, 'artifacts', appId, 'public', 'data', 'config', 'main'),
-          partial,
+          sanitized,
           { merge: true }
         );
+        setCloudStatus('connected');
       } catch (err) {
         console.error('Cloud config save error:', err);
-        showToast('تنبيه: حجم الصورة كبير جدًا على السحابة، جرب صورة أصغر', 'error');
+        showToast(`تعذر الحفظ السحابي: ${err?.code || err?.message || 'خطأ غير معروف'}`, 'error');
       }
     }
   };
@@ -3822,17 +3862,28 @@ export default function App() {
   };
 
   const handleSaveNotebook = async (nbObj) => {
-    const next = notebooks.some((n) => n.id === nbObj.id)
-      ? notebooks.map((n) => (n.id === nbObj.id ? nbObj : n))
-      : [nbObj, ...notebooks];
+    const cleanSampleImages = [];
+    for (const img of nbObj.sampleImages || []) {
+      const shrunk = await shrinkDataUrlIfNeeded(img, 650);
+      if (shrunk) cleanSampleImages.push(shrunk);
+    }
+    const cleanNb = {
+      ...nbObj,
+      coverUrl: await shrinkDataUrlIfNeeded(nbObj.coverUrl, 550),
+      sampleImages: cleanSampleImages.slice(0, 4)
+    };
+    const next = notebooks.some((n) => n.id === cleanNb.id)
+      ? notebooks.map((n) => (n.id === cleanNb.id ? cleanNb : n))
+      : [cleanNb, ...notebooks];
     setNotebooks(next);
     localStorage.setItem('muzakkirati_notebooks', JSON.stringify(next));
     if (db) {
       try {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'notebooks', nbObj.id), nbObj);
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'notebooks', cleanNb.id), cleanNb);
+        setCloudStatus('connected');
       } catch (err) {
         console.error('Cloud notebook save error:', err);
-        showToast('تنبيه: حجم صور العينة كبير، تم تقليل الجودة للحفظ السحابي', 'error');
+        showToast(`تعذر حفظ المذكرة سحابيًا: ${err?.code || err?.message}`, 'error');
       }
     }
   };
@@ -3895,7 +3946,7 @@ export default function App() {
     try {
       await persistConfigDoc({ settings, categories, stages, grades, subjects });
       for (const nb of notebooks) {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'notebooks', nb.id), nb);
+        await handleSaveNotebook(nb);
       }
       for (const cpn of coupons) {
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'coupons', cpn.id), cpn);
@@ -3903,9 +3954,13 @@ export default function App() {
       for (const bnd of bundles) {
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bundles', bnd.id), bnd);
       }
-      showToast('تمت مزامنة جميع الإعدادات والمذكرات إلى السحابة بنجاح! افتح الهاتف الآن', 'success');
+      for (const ord of orders) {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', ord.id), ord);
+      }
+      setCloudStatus('connected');
+      showToast('تمت مزامنة جميع الإعدادات والمذكرات والطلبات إلى السحابة بنجاح! افتح الهاتف الآن', 'success');
     } catch (err) {
-      showToast('تعذر رفع بعض العناصر بسبب كبر حجم الصور المرفقة', 'error');
+      showToast(`خطأ أثناء المزامنة: ${err?.code || err?.message}`, 'error');
     }
   };
 
