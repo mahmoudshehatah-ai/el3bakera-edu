@@ -1126,7 +1126,7 @@ export default function App() {
       {previewNotebook && (
         <ProtectedPreviewModal
           notebook={previewNotebook}
-          platformName={settings.platformName}
+          settings={settings}
           onClose={() => setPreviewNotebook(null)}
           onOrderNow={() => {
             const nb = previewNotebook;
@@ -1241,25 +1241,6 @@ function HomePage({
           </div>
         </div>
       </section>
-
-      {/* Important Notices Box */}
-      {settings.showNotices && Array.isArray(settings.notices) && settings.notices.length > 0 && (
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6 relative z-10">
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 shadow-md flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <div className="w-11 h-11 rounded-xl bg-amber-400/20 text-amber-700 flex items-center justify-center shrink-0">
-              <AlertCircle className="w-6 h-6" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="text-sm font-black text-amber-950">تنبيهات هامة قبل الطلب:</h3>
-              <ul className="text-xs sm:text-sm text-amber-900 space-y-1 font-semibold">
-                {settings.notices.map((notice, idx) => (
-                  <li key={idx}>• {notice}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </section>
-      )}
 
       {/* About Section */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
@@ -2103,7 +2084,9 @@ function OrderModal({ notebook, settings, coupons, onClose, onSubmitOrder, showT
  * PROTECTED SAMPLE PREVIEWER MODAL (SWIPE + ARROWS + DRIVE LINK)
  * ============================================================================
  */
-function ProtectedPreviewModal({ notebook, platformName, onClose, onOrderNow }) {
+function ProtectedPreviewModal({ notebook, settings, onClose, onOrderNow }) {
+  const platformName = settings?.platformName || 'منصة العباقرة للمذكرات التعليمية';
+  const showNotices = settings?.showNotices !== false && Array.isArray(settings?.notices) && settings.notices.length > 0;
   const images = useMemo(() => {
     const list = [];
     if (notebook?.coverImage) list.push(notebook.coverImage);
@@ -2227,6 +2210,23 @@ function ProtectedPreviewModal({ notebook, platformName, onClose, onOrderNow }) 
               </div>
             )}
           </div>
+
+          {/* Important Notices Inside Each Notebook's Detail Page */}
+          {showNotices && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-400/25 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-xs font-black text-amber-950">تنبيهات هامة قبل الطلب:</h4>
+                <ul className="text-xs text-amber-900 space-y-1 font-semibold">
+                  {settings.notices.map((notice, idx) => (
+                    <li key={idx}>• {notice}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
 
           {/* Swipeable Sample Pages Viewer */}
           {images.length > 0 && (
@@ -3388,6 +3388,38 @@ function AdminSettingsTab({ settings, onSaveSettings }) {
             className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
           />
         </div>
+      </div>
+
+      {/* Notices Control in Notebook Details Page */}
+      <div className="border-t border-slate-200 pt-6 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h4 className="font-black text-slate-900">التنبيهات الهامة داخل صفحة كل مذكرة</h4>
+            <p className="text-[11px] text-slate-500">تظهر هذه التنبيهات للزائر عند فتح صفحة تفاصيل ومعاينة أي مذكرة (كل سطر يمثل تنبيهًا)</p>
+          </div>
+          <label className="flex items-center gap-2 text-xs font-extrabold text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.showNotices !== false}
+              onChange={(e) => setForm({ ...form, showNotices: e.target.checked })}
+              className="w-4 h-4 accent-amber-600"
+            />
+            <span>{form.showNotices !== false ? 'إظهار التنبيهات' : 'إخفاء التنبيهات'}</span>
+          </label>
+        </div>
+
+        <textarea
+          rows={3}
+          value={Array.isArray(form.notices) ? form.notices.join('\n') : ''}
+          onChange={(e) =>
+            setForm({
+              ...form,
+              notices: e.target.value.split('\n').filter((line) => line.trim() !== '')
+            })
+          }
+          placeholder="اكتب كل تنبيه في سطر مستقل..."
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold"
+        />
       </div>
 
       {/* Customizable Order Form Fields */}
