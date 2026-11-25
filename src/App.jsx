@@ -2241,7 +2241,7 @@ function OrderModal({ notebook, settings, coupons, onClose, onSubmitOrder, showT
 
 /**
  * ============================================================================
- * PROTECTED SAMPLE PREVIEWER MODAL (ZOOM + SWIPE + ARROWS + DRIVE LINK)
+ * PROTECTED SAMPLE PREVIEWER MODAL (FULLSCREEN LIGHTBOX + PINCH-TO-ZOOM + SWIPE)
  * ============================================================================
  */
 function ProtectedPreviewModal({ notebook, settings, onClose, onOrderNow }) {
@@ -2262,10 +2262,20 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onOrderNow }) {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const pointerStartXRef = useRef(null);
+  const pinchStartDistRef = useRef(null);
+  const pinchStartZoomRef = useRef(1);
+
+  const getTouchDistance = (touches) => {
+    if (!touches || touches.length < 2) return 0;
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.hypot(dx, dy);
+  };
 
   const changePage = (newIdx) => {
     setCurrentIndex(newIdx);
     setZoomLevel(1);
+    pinchStartDistRef.current = null;
   };
 
   const goNext = () => {
@@ -2278,21 +2288,43 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onOrderNow }) {
     changePage((currentIndex - 1 + images.length) % images.length);
   };
 
-  const handleZoomIn = () => setZoomLevel((z) => Math.min(2.6, Number((z + 0.35).toFixed(2))));
-  const handleZoomOut = () => setZoomLevel((z) => Math.max(1, Number((z - 0.35).toFixed(2))));
+  const handleZoomIn = () => setZoomLevel((z) => Math.min(3.5, Number((z + 0.4).toFixed(2))));
+  const handleZoomOut = () => setZoomLevel((z) => Math.max(1, Number((z - 0.4).toFixed(2))));
   const handleResetZoom = () => setZoomLevel(1);
   const handleToggleDoubleClickZoom = () => {
-    setZoomLevel((z) => (z > 1 ? 1 : 1.85));
+    setZoomLevel((z) => (z > 1 ? 1 : 2));
   };
 
   const handleTouchStart = (e) => {
+    if (e.touches && e.touches.length === 2) {
+      pointerStartXRef.current = null;
+      pinchStartDistRef.current = getTouchDistance(e.touches);
+      pinchStartZoomRef.current = zoomLevel;
+      return;
+    }
     if (zoomLevel > 1) return;
-    if (e.touches && e.touches.length > 0) {
+    if (e.touches && e.touches.length === 1) {
       pointerStartXRef.current = e.touches[0].clientX;
     }
   };
 
+  const handleTouchMove = (e) => {
+    if (e.touches && e.touches.length === 2 && pinchStartDistRef.current) {
+      e.preventDefault();
+      const currentDist = getTouchDistance(e.touches);
+      if (currentDist > 0) {
+        const scaleRatio = currentDist / pinchStartDistRef.current;
+        const nextZoom = Math.min(3.5, Math.max(1, Number((pinchStartZoomRef.current * scaleRatio).toFixed(2))));
+        setZoomLevel(nextZoom);
+      }
+    }
+  };
+
   const handleTouchEnd = (e) => {
+    if (pinchStartDistRef.current !== null && (!e.touches || e.touches.length < 2)) {
+      pinchStartDistRef.current = null;
+      return;
+    }
     if (zoomLevel > 1 || pointerStartXRef.current === null) return;
     const endX = e.changedTouches?.[0]?.clientX;
     if (typeof endX === 'number') {
@@ -2328,6 +2360,142 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onOrderNow }) {
 
   const driveLink = normalizeExternalUrl(notebook?.driveUrl);
 
+  // True Full-Screen Image Lightbox Mode (Edge-to-Edge with Pinch-to-Zoom)
+  if (isFullscreen && images.length > 0) {
+    return (
+      <div
+        className="fixed inset-0 z-[60] bg-slate-950 text-white flex flex-col select-none"
+        onContextMenu={(e) => e.preventDefault()}
+        dir="rtl"
+      >
+        {/* Top Floating Controls */}
+        <div className="flex items-center justify-between gap-2 px-3 sm:px-6 py-3 bg-slate-900/95 border-b border-slate-800 z-10">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleZoomIn}
+              disabled={zoomLevel >= 3.5}
+              className="flex items-center gap-1 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-black cursor-pointer"
+            >
+              <ZoomIn className="w-4 h-4" />
+              <span>تكبير</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleZoomOut}
+              disabled={zoomLevel <= 1}
+              className="flex items-center gap-1 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white text-xs font-black cursor-pointer"
+            >
+              <ZoomOut className="w-4 h-4" />
+              <span>تصغير</span>
+            </button>
+            {zoomLevel > 1 && (
+              <button
+                type="button"
+                onClick={handleResetZoom}
+                className="flex items-center gap-1 px-2.5 py-2 rounded-xl bg-amber-400 text-slate-950 text-xs font-black cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>{Math.round(zoomLevel * 100)}%</span>
+              </button>
+            )}
+          </div>
+
+          <span className="text-xs font-black text-slate-200">
+            {currentIndex === 0 && notebook.coverImage
+              ? `الغلاف (1 / ${images.length})`
+              : `${currentIndex + 1} / ${images.length}`}
+          </span>
+
+          <button
+            type="button"
+            onClick={() => {
+              setIsFullscreen(false);
+              setZoomLevel(1);
+            }}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black cursor-pointer"
+          >
+            <Minimize2 className="w-4 h-4" />
+            <span>إغلاق ملء الشاشة</span>
+          </button>
+        </div>
+
+        {/* Fullscreen Pinch-Zoomable Viewport */}
+        <div
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onMouseDown={handleMouseDown}
+          onMouseUp={handleMouseUp}
+          onDoubleClick={handleToggleDoubleClickZoom}
+          style={{ touchAction: zoomLevel > 1 ? 'pan-x pan-y' : 'pinch-zoom' }}
+          className="flex-1 w-full h-full overflow-auto flex items-center justify-center relative bg-black"
+        >
+          <div
+            style={{
+              width: `${zoomLevel * 100}%`,
+              maxWidth: zoomLevel === 1 ? '900px' : 'none',
+              transition: pinchStartDistRef.current ? 'none' : 'width 0.18s ease-out'
+            }}
+            className="relative mx-auto"
+          >
+            <img
+              src={images[currentIndex] || images[0]}
+              alt="عينة ملء الشاشة"
+              draggable={false}
+              className="w-full h-auto pointer-events-none select-none block"
+            />
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden">
+              <span className="text-slate-900/15 font-black text-2xl sm:text-4xl -rotate-30 whitespace-nowrap">
+                {platformName} • نسخة معاينة
+              </span>
+            </div>
+          </div>
+
+          {images.length > 1 && zoomLevel === 1 && (
+            <>
+              <button
+                type="button"
+                onClick={goPrev}
+                className="fixed right-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/20 hover:bg-white/35 backdrop-blur-md text-white flex items-center justify-center shadow-xl cursor-pointer z-10"
+              >
+                <span className="text-2xl font-black leading-none">›</span>
+              </button>
+              <button
+                type="button"
+                onClick={goNext}
+                className="fixed left-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/20 hover:bg-white/35 backdrop-blur-md text-white flex items-center justify-center shadow-xl cursor-pointer z-10"
+              >
+                <span className="text-2xl font-black leading-none">‹</span>
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* Bottom Hint & Dots */}
+        <div className="py-2.5 px-4 bg-slate-900/95 border-t border-slate-800 flex flex-col items-center gap-1.5">
+          <p className="text-[11px] text-slate-400 font-bold">
+            قرّب وباعد بإصبعيك للتكبير والتصغير • اسحب للتنقل بين الصفحات
+          </p>
+          {images.length > 1 && (
+            <div className="flex flex-wrap items-center justify-center gap-1.5">
+              {images.map((_, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => changePage(idx)}
+                  className={`h-2 rounded-full transition-all cursor-pointer ${
+                    currentIndex === idx ? 'w-6 bg-amber-400' : 'w-2 bg-slate-600'
+                  }`}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 select-none"
@@ -2337,9 +2505,7 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onOrderNow }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`bg-white w-full ${
-          isFullscreen ? 'max-w-6xl h-[96vh]' : 'max-w-3xl max-h-[92vh]'
-        } rounded-3xl overflow-hidden shadow-2xl flex flex-col transition-all`}
+        className="bg-white w-full max-w-3xl max-h-[92vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col transition-all"
       >
         <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between gap-4">
           <div>
@@ -2349,14 +2515,17 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onOrderNow }) {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setIsFullscreen((f) => !f)}
-              title={isFullscreen ? 'تصغير النافذة' : 'تكبير النافذة لملء الشاشة'}
-              className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700 cursor-pointer"
-            >
-              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-            </button>
+            {images.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsFullscreen(true)}
+                title="عرض الصور في كامل الشاشة"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-black cursor-pointer"
+              >
+                <Maximize2 className="w-4 h-4" />
+                <span className="hidden sm:inline">ملء الشاشة</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={onClose}
@@ -2416,16 +2585,24 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onOrderNow }) {
             </div>
           )}
 
-          {/* Interactive Zoomable & Swipeable Sample Pages Viewer */}
+          {/* Interactive Pinch-Zoomable & Swipeable Sample Pages Viewer */}
           {images.length > 0 && (
             <div className="flex flex-col items-center">
-              {/* Zoom & Navigation Toolbar */}
+              {/* Zoom & Fullscreen Toolbar */}
               <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-2xl p-2.5 mb-3 flex flex-wrap items-center justify-between gap-2 shadow-sm">
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
+                    onClick={() => setIsFullscreen(true)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black transition cursor-pointer"
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                    <span>كامل الشاشة</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={handleZoomIn}
-                    disabled={zoomLevel >= 2.6}
+                    disabled={zoomLevel >= 3.5}
                     title="تكبير الصفحة"
                     className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 disabled:opacity-40 text-blue-700 text-xs font-black transition cursor-pointer"
                   >
@@ -2455,36 +2632,31 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onOrderNow }) {
                   )}
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold text-slate-500 hidden sm:inline">
-                    {zoomLevel > 1 ? 'اسحب داخل الصفحة للتصفح أو انقر مرتين للتصغير' : 'انقر مرتين للتكبير أو اسحب للتنقل'}
-                  </span>
-                  <span className="text-xs font-black text-blue-700 bg-blue-50 px-3 py-1 rounded-full">
-                    {currentIndex === 0 && notebook.coverImage
-                      ? `الغلاف (1 / ${images.length})`
-                      : `صفحة ${currentIndex + 1} من ${images.length}`}
-                  </span>
-                </div>
+                <span className="text-xs font-black text-blue-700 bg-blue-50 px-3 py-1 rounded-full">
+                  {currentIndex === 0 && notebook.coverImage
+                    ? `الغلاف (1 / ${images.length})`
+                    : `صفحة ${currentIndex + 1} من ${images.length}`}
+                </span>
               </div>
 
               <div
                 onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
                 onMouseDown={handleMouseDown}
                 onMouseUp={handleMouseUp}
                 onDoubleClick={handleToggleDoubleClickZoom}
-                className={`relative ${
-                  isFullscreen ? 'max-w-4xl' : 'max-w-xl'
-                } w-full rounded-2xl shadow-xl border border-slate-300 bg-white ${
+                style={{ touchAction: zoomLevel > 1 ? 'pan-x pan-y' : 'pinch-zoom' }}
+                className={`relative max-w-xl w-full rounded-2xl shadow-xl border border-slate-300 bg-white ${
                   zoomLevel > 1
                     ? 'overflow-auto max-h-[65vh] cursor-zoom-out'
-                    : 'overflow-hidden touch-pan-y cursor-zoom-in'
+                    : 'overflow-hidden cursor-zoom-in'
                 }`}
               >
                 <div
                   style={{
                     width: `${zoomLevel * 100}%`,
-                    transition: 'width 0.2s ease-out'
+                    transition: pinchStartDistRef.current ? 'none' : 'width 0.18s ease-out'
                   }}
                   className="relative"
                 >
@@ -2529,8 +2701,12 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onOrderNow }) {
                 )}
               </div>
 
+              <p className="text-[11px] font-bold text-slate-500 mt-2.5 text-center">
+                اضغط «كامل الشاشة» للمطالعة بحجم الشاشة الكامل • قرّب بإصبعيك للتكبير أو اسحب للتنقل
+              </p>
+
               {images.length > 1 && (
-                <div className="flex flex-wrap items-center justify-center gap-1.5 mt-4">
+                <div className="flex flex-wrap items-center justify-center gap-1.5 mt-3">
                   {images.map((_, idx) => (
                     <button
                       key={idx}
