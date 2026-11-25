@@ -161,12 +161,12 @@ function generateOrderNumber() {
 
 function normalizeExternalUrl(url) {
   const trimmed = String(url || '').trim();
-  if (!trimmed) return '';
+  if (!trimmed) return '#';
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
   return `https://${trimmed}`;
 }
 
-async function compressImageFile(file, maxWidth = 900, quality = 0.78) {
+async function compressImageFile(file, maxWidth = 750, quality = 0.72) {
   return new Promise((resolve, reject) => {
     if (file.type === 'image/svg+xml') {
       const reader = new FileReader();
@@ -190,7 +190,12 @@ async function compressImageFile(file, maxWidth = 900, quality = 0.78) {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', quality));
+        let dataUrl = canvas.toDataURL('image/jpeg', quality);
+        // Ensure Firestore document stays well below 1MB limit
+        if (dataUrl.length > 480000) {
+          dataUrl = canvas.toDataURL('image/jpeg', 0.5);
+        }
+        resolve(dataUrl);
       };
       img.onerror = reject;
       img.src = event.target.result;
@@ -1362,6 +1367,8 @@ function AdminDashboard({
   onDeleteBundle,
   onLogout,
   onBackToSite,
+  onSyncAllToCloud,
+  cloudStatus,
   showToast
 }) {
   const [activeTab, setActiveTab] = useState('stats');
@@ -1639,6 +1646,29 @@ function AdminDashboard({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <span
+            className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-extrabold ${
+              cloudStatus === 'connected'
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+            }`}
+          >
+            <span
+              className={`w-2 h-2 rounded-full ${
+                cloudStatus === 'connected' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+              }`}
+            />
+            {cloudStatus === 'connected' ? 'متصل بالسحابة' : 'جاري الاتصال...'}
+          </span>
+          <button
+            type="button"
+            onClick={onSyncAllToCloud}
+            className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-xs font-extrabold flex items-center gap-1.5"
+            title="رفع جميع البيانات المحلية إلى السحابة لتظهر على الهاتف"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>مزامنة للسحابة</span>
+          </button>
           <button
             type="button"
             onClick={onBackToSite}
@@ -3528,7 +3558,7 @@ export default function App() {
   const [page, setPage] = useState('home');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [toast, setToast] = useState(null);
-
+  const [cloudStatus, setCloudStatus] = useState('connecting');
   // Browse filters
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [selectedStageId, setSelectedStageId] = useState('');
@@ -3660,6 +3690,7 @@ export default function App() {
     signInAnonymously(auth).catch(() => {});
     const unsubAuth = onAuthStateChanged(auth, (user) => {
       if (!user) return;
+      setCloudStatus('connected');
       const basePath = ['artifacts', appId, 'public', 'data'];
       const handleSnapErr = (err) => {
         console.warn('Firestore listener notice:', err?.code || err?.message);
@@ -3753,7 +3784,10 @@ export default function App() {
           partial,
           { merge: true }
         );
-      } catch (_) {}
+      } catch (err) {
+        console.error('Cloud config save error:', err);
+        showToast('تنبيه: حجم الصورة كبير جدًا على السحابة، جرب صورة أصغر', 'error');
+      }
     }
   };
 
@@ -3763,28 +3797,28 @@ export default function App() {
     await persistConfigDoc({ settings: nextSettings });
   };
 
-  const handleSaveCategories = async (next) => {
-    setCategories(next);
-    localStorage.setItem('muzakkirati_categories', JSON.stringify(next));
-    await persistConfigDoc({ categories: next });
+  const handleSaveCategories = async (nextCategories) => {
+    setCategories(nextCategories);
+    localStorage.setItem('muzakkirati_categories', JSON.stringify(nextCategories));
+    await persistConfigDoc({ categories: nextCategories });
   };
 
-  const handleSaveStages = async (next) => {
-    setStages(next);
-    localStorage.setItem('muzakkirati_stages', JSON.stringify(next));
-    await persistConfigDoc({ stages: next });
+  const handleSaveStages = async (nextStages) => {
+    setStages(nextStages);
+    localStorage.setItem('muzakkirati_stages', JSON.stringify(nextStages));
+    await persistConfigDoc({ stages: nextStages });
   };
 
-  const handleSaveGrades = async (next) => {
-    setGrades(next);
-    localStorage.setItem('muzakkirati_grades', JSON.stringify(next));
-    await persistConfigDoc({ grades: next });
+  const handleSaveGrades = async (nextGrades) => {
+    setGrades(nextGrades);
+    localStorage.setItem('muzakkirati_grades', JSON.stringify(nextGrades));
+    await persistConfigDoc({ grades: nextGrades });
   };
 
-  const handleSaveSubjects = async (next) => {
-    setSubjects(next);
-    localStorage.setItem('muzakkirati_subjects', JSON.stringify(next));
-    await persistConfigDoc({ subjects: next });
+  const handleSaveSubjects = async (nextSubjects) => {
+    setSubjects(nextSubjects);
+    localStorage.setItem('muzakkirati_subjects', JSON.stringify(nextSubjects));
+    await persistConfigDoc({ subjects: nextSubjects });
   };
 
   const handleSaveNotebook = async (nbObj) => {
@@ -3796,35 +3830,51 @@ export default function App() {
     if (db) {
       try {
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'notebooks', nbObj.id), nbObj);
-      } catch (_) {}
+      } catch (err) {
+        console.error('Cloud notebook save error:', err);
+        showToast('تنبيه: حجم صور العينة كبير، تم تقليل الجودة للحفظ السحابي', 'error');
+      }
     }
   };
 
-  const handleDeleteNotebook = async (id) => {
-    const next = notebooks.filter((n) => n.id !== id);
+  const handleDeleteNotebook = async (nbId) => {
+    const next = notebooks.filter((n) => n.id !== nbId);
     setNotebooks(next);
     localStorage.setItem('muzakkirati_notebooks', JSON.stringify(next));
     if (db) {
       try {
-        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'notebooks', id));
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'notebooks', nbId));
       } catch (_) {}
     }
     showToast('تم حذف المذكرة', 'success');
   };
 
-  const handleSubmitOrder = async (orderObj, appliedCouponId) => {
+  const handleSubmitOrder = async (orderObj, usedCouponId) => {
     const nextOrders = [orderObj, ...orders];
     setOrders(nextOrders);
     localStorage.setItem('muzakkirati_orders', JSON.stringify(nextOrders));
     if (db) {
       try {
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', orderObj.id), orderObj);
-      } catch (_) {}
+      } catch (err) {
+        console.error('Cloud order save error:', err);
+      }
     }
-    if (appliedCouponId) {
-      const target = coupons.find((c) => c.id === appliedCouponId);
-      if (target) {
-        await handleSaveCoupon({ ...target, usedCount: Number(target.usedCount || 0) + 1 });
+    if (usedCouponId) {
+      const targetCpn = coupons.find((c) => c.id === usedCouponId);
+      if (targetCpn) {
+        const updatedCpn = { ...targetCpn, usedCount: Number(targetCpn.usedCount || 0) + 1 };
+        const nextCpns = coupons.map((c) => (c.id === usedCouponId ? updatedCpn : c));
+        setCoupons(nextCpns);
+        localStorage.setItem('muzakkirati_coupons', JSON.stringify(nextCpns));
+        if (db) {
+          try {
+            await setDoc(
+              doc(db, 'artifacts', appId, 'public', 'data', 'coupons', usedCouponId),
+              updatedCpn
+            );
+          } catch (_) {}
+        }
       }
     }
   };
@@ -3837,6 +3887,25 @@ export default function App() {
       try {
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', orderId), updates);
       } catch (_) {}
+    }
+  };
+
+  const handleSyncAllToCloud = async () => {
+    if (!db) return showToast('غير متصل بقاعدة البيانات', 'error');
+    try {
+      await persistConfigDoc({ settings, categories, stages, grades, subjects });
+      for (const nb of notebooks) {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'notebooks', nb.id), nb);
+      }
+      for (const cpn of coupons) {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'coupons', cpn.id), cpn);
+      }
+      for (const bnd of bundles) {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bundles', bnd.id), bnd);
+      }
+      showToast('تمت مزامنة جميع الإعدادات والمذكرات إلى السحابة بنجاح! افتح الهاتف الآن', 'success');
+    } catch (err) {
+      showToast('تعذر رفع بعض العناصر بسبب كبر حجم الصور المرفقة', 'error');
     }
   };
 
@@ -4094,6 +4163,8 @@ export default function App() {
             setPage('home');
           }}
           onBackToSite={() => setPage('home')}
+          onSyncAllToCloud={handleSyncAllToCloud}
+          cloudStatus={cloudStatus}
           showToast={showToast}
         />
         {toast && (
