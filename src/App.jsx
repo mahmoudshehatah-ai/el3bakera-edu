@@ -121,6 +121,7 @@ const DEFAULT_SETTINGS = {
   promoBannerText: '🎉 عرض خاص للمعلمين: خصم 15% على جميع مذكرات الترم الأول + إضافة الشعار مجانًا لفترة محدودة!',
   showNotices: true,
   allowTeacherLogo: true,
+  teacherLogoPosition: 'bottom',
   showHomeSections: true,
   showHeroSection: true,
   showHeroTrustBox: true,
@@ -2262,7 +2263,7 @@ function OrderModal({ notebook, settings, coupons, onClose, onSubmitOrder, showT
           ))}
 
           {settings.allowTeacherLogo !== false && (
-            <div>
+            <div style={{ order: settings.teacherLogoPosition === 'top' ? -1 : 0 }}>
               <label className="block text-xs font-extrabold text-slate-700 mb-1.5">
                 رفع شعار المعلم أو السنتر (اختياري)
               </label>
@@ -3785,6 +3786,18 @@ function AdminSettingsTab({ settings, categories = [], onSaveSettings }) {
     });
   };
 
+  const moveOrderField = (idx, direction) => {
+    setForm((prev) => {
+      const current = [...(Array.isArray(prev.orderFormFields) ? prev.orderFormFields : safeOrderFields)];
+      const targetIdx = idx + direction;
+      if (targetIdx < 0 || targetIdx >= current.length) return prev;
+      const temp = current[idx];
+      current[idx] = current[targetIdx];
+      current[targetIdx] = temp;
+      return { ...prev, orderFormFields: current };
+    });
+  };
+
   const updateHomeSection = (idx, patch) => {
     setForm((prev) => {
       const current = Array.isArray(prev.homeSections) ? prev.homeSections : safeHomeSections;
@@ -4328,7 +4341,10 @@ function AdminSettingsTab({ settings, categories = [], onSaveSettings }) {
       {/* Customizable Order Form Fields */}
       <div className="border-t border-slate-200 pt-6 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h4 className="font-black text-slate-900">تخصيص حقول نموذج الطلب</h4>
+          <div>
+            <h4 className="font-black text-slate-900">تخصيص حقول نموذج الطلب وترتيب أماكنها</h4>
+            <p className="text-[11px] text-slate-500">استخدم أسهم الأعلى والأسفل لتغيير ترتيب ظهور الحقول للعميل</p>
+          </div>
           <button
             type="button"
             onClick={addOrderField}
@@ -4338,27 +4354,42 @@ function AdminSettingsTab({ settings, categories = [], onSaveSettings }) {
           </button>
         </div>
 
-        {/* Toggle for Teacher Logo Upload Field */}
-        <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 flex items-center justify-between gap-3">
+        {/* Toggle & Position for Teacher Logo Upload Field */}
+        <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-black text-slate-900">حقل رفع شعار المعلم أو السنتر</p>
-            <p className="text-[11px] text-slate-600">التحكم في إظهار أو إخفاء خانة رفع الشعار للعميل داخل نموذج الطلب</p>
+            <p className="text-[11px] text-slate-600">التحكم في إظهار أو إخفاء خانة رفع الشعار ومكان ظهورها في النموذج</p>
           </div>
-          <label className="flex items-center gap-2 text-xs font-extrabold text-blue-800 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={form.allowTeacherLogo !== false}
-              onChange={(e) => setForm({ ...form, allowTeacherLogo: e.target.checked })}
-              className="w-4 h-4 accent-blue-700"
-            />
-            <span>{form.allowTeacherLogo !== false ? 'ظاهر في النموذج' : 'مخفي'}</span>
-          </label>
+          <div className="flex flex-wrap items-center gap-3">
+            {form.allowTeacherLogo !== false && (
+              <select
+                value={form.teacherLogoPosition || 'bottom'}
+                onChange={(e) => setForm({ ...form, teacherLogoPosition: e.target.value })}
+                className="px-3 py-1.5 rounded-xl border border-blue-200 bg-white text-xs font-bold text-slate-700"
+              >
+                <option value="bottom">المكان: أسفل الحقول</option>
+                <option value="top">المكان: أعلى النموذج</option>
+              </select>
+            )}
+            <label className="flex items-center gap-2 text-xs font-extrabold text-blue-800 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={form.allowTeacherLogo !== false}
+                onChange={(e) => setForm({ ...form, allowTeacherLogo: e.target.checked })}
+                className="w-4 h-4 accent-blue-700"
+              />
+              <span>{form.allowTeacherLogo !== false ? 'ظاهر في النموذج' : 'مخفي'}</span>
+            </label>
+          </div>
         </div>
 
         <div className="space-y-3">
-          {(Array.isArray(form.orderFormFields) ? form.orderFormFields : safeOrderFields).map((field, idx) => (
+          {(Array.isArray(form.orderFormFields) ? form.orderFormFields : safeOrderFields).map((field, idx, arr) => (
             <div key={field.id || idx} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
-              <div className="sm:col-span-5">
+              <div className="sm:col-span-4 flex items-center gap-2">
+                <span className="w-6 h-6 rounded-lg bg-blue-100 text-blue-800 text-[11px] font-black flex items-center justify-center shrink-0">
+                  {idx + 1}
+                </span>
                 <input
                   type="text"
                   value={field.label || ''}
@@ -4375,7 +4406,28 @@ function AdminSettingsTab({ settings, categories = [], onSaveSettings }) {
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white"
                 />
               </div>
-              <div className="sm:col-span-3 flex items-center justify-end gap-3 text-xs font-bold">
+              <div className="sm:col-span-4 flex flex-wrap items-center justify-end gap-2.5 text-xs font-bold">
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={idx === 0}
+                    onClick={() => moveOrderField(idx, -1)}
+                    title="نقل الحقل للأعلى"
+                    className="p-1.5 rounded-lg bg-white border border-slate-200 hover:bg-blue-50 disabled:opacity-35 text-slate-700 cursor-pointer"
+                  >
+                    <ArrowUp className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={idx === arr.length - 1}
+                    onClick={() => moveOrderField(idx, 1)}
+                    title="نقل الحقل للأسفل"
+                    className="p-1.5 rounded-lg bg-white border border-slate-200 hover:bg-blue-50 disabled:opacity-35 text-slate-700 cursor-pointer"
+                  >
+                    <ArrowDown className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
                 <label className="flex items-center gap-1 cursor-pointer">
                   <input
                     type="checkbox"
