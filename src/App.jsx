@@ -53,6 +53,7 @@ import {
   getFirestore,
   collection,
   doc,
+  getDoc,
   setDoc,
   deleteDoc,
   onSnapshot
@@ -331,31 +332,22 @@ function fileToCompressedDataUrl(file, maxWidth = 900, quality = 0.72) {
 }
 
 async function fitNotebookPayloadToCloud(nb) {
-  const MAX_BYTES = 820 * 1024;
-  let result = { ...nb };
+  const MAX_BYTES = 850 * 1024;
+  // Exclude heavy HD sampleImages from main notebook doc (stored separately as HD docs)
+  let result = {
+    ...nb,
+    sampleImages: [],
+    samplesCount: Array.isArray(nb.sampleImages) ? nb.sampleImages.length : (nb.samplesCount || 0)
+  };
   const estimateSize = (obj) => new Blob([JSON.stringify(obj)]).size;
 
+  if (result.coverImage?.startsWith('data:image')) {
+    result.coverImage = await compressImageDataUrl(result.coverImage, 1100, 0.82);
+  }
   if (estimateSize(result) <= MAX_BYTES) return result;
 
-  const presets = [
-    { coverW: 680, sampleW: 620, q: 0.56 },
-    { coverW: 580, sampleW: 520, q: 0.48 },
-    { coverW: 500, sampleW: 440, q: 0.42 },
-    { coverW: 440, sampleW: 380, q: 0.36 }
-  ];
-
-  for (const preset of presets) {
-    if (result.coverImage?.startsWith('data:image')) {
-      result.coverImage = await compressImageDataUrl(result.coverImage, preset.coverW, preset.q);
-    }
-    if (Array.isArray(result.sampleImages) && result.sampleImages.length > 0) {
-      result.sampleImages = await Promise.all(
-        result.sampleImages.map((img) =>
-          img?.startsWith('data:image') ? compressImageDataUrl(img, preset.sampleW, preset.q) : img
-        )
-      );
-    }
-    if (estimateSize(result) <= MAX_BYTES) break;
+  if (result.coverImage?.startsWith('data:image')) {
+    result.coverImage = await compressImageDataUrl(result.coverImage, 850, 0.72);
   }
 
   return result;
@@ -687,17 +679,38 @@ export default function App() {
   };
 
   const handleSaveNotebook = async (nb) => {
-    const optimizedNb = await fitNotebookPayloadToCloud(nb);
-    const updatedList = notebooks.some((item) => item.id === optimizedNb.id)
-      ? notebooks.map((item) => (item.id === optimizedNb.id ? optimizedNb : item))
-      : [optimizedNb, ...notebooks];
+    const hdSamples = Array.isArray(nb.sampleImages) ? nb.sampleImages : [];
+    const optimizedNb = await fitNotebookPayloadToCloud({
+      ...nb,
+      samplesCount: hdSamples.length
+    });
+    const fullLocalNb = {
+      ...optimizedNb,
+      sampleImages: hdSamples,
+      samplesCount: hdSamples.length
+    };
+
+    const updatedList = notebooks.some((item) => item.id === fullLocalNb.id)
+      ? notebooks.map((item) => (item.id === fullLocalNb.id ? fullLocalNb : item))
+      : [fullLocalNb, ...notebooks];
     setNotebooks(updatedList);
     try {
       localStorage.setItem('muzakkirati_notebooks', JSON.stringify(updatedList));
     } catch {}
     try {
       await saveCloudDoc(['notebooks', optimizedNb.id], optimizedNb);
-      showToast('تم حفظ المذكرة ومزامنتها بنجاح');
+      // Save each sample page as an independent HD document so there is zero quality loss
+      for (let i = 0; i < hdSamples.length; i++) {
+        const hdImg = hdSamples[i]?.startsWith('data:image')
+          ? await compressImageDataUrl(hdSamples[i], 1280, 0.85)
+          : hdSamples[i];
+        await saveCloudDoc(['notebook_samples', `${optimizedNb.id}_page_${i}`], {
+          notebookId: optimizedNb.id,
+          pageIndex: i,
+          imageData: hdImg
+        });
+      }
+      showToast('تم حفظ المذكرة وصفحات العينة بجودة HD فائقة الوضوح!');
     } catch (err) {
       showToast(`تعذر رفع المذكرة للسحابة: ${err?.code || err?.message}`);
     }
@@ -827,8 +840,22 @@ export default function App() {
       await saveCloudDoc(['config', 'subjects'], { items: subjects });
 
       for (const nb of notebooks) {
-        const cleanNb = await fitNotebookPayloadToCloud(nb);
+        const hdSamples = Array.isArray(nb.sampleImages) ? nb.sampleImages : [];
+        const cleanNb = await fitNotebookPayloadToCloud({
+          ...nb,
+          samplesCount: hdSamples.length
+        });
         await saveCloudDoc(['notebooks', cleanNb.id], cleanNb);
+        for (let i = 0; i < hdSamples.length; i++) {
+          const hdImg = hdSamples[i]?.startsWith('data:image')
+            ? await compressImageDataUrl(hdSamples[i], 1280, 0.85)
+            : hdSamples[i];
+          await saveCloudDoc(['notebook_samples', `${cleanNb.id}_page_${i}`], {
+            notebookId: cleanNb.id,
+            pageIndex: i,
+            imageData: hdImg
+          });
+        }
       }
 
       for (const cpn of coupons) {
@@ -1808,7 +1835,11 @@ function NotebookCard({ notebook, stages, grades, subjects, onOrder, onPreview }
   const stageName = stages.find((s) => s.id === notebook.stageId)?.name;
   const gradeName = grades.find((g) => g.id === notebook.gradeId)?.name;
   const subjectName = subjects.find((s) => s.id === notebook.subjectId)?.name;
-  const hasSamples = Array.isArray(notebook.sampleImages) && notebook.sampleImages.length > 0;
+  const samplesTotal = Math.max(
+    Array.isArray(notebook.sampleImages) ? notebook.sampleImages.length : 0,
+    Number(notebook.samplesCount) || 0
+  );
+  const hasSamples = samplesTotal > 0;
   const isComingSoon = Boolean(notebook.isComingSoon);
 
   return (
@@ -1914,7 +1945,7 @@ function NotebookCard({ notebook, stages, grades, subjects, onOrder, onPreview }
             className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-extrabold transition cursor-pointer"
           >
             <Eye className="w-4 h-4" />
-            <span>{hasSamples ? `معاينة (${notebook.sampleImages.length})` : 'التفاصيل'}</span>
+            <span>{hasSamples ? `معاينة (${samplesTotal})` : 'التفاصيل'}</span>
           </button>
 
           <button
@@ -2407,16 +2438,57 @@ function OrderModal({ notebook, settings, coupons, onClose, onSubmitOrder, showT
 function ProtectedPreviewModal({ notebook, settings, onClose, onOrderNow }) {
   const platformName = settings?.platformName || 'منصة العباقرة للمذكرات التعليمية';
   const showNotices = settings?.showNotices !== false && Array.isArray(settings?.notices) && settings.notices.length > 0;
+  const [cloudHdSamples, setCloudHdSamples] = useState([]);
+  const [loadingSamples, setLoadingSamples] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const total = Number(notebook?.samplesCount) || 0;
+    const localSamples = Array.isArray(notebook?.sampleImages) ? notebook.sampleImages : [];
+    if (localSamples.length >= total && localSamples.length > 0) {
+      setCloudHdSamples(localSamples);
+      return;
+    }
+    if (!db || !notebook?.id || total <= 0) return;
+
+    setLoadingSamples(true);
+    (async () => {
+      try {
+        const fetched = [];
+        for (let i = 0; i < total; i++) {
+          const snap = await getDoc(
+            doc(db, 'artifacts', APP_ID, 'public', 'data', 'notebook_samples', `${notebook.id}_page_${i}`)
+          );
+          if (snap.exists() && snap.data()?.imageData) {
+            fetched.push(snap.data().imageData);
+          }
+        }
+        if (active && fetched.length > 0) {
+          setCloudHdSamples(fetched);
+        }
+      } catch (err) {
+        console.warn('Error loading HD sample pages:', err);
+      } finally {
+        if (active) setLoadingSamples(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [notebook]);
+
   const images = useMemo(() => {
     const list = [];
     if (notebook?.coverImage) list.push(notebook.coverImage);
-    if (Array.isArray(notebook?.sampleImages)) {
-      notebook.sampleImages.forEach((img) => {
+    const activeSamples = cloudHdSamples.length > 0 ? cloudHdSamples : (notebook?.sampleImages || []);
+    if (Array.isArray(activeSamples)) {
+      activeSamples.forEach((img) => {
         if (img && img !== notebook.coverImage) list.push(img);
       });
     }
     return list;
-  }, [notebook]);
+  }, [notebook, cloudHdSamples]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -2761,6 +2833,12 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onOrderNow }) {
           )}
 
           {/* Interactive Pinch-Zoomable & Swipeable Sample Pages Viewer */}
+          {loadingSamples && images.length <= 1 && (
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center text-xs font-extrabold text-blue-700">
+              جاري تحميل صفحات المعاينة بجودة HD فائقة الوضوح...
+            </div>
+          )}
+
           {images.length > 0 && (
             <div className="flex flex-col items-center">
               {/* Zoom & Fullscreen Toolbar */}
@@ -3346,7 +3424,7 @@ function AdminNotebooksTab({
   const handleCoverChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const compressed = await fileToCompressedDataUrl(file, 760, 0.68);
+    const compressed = await fileToCompressedDataUrl(file, 1100, 0.82);
     setCoverImage(compressed);
   };
 
@@ -3354,7 +3432,7 @@ function AdminNotebooksTab({
     const files = Array.from(e.target.files || []).slice(0, 15);
     if (files.length === 0) return;
     const compressedList = await Promise.all(
-      files.map((f) => fileToCompressedDataUrl(f, 720, 0.62))
+      files.map((f) => fileToCompressedDataUrl(f, 1280, 0.85))
     );
     setSampleImages(compressedList);
   };
