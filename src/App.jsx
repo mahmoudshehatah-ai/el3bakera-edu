@@ -119,6 +119,10 @@ const DEFAULT_SETTINGS = {
   tiktokUrl: '',
   paymentInstructions: 'فودافون كاش / إنستاباي: 01068481536',
   promoBannerText: '🎉 عرض خاص للمعلمين: خصم 15% على جميع مذكرات الترم الأول + إضافة الشعار مجانًا لفترة محدودة!',
+  emptyCatalogTitle: 'جاري تجهيز أحدث المذكرات لهذا القسم قريبًا!',
+  emptyCatalogSubtitle: 'نعمل حاليًا على تنسيق ومراجعة مذكرات هذا القسم بأعلى جودة، يمكنك حجز مذكرتك مسبقًا أو التواصل معنا.',
+  emptyCatalogImage: '',
+  emptyCatalogButtonText: 'اطلب تجهيز مذكرتك الآن',
   showNotices: true,
   allowTeacherLogo: true,
   teacherLogoPosition: 'bottom',
@@ -250,6 +254,8 @@ const DEFAULT_NOTEBOOKS = [
     driveUrl: '',
     coverImage: '',
     sampleImages: [],
+    isComingSoon: false,
+    comingSoonText: '',
     hidden: false,
     createdAt: new Date().toISOString()
   }
@@ -769,6 +775,9 @@ export default function App() {
       if (cleanSettings.heroBgUrl?.startsWith('data:image')) {
         cleanSettings.heroBgUrl = await compressImageDataUrl(cleanSettings.heroBgUrl, 1200, 0.72);
       }
+      if (cleanSettings.emptyCatalogImage?.startsWith('data:image')) {
+        cleanSettings.emptyCatalogImage = await compressImageDataUrl(cleanSettings.emptyCatalogImage, 850, 0.72);
+      }
       if (Array.isArray(cleanSettings.homeSections)) {
         cleanSettings.homeSections = await Promise.all(
           cleanSettings.homeSections.map(async (sec) => ({
@@ -1031,6 +1040,7 @@ export default function App() {
 
         {activePage === 'catalog' && (
           <CatalogPage
+            settings={settings}
             notebooks={visibleNotebooks}
             categories={categories}
             stages={stages}
@@ -1581,6 +1591,7 @@ function HomePage({
  * ============================================================================
  */
 function CatalogPage({
+  settings,
   notebooks,
   categories,
   stages,
@@ -1703,22 +1714,49 @@ function CatalogPage({
 
       {/* Results Grid */}
       {filteredNotebooks.length === 0 ? (
-        <div className="bg-white rounded-3xl p-12 text-center border border-slate-200">
-          <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <h3 className="text-lg font-black text-slate-800">لا توجد مذكرات مطابقة لبحثك حاليًا</h3>
-          <p className="text-sm text-slate-500 mt-1 mb-5">جرب تغيير خيارات التصفية أو اطلب إعداد مذكرتك الخاصة</p>
-          <button
-            onClick={() => {
-              setSearchQuery('');
-              setSelectedCategory('all');
-              setSelectedStage('all');
-              setSelectedGrade('all');
-              setSelectedSubject('all');
-            }}
-            className="bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-extrabold cursor-pointer"
-          >
-            إعادة ضبط الفلاتر
-          </button>
+        <div className="bg-white rounded-3xl p-8 sm:p-12 text-center border border-slate-200 max-w-2xl mx-auto shadow-sm">
+          {settings?.emptyCatalogImage ? (
+            <img
+              src={settings.emptyCatalogImage}
+              alt={settings.emptyCatalogTitle || 'قريبًا'}
+              className="max-h-64 w-auto mx-auto rounded-2xl object-contain mb-5 shadow-sm border border-slate-100"
+            />
+          ) : (
+            <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-700 flex items-center justify-center mx-auto mb-4">
+              <Sparkles className="w-8 h-8" />
+            </div>
+          )}
+
+          <h3 className="text-lg sm:text-xl font-black text-slate-900">
+            {settings?.emptyCatalogTitle || DEFAULT_SETTINGS.emptyCatalogTitle}
+          </h3>
+          <p className="text-xs sm:text-sm text-slate-600 mt-2 mb-6 leading-relaxed max-w-lg mx-auto">
+            {settings?.emptyCatalogSubtitle || DEFAULT_SETTINGS.emptyCatalogSubtitle}
+          </p>
+
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={onOpenCustomOrder}
+              className="bg-amber-400 hover:bg-amber-300 text-slate-950 px-6 py-3 rounded-xl text-xs sm:text-sm font-black transition shadow-md cursor-pointer"
+            >
+              {settings?.emptyCatalogButtonText || DEFAULT_SETTINGS.emptyCatalogButtonText}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('');
+                setSelectedCategory('all');
+                setSelectedStage('all');
+                setSelectedGrade('all');
+                setSelectedSubject('all');
+              }}
+              className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 py-3 rounded-xl text-xs sm:text-sm font-extrabold transition cursor-pointer"
+            >
+              عرض جميع الأقسام
+            </button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1749,6 +1787,7 @@ function NotebookCard({ notebook, stages, grades, subjects, onOrder, onPreview }
   const gradeName = grades.find((g) => g.id === notebook.gradeId)?.name;
   const subjectName = subjects.find((s) => s.id === notebook.subjectId)?.name;
   const hasSamples = Array.isArray(notebook.sampleImages) && notebook.sampleImages.length > 0;
+  const isComingSoon = Boolean(notebook.isComingSoon);
 
   return (
     <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm hover:shadow-xl transition overflow-hidden flex flex-col">
@@ -1770,10 +1809,17 @@ function NotebookCard({ notebook, stages, grades, subjects, onOrder, onPreview }
           </div>
         )}
 
-        {notebook.badge && (
-          <span className="absolute top-3 right-3 bg-amber-400 text-slate-950 text-xs font-black px-3 py-1 rounded-full shadow">
-            {notebook.badge}
+        {isComingSoon ? (
+          <span className="absolute top-3 right-3 bg-purple-600 text-white text-xs font-black px-3.5 py-1 rounded-full shadow-lg flex items-center gap-1">
+            <Clock className="w-3.5 h-3.5" />
+            <span>{notebook.badge || 'قريبًا • قيد الإعداد'}</span>
           </span>
+        ) : (
+          notebook.badge && (
+            <span className="absolute top-3 right-3 bg-amber-400 text-slate-950 text-xs font-black px-3 py-1 rounded-full shadow">
+              {notebook.badge}
+            </span>
+          )
         )}
 
         {notebook.pagesCount > 0 && (
@@ -1814,14 +1860,26 @@ function NotebookCard({ notebook, stages, grades, subjects, onOrder, onPreview }
           {notebook.description}
         </p>
 
+        {isComingSoon && (
+          <div className="mb-4 p-3 rounded-2xl bg-purple-50 border border-purple-200 text-purple-950 text-xs font-bold leading-relaxed">
+            {notebook.comingSoonText || 'جاري العمل على المراجعة النهائية لهذه المذكرة — يمكنك حجز نسختك مسبقًا الآن!'}
+          </div>
+        )}
+
         {/* Price Row */}
         <div className="flex items-baseline justify-between pt-3 border-t border-slate-100 mb-4">
           <div>
-            <span className="text-xl font-black text-blue-700">{notebook.price} ج.م</span>
-            {notebook.oldPrice > notebook.price && (
-              <span className="text-xs text-slate-400 line-through mr-2 font-bold">
-                {notebook.oldPrice} ج.م
-              </span>
+            {Number(notebook.price) > 0 ? (
+              <>
+                <span className="text-xl font-black text-blue-700">{notebook.price} ج.م</span>
+                {notebook.oldPrice > notebook.price && (
+                  <span className="text-xs text-slate-400 line-through mr-2 font-bold">
+                    {notebook.oldPrice} ج.م
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-sm font-black text-purple-700">حجز مسبق</span>
             )}
           </div>
           <span className="text-[11px] font-bold text-emerald-600">شامل التخصيص باسمك</span>
@@ -1839,10 +1897,14 @@ function NotebookCard({ notebook, stages, grades, subjects, onOrder, onPreview }
 
           <button
             onClick={onOrder}
-            className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-extrabold transition shadow-md shadow-blue-700/20 cursor-pointer"
+            className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-white text-xs font-extrabold transition shadow-md cursor-pointer ${
+              isComingSoon
+                ? 'bg-purple-700 hover:bg-purple-800 shadow-purple-700/20'
+                : 'bg-blue-700 hover:bg-blue-800 shadow-blue-700/20'
+            }`}
           >
             <ShoppingBag className="w-4 h-4" />
-            <span>اطلب الآن</span>
+            <span>{isComingSoon ? 'احجز نسختك' : 'اطلب الآن'}</span>
           </button>
         </div>
       </div>
@@ -2613,6 +2675,21 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onOrderNow }) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50 space-y-5">
+          {/* Coming Soon Announcement Banner Inside Notebook Details */}
+          {notebook.isComingSoon && (
+            <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 mt-0.5">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-xs font-black text-purple-950">إعلان: هذه المذكرة قيد الإعداد والتجهيز</h4>
+                <p className="text-xs text-purple-900 font-semibold leading-relaxed">
+                  {notebook.comingSoonText || 'نعمل حاليًا على اللمسات النهائية لهذه المذكرة، ويمكنك تسجيل حجزك المسبق الآن لتستلمها فور صدورها.'}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Notebook Description & Details Card */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2804,19 +2881,29 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onOrderNow }) {
 
         <div className="p-4 border-t border-slate-200 bg-white flex items-center justify-between gap-4">
           <div>
-            <span className="font-black text-blue-700 text-lg">{notebook.price} ج.م</span>
-            {notebook.oldPrice > notebook.price && (
-              <span className="text-xs text-slate-400 line-through mr-2 font-bold">
-                {notebook.oldPrice} ج.م
-              </span>
+            {Number(notebook.price) > 0 ? (
+              <>
+                <span className="font-black text-blue-700 text-lg">{notebook.price} ج.م</span>
+                {notebook.oldPrice > notebook.price && (
+                  <span className="text-xs text-slate-400 line-through mr-2 font-bold">
+                    {notebook.oldPrice} ج.م
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="font-black text-purple-700 text-base">حجز مسبق</span>
             )}
           </div>
           <button
             type="button"
             onClick={onOrderNow}
-            className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-xl text-sm font-black transition cursor-pointer"
+            className={`text-white px-6 py-3 rounded-xl text-sm font-black transition cursor-pointer ${
+              notebook.isComingSoon
+                ? 'bg-purple-700 hover:bg-purple-800'
+                : 'bg-blue-700 hover:bg-blue-800'
+            }`}
           >
-            اطلب هذه المذكرة باسمك الآن
+            {notebook.isComingSoon ? 'احجز هذه المذكرة مسبقًا الآن' : 'اطلب هذه المذكرة باسمك الآن'}
           </button>
         </div>
       </div>
@@ -3154,6 +3241,8 @@ function AdminNotebooksTab({
   const [driveUrl, setDriveUrl] = useState('');
   const [coverImage, setCoverImage] = useState('');
   const [sampleImages, setSampleImages] = useState([]);
+  const [isComingSoon, setIsComingSoon] = useState(false);
+  const [comingSoonText, setComingSoonText] = useState('');
 
   const resetForm = () => {
     setEditingId(null);
@@ -3166,6 +3255,8 @@ function AdminNotebooksTab({
     setDriveUrl('');
     setCoverImage('');
     setSampleImages([]);
+    setIsComingSoon(false);
+    setComingSoonText('');
   };
 
   const startEdit = (nb) => {
@@ -3183,6 +3274,8 @@ function AdminNotebooksTab({
     setDriveUrl(nb.driveUrl || '');
     setCoverImage(nb.coverImage || '');
     setSampleImages(nb.sampleImages || []);
+    setIsComingSoon(Boolean(nb.isComingSoon));
+    setComingSoonText(nb.comingSoonText || '');
   };
 
   const handleCoverChange = async (e) => {
@@ -3219,6 +3312,8 @@ function AdminNotebooksTab({
       driveUrl: driveUrl.trim(),
       coverImage,
       sampleImages,
+      isComingSoon,
+      comingSoonText: comingSoonText.trim(),
       hidden: false,
       createdAt: new Date().toISOString()
     };
@@ -3332,6 +3427,28 @@ function AdminNotebooksTab({
             className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs"
           />
 
+          {/* Coming Soon / Under Preparation Announcement Control */}
+          <div className="p-3.5 rounded-2xl bg-purple-50/70 border border-purple-200 space-y-2.5">
+            <label className="flex items-center gap-2 text-xs font-black text-purple-950 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isComingSoon}
+                onChange={(e) => setIsComingSoon(e.target.checked)}
+                className="w-4 h-4 accent-purple-700"
+              />
+              <span>المذكرة لم تكتمل بعد (وضع إعلان «قريبًا / حجز مسبق»)</span>
+            </label>
+            {isComingSoon && (
+              <textarea
+                rows={2}
+                value={comingSoonText}
+                onChange={(e) => setComingSoonText(e.target.value)}
+                placeholder="اكتب نص الإعلان أو موعد الصدور الذي سيظهر للزوار على هذه المذكرة..."
+                className="w-full px-3 py-2 rounded-xl border border-purple-200 bg-white text-xs font-semibold"
+              />
+            )}
+          </div>
+
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
               رابط Google Drive لمطالعة نسخة المذكرة (اختياري)
@@ -3383,7 +3500,14 @@ function AdminNotebooksTab({
         {notebooks.map((nb) => (
           <div key={nb.id} className="bg-white p-4 rounded-2xl border border-slate-200 flex items-center justify-between gap-4">
             <div>
-              <h4 className="font-black text-slate-900 text-sm">{nb.title}</h4>
+              <div className="flex flex-wrap items-center gap-2">
+                <h4 className="font-black text-slate-900 text-sm">{nb.title}</h4>
+                {nb.isComingSoon && (
+                  <span className="text-[10px] font-black bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">
+                    قريبًا / إعلان
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-slate-500 mt-0.5">
                 السعر: <strong className="text-blue-700">{nb.price} ج.م</strong> • {nb.pagesCount} صفحة
               </p>
@@ -3711,7 +3835,7 @@ function AdminSettingsTab({ settings, categories = [], onSaveSettings }) {
   const handleImageUpload = async (field, e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const maxW = field === 'logoUrl' ? 400 : 1200;
+    const maxW = field === 'logoUrl' ? 400 : field === 'emptyCatalogImage' ? 850 : 1200;
     const compressed = await fileToCompressedDataUrl(file, maxW, 0.75);
     setForm((prev) => ({ ...prev, [field]: compressed }));
   };
@@ -4031,6 +4155,86 @@ function AdminSettingsTab({ settings, categories = [], onSaveSettings }) {
             onChange={(e) => setForm({ ...form, promoBannerText: e.target.value })}
             className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
           />
+        </div>
+      </div>
+
+      {/* Empty Catalog / Section Announcement Customization */}
+      <div className="border-t border-slate-200 pt-6 space-y-4">
+        <div>
+          <h4 className="font-black text-slate-900">تخصيص رسالة وصورة القسم الفارغ (عند عدم وجود مذكرات في القسم بعد)</h4>
+          <p className="text-[11px] text-slate-500">
+            تحكم فيما يظهر للزائر من عنوان ونص وصورة إعلانية عندما يفتح قسمًا لم تُضف فيه مذكرات بعد
+          </p>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-extrabold text-slate-700 mb-1">العنوان الرئيسي عند خلو القسم</label>
+              <input
+                type="text"
+                value={form.emptyCatalogTitle ?? ''}
+                onChange={(e) => setForm({ ...form, emptyCatalogTitle: e.target.value })}
+                placeholder="مثال: جاري تجهيز مذكرات هذا القسم قريبًا!"
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-extrabold text-slate-700 mb-1">نص زر الحجز أو الطلب المسبق</label>
+              <input
+                type="text"
+                value={form.emptyCatalogButtonText ?? ''}
+                onChange={(e) => setForm({ ...form, emptyCatalogButtonText: e.target.value })}
+                placeholder="مثال: احجز مذكرتك مسبقًا الآن"
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold bg-white"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-extrabold text-slate-700 mb-1">النص التوضيحي أو الإعلاني</label>
+            <textarea
+              rows={2}
+              value={form.emptyCatalogSubtitle ?? ''}
+              onChange={(e) => setForm({ ...form, emptyCatalogSubtitle: e.target.value })}
+              placeholder="اكتب الرسالة التي تريدها للزوار عندما يكون القسم فارغًا..."
+              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs bg-white"
+            />
+          </div>
+
+          <div className="bg-white p-3 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              {form.emptyCatalogImage ? (
+                <img
+                  src={form.emptyCatalogImage}
+                  alt="صورة القسم الفارغ"
+                  className="w-16 h-12 rounded-lg object-cover border border-slate-200"
+                />
+              ) : (
+                <div className="w-16 h-12 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center text-[10px] font-bold">
+                  بدون صورة
+                </div>
+              )}
+              <div>
+                <p className="text-xs font-extrabold text-slate-800">صورة أو بانر يظهر عند خلو القسم (اختياري)</p>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleImageUpload('emptyCatalogImage', e)}
+                  className="text-[11px] text-slate-600 mt-1"
+                />
+              </div>
+            </div>
+            {form.emptyCatalogImage && (
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, emptyCatalogImage: '' })}
+                className="text-xs font-bold text-rose-600 hover:underline cursor-pointer"
+              >
+                حذف الصورة
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
