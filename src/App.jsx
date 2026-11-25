@@ -6,7 +6,6 @@ import {
   Award,
   BarChart3,
   BookOpen,
-  Calendar,
   Check,
   CheckCircle2,
   ChevronLeft,
@@ -25,7 +24,6 @@ import {
   GraduationCap,
   HeartHandshake,
   HelpCircle,
-  Image as ImageIcon,
   KeyRound,
   Layers,
   LayoutDashboard,
@@ -38,467 +36,126 @@ import {
   Package,
   Percent,
   Phone,
-  Play,
   Plus,
   Printer,
-  Quote,
-  Receipt,
   RefreshCw,
-  RotateCcw,
   Save,
   Search,
   Send,
   Settings,
-  Shield,
   ShieldCheck,
-  ShoppingBag,
   SlidersHorizontal,
   Sparkles,
   Tag,
   Trash2,
   TrendingUp,
-  Truck,
   Upload,
-  User,
+  UserCheck,
   Users,
+  Wallet,
   X,
   ZoomIn,
   ZoomOut
 } from 'lucide-react';
-import { initializeApp, getApps } from 'firebase/app';
+import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import {
   getFirestore,
   collection,
   doc,
   setDoc,
+  updateDoc,
   deleteDoc,
   onSnapshot
 } from 'firebase/firestore';
 
-/* ============================================================================
-   1. FIREBASE INITIALIZATION & CONFIGURATION (el3bakera-edu)
-   ============================================================================ */
+/**
+ * ============================================================================
+ * FIREBASE INITIALIZATION & CLOUD SYNC LAYER
+ * ============================================================================
+ */
 const DEFAULT_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyD_du5VY8nJGDJ169Fof9EAli9x2W2d-14",
-  authDomain: "el3bakera-edu.firebaseapp.com",
-  projectId: "el3bakera-edu",
-  storageBucket: "el3bakera-edu.firebasestorage.app",
-  messagingSenderId: "74663879858",
-  appId: "1:74663879858:web:4327c0ea1b825dd6c615ab"
+  apiKey: 'AIzaSyD_du5VY8nJGDJ169Fof9EALi9x2W2d-14',
+  authDomain: 'el3bakera-edu.firebaseapp.com',
+  projectId: 'el3bakera-edu',
+  storageBucket: 'el3bakera-edu.firebasestorage.app',
+  messagingSenderId: '74663879858',
+  appId: '1:74663879858:web:4327c0ea1b825dd6c615ab'
 };
+
+let firebaseConfig = DEFAULT_FIREBASE_CONFIG;
+try {
+  if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+    firebaseConfig =
+      typeof __firebase_config === 'string' ? JSON.parse(__firebase_config) : __firebase_config;
+  }
+} catch (_) {
+  firebaseConfig = DEFAULT_FIREBASE_CONFIG;
+}
+
+const appId = typeof __app_id !== 'undefined' && __app_id ? __app_id : 'muzakkirati-edu-app';
 
 let db = null;
 let auth = null;
-let firebaseEnabled = false;
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'muzakkirati-edu-app';
-
 try {
-  let activeConfig = DEFAULT_FIREBASE_CONFIG;
-  if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-    const parsedConfig =
-      typeof __firebase_config === 'string'
-        ? JSON.parse(__firebase_config)
-        : __firebase_config;
-    if (parsedConfig && parsedConfig.apiKey) {
-      activeConfig = parsedConfig;
+  const app = initializeApp(firebaseConfig);
+  db = getFirestore(app);
+  auth = getAuth(app);
+} catch (err) {
+  console.warn('Firebase init fallback to local mode:', err);
+}
+
+/**
+ * ============================================================================
+ * SECURITY & CRYPTO UTILITIES (SHA-256 + RANDOM SALT)
+ * ============================================================================
+ */
+function generateSalt(length = 16) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  const arr = new Uint8Array(length);
+  if (window.crypto && window.crypto.getRandomValues) {
+    window.crypto.getRandomValues(arr);
+    for (let i = 0; i < length; i++) {
+      result += chars[arr[i] % chars.length];
+    }
+  } else {
+    for (let i = 0; i < length; i++) {
+      result += chars[Math.floor(Math.random() * chars.length)];
     }
   }
-  if (activeConfig && activeConfig.apiKey) {
-    const app = getApps().length ? getApps()[0] : initializeApp(activeConfig);
-    auth = getAuth(app);
-    db = getFirestore(app);
-    firebaseEnabled = true;
-  }
-} catch (err) {
-  console.warn('Firebase initialization warning, using local storage fallback:', err);
+  return result;
 }
 
-/* ============================================================================
-   2. DEFAULT SEED DATA & CONSTANTS
-   ============================================================================ */
-const DEFAULT_SETTINGS = {
-  siteName: 'منصة مذكرتي التعليمية',
-  tagline: 'مذكرات دراسية احترافية مُخصصة باسمك وشعارك الخاص',
-  heroTitle: 'مذكرتك التعليمية الجاهزة… باسمك وشعارك وهويتك الاحترافية',
-  heroSubtitle:
-    'نوفر للمعلمين مذكرات دراسية منسقة ومحدثة وفق أحدث المناهج بصيغة PDF عالية الدقة، مع إضافة اسم المعلم، رقم الهاتف، والشعار الخاص به على الغلاف وجميع الصفحات.',
-  aboutTitle: 'لماذا يختار المعلمون منصة مذكرتي التعليمية؟',
-  aboutDescription:
-    'نحن منصة متخصصة في إعداد وتصميم المذكرات التعليمية الاحترافية للمعلمين في جميع المراحل الدراسية. نوفر لك محتوى علميًا منقحًا، وتنسيقًا عصريًا مريحًا للعين، مع تخصيص الغلاف والصفحات الداخلية باسمك ورقم هاتفك وشعارك الخاص لتكون جاهزة للطباعة الفورية بأعلى جودة.',
-  logoUrl: '',
-  logoSize: 'lg',
-  heroBgImage: '',
-  primaryColor: '#1d4ed8',
-  secondaryColor: '#0d9488',
-  currency: 'ج.م',
-  whatsappNumber: '01000000000',
-  phone: '01000000000',
-  email: 'info@muzakkirati.com',
-  whatsappGroupUrl: '',
-  facebookUrl: '',
-  telegramUrl: '',
-  youtubeUrl: '',
-  instagramUrl: '',
-  tiktokUrl: '',
-  allowLogoUpload: true,
-  requirePaymentProof: false,
-  orderSuccessMessage:
-    'تم استلام طلبك بنجاح! سنقوم بمراجعة تفاصيل مذكرتك وإيصال الدفع والتواصل معك عبر الواتساب لتأكيد التصميم والبدء في التجهيز.',
-  paymentInfo: 'فودافون كاش: 01000000000\nإنستاباي: muzakkirati@instapay',
-  showImportantNotices: true,
-  importantNoticesTitle: 'تنبيهات هامة قبل الطلب',
-  importantNotices: [
-    'المذكرة تُرسل بصيغة PDF إلكترونية عالية الجودة جاهزة للطباعة (ولا يوجد شحن ورقي).',
-    'يتم إضافة اسم المعلم، رقم الهاتف، والشعار الخاص به على الغلاف وجميع الصفحات الداخلية.',
-    'يرجى مراجعة عينة المطالعة والتأكد من المرحلة والصف الدراسي قبل تأكيد الطلب.',
-    'مدة التجهيز والتسليم تتراوح بين 12 إلى 24 ساعة من تأكيد البيانات.'
-  ],
-  maintenanceMode: false,
-  announcementBar: {
-    enabled: true,
-    text: '🎉 عرض خاص للمعلمين: خصم 20% على جميع مذكرات الترم الأول + إضافة الشعار مجانًا لفترة محدودة!',
-    bgColor: '#0f172a',
-    textColor: '#ffffff'
-  },
-  multiOrderDiscount: {
-    enabled: true,
-    minItems: 2,
-    type: 'percent',
-    value: 15,
-    label: 'خصم إضافي 15% تلقائيًا عند طلب مذكرتين أو أكثر في نفس الطلب!'
-  },
-  nextOrderCouponAuto: {
-    enabled: true,
-    type: 'percent',
-    value: 15,
-    maxUses: 1,
-    validDays: 30,
-    description: 'هدية خاصة لطلبك القادم عند إتمام استلام مذكرتك'
-  },
-  showOffersOnHome: true,
-  showHero: true,
-  showAbout: true,
-  showCategories: true,
-  showFeatured: true,
-  showReviews: true,
-  showWhyUs: true
-};
-
-const DEFAULT_REVIEWS = [
-  {
-    id: 'rev_demo_1',
-    teacherName: 'أ/ محمود عبد الرحمن',
-    subjectAndStage: 'معلم اللغة العربية — المرحلة الإعدادية',
-    quote:
-      'بصراحة شغل فوق الممتاز، الغلاف باسمي وشعاري طلع احترافي جدًا والطلاب انبهروا بالمذكرة والتنسيق، والتسليم كان في نفس اليوم!',
-    screenshotUrl: '',
-    active: true
-  },
-  {
-    id: 'rev_demo_2',
-    teacherName: 'أ/ سارة السيد',
-    subjectAndStage: 'معلمة اللغة الإنجليزية — المرحلة الثانوية',
-    quote:
-      'وفرتوا عليّ وقت ومجهود شهور في الكتابة والتنسيق، المذكرة جاهزة للطباعة مباشرة والخطوط والجداول منسقة بدقة عالية.',
-    screenshotUrl: '',
-    active: true
-  },
-  {
-    id: 'rev_demo_3',
-    teacherName: 'أ/ أحمد طارق',
-    subjectAndStage: 'معلم الرياضيات — المرحلة الابتدائية',
-    quote:
-      'تعامل راقي وسريع جدًا، عدلوا لي ألوان الغلاف حسب طلبي وأضافوا رقمي في كل صفحة. بالتأكيد مش آخر تعامل!',
-    screenshotUrl: '',
-    active: true
-  }
-];
-
-const DEFAULT_CATEGORIES = [
-  {
-    id: 'term1',
-    name: 'مذكرات الترم الأول',
-    slug: 'term-1',
-    description: 'مذكرات شرح وتدريبات ومراجعات شاملة للفصل الدراسي الأول لجميع المراحل.',
-    gradient: 'from-blue-600 to-indigo-700',
-    order: 1
-  },
-  {
-    id: 'term2',
-    name: 'مذكرات الترم الثاني',
-    slug: 'term-2',
-    description: 'مذكرات متكاملة ومراجعات نهائية للفصل الدراسي الثاني وفق أحدث المواصفات.',
-    gradient: 'from-teal-600 to-emerald-700',
-    order: 2
-  },
-  {
-    id: 'foundation',
-    name: 'كورسات التأسيس',
-    slug: 'foundation',
-    description: 'سلاسل تأسيس احترافية في القراءة والكتابة واللغات والرياضيات لمختلف الأعمار.',
-    gradient: 'from-amber-500 to-orange-600',
-    order: 3
-  }
-];
-
-const DEFAULT_STAGES = [
-  { id: 'primary', name: 'المرحلة الابتدائية', order: 1 },
-  { id: 'prep', name: 'المرحلة الإعدادية', order: 2 },
-  { id: 'secondary', name: 'المرحلة الثانوية', order: 3 }
-];
-
-const DEFAULT_GRADES = [
-  { id: 'g4', stageId: 'primary', name: 'الصف الرابع الابتدائي', order: 1 },
-  { id: 'g5', stageId: 'primary', name: 'الصف الخامس الابتدائي', order: 2 },
-  { id: 'g6', stageId: 'primary', name: 'الصف السادس الابتدائي', order: 3 },
-  { id: 'g7', stageId: 'prep', name: 'الصف الأول الإعدادي', order: 4 },
-  { id: 'g8', stageId: 'prep', name: 'الصف الثاني الإعدادي', order: 5 },
-  { id: 'g9', stageId: 'prep', name: 'الصف الثالث الإعدادي', order: 6 },
-  { id: 'g10', stageId: 'secondary', name: 'الصف الأول الثانوي', order: 7 },
-  { id: 'g11', stageId: 'secondary', name: 'الصف الثاني الثانوي', order: 8 },
-  { id: 'g12', stageId: 'secondary', name: 'الصف الثالث الثانوي', order: 9 }
-];
-
-const DEFAULT_SUBJECTS = [
-  { id: 'arabic', name: 'اللغة العربية', order: 1, visible: true },
-  { id: 'english', name: 'اللغة الإنجليزية', order: 2, visible: true },
-  { id: 'math', name: 'الرياضيات', order: 3, visible: true },
-  { id: 'science', name: 'العلوم', order: 4, visible: true },
-  { id: 'social', name: 'الدراسات الاجتماعية', order: 5, visible: true },
-  { id: 'physics', name: 'الفيزياء', order: 6, visible: true },
-  { id: 'chemistry', name: 'الكيمياء', order: 7, visible: true }
-];
-
-const DEFAULT_NOTEBOOKS = [
-  {
-    id: 'nb_demo_1',
-    title: 'مذكرة القمة في اللغة العربية — الصف الثالث الإعدادي',
-    shortDesc: 'شرح مبسط للنحو والنصوص والقراءة مع بنك أسئلة شامل بنظام البوكليت.',
-    fullDesc:
-      'تتضمن المذكرة شرحًا وافيًا لجميع فروع اللغة العربية (النحو، القراءة، النصوص، القصة، التعبير) مع تدريبات متدرجة بعد كل درس، وامتحانات شاملة بنظام التقييم الحديث. يتم تسليم النسخة للمعلم بصيغة PDF عالية الدقة باسمه ورقم هاتفه وشعاره على الغلاف وجميع الصفحات.',
-    categoryId: 'term1',
-    stageId: 'prep',
-    gradeId: 'g9',
-    subjectId: 'arabic',
-    price: 250,
-    oldPrice: 350,
-    pageCount: 145,
-    previewPagesCount: 4,
-    coverUrl: '',
-    previewType: 'images',
-    previewImages: [],
-    previewPdfData: '',
-    drivePreviewUrl: '',
-    badge: 'الأكثر طلبًا',
-    published: true,
-    order: 1,
-    createdAt: '2026-01-10T10:00:00Z'
-  },
-  {
-    id: 'nb_demo_2',
-    title: 'سلسلة التأسيس الشامل في اللغة الإنجليزية (من الصفر للاحتراف)',
-    shortDesc: 'كورس تأسيس متكامل في الصوتيات والقواعد والمحادثة للمرحلتين الابتدائية والإعدادية.',
-    fullDesc:
-      'مذكرة تأسيس مصممة بألوان جذابة وخطوط واضحة لتعليم الصوتيات (Phonics) وتكوين الجملة والأزمنة الأساسية مع تمارين تطبيقية ممتعة للطلاب.',
-    categoryId: 'foundation',
-    stageId: 'primary',
-    gradeId: 'g4',
-    subjectId: 'english',
-    price: 200,
-    oldPrice: 280,
-    pageCount: 96,
-    previewPagesCount: 3,
-    coverUrl: '',
-    previewType: 'images',
-    previewImages: [],
-    previewPdfData: '',
-    drivePreviewUrl: '',
-    badge: 'جديد',
-    published: true,
-    order: 2,
-    createdAt: '2026-01-12T10:00:00Z'
-  },
-  {
-    id: 'nb_demo_3',
-    title: 'مذكرة البرهان في الرياضيات — الصف الأول الثانوي',
-    shortDesc: 'شرح الجبر وحساب المثلثات والهندسة مع أمثلة محلولة ومسائل مهارات التفكير العليا.',
-    fullDesc:
-      'مذكرة منظمة تغطي منهج الرياضيات بالكامل للفصل الدراسي الثاني مع رسومات هندسية دقيقة واختبارات إلكترونية وورقية مرفقة.',
-    categoryId: 'term2',
-    stageId: 'secondary',
-    gradeId: 'g10',
-    subjectId: 'math',
-    price: 300,
-    oldPrice: 0,
-    pageCount: 168,
-    previewPagesCount: 4,
-    coverUrl: '',
-    previewType: 'images',
-    previewImages: [],
-    previewPdfData: '',
-    drivePreviewUrl: '',
-    badge: '',
-    published: true,
-    order: 3,
-    createdAt: '2026-01-15T10:00:00Z'
-  },
-  {
-    id: 'nb_demo_4',
-    title: 'مذكرة النخبة في الكيمياء — الصف الثالث الثانوي',
-    shortDesc: 'شرح تفصيلي للمعادلات والباب الأول والثاني مع أفكار امتحانات الثانوية العامة.',
-    fullDesc:
-      'تشمل شرح جميع أبواب المنهج بأسلوب الخرائط الذهنية، مع ربط المعادلات الكيميائية وأسئلة المستويات العليا وإجاباتها النموذجية.',
-    categoryId: 'term1',
-    stageId: 'secondary',
-    gradeId: 'g12',
-    subjectId: 'chemistry',
-    price: 350,
-    oldPrice: 450,
-    pageCount: 210,
-    previewPagesCount: 5,
-    coverUrl: '',
-    previewType: 'images',
-    previewImages: [],
-    previewPdfData: '',
-    drivePreviewUrl: '',
-    badge: 'الأكثر طلبًا',
-    published: true,
-    order: 4,
-    createdAt: '2026-01-18T10:00:00Z'
-  }
-];
-
-const DEFAULT_COUPONS = [
-  {
-    id: 'cp_welcome',
-    code: 'TEACHER20',
-    type: 'percent',
-    value: 20,
-    minOrder: 200,
-    description: 'خصم 20% للمعلمين على الطلبات بقيمة 200 ج.م فأكثر',
-    active: true,
-    isPrivate: false,
-    maxUses: 0,
-    usedCount: 0,
-    expiresAt: ''
-  },
-  {
-    id: 'cp_save50',
-    code: 'SAVE50',
-    type: 'fixed',
-    value: 50,
-    minOrder: 250,
-    description: 'خصم فوري 50 ج.م عند طلب مذكرة بقيمة 250 ج.م أو أكثر',
-    active: true,
-    isPrivate: false,
-    maxUses: 0,
-    usedCount: 0,
-    expiresAt: ''
-  }
-];
-
-const DEFAULT_BUNDLES = [
-  {
-    id: 'bnd_1',
-    title: 'باقة الترم الكاملة (3 مذكرات من اختيارك)',
-    subtitle: 'اختر أي 3 مذكرات لأي صف دراسي بخصم مجمّع وتصميم غلاف موحد لهويتك',
-    price: 650,
-    oldPrice: 900,
-    badge: 'وفر 250 ج.م',
-    features: [
-      '3 مذكرات PDF عالية الجودة جاهزة للطباعة',
-      'إضافة اسم المعلم ورقمه وشعاره على جميع المذكرات',
-      'أولوية في التنفيذ والتسليم خلال 24 ساعة'
-    ],
-    active: true
-  },
-  {
-    id: 'bnd_2',
-    title: 'باقة التأسيس + مذكرة الترم الأول',
-    subtitle: 'ابدأ عامك الدراسي بكورس تأسيس قوي مع مذكرة المنهج الأساسية',
-    price: 380,
-    oldPrice: 480,
-    badge: 'عرض البداية',
-    features: [
-      'كورس تأسيس متكامل + مذكرة شرح وتدريبات الترم',
-      'تنسيق احترافي موحد باسم المعلم وشعاره',
-      'دعم فني للتعديلات قبل الاعتماد النهائي'
-    ],
-    active: true
-  }
-];
-
-const ORDER_STATUSES = [
-  { id: 'new', label: 'طلب جديد', color: 'bg-blue-100 text-blue-800 border-blue-200', step: 1 },
-  {
-    id: 'reviewing',
-    label: 'قيد المراجعة والتواصل',
-    color: 'bg-amber-100 text-amber-800 border-amber-200',
-    step: 2
-  },
-  {
-    id: 'customizing',
-    label: 'قيد التخصيص والكتابة',
-    color: 'bg-purple-100 text-purple-800 border-purple-200',
-    step: 3
-  },
-  {
-    id: 'ready',
-    label: 'جاهز للتسليم',
-    color: 'bg-teal-100 text-teal-800 border-teal-200',
-    step: 4
-  },
-  {
-    id: 'delivered',
-    label: 'تم التسليم',
-    color: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-    step: 5
-  },
-  { id: 'cancelled', label: 'ملغي', color: 'bg-rose-100 text-rose-800 border-rose-200', step: 0 }
-];
-
-/* ============================================================================
-   3. UTILITY HELPERS (CRYPTO, VALIDATION, IMAGE COMPRESSION, WHATSAPP)
-   ============================================================================ */
 async function hashPasswordWithSalt(password, salt) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(`${salt}:${password}`);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-function generateSalt() {
-  const arr = new Uint8Array(16);
-  crypto.getRandomValues(arr);
-  return Array.from(arr)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-function generateOrderNumber() {
-  const now = new Date();
-  const y = String(now.getFullYear()).slice(-2);
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  const rand = Math.floor(1000 + Math.random() * 9000);
-  return `MZ-${y}${m}${d}-${rand}`;
+  const text = `${salt}:${password}`;
+  if (window.crypto && window.crypto.subtle) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(text);
+    const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    hash = (hash << 5) - hash + text.charCodeAt(i);
+    hash |= 0;
+  }
+  return `fallback_${Math.abs(hash)}`;
 }
 
 function validateEgyptianPhone(phone) {
   const cleaned = String(phone || '').replace(/[\s\-()]/g, '');
-  return /^(\+?20)?01[0125][0-9]{8}$/.test(cleaned);
+  return /^(010|011|012|015)\d{8}$/.test(cleaned);
 }
 
-function buildWhatsAppUrl(phone, message) {
-  let digits = String(phone || '').replace(/\D/g, '');
-  if (digits.startsWith('01') && digits.length === 11) {
-    digits = `2${digits}`;
-  } else if (digits.startsWith('1') && digits.length === 10) {
-    digits = `20${digits}`;
-  }
-  return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+function generateOrderNumber() {
+  const now = new Date();
+  const yy = String(now.getFullYear()).slice(-2);
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  return `MZ-${yy}${mm}${dd}-${rand}`;
 }
 
 function normalizeExternalUrl(url) {
@@ -508,54 +165,8 @@ function normalizeExternalUrl(url) {
   return `https://${trimmed}`;
 }
 
-function isCouponExhausted(cp) {
-  if (!cp) return true;
-  if (cp.active === false) return true;
-  const max = Number(cp.maxUses) || 0;
-  const used = Number(cp.usedCount) || 0;
-  if (max > 0 && used >= max) return true;
-  if (cp.expiresAt) {
-    const exp = new Date(`${cp.expiresAt}T23:59:59`);
-    if (!Number.isNaN(exp.getTime()) && new Date() > exp) return true;
-  }
-  return false;
-}
-
-function formatCouponLimitsAr(cp) {
-  if (!cp) return '';
-  const parts = [];
-  const max = Number(cp.maxUses) || 0;
-  const used = Number(cp.usedCount) || 0;
-  if (max > 0) {
-    const remaining = Math.max(0, max - used);
-    parts.push(max === 1 ? 'يُستخدم مرة واحدة' : `متبقي ${remaining} من ${max} مرات`);
-  } else {
-    parts.push('مرات استخدام بلا حدود');
-  }
-  if (cp.expiresAt) {
-    parts.push(`صالح حتى ${new Date(cp.expiresAt).toLocaleDateString('ar-EG')}`);
-  } else {
-    parts.push('صلاحية مفتوحة');
-  }
-  return parts.join(' • ');
-}
-
-function calcDiscountPercent(price, oldPrice) {
-  const p = Number(price) || 0;
-  const o = Number(oldPrice) || 0;
-  if (o > p && p > 0) {
-    return Math.round(((o - p) / o) * 100);
-  }
-  return 0;
-}
-
-function compressImageFile(file, maxWidth = 900, quality = 0.8) {
+async function compressImageFile(file, maxWidth = 900, quality = 0.78) {
   return new Promise((resolve, reject) => {
-    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
-      reject(new Error('صيغة الملف غير مدعومة. الصيغ المسموحة: PNG, JPG, JPEG, SVG'));
-      return;
-    }
     if (file.type === 'image/svg+xml') {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result);
@@ -564,7 +175,7 @@ function compressImageFile(file, maxWidth = 900, quality = 0.8) {
       return;
     }
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = (event) => {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
@@ -578,3035 +189,2082 @@ function compressImageFile(file, maxWidth = 900, quality = 0.8) {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
-        const outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
-        resolve(canvas.toDataURL(outputType, quality));
+        resolve(canvas.toDataURL('image/jpeg', quality));
       };
-      img.onerror = () => reject(new Error('تعذر قراءة الصورة'));
-      img.src = e.target.result;
+      img.onerror = reject;
+      img.src = event.target.result;
     };
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
 }
 
-function readPdfAsDataUrl(file, maxBytes = 750 * 1024) {
-  return new Promise((resolve, reject) => {
-    if (file.type !== 'application/pdf') {
-      reject(new Error('يرجى اختيار ملف بصيغة PDF فقط.'));
-      return;
-    }
-    if (file.size > maxBytes) {
-      reject(
-        new Error(
-          `حجم ملف PDF (${Math.round(file.size / 1024)}KB) كبير. الحد الأقصى للمعاينة 750KB لضمان سرعة التحميل، أو استخدم خيار "صور صفحات العينة".`
-        )
-      );
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error('تعذر قراءة ملف PDF'));
-    reader.readAsDataURL(file);
-  });
-}
-
-function exportOrdersToCSV(orders, currency) {
-  const headers = [
-    'رقم الطلب',
-    'اسم المعلم',
-    'اسم المذكرة المطلوب',
-    'رقم الهاتف',
-    'المذكرة الأصلية',
-    'السعر',
-    'الحالة',
-    'تاريخ الطلب',
-    'رابط التسليم',
-    'ملاحظات المعلم'
-  ];
-  const rows = orders.map((o) => {
-    const st = ORDER_STATUSES.find((s) => s.id === o.status)?.label || o.status;
-    return [
-      o.orderNumber,
-      o.teacherName,
-      o.customNotebookTitle,
-      o.phone,
-      o.notebookTitle,
-      `${o.price} ${currency}`,
-      st,
-      new Date(o.createdAt).toLocaleString('ar-EG'),
-      o.deliveryUrl || '',
-      (o.notes || '').replace(/\n/g, ' ')
-    ]
-      .map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`)
-      .join(',');
-  });
-  const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `muzakkirati-orders-${new Date().toISOString().slice(0, 10)}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-/* ============================================================================
-   4. REUSABLE UI COMPONENTS (COVER ART, NOTICES BOX, PROTECTED PREVIEWER)
-   ============================================================================ */
-const NotebookCoverArt = ({ notebook, stageName, subjectName, className = 'h-52' }) => {
-  const discountPct = calcDiscountPercent(notebook.price, notebook.oldPrice);
-
-  if (notebook.coverUrl) {
-    return (
-      <div className={`relative overflow-hidden bg-slate-100 ${className}`}>
-        <img
-          src={notebook.coverUrl}
-          alt={notebook.title}
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-        />
-        <div className="absolute top-3 right-3 flex flex-col gap-1.5 items-start">
-          {notebook.badge && (
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-400 text-slate-950 shadow-md">
-              {notebook.badge}
-            </span>
-          )}
-          {discountPct > 0 && (
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-rose-600 text-white shadow-md">
-              وفر {discountPct}%
-            </span>
-          )}
-        </div>
-      </div>
-    );
+/**
+ * ============================================================================
+ * DEFAULT SEED DATA & INITIAL SETTINGS
+ * ============================================================================
+ */
+const DEFAULT_CATEGORIES = [
+  {
+    id: 'term1',
+    name: 'مذكرات الترم الأول',
+    description: 'مذكرات شرح وتدريبات ومراجعات شاملة للفصل الدراسي الأول لجميع المراحل.',
+    color: 'from-blue-700 to-indigo-800',
+    badge: 'الترم الأول'
+  },
+  {
+    id: 'term2',
+    name: 'مذكرات الترم الثاني',
+    description: 'مذكرات منسقة ومحدثة للفصل الدراسي الثاني مع بنوك أسئلة وامتحانات.',
+    color: 'from-teal-600 to-emerald-800',
+    badge: 'الترم الثاني'
+  },
+  {
+    id: 'foundation',
+    name: 'كورسات التأسيس',
+    description: 'مذكرات تأسيس مهارات القراءة والكتابة والقواعد والحساب قبل بدء العام الدراسي.',
+    color: 'from-amber-600 to-orange-700',
+    badge: 'تأسيس شامل'
   }
+];
 
-  const palette =
-    notebook.categoryId === 'term1'
-      ? 'from-blue-700 via-blue-800 to-indigo-950'
-      : notebook.categoryId === 'term2'
-      ? 'from-teal-600 via-emerald-700 to-slate-900'
-      : 'from-amber-500 via-orange-600 to-rose-900';
+const DEFAULT_STAGES = [
+  { id: 'primary', name: 'المرحلة الابتدائية', order: 1 },
+  { id: 'prep', name: 'المرحلة الإعدادية', order: 2 },
+  { id: 'secondary', name: 'المرحلة الثانوية', order: 3 }
+];
 
-  return (
-    <div
-      className={`relative overflow-hidden bg-gradient-to-br ${palette} p-5 flex flex-col justify-between text-white select-none ${className}`}
-    >
-      <div className="absolute -left-8 -top-8 w-32 h-32 rounded-full bg-white/10 blur-xl" />
-      <div className="absolute -right-8 -bottom-8 w-32 h-32 rounded-full bg-black/20 blur-xl" />
+const DEFAULT_GRADES = [
+  { id: 'g_p4', stageId: 'primary', name: 'الصف الرابع الابتدائي' },
+  { id: 'g_p5', stageId: 'primary', name: 'الصف الخامس الابتدائي' },
+  { id: 'g_p6', stageId: 'primary', name: 'الصف السادس الابتدائي' },
+  { id: 'g_m1', stageId: 'prep', name: 'الصف الأول الإعدادي' },
+  { id: 'g_m2', stageId: 'prep', name: 'الصف الثاني الإعدادي' },
+  { id: 'g_m3', stageId: 'prep', name: 'الصف الثالث الإعدادي' },
+  { id: 'g_s1', stageId: 'secondary', name: 'الصف الأول الثانوي' },
+  { id: 'g_s2', stageId: 'secondary', name: 'الصف الثاني الثانوي' },
+  { id: 'g_s3', stageId: 'secondary', name: 'الصف الثالث الثانوي' }
+];
 
-      <div className="relative z-10 flex items-center justify-between gap-2">
-        <span className="px-2.5 py-1 rounded-lg bg-white/15 backdrop-blur-xs text-[11px] font-bold">
-          {subjectName || 'مذكرة دراسية'}
-        </span>
-        <div className="flex items-center gap-1.5">
-          {discountPct > 0 && (
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-rose-500 text-white shadow">
-              وفر {discountPct}%
-            </span>
-          )}
-          {notebook.badge && (
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-400 text-slate-950 shadow">
-              {notebook.badge}
-            </span>
-          )}
-        </div>
-      </div>
+const DEFAULT_SUBJECTS = [
+  { id: 'sub_ar', name: 'اللغة العربية', visible: true },
+  { id: 'sub_en', name: 'اللغة الإنجليزية', visible: true },
+  { id: 'sub_math', name: 'الرياضيات', visible: true },
+  { id: 'sub_sci', name: 'العلوم', visible: true },
+  { id: 'sub_soc', name: 'الدراسات الاجتماعية', visible: true }
+];
 
-      <div className="relative z-10 my-auto py-2">
-        <div className="w-10 h-1 bg-amber-300 rounded-full mb-2.5" />
-        <h4 className="font-extrabold text-base sm:text-lg leading-snug line-clamp-2 drop-shadow-xs">
-          {notebook.title}
-        </h4>
-      </div>
+const DEFAULT_NOTEBOOKS = [
+  {
+    id: 'nb_demo_1',
+    title: 'سلسلة البيان في اللغة العربية — الصف الثالث الإعدادي',
+    categoryId: 'term1',
+    stageId: 'prep',
+    gradeId: 'g_m3',
+    subjectId: 'sub_ar',
+    price: 150,
+    oldPrice: 210,
+    pagesCount: 112,
+    badge: 'الأكثر طلبًا',
+    description:
+      'مذكرة شرح وتدريبات متكاملة تشمل النحو والقراءة والنصوص والقصة، منسقة بأحدث خطوط الطباعة مع أماكن مخصصة لاسم المعلم وشعاره ورقم هاتفه على الغلاف وجميع الصفحات.',
+    features: [
+      'إضافة اسم المعلم ورقم الهاتف والشعار على الغلاف وجميع الصفحات',
+      'ملف PDF عالي الدقة جاهز للطباعة الفورية (A4)',
+      'تدريبات شاملة بنظام الامتحانات الحديثة',
+      'تعديل الألوان الأساسية للغلاف حسب رغبة المعلم'
+    ],
+    coverUrl: '',
+    sampleType: 'images',
+    sampleImages: [],
+    samplePdfUrl: '',
+    previewPagesLimit: 4,
+    isActive: true,
+    createdAt: Date.now() - 86400000 * 3
+  },
+  {
+    id: 'nb_demo_2',
+    title: 'المتفوق في الرياضيات — الصف الأول الثانوي',
+    categoryId: 'term1',
+    stageId: 'secondary',
+    gradeId: 'g_s1',
+    subjectId: 'sub_math',
+    price: 180,
+    oldPrice: 240,
+    pagesCount: 136,
+    badge: 'عرض خاص',
+    description:
+      'مذكرة الجبر وحساب المثلثات والهندسة التحليلية مع أمثلة محلولة ومسائل مهارات التفكير العليا، قابلة للتخصيص الكامل باسمك وشعارك.',
+    features: [
+      'تخصيص كامل للغلاف والترويسة الداخلية باسم المعلم',
+      'رسومات هندسية واضحة ومرتبة بدقة عالية',
+      'اختبارات تراكمية بعد كل وحدة دراسية'
+    ],
+    coverUrl: '',
+    sampleType: 'images',
+    sampleImages: [],
+    samplePdfUrl: '',
+    previewPagesLimit: 4,
+    isActive: true,
+    createdAt: Date.now() - 86400000 * 2
+  },
+  {
+    id: 'nb_demo_3',
+    title: 'كورس التأسيس الشامل في القواعد الإنجليزية',
+    categoryId: 'foundation',
+    stageId: 'primary',
+    gradeId: 'g_p6',
+    subjectId: 'sub_en',
+    price: 120,
+    oldPrice: 160,
+    pagesCount: 74,
+    badge: 'تأسيس',
+    description:
+      'كورس تأسيس متدرج من الصفر لتقوية الطلاب في القراءة وتكوين الجمل والأزمنة الأساسية قبل بدء العام الدراسي.',
+    features: [
+      'تصميم جذاب مناسب لطلاب المرحلة الابتدائية والإعدادية',
+      'إضافة اسم المعلم والسنتر على الغلاف والصفحات',
+      'جاهز للطباعة أبيض وأسود أو ألوان'
+    ],
+    coverUrl: '',
+    sampleType: 'images',
+    sampleImages: [],
+    samplePdfUrl: '',
+    previewPagesLimit: 4,
+    isActive: true,
+    createdAt: Date.now() - 86400000
+  }
+];
 
-      <div className="relative z-10 flex items-center justify-between text-[11px] text-white/85 border-t border-white/15 pt-2">
-        <span>{stageName || 'جميع المراحل'}</span>
-        <span>PDF قابل للتخصيص</span>
-      </div>
-    </div>
-  );
+const DEFAULT_COUPONS = [
+  {
+    id: 'cpn_welcome',
+    code: 'TEACHER20',
+    type: 'percent',
+    value: 20,
+    description: 'خصم 20% بمناسبة بداية الفصل الدراسي للمعلمين',
+    minOrderAmount: 100,
+    maxUses: null,
+    usedCount: 0,
+    expiresAt: '',
+    isPublic: true,
+    isActive: true
+  }
+];
+
+const DEFAULT_BUNDLES = [
+  {
+    id: 'bnd_prep_all',
+    title: 'باقة المرحلة الإعدادية الكاملة (3 صفوف)',
+    description:
+      'احصل على مذكرات الصف الأول والثاني والثالث الإعدادي لمادتك مخصصة باسمك وشعارك بخصم خاص.',
+    price: 380,
+    oldPrice: 480,
+    itemsSummary: '3 مذكرات كاملة + تصميم غلاف خاص لكل صف مجانًا',
+    isActive: true
+  }
+];
+
+const DEFAULT_SETTINGS = {
+  platformName: 'منصة العباقرة للمذكرات التعليمية',
+  platformTagline: 'مذكرات دراسية احترافية مُخصّصة باسمك وشعارك الخاص',
+  logoUrl: '',
+  heroBannerUrl: '',
+  heroTitle: 'مذكرتك التعليمية الجاهزة... باسمك وشعارك وهويتك الاحترافية',
+  heroSubtitle:
+    'نوفر للمعلمين مذكرات دراسية منسقة ومحدثة وفق أحدث المناهج بصيغة PDF عالية الدقة، مع إضافة اسم المعلم، رقم الهاتف، والشعار الخاص به على الغلاف وجميع الصفحات.',
+  aboutTitle: 'لماذا يختار المعلمون منصة العباقرة للمذكرات التعليمية؟',
+  aboutDescription:
+    'نحن منصة متخصصة في إعداد وتصميم المذكرات التعليمية الاحترافية للمعلمين في جميع المراحل الدراسية. نوفر لك محتوى علميًا منقحًا، وتنسيقًا عصريًا مريحًا للعين، مع تخصيص الغلاف والصفحات الداخلية باسمك ورقم هاتفك وشعارك الخاص لتكون جاهزة للطباعة الفورية بأعلى جودة.',
+  currency: 'ج.م',
+  whatsappNumber: '201000000000',
+  customerServicePhone: '01000000000',
+  contactEmail: 'info@el3bakera-edu.com',
+  whatsappGroupUrl: '',
+  facebookUrl: '',
+  telegramUrl: '',
+  youtubeUrl: '',
+  instagramUrl: '',
+  tiktokUrl: '',
+  paymentDetails: 'فودافون كاش / إنستاباي: 01000000000',
+  announcementEnabled: true,
+  announcementText:
+    '🎉 عرض خاص للمعلمين: خصم 20% على جميع مذكرات الترم الأول + إضافة الشعار مجانًا لفترة محدودة!',
+  showHomeOffersSection: true,
+  bulkDiscountEnabled: true,
+  bulkDiscountMinItems: 2,
+  bulkDiscountPercent: 15,
+  autoNextOrderCouponEnabled: true,
+  autoNextOrderCouponPercent: 15,
+  autoNextOrderCouponDays: 30,
+  importantNoticesEnabled: true,
+  importantNoticesTitle: 'تنبيهات هامة قبل تأكيد الطلب',
+  importantNoticesList: [
+    'جميع المذكرات تُسلّم بصيغة إلكترونية PDF عالية الدقة جاهزة للطباعة (لا يوجد شحن ورقي).',
+    'يتم إضافة اسم المعلم، رقم الهاتف، والشعار الخاص بك على الغلاف وجميع الصفحات الداخلية.',
+    'مدة التجهيز والتسليم تتراوح بين 12 إلى 24 ساعة من تأكيد البيانات.'
+  ],
+  allowLogoUpload: true,
+  requirePaymentProof: false,
+  maintenanceMode: false,
+  orderSuccessMessage:
+    'تم استلام طلبك بنجاح! سيقوم فريق التنسيق بإضافة بياناتك وشعارك على المذكرة وإرسالها لك في أقرب وقت.',
+  orderFormFields: {
+    teacherNameLabel: 'اسم المعلم (كما سيُكتب على المذكرة)',
+    teacherNamePlaceholder: 'مثال: أ/ محمد أحمد عبد الله',
+    showTeacherNameField: true,
+    requireTeacherNameField: true,
+    customTitleLabel: 'اسم المذكرة المطلوب طباعته على الغلاف',
+    customTitlePlaceholder: 'مثال: سلسلة الإبداع في اللغة العربية',
+    showCustomTitleField: true,
+    requireCustomTitleField: true,
+    phoneLabel: 'رقم الهاتف / الواتساب للتواصل',
+    phonePlaceholder: '010XXXXXXXX',
+    showPhoneField: true,
+    requirePhoneField: true,
+    logoLabel: 'شعار المعلم أو السنتر التعليمي (اختياري — PNG, JPG, SVG)',
+    notesLabel: 'ملاحظات إضافية (الألوان المفضلة، إضافة أرقام أخرى، إلخ)',
+    notesPlaceholder: 'اكتب أي تعليمات خاصة ترغب في إضافتها على المذكرة...',
+    showNotesField: true,
+    requireNotesField: false,
+    paymentSectionLabel: 'تأكيد الدفع وإرفاق صورة التحويل',
+    paymentReceiptPlaceholder: 'ارفع صورة إيصال التحويل (فودافون كاش / إنستاباي)',
+    showPaymentSection: true,
+    customFields: []
+  }
 };
 
-const ImportantNoticesBox = ({ settings, compact = false }) => {
-  if (!settings?.showImportantNotices) return null;
-  const notices = Array.isArray(settings.importantNotices)
-    ? settings.importantNotices.filter((n) => String(n || '').trim())
-    : [];
-  if (notices.length === 0) return null;
+const ORDER_STATUSES = [
+  { id: 'new', label: 'طلب جديد', color: 'bg-blue-100 text-blue-800 border-blue-200', step: 1 },
+  {
+    id: 'reviewing',
+    label: 'قيد المراجعة والتأكيد',
+    color: 'bg-amber-100 text-amber-800 border-amber-200',
+    step: 2
+  },
+  {
+    id: 'customizing',
+    label: 'جاري كتابة البيانات والتخصيص',
+    color: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+    step: 3
+  },
+  {
+    id: 'ready',
+    label: 'جاهز للتسليم',
+    color: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    step: 4
+  },
+  {
+    id: 'delivered',
+    label: 'تم التسليم بنجاح',
+    color: 'bg-teal-100 text-teal-800 border-teal-200',
+    step: 5
+  },
+  {
+    id: 'cancelled',
+    label: 'ملغي',
+    color: 'bg-rose-100 text-rose-800 border-rose-200',
+    step: 0
+  }
+];
 
-  return (
-    <div
-      className={`rounded-2xl border-2 border-amber-300 bg-gradient-to-l from-amber-50 to-orange-50/80 ${
-        compact ? 'p-3.5' : 'p-5 sm:p-6'
-      } shadow-xs`}
-    >
-      <div className="flex items-center gap-2 text-amber-900 mb-2">
-        <div className="w-7 h-7 rounded-xl bg-amber-400/30 text-amber-800 flex items-center justify-center shrink-0">
-          <AlertTriangle className="w-4 h-4" />
-        </div>
-        <h3 className={`font-black ${compact ? 'text-xs sm:text-sm' : 'text-sm sm:text-base'}`}>
-          {settings.importantNoticesTitle || 'تنبيهات هامة قبل الطلب'}
-        </h3>
-      </div>
-      <ul className={`space-y-1.5 text-amber-950/90 ${compact ? 'text-[11px]' : 'text-xs sm:text-sm'}`}>
-        {notices.map((item, idx) => (
-          <li key={idx} className="flex items-start gap-2 leading-relaxed">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-600 mt-2 shrink-0" />
-            <span>{item}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-};
-
-const ProtectedPreviewer = ({ notebook, lookUp, settings }) => {
-  const maxPages = Math.max(1, Number(notebook.previewPagesCount) || 3);
-  const previewImages = Array.isArray(notebook.previewImages) ? notebook.previewImages : [];
-  const hasPdfData = Boolean(notebook.previewPdfData);
-  const usePdfMode = notebook.previewType === 'pdf' && hasPdfData;
-
-  const [currentPage, setCurrentPage] = useState(1);
+/**
+ * ============================================================================
+ * PROTECTED SAMPLE PREVIEWER COMPONENT
+ * ============================================================================
+ */
+function ProtectedPreviewer({ notebook, platformName }) {
+  const images =
+    Array.isArray(notebook?.sampleImages) && notebook.sampleImages.length > 0
+      ? notebook.sampleImages
+      : [];
+  const limit = Number(notebook?.previewPagesLimit) || 4;
+  const displayImages = images.slice(0, limit);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [zoom, setZoom] = useState(100);
-  const [pdfPageImage, setPdfPageImage] = useState('');
-  const [pdfLoading, setPdfLoading] = useState(false);
-
-  const totalPages = usePdfMode
-    ? maxPages
-    : previewImages.length > 0
-    ? Math.min(previewImages.length, maxPages)
-    : maxPages;
 
   useEffect(() => {
-    setCurrentPage(1);
-  }, [notebook.id, notebook.previewType]);
-
-  // Render PDF sample page using PDF.js if previewType === 'pdf'
-  useEffect(() => {
-    if (!usePdfMode) {
-      setPdfPageImage('');
-      return;
-    }
-    let cancelled = false;
-    const renderPdfPage = async () => {
-      setPdfLoading(true);
-      try {
-        if (!window.pdfjsLib) {
-          await new Promise((res, rej) => {
-            const s = document.createElement('script');
-            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-            s.onload = res;
-            s.onerror = rej;
-            document.head.appendChild(s);
-          });
-          window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-        }
-        const loadingTask = window.pdfjsLib.getDocument(notebook.previewPdfData);
-        const pdf = await loadingTask.promise;
-        const safePage = Math.min(currentPage, pdf.numPages, maxPages);
-        const page = await pdf.getPage(safePage);
-        const viewport = page.getViewport({ scale: 1.5 });
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        await page.render({ canvasContext: ctx, viewport }).promise;
-        if (!cancelled) {
-          setPdfPageImage(canvas.toDataURL('image/jpeg', 0.85));
-        }
-      } catch (err) {
-        console.warn('PDF render fallback:', err);
-        if (!cancelled) setPdfPageImage('');
-      } finally {
-        if (!cancelled) setPdfLoading(false);
-      }
-    };
-    renderPdfPage();
-    return () => {
-      cancelled = true;
-    };
-  }, [usePdfMode, notebook.previewPdfData, currentPage, maxPages]);
-
-  const demoSamplePages = [
-    {
-      header: 'نموذج الغلاف الخارجي (يُضاف اسمك ورقمك وشعارك هنا)',
-      title: notebook.title,
-      body: [
-        'إعداد وتقديم الأستاذ / [اسم المعلم يُكتب هنا]',
-        `المرحلة: ${lookUp.stageName(notebook.stageId)} — ${lookUp.gradeName(notebook.gradeId)}`,
-        `المادة: ${lookUp.subjectName(notebook.subjectId)}`,
-        'رقم التواصل / الواتساب: [010XXXXXXXX]'
-      ]
-    },
-    {
-      header: 'نموذج من تنسيق الشرح الداخلي — الدرس الأول',
-      title: 'أولًا: المفاهيم الأساسية والقواعد المنظمة للدرس',
-      body: [
-        '• تم تنسيق الفقرات بخطوط واضحة ومريحة للعين مع تمييز المصطلحات الهامة.',
-        '• جداول مقارنة تلخص أهم نقاط الدرس ليسهل على الطالب استيعابها.',
-        '• تذييل كل صفحة يحمل اسم المعلم ورقم هاتفه لحفظ الحقوق.',
-        '• أمثلة محلولة خطوة بخطوة على كل جزئية.'
-      ]
-    },
-    {
-      header: 'نموذج من بنك الأسئلة والتدريبات التطبيقية',
-      title: 'ثانيًا: تدريبات شاملة بنظام التقييم الحديث',
-      body: [
-        'س1: اختر الإجابة الصحيحة من بين البدائل المعطاة في كل مما يأتي:',
-        'س2: علل لما يأتي بأسلوب علمي دقيق ومختصر...',
-        'س3: قارن في جدول بين كل مفهومين مما يلي...',
-        'ملاحظة: هذه عينة محمية للمطالعة، ويتم تسليم النسخة الكاملة بصيغة PDF عالية الجودة.'
-      ]
-    }
-  ];
-
-  const activeDemo = demoSamplePages[(currentPage - 1) % demoSamplePages.length];
+    setCurrentIndex(0);
+    setZoom(100);
+  }, [notebook?.id]);
 
   return (
     <div
       onContextMenu={(e) => e.preventDefault()}
-      className="bg-slate-900 rounded-2xl overflow-hidden border border-slate-800 shadow-xl select-none"
+      className="select-none rounded-3xl bg-slate-900 text-white overflow-hidden border border-slate-800 shadow-xl"
     >
-      {/* Toolbar */}
-      <div className="bg-slate-800/90 px-4 py-3 flex flex-wrap items-center justify-between gap-3 border-b border-slate-700 text-white">
-        <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-amber-300">
-          <Eye className="w-4 h-4" />
-          <span>
-            عينة مطالعة محمية ({currentPage} من {totalPages} صفحات)
+      {/* Top Toolbar */}
+      <div className="px-4 py-3 bg-slate-950/80 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Eye className="w-4 h-4 text-amber-400" />
+          <span className="text-xs sm:text-sm font-extrabold">
+            معاينة محمية من المذكرة ({displayImages.length > 0 ? `${displayImages.length} صفحات` : 'نموذج عرض'})
           </span>
         </div>
-
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => setZoom((z) => Math.max(70, z - 15))}
+            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200"
             title="تصغير"
-            className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 transition"
           >
             <ZoomOut className="w-4 h-4" />
           </button>
-          <span className="text-xs font-mono w-11 text-center text-slate-300">{zoom}%</span>
+          <span className="text-xs font-mono px-2 text-slate-300">{zoom}%</span>
           <button
             type="button"
             onClick={() => setZoom((z) => Math.min(160, z + 15))}
+            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200"
             title="تكبير"
-            className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 transition"
           >
             <ZoomIn className="w-4 h-4" />
-          </button>
-
-          <div className="h-4 w-px bg-slate-600 mx-1" />
-
-          <button
-            type="button"
-            disabled={currentPage <= 1}
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            className="px-2.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-xs font-bold flex items-center gap-1"
-          >
-            <ChevronRight className="w-4 h-4" />
-            <span>السابق</span>
-          </button>
-          <button
-            type="button"
-            disabled={currentPage >= totalPages}
-            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-xs font-bold flex items-center gap-1"
-          >
-            <span>التالي</span>
-            <ChevronLeft className="w-4 h-4" />
           </button>
         </div>
       </div>
 
       {/* Viewer Canvas */}
-      <div className="relative p-4 sm:p-8 bg-slate-950/70 min-h-[420px] flex items-center justify-center overflow-auto">
-        <div
-          style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center' }}
-          className="relative w-full max-w-2xl bg-white rounded-xl shadow-2xl overflow-hidden transition-transform duration-200"
-        >
-          {/* Repeating Diagonal Watermark */}
-          <div className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-around items-center opacity-15 -rotate-12 overflow-hidden">
-            {[1, 2, 3].map((row) => (
-              <div key={row} className="whitespace-nowrap text-xl sm:text-2xl font-black text-slate-900">
-                {settings.siteName} • عينة للمعاينة فقط • {settings.siteName}
-              </div>
-            ))}
-          </div>
-
-          {usePdfMode ? (
-            pdfLoading ? (
-              <div className="py-24 text-center text-slate-500 text-sm font-bold">
-                جاري تحميل صفحة العينة من ملف PDF...
-              </div>
-            ) : pdfPageImage ? (
-              <img
-                src={pdfPageImage}
-                alt={`صفحة عينة ${currentPage}`}
-                draggable={false}
-                className="w-full h-auto block pointer-events-none"
-              />
-            ) : (
-              <div className="py-20 text-center text-slate-500 text-sm">
-                تعذر عرض صفحة PDF، يرجى استخدام أزرار التنقل.
-              </div>
-            )
-          ) : previewImages.length > 0 ? (
-            <img
-              src={previewImages[currentPage - 1]}
-              alt={`عينة صفحة ${currentPage}`}
-              draggable={false}
-              className="w-full h-auto block pointer-events-none"
+      <div className="relative min-h-[360px] sm:min-h-[460px] flex items-center justify-center p-4 sm:p-6 bg-slate-900 overflow-auto">
+        {notebook?.sampleType === 'pdf' && notebook?.samplePdfUrl ? (
+          <div className="w-full space-y-3 text-center">
+            <iframe
+              src={`${notebook.samplePdfUrl}#toolbar=0&navpanes=0`}
+              title="عينة PDF"
+              className="w-full h-[440px] rounded-2xl border border-slate-700 bg-white"
             />
-          ) : (
-            <div className="p-6 sm:p-10 text-slate-800 space-y-6 border-4 border-double border-blue-100 m-3 rounded-lg">
-              <div className="flex items-center justify-between border-b-2 border-blue-600 pb-3">
-                <span className="text-xs font-extrabold text-blue-700 bg-blue-50 px-3 py-1 rounded-full">
-                  {activeDemo.header}
-                </span>
-                <span className="text-xs font-bold text-slate-400">صفحة {currentPage}</span>
+            <p className="text-[11px] text-slate-400">
+              عينة PDF محمية — تُرسل النسخة الكاملة بدون علامة مائية وباسمك وشعارك بعد الطلب
+            </p>
+          </div>
+        ) : displayImages.length > 0 ? (
+          <div className="relative inline-block overflow-hidden rounded-2xl shadow-2xl border border-slate-700 bg-white">
+            <img
+              src={displayImages[currentIndex]}
+              alt={`صفحة معاينة ${currentIndex + 1}`}
+              draggable={false}
+              style={{ width: `${zoom}%`, maxWidth: '100%' }}
+              className="block mx-auto pointer-events-none"
+            />
+            {/* Repeating Diagonal Watermark */}
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center opacity-25 rotate-[-24deg]">
+              <span className="text-xl sm:text-3xl font-black text-slate-900 tracking-wider whitespace-nowrap">
+                {platformName} • عينة للمعاينة فقط
+              </span>
+            </div>
+          </div>
+        ) : (
+          /* Built-in Illustrative Sample Page when no sample images uploaded yet */
+          <div
+            style={{ transform: `scale(${zoom / 100})` }}
+            className="relative w-full max-w-md rounded-2xl bg-white text-slate-900 p-6 sm:p-8 shadow-2xl border-4 border-blue-800 transition-transform"
+          >
+            <div className="border-b-2 border-blue-800 pb-3 mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-bold text-blue-700">{platformName}</p>
+                <h4 className="text-base sm:text-lg font-black text-slate-900 mt-0.5">
+                  {notebook?.title}
+                </h4>
               </div>
-
-              <div className="text-center py-4 bg-gradient-to-l from-blue-50 to-teal-50 rounded-xl px-4">
-                <h4 className="text-lg sm:text-xl font-black text-slate-900">{activeDemo.title}</h4>
-              </div>
-
-              <div className="space-y-3 text-sm sm:text-base leading-relaxed text-slate-700">
-                {activeDemo.body.map((line, idx) => (
-                  <p key={idx} className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
-                    {line}
-                  </p>
-                ))}
-              </div>
-
-              <div className="pt-4 border-t border-dashed border-slate-300 flex items-center justify-between text-xs text-slate-500 font-bold">
-                <span>أ/ [اسم المعلم هنا]</span>
-                <span>ت/ [رقم الهاتف هنا]</span>
+              <div className="w-12 h-12 rounded-xl border-2 border-dashed border-amber-500 bg-amber-50 flex items-center justify-center text-[10px] font-extrabold text-amber-800 text-center leading-tight">
+                مكان شعارك
               </div>
             </div>
-          )}
-        </div>
+            <div className="space-y-2.5 text-xs text-slate-700 leading-relaxed">
+              <div className="p-3 rounded-xl bg-blue-50 border border-blue-100 font-bold text-blue-950">
+                إعداد الأستاذ / [يُكتب اسمك ورقم هاتفك هنا على الغلاف وجميع الصفحات]
+              </div>
+              <p className="font-bold text-slate-800">نموذج تنسيق المحتوى الداخلي:</p>
+              <ul className="list-disc pr-5 space-y-1 text-slate-600">
+                <li>شرح مبسط ومنظم بأحدث خطوط الطباعة التعليمية الواضحة.</li>
+                <li>أمثلة محلولة وتدريبات متدرجة مطابقة لمواصفات الورقة الامتحانية.</li>
+                <li>تذييل مخصص في أسفل كل صفحة باسم المعلم ورقم التواصل.</li>
+              </ul>
+            </div>
+            <div className="mt-5 pt-3 border-t border-slate-200 flex items-center justify-between text-[11px] font-bold text-slate-500">
+              <span>تليفون المعلم: 010XXXXXXXX</span>
+              <span>صفحة (1)</span>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Thumbnail Strip when multiple images exist */}
-      {!usePdfMode && previewImages.length > 1 && (
-        <div className="bg-slate-900/95 px-4 py-2.5 border-t border-slate-800 flex items-center justify-center gap-2 overflow-x-auto">
-          {previewImages.slice(0, maxPages).map((imgSrc, idx) => (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => setCurrentPage(idx + 1)}
-              className={`relative w-12 h-16 rounded-lg overflow-hidden border-2 transition shrink-0 ${
-                currentPage === idx + 1 ? 'border-amber-400 scale-105' : 'border-slate-700 opacity-60'
-              }`}
-            >
-              <img src={imgSrc} alt="" className="w-full h-full object-cover" />
-            </button>
-          ))}
+      {/* Pagination & Thumbnails */}
+      {displayImages.length > 1 && (
+        <div className="px-4 py-3 bg-slate-950/90 border-t border-slate-800 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
+            disabled={currentIndex === 0}
+            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-xs font-bold flex items-center gap-1"
+          >
+            <ChevronRight className="w-4 h-4" />
+            <span>السابقة</span>
+          </button>
+          <div className="flex items-center gap-1.5 overflow-x-auto">
+            {displayImages.map((img, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => setCurrentIndex(idx)}
+                className={`w-9 h-11 rounded-lg overflow-hidden border-2 transition shrink-0 ${
+                  idx === currentIndex ? 'border-amber-400 scale-105' : 'border-slate-700 opacity-60'
+                }`}
+              >
+                <img src={img} alt="" className="w-full h-full object-cover" />
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setCurrentIndex((i) => Math.min(displayImages.length - 1, i + 1))}
+            disabled={currentIndex === displayImages.length - 1}
+            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-xs font-bold flex items-center gap-1"
+          >
+            <span>التالية</span>
+            <ChevronLeft className="w-4 h-4" />
+          </button>
         </div>
       )}
     </div>
   );
-};
+}
 
-/* ============================================================================
-   5. ORDER MODAL (NO LOGIN REQUIRED + MULTI-NOTEBOOK + COUPON SUPPORT)
-   ============================================================================ */
-const OrderModal = ({
+/**
+ * ============================================================================
+ * ORDER MODAL COMPONENT (DYNAMIC FIELDS + MULTI-NOTEBOOK + COUPONS)
+ * ============================================================================
+ */
+function OrderModal({
   isOpen,
   onClose,
   notebook,
-  initialItems = null,
-  initialCouponCode = '',
+  initialItems,
+  initialCouponCode,
   allNotebooks,
   coupons,
   settings,
   lookUp,
   onSubmitOrder,
   showToast
-}) => {
+}) {
+  const formFieldsCfg = settings.orderFormFields || DEFAULT_SETTINGS.orderFormFields;
+
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [showAddMorePicker, setShowAddMorePicker] = useState(false);
+  const [pickerSearch, setPickerSearch] = useState('');
+
   const [teacherName, setTeacherName] = useState('');
   const [customTitle, setCustomTitle] = useState('');
   const [phone, setPhone] = useState('');
   const [notes, setNotes] = useState('');
+  const [customFieldValues, setCustomFieldValues] = useState({});
+
   const [logoData, setLogoData] = useState('');
   const [logoName, setLogoName] = useState('');
   const [paymentReceiptData, setPaymentReceiptData] = useState('');
   const [paymentReceiptName, setPaymentReceiptName] = useState('');
+
   const [couponInput, setCouponInput] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState(null);
-  const [selectedItems, setSelectedItems] = useState([]);
-  const [showAddPicker, setShowAddPicker] = useState(false);
-  const [pickerSearch, setPickerSearch] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [createdOrder, setCreatedOrder] = useState(null);
+  const [submittedOrder, setSubmittedOrder] = useState(null);
 
   useEffect(() => {
-    if (isOpen) {
-      if (Array.isArray(initialItems) && initialItems.length > 0) {
-        setSelectedItems(initialItems);
-        setCustomTitle(
-          initialItems.length === 1
-            ? initialItems[0].title
-            : `طلب مجمّع (${initialItems.length}): ${initialItems.map((i) => i.title).join(' + ')}`
-        );
-      } else if (notebook) {
-        setSelectedItems([
-          {
-            id: notebook.id,
-            title: notebook.title,
-            price: Number(notebook.price) || 0,
-            stageId: notebook.stageId || '',
-            subjectId: notebook.subjectId || ''
-          }
-        ]);
-        setCustomTitle(notebook.title || '');
+    if (!isOpen) return;
+    setSubmittedOrder(null);
+    setShowAddMorePicker(false);
+    setPickerSearch('');
+    setCustomFieldValues({});
+    setLogoData('');
+    setLogoName('');
+    setPaymentReceiptData('');
+    setPaymentReceiptName('');
+
+    if (Array.isArray(initialItems) && initialItems.length > 0) {
+      setSelectedItems(initialItems);
+      setCustomTitle(initialItems.map((i) => i.title).join(' + '));
+    } else if (notebook) {
+      setSelectedItems([notebook]);
+      setCustomTitle(notebook.title || '');
+    } else {
+      setSelectedItems([]);
+      setCustomTitle('');
+    }
+
+    if (initialCouponCode) {
+      setCouponInput(initialCouponCode);
+      const found = (coupons || []).find(
+        (c) => c.isActive && c.code.toUpperCase() === initialCouponCode.trim().toUpperCase()
+      );
+      setAppliedCoupon(found || null);
+    } else {
+      setCouponInput('');
+      setAppliedCoupon(null);
+    }
+  }, [isOpen, notebook, initialItems, initialCouponCode]);
+
+  const pricing = useMemo(() => {
+    const subtotal = selectedItems.reduce((sum, item) => sum + Number(item.price || 0), 0);
+    let bulkDiscount = 0;
+    if (
+      settings.bulkDiscountEnabled &&
+      selectedItems.length >= Number(settings.bulkDiscountMinItems || 2)
+    ) {
+      bulkDiscount = Math.round((subtotal * Number(settings.bulkDiscountPercent || 0)) / 100);
+    }
+    const afterBulk = Math.max(0, subtotal - bulkDiscount);
+    let couponDiscount = 0;
+    if (appliedCoupon && afterBulk >= Number(appliedCoupon.minOrderAmount || 0)) {
+      if (appliedCoupon.type === 'percent') {
+        couponDiscount = Math.round((afterBulk * Number(appliedCoupon.value || 0)) / 100);
       } else {
-        setSelectedItems([]);
-        setCustomTitle('');
+        couponDiscount = Math.min(afterBulk, Number(appliedCoupon.value || 0));
       }
-
-      if (initialCouponCode) {
-        const found = (coupons || []).find(
-          (c) =>
-            !isCouponExhausted(c) &&
-            c.code.toUpperCase() === initialCouponCode.trim().toUpperCase()
-        );
-        if (found) {
-          setCouponInput(found.code);
-          setAppliedCoupon(found);
-        } else {
-          setCouponInput(initialCouponCode);
-          setAppliedCoupon(null);
-        }
-      } else {
-        setCouponInput('');
-        setAppliedCoupon(null);
-      }
-
-      setCreatedOrder(null);
-      setShowAddPicker(false);
-      setPickerSearch('');
-      setLogoData('');
-      setLogoName('');
-      setPaymentReceiptData('');
-      setPaymentReceiptName('');
     }
-  }, [isOpen, notebook, initialItems, initialCouponCode, coupons]);
+    const finalTotal = Math.max(0, afterBulk - couponDiscount);
+    return { subtotal, bulkDiscount, couponDiscount, finalTotal };
+  }, [selectedItems, settings, appliedCoupon]);
 
-  const subtotalPrice = useMemo(
-    () => selectedItems.reduce((sum, item) => sum + (Number(item.price) || 0), 0),
-    [selectedItems]
-  );
-
-  // Automatic Multi-Notebook Discount calculation
-  const multiDiscountRule = settings.multiOrderDiscount || {};
-  const qualifiesMultiDiscount =
-    Boolean(multiDiscountRule.enabled) &&
-    selectedItems.length >= (Number(multiDiscountRule.minItems) || 2) &&
-    subtotalPrice > 0;
-
-  const multiDiscountAmount = useMemo(() => {
-    if (!qualifiesMultiDiscount) return 0;
-    const val = Number(multiDiscountRule.value) || 0;
-    if (multiDiscountRule.type === 'percent') {
-      return Math.round((subtotalPrice * val) / 100);
-    }
-    return Math.min(subtotalPrice, val);
-  }, [qualifiesMultiDiscount, multiDiscountRule, subtotalPrice]);
-
-  const priceAfterMulti = Math.max(0, subtotalPrice - multiDiscountAmount);
-
-  // Coupon Discount calculation
-  const couponDiscountAmount = useMemo(() => {
-    if (!appliedCoupon || priceAfterMulti <= 0) return 0;
-    if (subtotalPrice < (Number(appliedCoupon.minOrder) || 0)) return 0;
-    const val = Number(appliedCoupon.value) || 0;
-    if (appliedCoupon.type === 'percent') {
-      return Math.round((priceAfterMulti * val) / 100);
-    }
-    return Math.min(priceAfterMulti, val);
-  }, [appliedCoupon, priceAfterMulti, subtotalPrice]);
-
-  const finalPrice = Math.max(0, priceAfterMulti - couponDiscountAmount);
+  if (!isOpen) return null;
 
   const handleApplyCoupon = () => {
     const code = couponInput.trim().toUpperCase();
-    if (!code) return showToast('يرجى كتابة كود الخصم أولًا', 'error');
-    const found = (coupons || []).find((c) => c.code.toUpperCase() === code);
+    if (!code) return;
+    const found = (coupons || []).find((c) => c.isActive && c.code.toUpperCase() === code);
     if (!found) {
-      setAppliedCoupon(null);
-      return showToast('كود الخصم غير صحيح', 'error');
+      return showToast('كود الخصم غير صحيح أو منتهي الصلاحية', 'error');
     }
-    if (found.active === false) {
-      setAppliedCoupon(null);
-      return showToast('هذا الكوبون موقوف حاليًا', 'error');
+    if (found.expiresAt && new Date(found.expiresAt) < new Date()) {
+      return showToast('عذرًا، انتهت صلاحية هذا الكوبون', 'error');
     }
-    if (found.expiresAt) {
-      const exp = new Date(`${found.expiresAt}T23:59:59`);
-      if (!Number.isNaN(exp.getTime()) && new Date() > exp) {
-        setAppliedCoupon(null);
-        return showToast('انتهت مدة صلاحية هذا الكوبون', 'error');
-      }
+    if (found.maxUses && Number(found.usedCount || 0) >= Number(found.maxUses)) {
+      return showToast('تم استهلاك الحد الأقصى لاستخدام هذا الكوبون', 'error');
     }
-    const maxUses = Number(found.maxUses) || 0;
-    const usedCount = Number(found.usedCount) || 0;
-    if (maxUses > 0 && usedCount >= maxUses) {
-      setAppliedCoupon(null);
-      return showToast('تم استنفاد الحد الأقصى لعدد مرات استخدام هذا الكوبون', 'error');
-    }
-    if (subtotalPrice > 0 && subtotalPrice < (Number(found.minOrder) || 0)) {
-      setAppliedCoupon(null);
+    if (pricing.subtotal < Number(found.minOrderAmount || 0)) {
       return showToast(
-        `الحد الأدنى لتطبيق هذا الكود هو ${found.minOrder} ${settings.currency}`,
+        `الحد الأدنى لتفعيل هذا الكوبون هو ${found.minOrderAmount} ${settings.currency}`,
         'error'
       );
     }
     setAppliedCoupon(found);
-    showToast(`تم تطبيق كود الخصم (${found.code}) بنجاح!`, 'success');
+    showToast(`تم تطبيق كوبون (${found.code}) بنجاح!`, 'success');
   };
-
-  const handleAddExtraNotebook = (nb) => {
-    if (selectedItems.some((item) => item.id === nb.id)) {
-      return showToast('هذه المذكرة مضافة بالفعل في طلبك', 'info');
-    }
-    const next = [
-      ...selectedItems,
-      {
-        id: nb.id,
-        title: nb.title,
-        price: Number(nb.price) || 0,
-        stageId: nb.stageId || '',
-        subjectId: nb.subjectId || ''
-      }
-    ];
-    setSelectedItems(next);
-    setCustomTitle(
-      next.length === 1
-        ? next[0].title
-        : `طلب مجمّع (${next.length}): ${next.map((i) => i.title).join(' + ')}`
-    );
-    setShowAddPicker(false);
-    showToast('تمت إضافة المذكرة إلى طلبك', 'success');
-  };
-
-  const handleRemoveSelectedItem = (idx) => {
-    const next = selectedItems.filter((_, i) => i !== idx);
-    setSelectedItems(next);
-    if (next.length === 1) {
-      setCustomTitle(next[0].title);
-    } else if (next.length > 1) {
-      setCustomTitle(`طلب مجمّع (${next.length}): ${next.map((i) => i.title).join(' + ')}`);
-    }
-  };
-
-  if (!isOpen) return null;
 
   const handleLogoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 4 * 1024 * 1024) {
+      return showToast('حجم ملف الشعار يجب ألا يتعدى 4 ميجابايت', 'error');
+    }
     try {
-      const compressed = await compressImageFile(file, 450, 0.85);
+      const compressed = await compressImageFile(file, 600, 0.85);
       setLogoData(compressed);
       setLogoName(file.name);
-      showToast('تم رفع الشعار بنجاح', 'success');
-    } catch (err) {
-      showToast(err.message || 'تعذر رفع الشعار', 'error');
+    } catch (_) {
+      showToast('تعذر قراءة ملف الشعار، يرجى اختيار صورة صالحة', 'error');
     }
   };
 
   const handleReceiptUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      showToast('يرجى رفع صورة إيصال التحويل (PNG أو JPG)', 'error');
-      return;
+    if (file.size > 5 * 1024 * 1024) {
+      return showToast('حجم صورة الإيصال يجب ألا يتعدى 5 ميجابايت', 'error');
     }
     try {
       const compressed = await compressImageFile(file, 900, 0.8);
       setPaymentReceiptData(compressed);
       setPaymentReceiptName(file.name);
-      showToast('تم إرفاق صورة إيصال الدفع بنجاح', 'success');
-    } catch (err) {
-      showToast(err.message || 'تعذر رفع صورة الإيصال', 'error');
+    } catch (_) {
+      showToast('تعذر قراءة صورة الإيصال', 'error');
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!teacherName.trim()) return showToast('يرجى إدخال اسم المعلم', 'error');
-    if (!customTitle.trim()) return showToast('يرجى إدخال اسم المذكرة المطلوب طباعته', 'error');
-    if (!validateEgyptianPhone(phone)) {
+    const showTeacher = formFieldsCfg.showTeacherNameField !== false;
+    const reqTeacher = showTeacher && formFieldsCfg.requireTeacherNameField !== false;
+    const showCustomTitle = formFieldsCfg.showCustomTitleField !== false;
+    const reqCustomTitle = showCustomTitle && formFieldsCfg.requireCustomTitleField !== false;
+    const showPhone = formFieldsCfg.showPhoneField !== false;
+    const reqPhone = showPhone && formFieldsCfg.requirePhoneField !== false;
+    const showNotes = formFieldsCfg.showNotesField !== false;
+    const reqNotes = showNotes && Boolean(formFieldsCfg.requireNotesField);
+    const showPayment = formFieldsCfg.showPaymentSection !== false;
+
+    if (reqTeacher && !teacherName.trim()) {
+      return showToast(`يرجى إدخال "${formFieldsCfg.teacherNameLabel}"`, 'error');
+    }
+    if (reqCustomTitle && !customTitle.trim()) {
+      return showToast(`يرجى إدخال "${formFieldsCfg.customTitleLabel}"`, 'error');
+    }
+    if (showPhone && phone.trim() && !validateEgyptianPhone(phone)) {
       return showToast(
         'يرجى إدخال رقم هاتف مصري صحيح مكون من 11 رقمًا (يبدأ بـ 010/011/012/015)',
         'error'
       );
     }
-    if (settings.requirePaymentProof && !paymentReceiptData) {
+    if (reqPhone && !phone.trim()) {
+      return showToast(`يرجى إدخال "${formFieldsCfg.phoneLabel}"`, 'error');
+    }
+    if (reqNotes && !notes.trim()) {
+      return showToast(`يرجى إدخال "${formFieldsCfg.notesLabel}"`, 'error');
+    }
+    if (showPayment && settings.requirePaymentProof && !paymentReceiptData) {
       return showToast('يرجى إرفاق صورة إيصال الدفع لتأكيد الطلب', 'error');
+    }
+    for (const cf of formFieldsCfg.customFields || []) {
+      if (cf.visible !== false && cf.required && !String(customFieldValues[cf.id] || '').trim()) {
+        return showToast(`يرجى إدخال حقل "${cf.label}"`, 'error');
+      }
     }
 
     setSubmitting(true);
     try {
       const primaryItem = selectedItems[0] || notebook;
+      const customFieldEntries = (formFieldsCfg.customFields || [])
+        .filter((cf) => cf.visible !== false)
+        .map((cf) => ({
+          id: cf.id,
+          label: cf.label,
+          value: String(customFieldValues[cf.id] || '').trim()
+        }))
+        .filter((entry) => entry.value);
+
       const orderObj = {
         id: `ord_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
         orderNumber: generateOrderNumber(),
-        teacherName: teacherName.trim(),
-        customNotebookTitle: customTitle.trim(),
-        phone: phone.replace(/[\s\-()]/g, ''),
-        notes: notes.trim(),
-        logoUrl: logoData,
-        paymentReceiptUrl: paymentReceiptData,
-        paymentStatus: paymentReceiptData ? 'pending_review' : 'unpaid',
+        teacherName: showTeacher ? teacherName.trim() : 'عميل',
+        customNotebookTitle: showCustomTitle
+          ? customTitle.trim()
+          : primaryItem?.title || 'طلب جديد',
+        phone: showPhone ? phone.replace(/[\s\-()]/g, '') : '',
+        notes: showNotes ? notes.trim() : '',
+        customFieldEntries,
+        logoUrl: settings.allowLogoUpload ? logoData : '',
+        paymentReceiptUrl: showPayment ? paymentReceiptData : '',
+        paymentStatus: showPayment && paymentReceiptData ? 'pending_review' : 'unpaid',
         notebookId: primaryItem?.id || 'custom',
         notebookTitle:
           selectedItems.length > 1
-            ? selectedItems.map((i) => i.title).join(' + ')
-            : primaryItem?.title || customTitle.trim(),
-        items: selectedItems,
-        stageName: primaryItem?.stageId ? lookUp.stageName(primaryItem.stageId) : 'مخصص',
-        subjectName: primaryItem?.subjectId ? lookUp.subjectName(primaryItem.subjectId) : 'عام',
-        subtotalPrice,
-        multiDiscountAmount,
+            ? `${primaryItem?.title || 'مذكرة'} (+${selectedItems.length - 1} أخرى)`
+            : primaryItem?.title || customTitle.trim() || 'مذكرة مخصصة',
+        items: selectedItems.map((it) => ({
+          id: it.id,
+          title: it.title,
+          price: Number(it.price || 0)
+        })),
+        subtotal: pricing.subtotal,
+        bulkDiscount: pricing.bulkDiscount,
         couponCode: appliedCoupon ? appliedCoupon.code : '',
-        couponDiscountAmount,
-        price: finalPrice,
+        couponDiscount: pricing.couponDiscount,
+        totalAmount: pricing.finalTotal,
         status: 'new',
-        deliveryUrl: '',
         adminNotes: '',
-        createdAt: new Date().toISOString()
+        deliveryUrl: '',
+        nextOrderCoupon: null,
+        createdAt: Date.now()
       };
-      await onSubmitOrder(orderObj, appliedCoupon?.id || '');
-      setCreatedOrder(orderObj);
-      showToast('تم إرسال طلبك بنجاح!', 'success');
-    } catch (err) {
-      showToast('حدث خطأ أثناء إرسال الطلب، حاول مرة أخرى', 'error');
+
+      await onSubmitOrder(orderObj, appliedCoupon?.id);
+      setSubmittedOrder(orderObj);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const availablePickerNotebooks = (allNotebooks || []).filter(
-    (nb) =>
-      nb.published !== false &&
-      (!pickerSearch.trim() ||
-        nb.title.toLowerCase().includes(pickerSearch.toLowerCase()) ||
-        lookUp.subjectName(nb.subjectId).includes(pickerSearch))
-  );
+  const whatsappConfirmUrl = submittedOrder
+    ? `https://wa.me/${settings.whatsappNumber}?text=${encodeURIComponent(
+        `السلام عليكم، قمت بتسجيل طلب جديد على ${settings.platformName}\n` +
+          `رقم الطلب: ${submittedOrder.orderNumber}\n` +
+          `الاسم: ${submittedOrder.teacherName}\n` +
+          `المطلوب: ${submittedOrder.customNotebookTitle}\n` +
+          `الإجمالي: ${submittedOrder.totalAmount} ${settings.currency}`
+      )}`
+    : '#';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs overflow-y-auto">
-      <div className="relative w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden my-8">
-        {/* Header */}
-        <div className="bg-gradient-to-l from-blue-700 to-teal-600 px-6 py-5 text-white flex items-center justify-between">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/75 backdrop-blur-sm overflow-y-auto">
+      <div className="relative w-full max-w-2xl rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col">
+        {/* Modal Header */}
+        <div className="px-6 py-4 bg-gradient-to-l from-blue-900 to-teal-700 text-white flex items-center justify-between shrink-0">
           <div>
             <h3 className="text-lg sm:text-xl font-black">
-              {createdOrder ? 'تم تسجيل طلبك بنجاح 🎉' : 'نموذج طلب تجهيز مذكرة'}
+              {submittedOrder ? 'تم استلام طلبك بنجاح!' : 'نموذج طلب تجهيز مذكرة'}
             </h3>
             <p className="text-xs text-blue-100 mt-0.5">
-              {createdOrder
-                ? 'احتفظ برقم الطلب لمتابعة حالة التخصيص والاستلام'
+              {submittedOrder
+                ? 'احتفظ برقم الطلب لمتابعة حالة التجهيز والتحميل'
                 : 'بدون الحاجة لإنشاء حساب — أدخل بيانات التخصيص وسنتواصل معك فورًا'}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl bg-white/15 hover:bg-white/25 transition"
+            className="p-2 rounded-xl bg-white/15 hover:bg-white/25 text-white transition"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {createdOrder ? (
-          <div className="p-6 sm:p-8 space-y-6 text-center">
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
-              <CheckCircle2 className="w-10 h-10" />
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-sm text-slate-600 leading-relaxed">{settings.orderSuccessMessage}</p>
-              <div className="inline-flex items-center gap-3 px-5 py-3 rounded-2xl bg-slate-100 border border-slate-200 mt-2">
-                <span className="text-xs font-bold text-slate-500">رقم الطلب:</span>
-                <span className="text-lg font-black font-mono text-blue-700 tracking-wider">
-                  {createdOrder.orderNumber}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard?.writeText(createdOrder.orderNumber);
-                    showToast('تم نسخ رقم الطلب', 'success');
-                  }}
-                  className="p-1.5 rounded-lg bg-white hover:bg-slate-200 text-slate-700 shadow-xs"
-                  title="نسخ رقم الطلب"
-                >
-                  <Copy className="w-4 h-4" />
-                </button>
+        {/* Modal Body */}
+        <div className="p-5 sm:p-6 overflow-y-auto space-y-5">
+          {submittedOrder ? (
+            <div className="text-center space-y-5 py-2">
+              <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-10 h-10" />
               </div>
-            </div>
-
-            <div className="bg-slate-50 rounded-2xl p-4 text-right text-xs sm:text-sm space-y-2 border border-slate-200/80">
-              <div className="flex justify-between">
-                <span className="text-slate-500">اسم المعلم:</span>
-                <span className="font-bold text-slate-900">{createdOrder.teacherName}</span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-slate-500 shrink-0">المذكرة:</span>
-                <span className="font-bold text-slate-900 text-left">
-                  {createdOrder.customNotebookTitle}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">رقم الهاتف:</span>
-                <span className="font-bold font-mono text-slate-900">{createdOrder.phone}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">التكلفة:</span>
-                <span className="font-black text-emerald-700">
-                  {createdOrder.price ? `${createdOrder.price} ${settings.currency}` : 'بالاتفاق'}
-                  {createdOrder.multiDiscountAmount > 0 && (
-                    <span className="mr-1.5 text-[11px] text-teal-700 font-bold">
-                      (خصم كمية -{createdOrder.multiDiscountAmount} {settings.currency})
-                    </span>
-                  )}
-                  {createdOrder.couponCode && (
-                    <span className="mr-1.5 text-[11px] text-rose-600 font-bold">
-                      (كود {createdOrder.couponCode})
-                    </span>
-                  )}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">حالة الدفع:</span>
-                <span
-                  className={`font-bold text-xs ${
-                    createdOrder.paymentReceiptUrl ? 'text-amber-700' : 'text-slate-600'
-                  }`}
-                >
-                  {createdOrder.paymentReceiptUrl
-                    ? 'تم إرفاق صورة الإيصال (قيد المراجعة)'
-                    : 'لم يتم إرفاق إيصال بعد (يمكنك رفعه من صفحة تتبع طلبك)'}
-                </span>
-              </div>
-            </div>
-
-            <div className="p-3.5 rounded-2xl bg-purple-50 border border-purple-200 text-right text-xs text-purple-900 leading-relaxed">
-              <span className="font-extrabold block mb-1">ℹ️ ماذا يحدث الآن؟</span>
-              ستدخل مذكرتك الآن مرحلة <strong>كتابة البيانات والتخصيص</strong> (إضافة اسمك ورقمك وشعارك على الغلاف والصفحات). فور الانتهاء، سيتاح لك رابط التحميل المباشر في صفحة <strong>تتبع طلبك</strong> وسنرسله لك عبر الواتساب.
-            </div>
-
-            {settings.paymentInfo && (
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-right text-xs text-amber-900 whitespace-pre-line">
-                <strong className="block mb-1">بيانات الدفع والتأكيد:</strong>
-                {settings.paymentInfo}
-              </div>
-            )}
-
-            <div className="flex flex-col sm:flex-row gap-3">
-              {settings.whatsappNumber && (
-                <a
-                  href={buildWhatsAppUrl(
-                    settings.whatsappNumber,
-                    `مرحبًا، قمت بتسجيل طلب جديد على ${settings.siteName}\nرقم الطلب: ${createdOrder.orderNumber}\nالاسم: ${createdOrder.teacherName}\nالمذكرة: ${createdOrder.customNotebookTitle}`
-                  )}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20"
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  <span>إرسال التفاصيل عبر واتساب</span>
-                </a>
-              )}
-              <button
-                type="button"
-                onClick={onClose}
-                className="py-3 px-6 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-sm"
-              >
-                إغلاق
-              </button>
-            </div>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[82vh] overflow-y-auto">
-            <ImportantNoticesBox settings={settings} compact />
-
-            {/* Selected Notebooks & Multi-Notebook Add Section */}
-            <div className="p-3.5 rounded-2xl bg-blue-50/80 border border-blue-100 space-y-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-extrabold text-blue-900">
-                  المذكرات المختارة ({selectedItems.length || 1})
-                </span>
-                {allNotebooks && allNotebooks.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAddPicker((prev) => !prev)}
-                    className="px-2.5 py-1 rounded-lg bg-blue-700 hover:bg-blue-800 text-white text-[11px] font-bold flex items-center gap-1"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>إضافة مذكرة أخرى</span>
-                  </button>
-                )}
+              <div>
+                <p className="text-sm text-slate-600 max-w-md mx-auto leading-relaxed">
+                  {settings.orderSuccessMessage}
+                </p>
               </div>
 
-              {selectedItems.length > 0 ? (
-                <div className="space-y-1.5">
-                  {selectedItems.map((item, idx) => (
-                    <div
-                      key={`${item.id}_${idx}`}
-                      className="flex items-center justify-between gap-2 bg-white px-3 py-2 rounded-xl border border-blue-100 text-xs"
-                    >
-                      <span className="font-bold text-slate-800 truncate">{item.title}</span>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="font-black text-blue-700">
-                          {item.price ? `${item.price} ${settings.currency}` : 'بالاتفاق'}
-                        </span>
-                        {selectedItems.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveSelectedItem(idx)}
-                            className="p-1 rounded-lg text-rose-500 hover:bg-rose-50"
-                            title="إزالة"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-xs text-blue-800 font-semibold">
-                  مذكرة مخصصة حسب طلبك — يمكنك اختيار مذكرات جاهزة بالزر أعلاه أو كتابة التفاصيل بالأسفل.
-                </div>
-              )}
-
-              {/* Extra Notebook Picker Dropdown */}
-              {showAddPicker && (
-                <div className="p-3 rounded-xl bg-white border border-blue-200 space-y-2 shadow-sm">
-                  <input
-                    type="text"
-                    placeholder="ابحث باسم المذكرة أو المادة لإضافتها..."
-                    value={pickerSearch}
-                    onChange={(e) => setPickerSearch(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <div className="max-h-36 overflow-y-auto divide-y divide-slate-100">
-                    {availablePickerNotebooks.map((nb) => (
-                      <button
-                        key={nb.id}
-                        type="button"
-                        onClick={() => handleAddExtraNotebook(nb)}
-                        className="w-full text-right py-2 px-2 hover:bg-blue-50 rounded-lg flex items-center justify-between gap-2 text-xs"
-                      >
-                        <span className="font-bold text-slate-800 truncate">{nb.title}</span>
-                        <span className="font-extrabold text-emerald-700 shrink-0">
-                          {nb.price} {settings.currency}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Multi-Order Discount Banner */}
-              {multiDiscountRule.enabled && (
-                <div
-                  className={`p-2.5 rounded-xl text-[11px] font-bold flex items-center gap-2 ${
-                    qualifiesMultiDiscount
-                      ? 'bg-emerald-100 text-emerald-900 border border-emerald-200'
-                      : 'bg-amber-50 text-amber-900 border border-amber-200'
-                  }`}
-                >
-                  <Sparkles className="w-4 h-4 shrink-0" />
-                  <span>
-                    {qualifiesMultiDiscount
-                      ? `مبروك! تم تفعيل خصم الكمية تلقائيًا (-${multiDiscountAmount} ${settings.currency})`
-                      : multiDiscountRule.label ||
-                        `اطلب ${multiDiscountRule.minItems || 2} مذكرات أو أكثر واحصل على خصم إضافي تلقائي!`}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Coupon Code Input */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-extrabold text-slate-700">
-                هل لديك كوبون خصم؟ (اختياري)
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  dir="ltr"
-                  placeholder="أدخل كود الخصم مثل TEACHER20"
-                  value={couponInput}
-                  onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
-                  className="flex-1 px-3.5 py-2 rounded-xl border border-slate-200 font-mono text-xs uppercase text-left focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={handleApplyCoupon}
-                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold"
-                >
-                  تطبيق الكود
-                </button>
-              </div>
-              {appliedCoupon && (
-                <div className="flex items-center justify-between text-xs bg-emerald-50 text-emerald-800 px-3 py-1.5 rounded-xl border border-emerald-200">
-                  <span className="font-bold">
-                    ✓ كود ({appliedCoupon.code}) مُفعّل: خصم{' '}
-                    {appliedCoupon.type === 'percent'
-                      ? `${appliedCoupon.value}%`
-                      : `${appliedCoupon.value} ${settings.currency}`}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 max-w-md mx-auto space-y-2">
+                <span className="text-xs font-bold text-slate-500">رقم متابعة الطلب</span>
+                <div className="flex items-center justify-center gap-2">
+                  <span dir="ltr" className="text-xl font-black font-mono text-blue-900">
+                    {submittedOrder.orderNumber}
                   </span>
                   <button
                     type="button"
                     onClick={() => {
-                      setAppliedCoupon(null);
-                      setCouponInput('');
+                      navigator.clipboard?.writeText(submittedOrder.orderNumber);
+                      showToast('تم نسخ رقم الطلب', 'success');
                     }}
-                    className="text-rose-600 font-bold hover:underline"
+                    className="p-1.5 rounded-lg bg-blue-100 text-blue-800 hover:bg-blue-200"
+                    title="نسخ رقم الطلب"
                   >
-                    إلغاء
+                    <Copy className="w-4 h-4" />
                   </button>
                 </div>
-              )}
-            </div>
-
-            {/* Price Summary Box */}
-            {subtotalPrice > 0 && (
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-1.5">
-                <div className="flex justify-between text-slate-600">
-                  <span>المجموع الفرعي:</span>
-                  <span className="font-bold">
-                    {subtotalPrice} {settings.currency}
-                  </span>
-                </div>
-                {multiDiscountAmount > 0 && (
-                  <div className="flex justify-between text-teal-700 font-bold">
-                    <span>خصم طلب أكثر من مذكرة:</span>
-                    <span>
-                      - {multiDiscountAmount} {settings.currency}
-                    </span>
-                  </div>
-                )}
-                {couponDiscountAmount > 0 && (
-                  <div className="flex justify-between text-rose-600 font-bold">
-                    <span>خصم الكوبون ({appliedCoupon?.code}):</span>
-                    <span>
-                      - {couponDiscountAmount} {settings.currency}
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between text-sm font-black text-slate-900 pt-1.5 border-t border-slate-200">
-                  <span>الإجمالي النهائي المطلوب:</span>
-                  <span className="text-blue-700">
-                    {finalPrice} {settings.currency}
-                  </span>
+                <div className="text-xs text-slate-600 pt-1">
+                  الإجمالي المطلوب:{' '}
+                  <strong className="text-emerald-700">
+                    {submittedOrder.totalAmount} {settings.currency}
+                  </strong>
                 </div>
               </div>
-            )}
 
-            <div>
-              <label className="block text-xs font-extrabold text-slate-700 mb-1.5">
-                اسم المعلم (كما سيُكتب على المذكرة) <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="مثال: أ/ محمد أحمد عبد الله"
-                value={teacherName}
-                onChange={(e) => setTeacherName(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-extrabold text-slate-700 mb-1.5">
-                اسم المذكرة المطلوب طباعته على الغلاف <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="مثال: سلسلة الإبداع في اللغة العربية"
-                value={customTitle}
-                onChange={(e) => setCustomTitle(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-extrabold text-slate-700 mb-1.5">
-                رقم الهاتف / الواتساب للتواصل <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="tel"
-                required
-                dir="ltr"
-                placeholder="010XXXXXXXX"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-left font-mono"
-              />
-            </div>
-
-            {settings.allowLogoUpload && (
-              <div>
-                <label className="block text-xs font-extrabold text-slate-700 mb-1.5">
-                  شعار المعلم أو السنتر التعليمي (اختياري — PNG, JPG, SVG)
-                </label>
-                <div className="flex items-center gap-3">
-                  <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-slate-300 hover:border-blue-500 bg-slate-50 hover:bg-blue-50/40 transition text-xs font-bold text-slate-600">
-                    <Upload className="w-4 h-4 text-blue-600" />
-                    <span>{logoName || 'اضغط لاختيار ملف الشعار من جهازك'}</span>
-                    <input
-                      type="file"
-                      accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml"
-                      onChange={handleLogoUpload}
-                      className="hidden"
-                    />
-                  </label>
-                  {logoData && (
-                    <div className="relative w-14 h-14 rounded-xl border border-slate-200 overflow-hidden bg-white p-1 shrink-0">
-                      <img src={logoData} alt="شعار المعلم" className="w-full h-full object-contain" />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setLogoData('');
-                          setLogoName('');
-                        }}
-                        className="absolute top-0.5 left-0.5 p-0.5 rounded-full bg-rose-500 text-white"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-extrabold text-slate-700 mb-1.5">
-                ملاحظات إضافية (الألوان المفضلة، إضافة أرقام أخرى، إلخ)
-              </label>
-              <textarea
-                rows="3"
-                placeholder="اكتب أي تعليمات خاصة ترغب في إضافتها على المذكرة..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
-              />
-            </div>
-
-            {/* Payment Details & Receipt Upload Box */}
-            <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-3">
-              <div className="flex items-center gap-2 text-emerald-900">
-                <Receipt className="w-4 h-4 text-emerald-700 shrink-0" />
-                <span className="text-xs font-extrabold">
-                  تأكيد الدفع وإرفاق صورة التحويل{' '}
-                  {settings.requirePaymentProof ? (
-                    <span className="text-rose-600">* (إلزامي)</span>
-                  ) : (
-                    '(اختياري — لتسريع البدء في التجهيز)'
-                  )}
-                </span>
-              </div>
-              {settings.paymentInfo && (
-                <div className="bg-white/90 rounded-xl p-3 border border-emerald-200/80 text-xs text-slate-800 space-y-1">
-                  <span className="font-bold text-emerald-800 block">بيانات التحويل المتاحة:</span>
-                  <p className="whitespace-pre-line font-mono text-[11px] sm:text-xs leading-relaxed">
-                    {settings.paymentInfo}
+              {settings.paymentDetails && (
+                <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-right max-w-md mx-auto">
+                  <p className="text-xs font-extrabold text-amber-900 mb-1">
+                    بيانات الدفع المتاحة لتأكيد التجهيز:
+                  </p>
+                  <p className="text-xs text-amber-800 whitespace-pre-line">
+                    {settings.paymentDetails}
                   </p>
                 </div>
               )}
-              <div className="flex items-center gap-3">
-                <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-emerald-300 bg-white hover:bg-emerald-50/60 transition text-xs font-bold text-emerald-900">
-                  <Upload className="w-4 h-4 text-emerald-600" />
-                  <span>
-                    {paymentReceiptName || 'ارفع صورة إيصال التحويل (فودافون كاش / إنستاباي)'}
+
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                <a
+                  href={whatsappConfirmUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:w-auto px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-extrabold flex items-center justify-center gap-2 shadow-lg"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>إرسال تفاصيل الطلب عبر واتساب</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-full sm:w-auto px-6 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-bold"
+                >
+                  إغلاق النافذة
+                </button>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Important Notices */}
+              {settings.importantNoticesEnabled &&
+                Array.isArray(settings.importantNoticesList) &&
+                settings.importantNoticesList.length > 0 && (
+                  <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-950 space-y-1">
+                    <div className="font-extrabold flex items-center gap-1.5 text-amber-900">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>{settings.importantNoticesTitle}</span>
+                    </div>
+                    <ul className="list-disc pr-5 space-y-0.5 text-amber-900/90">
+                      {settings.importantNoticesList.map((n, i) => (
+                        <li key={i}>{n}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+              {/* Selected Notebooks & Multi-Item Builder */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-slate-800">
+                    المذكرات المختارة ({selectedItems.length})
                   </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleReceiptUpload}
-                    className="hidden"
-                  />
-                </label>
-                {paymentReceiptData && (
-                  <div className="relative w-14 h-14 rounded-xl border border-emerald-200 overflow-hidden bg-white shrink-0">
-                    <img
-                      src={paymentReceiptData}
-                      alt="إيصال الدفع"
-                      className="w-full h-full object-cover"
+                  <button
+                    type="button"
+                    onClick={() => setShowAddMorePicker((v) => !v)}
+                    className="px-3 py-1 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>إضافة مذكرة أخرى</span>
+                  </button>
+                </div>
+
+                {selectedItems.length > 0 ? (
+                  <div className="space-y-2">
+                    {selectedItems.map((item, idx) => (
+                      <div
+                        key={`${item.id}_${idx}`}
+                        className="px-3 py-2 rounded-xl bg-white border border-slate-200 flex items-center justify-between gap-2 text-xs"
+                      >
+                        <span className="font-bold text-slate-800 truncate">{item.title}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="font-black text-blue-800">
+                            {item.price} {settings.currency}
+                          </span>
+                          {selectedItems.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSelectedItems((prev) => prev.filter((_, i) => i !== idx))
+                              }
+                              className="p-1 rounded-lg text-rose-500 hover:bg-rose-50"
+                              title="إزالة"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500">
+                    طلب مذكرة خاصة — حدد اسم المذكرة بالأسفل أو اختر من القائمة
+                  </p>
+                )}
+
+                {showAddMorePicker && (
+                  <div className="p-3 rounded-xl bg-white border border-blue-200 space-y-2">
+                    <input
+                      type="text"
+                      placeholder="ابحث عن مذكرة لإضافتها للطلب..."
+                      value={pickerSearch}
+                      onChange={(e) => setPickerSearch(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs"
                     />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPaymentReceiptData('');
-                        setPaymentReceiptName('');
-                      }}
-                      className="absolute top-0.5 left-0.5 p-0.5 rounded-full bg-rose-600 text-white"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
+                    <div className="max-h-36 overflow-y-auto space-y-1">
+                      {(allNotebooks || [])
+                        .filter((nb) =>
+                          nb.title.toLowerCase().includes(pickerSearch.trim().toLowerCase())
+                        )
+                        .map((nb) => (
+                          <button
+                            key={nb.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedItems((prev) => [...prev, nb]);
+                              setShowAddMorePicker(false);
+                              showToast(`تمت إضافة "${nb.title}" للطلب`, 'success');
+                            }}
+                            className="w-full text-right px-2.5 py-1.5 rounded-lg hover:bg-blue-50 text-xs flex items-center justify-between"
+                          >
+                            <span className="font-bold text-slate-700 truncate">{nb.title}</span>
+                            <span className="text-blue-700 font-extrabold shrink-0">
+                              + {nb.price} {settings.currency}
+                            </span>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {settings.bulkDiscountEnabled && (
+                  <div className="px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-900 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span>
+                      خصم إضافي {settings.bulkDiscountPercent}% تلقائيًا عند طلب{' '}
+                      {settings.bulkDiscountMinItems} مذكرات أو أكثر في نفس الطلب!
+                    </span>
                   </div>
                 )}
               </div>
-            </div>
 
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-l from-blue-700 to-teal-600 hover:opacity-95 text-white font-black text-sm shadow-lg flex items-center justify-center gap-2 transition"
-            >
-              <Send className="w-4 h-4" />
-              <span>{submitting ? 'جاري إرسال الطلب...' : 'تأكيد وإرسال الطلب الآن'}</span>
-            </button>
-          </form>
-        )}
+              {/* Coupon Input */}
+              <div>
+                <label className="block text-xs font-extrabold text-slate-700 mb-1.5">
+                  هل لديك كوبون خصم؟ (اختياري)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    dir="ltr"
+                    placeholder="أدخل كود الخصم مثل TEACHER20"
+                    value={couponInput}
+                    onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                    className="flex-1 px-4 py-2 rounded-xl border border-slate-200 text-sm font-mono uppercase text-left"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyCoupon}
+                    className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold"
+                  >
+                    تطبيق الكود
+                  </button>
+                </div>
+              </div>
+
+              {/* Dynamic Price Summary */}
+              {selectedItems.length > 0 && (
+                <div className="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-100 space-y-1.5 text-xs">
+                  <div className="flex justify-between text-slate-600">
+                    <span>المجموع الفرعي:</span>
+                    <span className="font-bold">
+                      {pricing.subtotal} {settings.currency}
+                    </span>
+                  </div>
+                  {pricing.bulkDiscount > 0 && (
+                    <div className="flex justify-between text-emerald-700 font-bold">
+                      <span>خصم طلب أكثر من مذكرة ({settings.bulkDiscountPercent}%):</span>
+                      <span>
+                        - {pricing.bulkDiscount} {settings.currency}
+                      </span>
+                    </div>
+                  )}
+                  {pricing.couponDiscount > 0 && (
+                    <div className="flex justify-between text-emerald-700 font-bold">
+                      <span>خصم الكوبون ({appliedCoupon?.code}):</span>
+                      <span>
+                        - {pricing.couponDiscount} {settings.currency}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm font-black text-blue-950 pt-1.5 border-t border-blue-200/70">
+                    <span>الإجمالي النهائي المطلوب:</span>
+                    <span className="text-blue-700">
+                      {pricing.finalTotal} {settings.currency}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Built-in Customizable Fields */}
+              {formFieldsCfg.showTeacherNameField !== false && (
+                <div>
+                  <label className="block text-xs font-extrabold text-slate-700 mb-1.5">
+                    {formFieldsCfg.teacherNameLabel}{' '}
+                    {formFieldsCfg.requireTeacherNameField !== false && (
+                      <span className="text-rose-500">*</span>
+                    )}
+                  </label>
+                  <input
+                    type="text"
+                    required={formFieldsCfg.requireTeacherNameField !== false}
+                    placeholder={formFieldsCfg.teacherNamePlaceholder}
+                    value={teacherName}
+                    onChange={(e) => setTeacherName(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
+                  />
+                </div>
+              )}
+
+              {formFieldsCfg.showCustomTitleField !== false && (
+                <div>
+                  <label className="block text-xs font-extrabold text-slate-700 mb-1.5">
+                    {formFieldsCfg.customTitleLabel}{' '}
+                    {formFieldsCfg.requireCustomTitleField !== false && (
+                      <span className="text-rose-500">*</span>
+                    )}
+                  </label>
+                  <input
+                    type="text"
+                    required={formFieldsCfg.requireCustomTitleField !== false}
+                    placeholder={formFieldsCfg.customTitlePlaceholder}
+                    value={customTitle}
+                    onChange={(e) => setCustomTitle(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
+                  />
+                </div>
+              )}
+
+              {formFieldsCfg.showPhoneField !== false && (
+                <div>
+                  <label className="block text-xs font-extrabold text-slate-700 mb-1.5">
+                    {formFieldsCfg.phoneLabel}{' '}
+                    {formFieldsCfg.requirePhoneField !== false && (
+                      <span className="text-rose-500">*</span>
+                    )}
+                  </label>
+                  <input
+                    type="tel"
+                    required={formFieldsCfg.requirePhoneField !== false}
+                    dir="ltr"
+                    placeholder={formFieldsCfg.phonePlaceholder}
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm text-left font-mono"
+                  />
+                </div>
+              )}
+
+              {/* Dynamic Custom Fields added from Admin Dashboard */}
+              {(formFieldsCfg.customFields || [])
+                .filter((cf) => cf.visible !== false)
+                .map((cf) => (
+                  <div key={cf.id}>
+                    <label className="block text-xs font-extrabold text-slate-700 mb-1.5">
+                      {cf.label} {cf.required && <span className="text-rose-500">*</span>}
+                    </label>
+                    <input
+                      type="text"
+                      required={Boolean(cf.required)}
+                      placeholder={cf.placeholder || `أدخل ${cf.label}...`}
+                      value={customFieldValues[cf.id] || ''}
+                      onChange={(e) =>
+                        setCustomFieldValues((prev) => ({ ...prev, [cf.id]: e.target.value }))
+                      }
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
+                    />
+                  </div>
+                ))}
+
+              {settings.allowLogoUpload && (
+                <div>
+                  <label className="block text-xs font-extrabold text-slate-700 mb-1.5">
+                    {formFieldsCfg.logoLabel}
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-slate-300 hover:border-blue-500 bg-slate-50 hover:bg-blue-50/40 transition text-xs font-bold text-slate-600">
+                      <Upload className="w-4 h-4 text-blue-600" />
+                      <span>{logoName || 'اضغط لاختيار ملف الشعار من جهازك'}</span>
+                      <input
+                        type="file"
+                        accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml"
+                        onChange={handleLogoUpload}
+                        className="hidden"
+                      />
+                    </label>
+                    {logoData && (
+                      <div className="relative w-14 h-14 rounded-xl border border-slate-200 overflow-hidden bg-white p-1 shrink-0">
+                        <img src={logoData} alt="شعار المعلم" className="w-full h-full object-contain" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLogoData('');
+                            setLogoName('');
+                          }}
+                          className="absolute top-0.5 left-0.5 p-0.5 rounded-full bg-rose-500 text-white"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {formFieldsCfg.showNotesField !== false && (
+                <div>
+                  <label className="block text-xs font-extrabold text-slate-700 mb-1.5">
+                    {formFieldsCfg.notesLabel}{' '}
+                    {formFieldsCfg.requireNotesField && <span className="text-rose-500">*</span>}
+                  </label>
+                  <textarea
+                    rows="3"
+                    required={Boolean(formFieldsCfg.requireNotesField)}
+                    placeholder={formFieldsCfg.notesPlaceholder}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
+                  />
+                </div>
+              )}
+
+              {/* Payment Details & Receipt Upload Box */}
+              {formFieldsCfg.showPaymentSection !== false && (
+                <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-extrabold text-emerald-950 flex items-center gap-1.5">
+                      <Wallet className="w-4 h-4 text-emerald-700" />
+                      <span>
+                        {formFieldsCfg.paymentSectionLabel}{' '}
+                        {settings.requirePaymentProof ? '(إلزامي)' : '(اختياري — لتسريع البدء في التجهيز)'}
+                      </span>
+                    </span>
+                  </div>
+                  {settings.paymentDetails && (
+                    <div className="p-2.5 rounded-xl bg-white border border-emerald-200 text-xs text-slate-800 whitespace-pre-line">
+                      <strong className="block text-emerald-900 mb-0.5">بيانات التحويل المتاحة:</strong>
+                      {settings.paymentDetails}
+                    </div>
+                  )}
+                  <label className="cursor-pointer flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 border-dashed border-emerald-300 hover:border-emerald-500 bg-white text-xs font-bold text-emerald-800">
+                    <Upload className="w-4 h-4" />
+                    <span>
+                      {paymentReceiptName ||
+                        formFieldsCfg.paymentReceiptPlaceholder ||
+                        'ارفع صورة إيصال التحويل (فودافون كاش / إنستاباي)'}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleReceiptUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full py-3.5 rounded-2xl bg-gradient-to-l from-blue-800 to-teal-700 hover:from-blue-900 hover:to-teal-800 text-white text-sm font-black flex items-center justify-center gap-2 shadow-xl disabled:opacity-60 transition"
+              >
+                <Send className="w-4 h-4" />
+                <span>{submitting ? 'جاري إرسال طلبك...' : 'تأكيد وإرسال الطلب الآن'}</span>
+              </button>
+            </form>
+          )}
+        </div>
       </div>
     </div>
   );
-};
+}
 
-/* ============================================================================
-   6. SECURE ADMIN DASHBOARD (WITH ALL CRUD, ANALYTICS, OFFERS, AND SETTINGS)
-   ============================================================================ */
-const AdminDashboard = ({
+/**
+ * ============================================================================
+ * ADMIN DASHBOARD COMPONENT
+ * ============================================================================
+ */
+function AdminDashboard({
   settings,
-  categories,
-  stages,
-  grades,
-  subjects,
-  notebooks,
-  orders,
-  coupons,
-  bundles,
-  reviews,
-  adminMeta,
-  lookUp,
   onSaveSettings,
-  onRestoreBackup,
+  categories,
+  onSaveCategories,
+  stages,
+  onSaveStages,
+  grades,
+  onSaveGrades,
+  subjects,
+  onSaveSubjects,
+  notebooks,
   onSaveNotebook,
   onDeleteNotebook,
+  orders,
   onUpdateOrder,
-  onSaveStructureItem,
-  onDeleteStructureItem,
+  onDeleteOrder,
+  coupons,
   onSaveCoupon,
   onDeleteCoupon,
+  bundles,
   onSaveBundle,
   onDeleteBundle,
-  onSaveReview,
-  onDeleteReview,
-  onUpdateAdminPassword,
-  onIssueNextOrderCoupon,
-  onToggleNextOrderCoupon,
-  onRemoveNextOrderCoupon,
-  onExitAdmin,
+  onLogout,
+  onBackToSite,
   showToast
-}) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authEmail, setAuthEmail] = useState('');
-  const [authPassword, setAuthPassword] = useState('');
-  const [authConfirmPassword, setAuthConfirmPassword] = useState('');
-  const [authLoading, setAuthLoading] = useState(false);
-
+}) {
   const [activeTab, setActiveTab] = useState('stats');
+
+  // Orders filter state
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState('all');
-  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [deliveryDrafts, setDeliveryDrafts] = useState({});
+  const [adminNotesDrafts, setAdminNotesDrafts] = useState({});
 
-  // Notebook CRUD modal state
-  const [nbModalOpen, setNbModalOpen] = useState(false);
-  const [editingNb, setEditingNb] = useState(null);
+  // Notebook form state
+  const [editingNotebook, setEditingNotebook] = useState(null);
   const [nbForm, setNbForm] = useState({
     title: '',
-    shortDesc: '',
-    fullDesc: '',
-    categoryId: 'term1',
-    stageId: 'primary',
-    gradeId: 'g4',
-    subjectId: 'arabic',
-    price: 250,
-    oldPrice: '',
-    pageCount: 100,
-    previewPagesCount: 3,
-    coverUrl: '',
-    previewType: 'images',
-    previewImages: [],
-    previewPdfData: '',
-    drivePreviewUrl: '',
+    categoryId: categories[0]?.id || 'term1',
+    stageId: stages[0]?.id || 'primary',
+    gradeId: grades[0]?.id || 'g_p4',
+    subjectId: subjects[0]?.id || 'sub_ar',
+    price: 150,
+    oldPrice: 200,
+    pagesCount: 80,
     badge: '',
-    published: true,
-    order: 1
+    description: '',
+    featuresText: 'إضافة اسم المعلم ورقم الهاتف والشعار على الغلاف وجميع الصفحات\nملف PDF عالي الدقة جاهز للطباعة الفورية',
+    coverUrl: '',
+    sampleType: 'images',
+    sampleImages: [],
+    samplePdfUrl: '',
+    previewPagesLimit: 4,
+    isActive: true
   });
 
-  // Reviews CRUD state
-  const [reviewForm, setReviewForm] = useState({
-    teacherName: '',
-    subjectAndStage: '',
-    quote: '',
-    screenshotUrl: ''
-  });
-
-  // Next-order coupon custom controls inside Order Detail modal
-  const [nextCpType, setNextCpType] = useState('percent');
-  const [nextCpValue, setNextCpValue] = useState(15);
-  const [nextCpMaxUses, setNextCpMaxUses] = useState(1);
-  const [nextCpValidDays, setNextCpValidDays] = useState(30);
-
-  // Structure & Subjects quick-add state
-  const [newStructName, setNewStructName] = useState('');
-  const [newStructType, setNewStructType] = useState('subjects');
-  const [newStructStageId, setNewStructStageId] = useState('primary');
-  const [newSubjectSettingName, setNewSubjectSettingName] = useState('');
-  const [editingSubjectId, setEditingSubjectId] = useState('');
-  const [editingSubjectName, setEditingSubjectName] = useState('');
-
-  // Coupons & Bundles CRUD state
-  const [editingCouponId, setEditingCouponId] = useState('');
-  const [couponForm, setCouponForm] = useState({
+  // Coupon & Bundle state
+  const [cpnForm, setCpnForm] = useState({
     code: '',
     type: 'percent',
     value: 15,
-    minOrder: 0,
     description: '',
-    isPrivate: false,
-    maxUses: 0,
-    expiresAt: ''
+    minOrderAmount: 0,
+    maxUses: '',
+    expiresAt: '',
+    isPublic: true,
+    isActive: true
   });
-  const [bundleForm, setBundleForm] = useState({
+  const [bndForm, setBndForm] = useState({
     title: '',
-    subtitle: '',
-    price: 600,
-    oldPrice: 800,
-    badge: 'عرض مجمّع',
-    featuresText: ''
+    description: '',
+    price: 350,
+    oldPrice: 450,
+    itemsSummary: '',
+    isActive: true
   });
+
+  // Taxonomy inputs
+  const [newCatName, setNewCatName] = useState('');
+  const [newStageName, setNewStageName] = useState('');
+  const [newGradeName, setNewGradeName] = useState('');
+  const [newGradeStageId, setNewGradeStageId] = useState(stages[0]?.id || 'primary');
+  const [newSubjectName, setNewSubjectName] = useState('');
 
   // Settings form state
-  const [settingsForm, setSettingsForm] = useState(settings);
-  const [newNoticeInput, setNewNoticeInput] = useState('');
+  const [settingsForm, setSettingsForm] = useState(() => ({
+    ...DEFAULT_SETTINGS,
+    ...settings,
+    orderFormFields: {
+      ...DEFAULT_SETTINGS.orderFormFields,
+      ...(settings.orderFormFields || {})
+    }
+  }));
+  const [newNoticeText, setNewNoticeText] = useState('');
+  const [newCustomFieldLabel, setNewCustomFieldLabel] = useState('');
+  const [newCustomFieldPlaceholder, setNewCustomFieldPlaceholder] = useState('');
+  const [newCustomFieldRequired, setNewCustomFieldRequired] = useState(false);
+
+  // Admin password change state
   const [newAdminPass, setNewAdminPass] = useState('');
-
-  // Custom confirmation dialog state
-  const [confirmDialog, setConfirmDialog] = useState(null);
-  const backupFileInputRef = useRef(null);
+  const [confirmAdminPass, setConfirmAdminPass] = useState('');
+  const fileRestoreRef = useRef(null);
 
   useEffect(() => {
-    setSettingsForm(settings);
+    setSettingsForm({
+      ...DEFAULT_SETTINGS,
+      ...settings,
+      orderFormFields: {
+        ...DEFAULT_SETTINGS.orderFormFields,
+        ...(settings.orderFormFields || {})
+      }
+    });
   }, [settings]);
 
-  useEffect(() => {
-    setNextCpType(settings?.nextOrderCouponAuto?.type || 'percent');
-    setNextCpValue(Number(settings?.nextOrderCouponAuto?.value) || 15);
-    setNextCpMaxUses(
-      settings?.nextOrderCouponAuto?.maxUses !== undefined
-        ? Number(settings.nextOrderCouponAuto.maxUses)
-        : 1
-    );
-    setNextCpValidDays(
-      settings?.nextOrderCouponAuto?.validDays !== undefined
-        ? Number(settings.nextOrderCouponAuto.validDays)
-        : 30
-    );
-  }, [settings]);
-
-  // Check existing admin session token (valid for 24h)
-  useEffect(() => {
-    try {
-      const savedSession = JSON.parse(localStorage.getItem('mz_admin_session') || 'null');
-      if (savedSession && savedSession.expiresAt > Date.now() && adminMeta?.email) {
-        if (savedSession.email === adminMeta.email) {
-          setIsAuthenticated(true);
-        }
-      }
-    } catch {
-      // ignore
-    }
-  }, [adminMeta]);
-
-  const handleAdminSetup = async (e) => {
-    e.preventDefault();
-    if (!authEmail.trim() || !authEmail.includes('@')) {
-      return showToast('يرجى إدخال بريد إلكتروني صحيح للمدير', 'error');
-    }
-    if (authPassword.length < 6) {
-      return showToast('كلمة المرور يجب أن تكون 6 أحرف على الأقل', 'error');
-    }
-    if (authPassword !== authConfirmPassword) {
-      return showToast('كلمتا المرور غير متطابقتين', 'error');
-    }
-    setAuthLoading(true);
-    try {
-      const salt = generateSalt();
-      const passwordHash = await hashPasswordWithSalt(authPassword, salt);
-      await onUpdateAdminPassword({
-        email: authEmail.trim().toLowerCase(),
-        salt,
-        passwordHash,
-        updatedAt: new Date().toISOString()
-      });
-      localStorage.setItem(
-        'mz_admin_session',
-        JSON.stringify({
-          email: authEmail.trim().toLowerCase(),
-          expiresAt: Date.now() + 24 * 60 * 60 * 1000
-        })
-      );
-      setIsAuthenticated(true);
-      showToast('تم إنشاء حساب المدير وتأمين لوحة التحكم بنجاح', 'success');
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const handleAdminLogin = async (e) => {
-    e.preventDefault();
-    if (!adminMeta) return;
-    setAuthLoading(true);
-    try {
-      const inputHash = await hashPasswordWithSalt(authPassword, adminMeta.salt);
-      if (
-        authEmail.trim().toLowerCase() === adminMeta.email.toLowerCase() &&
-        inputHash === adminMeta.passwordHash
-      ) {
-        localStorage.setItem(
-          'mz_admin_session',
-          JSON.stringify({
-            email: adminMeta.email,
-            expiresAt: Date.now() + 24 * 60 * 60 * 1000
-          })
-        );
-        setIsAuthenticated(true);
-        setAuthPassword('');
-        showToast('مرحبًا بك في لوحة التحكم', 'success');
-      } else {
-        showToast('البريد الإلكتروني أو كلمة المرور غير صحيحة', 'error');
-      }
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('mz_admin_session');
-    setIsAuthenticated(false);
-    showToast('تم تسجيل الخروج بأمان', 'info');
-  };
-
-  // Analytics calculations
+  // Statistics
   const stats = useMemo(() => {
-    const totalOrders = orders.length;
-    const newOrders = orders.filter((o) => o.status === 'new').length;
-    const activeOrders = orders.filter((o) =>
-      ['reviewing', 'customizing', 'ready'].includes(o.status)
+    const total = orders.length;
+    const newCount = orders.filter((o) => o.status === 'new').length;
+    const completedCount = orders.filter(
+      (o) => o.status === 'ready' || o.status === 'delivered'
     ).length;
-    const completedOrders = orders.filter((o) => o.status === 'delivered').length;
     const revenue = orders
       .filter((o) => o.status !== 'cancelled')
-      .reduce((acc, o) => acc + (Number(o.price) || 0), 0);
-    return { totalOrders, newOrders, activeOrders, completedOrders, revenue };
+      .reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
+    return { total, newCount, completedCount, revenue };
   }, [orders]);
 
   const filteredOrders = useMemo(() => {
     return orders
+      .filter((o) => (orderStatusFilter === 'all' ? true : o.status === orderStatusFilter))
       .filter((o) => {
-        if (orderStatusFilter !== 'all' && o.status !== orderStatusFilter) return false;
-        if (!orderSearch.trim()) return true;
-        const q = orderSearch.toLowerCase();
+        const q = orderSearch.trim().toLowerCase();
+        if (!q) return true;
         return (
-          o.orderNumber?.toLowerCase().includes(q) ||
-          o.teacherName?.toLowerCase().includes(q) ||
-          o.phone?.includes(q) ||
-          o.customNotebookTitle?.toLowerCase().includes(q)
+          String(o.orderNumber || '').toLowerCase().includes(q) ||
+          String(o.teacherName || '').toLowerCase().includes(q) ||
+          String(o.phone || '').includes(q)
         );
       })
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  }, [orders, orderSearch, orderStatusFilter]);
+      .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+  }, [orders, orderStatusFilter, orderSearch]);
 
-  const openAddNotebookModal = () => {
-    setEditingNb(null);
-    setNbForm({
-      title: '',
-      shortDesc: '',
-      fullDesc: '',
-      categoryId: categories[0]?.id || 'term1',
-      stageId: stages[0]?.id || 'primary',
-      gradeId: grades[0]?.id || 'g4',
-      subjectId: subjects[0]?.id || 'arabic',
-      price: 250,
-      oldPrice: '',
-      pageCount: 100,
-      previewPagesCount: 3,
-      coverUrl: '',
-      previewType: 'images',
-      previewImages: [],
-      previewPdfData: '',
-      drivePreviewUrl: '',
-      badge: '',
-      published: true,
-      order: notebooks.length + 1
-    });
-    setNbModalOpen(true);
+  const handleExportOrdersCsv = () => {
+    const headers = ['رقم الطلب', 'اسم العميل', 'الهاتف', 'المطلوب', 'الإجمالي', 'الحالة', 'التاريخ'];
+    const rows = filteredOrders.map((o) => [
+      o.orderNumber,
+      o.teacherName,
+      o.phone,
+      o.customNotebookTitle,
+      o.totalAmount,
+      ORDER_STATUSES.find((s) => s.id === o.status)?.label || o.status,
+      new Date(o.createdAt || Date.now()).toLocaleDateString('ar-EG')
+    ]);
+    const csvContent =
+      '\uFEFF' + [headers, ...rows].map((r) => r.map((v) => `"${v || ''}"`).join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `orders_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('تم تصدير جدول الطلبات إلى ملف Excel (CSV)', 'success');
   };
 
-  const openEditNotebookModal = (nb) => {
-    setEditingNb(nb);
-    setNbForm({
-      title: nb.title || '',
-      shortDesc: nb.shortDesc || '',
-      fullDesc: nb.fullDesc || '',
-      categoryId: nb.categoryId || categories[0]?.id || '',
-      stageId: nb.stageId || stages[0]?.id || '',
-      gradeId: nb.gradeId || grades[0]?.id || '',
-      subjectId: nb.subjectId || subjects[0]?.id || '',
-      price: Number(nb.price) || 0,
-      oldPrice: nb.oldPrice ? Number(nb.oldPrice) : '',
-      pageCount: Number(nb.pageCount) || 0,
-      previewPagesCount: Number(nb.previewPagesCount) || 3,
-      coverUrl: nb.coverUrl || '',
-      previewType: nb.previewType || (nb.previewPdfData ? 'pdf' : 'images'),
-      previewImages: Array.isArray(nb.previewImages) ? nb.previewImages : [],
-      previewPdfData: nb.previewPdfData || '',
-      drivePreviewUrl: nb.drivePreviewUrl || '',
-      badge: nb.badge || '',
-      published: nb.published !== false,
-      order: Number(nb.order) || 1
-    });
-    setNbModalOpen(true);
-  };
-
-  const handleSaveNbSubmit = async (e) => {
+  const handleSaveNotebookSubmit = async (e) => {
     e.preventDefault();
     if (!nbForm.title.trim()) return showToast('يرجى إدخال عنوان المذكرة', 'error');
-    const payload = {
-      ...nbForm,
-      id: editingNb ? editingNb.id : `nb_${Date.now()}`,
-      price: Number(nbForm.price) || 0,
-      oldPrice: Number(nbForm.oldPrice) || 0,
-      pageCount: Number(nbForm.pageCount) || 0,
-      previewPagesCount: Math.max(1, Number(nbForm.previewPagesCount) || 3),
-      createdAt: editingNb?.createdAt || new Date().toISOString()
+    const nbObj = {
+      id: editingNotebook ? editingNotebook.id : `nb_${Date.now()}`,
+      title: nbForm.title.trim(),
+      categoryId: nbForm.categoryId,
+      stageId: nbForm.stageId,
+      gradeId: nbForm.gradeId,
+      subjectId: nbForm.subjectId,
+      price: Number(nbForm.price || 0),
+      oldPrice: Number(nbForm.oldPrice || 0),
+      pagesCount: Number(nbForm.pagesCount || 0),
+      badge: nbForm.badge.trim(),
+      description: nbForm.description.trim(),
+      features: nbForm.featuresText
+        .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean),
+      coverUrl: nbForm.coverUrl,
+      sampleType: nbForm.sampleType,
+      sampleImages: nbForm.sampleImages || [],
+      samplePdfUrl: nbForm.samplePdfUrl || '',
+      previewPagesLimit: Number(nbForm.previewPagesLimit || 4),
+      isActive: Boolean(nbForm.isActive),
+      createdAt: editingNotebook ? editingNotebook.createdAt : Date.now()
     };
-    await onSaveNotebook(payload);
-    setNbModalOpen(false);
-    showToast(editingNb ? 'تم تحديث بيانات المذكرة' : 'تمت إضافة المذكرة الجديدة بنجاح', 'success');
-  };
-
-  const handleAddStructure = async (e) => {
-    e.preventDefault();
-    if (!newStructName.trim()) return;
-    const id = `${newStructType.slice(0, 3)}_${Date.now()}`;
-    const item =
-      newStructType === 'grades'
-        ? { id, stageId: newStructStageId, name: newStructName.trim(), order: 99 }
-        : newStructType === 'categories'
-        ? {
-            id,
-            name: newStructName.trim(),
-            slug: id,
-            description: 'قسم تعليمي مضاف من لوحة التحكم',
-            gradient: 'from-indigo-600 to-blue-700',
-            order: 99
-          }
-        : { id, name: newStructName.trim(), order: 99, visible: true };
-    await onSaveStructureItem(newStructType, item);
-    setNewStructName('');
-    showToast('تمت الإضافة بنجاح', 'success');
+    await onSaveNotebook(nbObj);
+    setEditingNotebook(null);
+    setNbForm({
+      ...nbForm,
+      title: '',
+      badge: '',
+      description: '',
+      coverUrl: '',
+      sampleImages: [],
+      samplePdfUrl: ''
+    });
+    showToast('تم حفظ المذكرة بنجاح', 'success');
   };
 
   const handleDownloadBackup = () => {
-    const backupPayload = {
+    const backup = {
       exportedAt: new Date().toISOString(),
-      version: '1.1',
-      settings,
+      settings: settingsForm,
       categories,
       stages,
       grades,
       subjects,
       notebooks,
-      orders,
       coupons,
       bundles,
-      reviews
+      orders
     };
-    const blob = new Blob([JSON.stringify(backupPayload, null, 2)], {
-      type: 'application/json;charset=utf-8'
-    });
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `muzakkirati-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `muzakkirati_backup_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    showToast('تم تحميل النسخة الاحتياطية الكاملة بنجاح', 'success');
+    showToast('تم تحميل النسخة الاحتياطية الكاملة (JSON)', 'success');
   };
 
-  const handleRestoreBackupFile = (e) => {
+  const handleRestoreBackup = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async (ev) => {
       try {
-        const parsed = JSON.parse(reader.result);
-        if (!parsed || typeof parsed !== 'object' || (!parsed.settings && !parsed.notebooks)) {
-          return showToast('ملف النسخة الاحتياطية غير صالح', 'error');
+        const parsed = JSON.parse(ev.target.result);
+        if (parsed.settings) await onSaveSettings(parsed.settings);
+        if (parsed.categories) await onSaveCategories(parsed.categories);
+        if (parsed.stages) await onSaveStages(parsed.stages);
+        if (parsed.grades) await onSaveGrades(parsed.grades);
+        if (parsed.subjects) await onSaveSubjects(parsed.subjects);
+        if (Array.isArray(parsed.notebooks)) {
+          for (const nb of parsed.notebooks) await onSaveNotebook(nb);
         }
-        setConfirmDialog({
-          title: 'استعادة نسخة احتياطية',
-          message:
-            'سيتم استبدال الإعدادات والمذكرات والطلبات الحالية بالبيانات الموجودة في ملف النسخة الاحتياطية. هل تريد المتابعة؟',
-          onConfirm: async () => {
-            await onRestoreBackup(parsed);
-            showToast('تمت استعادة النسخة الاحتياطية بنجاح', 'success');
-          }
-        });
-      } catch {
-        showToast('تعذر قراءة ملف JSON', 'error');
+        if (Array.isArray(parsed.coupons)) {
+          for (const cp of parsed.coupons) await onSaveCoupon(cp);
+        }
+        if (Array.isArray(parsed.bundles)) {
+          for (const bn of parsed.bundles) await onSaveBundle(bn);
+        }
+        showToast('تمت استعادة النسخة الاحتياطية بنجاح!', 'success');
+      } catch (_) {
+        showToast('ملف النسخة الاحتياطية غير صالح', 'error');
       }
     };
     reader.readAsText(file);
-    e.target.value = '';
   };
 
-  /* -------------------- ADMIN AUTH GATE SCREEN -------------------- */
-  if (!isAuthenticated) {
-    const isFirstSetup = !adminMeta || !adminMeta.passwordHash;
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden">
-          <div className="bg-gradient-to-l from-slate-900 to-blue-900 p-7 text-white text-center space-y-2">
-            <div className="w-14 h-14 mx-auto rounded-2xl bg-white/10 flex items-center justify-center mb-2">
-              <Shield className="w-8 h-8 text-amber-400" />
-            </div>
-            <h2 className="text-xl font-black">
-              {isFirstSetup ? 'إعداد حساب مدير المنصة لأول مرة' : 'تسجيل دخول لوحة التحكم'}
-            </h2>
-            <p className="text-xs text-slate-300">
-              {isFirstSetup
-                ? 'أنشئ البريد الإلكتروني وكلمة المرور الخاصة بالإدارة لتأمين لوحة التحكم'
-                : 'منطقة محمية — مخصصة لإدارة المنصة والطلبات'}
-            </p>
-          </div>
-
-          <form
-            onSubmit={isFirstSetup ? handleAdminSetup : handleAdminLogin}
-            className="p-7 space-y-4"
-          >
-            <div>
-              <label className="block text-xs font-extrabold text-slate-700 mb-1.5">
-                البريد الإلكتروني للمدير
-              </label>
-              <input
-                type="email"
-                required
-                dir="ltr"
-                placeholder="admin@muzakkirati.com"
-                value={authEmail}
-                onChange={(e) => setAuthEmail(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-600 outline-none text-sm text-left"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-extrabold text-slate-700 mb-1.5">
-                كلمة المرور
-              </label>
-              <input
-                type="password"
-                required
-                dir="ltr"
-                placeholder="••••••••"
-                value={authPassword}
-                onChange={(e) => setAuthPassword(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-600 outline-none text-sm text-left"
-              />
-            </div>
-
-            {isFirstSetup && (
-              <div>
-                <label className="block text-xs font-extrabold text-slate-700 mb-1.5">
-                  تأكيد كلمة المرور
-                </label>
-                <input
-                  type="password"
-                  required
-                  dir="ltr"
-                  placeholder="••••••••"
-                  value={authConfirmPassword}
-                  onChange={(e) => setAuthConfirmPassword(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-600 outline-none text-sm text-left"
-                />
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={authLoading}
-              className="w-full py-3.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white font-black text-sm shadow-lg transition"
-            >
-              {authLoading
-                ? 'جاري التحقق...'
-                : isFirstSetup
-                ? 'حفظ بيانات المدير والدخول'
-                : 'دخول لوحة التحكم'}
-            </button>
-
-            <button
-              type="button"
-              onClick={onExitAdmin}
-              className="w-full py-2.5 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-800"
-            >
-              ← العودة إلى واجهة الموقع
-            </button>
-          </form>
-        </div>
-      </div>
+  const handleUpdateAdminPassword = async () => {
+    if (newAdminPass.length < 6) {
+      return showToast('يجب أن تتكون كلمة المرور الجديدة من 6 أحرف على الأقل', 'error');
+    }
+    if (newAdminPass !== confirmAdminPass) {
+      return showToast('كلمتا المرور غير متطابقتين', 'error');
+    }
+    const rawCreds = localStorage.getItem('muzakkirati_admin_creds');
+    const parsed = rawCreds ? JSON.parse(rawCreds) : { email: 'admin@el3bakera.com' };
+    const newSalt = generateSalt();
+    const newHash = await hashPasswordWithSalt(newAdminPass, newSalt);
+    localStorage.setItem(
+      'muzakkirati_admin_creds',
+      JSON.stringify({ email: parsed.email, salt: newSalt, hash: newHash })
     );
-  }
+    setNewAdminPass('');
+    setConfirmAdminPass('');
+    showToast('تم تحديث كلمة مرور المدير بنجاح', 'success');
+  };
 
-  /* -------------------- AUTHENTICATED ADMIN WORKSPACE -------------------- */
-  const navItems = [
-    { id: 'stats', label: 'الإحصائيات', icon: LayoutDashboard },
-    { id: 'orders', label: `الطلبات (${stats.newOrders})`, icon: Package },
-    { id: 'notebooks', label: 'إدارة المذكرات', icon: BookOpen },
-    { id: 'offers', label: 'العروض والكوبونات', icon: Gift },
-    { id: 'reviews', label: 'آراء العملاء', icon: Quote },
-    { id: 'structure', label: 'المراحل والمواد', icon: FolderTree },
+  const tabs = [
+    { id: 'stats', label: 'الإحصائيات', icon: BarChart3 },
+    { id: 'orders', label: `الطلبات (${orders.length})`, icon: Package },
+    { id: 'notebooks', label: `المذكرات (${notebooks.length})`, icon: BookOpen },
+    { id: 'offers', label: 'العروض والكوبونات', icon: Tag },
+    { id: 'taxonomy', label: 'المراحل والمواد', icon: FolderTree },
     { id: 'settings', label: 'إعدادات الموقع', icon: Settings }
   ];
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col lg:flex-row">
-      {/* Admin Sidebar */}
-      <aside className="w-full lg:w-72 bg-slate-900 text-white flex flex-col shrink-0">
-        <div className="p-6 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center font-black">
-              <Shield className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="font-black text-sm">{settings.siteName}</h2>
-              <span className="text-[11px] text-slate-400">لوحة الإدارة والتحكم</span>
-            </div>
+    <div className="min-h-screen bg-slate-100 text-slate-900">
+      {/* Top Admin Header */}
+      <header className="bg-slate-950 text-white px-4 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-30 shadow-lg">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-teal-600 flex items-center justify-center font-black">
+            <LayoutDashboard className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-base sm:text-lg font-black">لوحة التحكم الإدارية</h1>
+            <p className="text-[11px] text-slate-400">{settings.platformName}</p>
           </div>
         </div>
-
-        <nav className="p-3 flex lg:flex-col gap-1.5 overflow-x-auto">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const active = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  setActiveTab(item.id);
-                  document.getElementById('admin-main-content')?.scrollIntoView({ behavior: 'smooth' });
-                }}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition ${
-                  active
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
-                    : 'text-slate-300 hover:bg-slate-800'
-                }`}
-              >
-                <Icon className="w-4 h-4 shrink-0" />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="mt-auto p-4 border-t border-slate-800 flex lg:flex-col gap-2">
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={onExitAdmin}
-            className="flex-1 py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 flex items-center justify-center gap-2"
+            onClick={onBackToSite}
+            className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold flex items-center gap-1.5"
           >
-            <ExternalLink className="w-4 h-4" />
+            <ExternalLink className="w-3.5 h-3.5" />
             <span>معاينة الموقع</span>
           </button>
           <button
             type="button"
-            onClick={handleLogout}
-            className="py-2.5 px-3 rounded-xl bg-rose-950/60 hover:bg-rose-900 text-xs font-bold text-rose-300 flex items-center justify-center gap-2"
+            onClick={onLogout}
+            className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-xs font-bold flex items-center gap-1.5"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-3.5 h-3.5" />
             <span>خروج</span>
           </button>
         </div>
-      </aside>
+      </header>
 
-      {/* Admin Main Content */}
-      <main id="admin-main-content" className="flex-1 min-w-0 p-4 sm:p-8 overflow-y-auto">
-        {/* TAB 1: ANALYTICS & STATS */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {/* Tabs Bar */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          {tabs.map((t) => {
+            const Icon = t.icon;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setActiveTab(t.id)}
+                className={`px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold flex items-center gap-2 shrink-0 transition ${
+                  activeTab === t.id
+                    ? 'bg-blue-800 text-white shadow-md'
+                    : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                <span>{t.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* TAB 1: STATS */}
         {activeTab === 'stats' && (
           <div className="space-y-6">
-            <div>
-              <h1 className="text-2xl font-black text-slate-900">ملخص الأداء والإحصائيات</h1>
-              <p className="text-sm text-slate-500">نظرة شاملة على طلبات المعلمين وإيرادات المنصة</p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-              {[
-                {
-                  label: 'إجمالي الطلبات',
-                  value: stats.totalOrders,
-                  icon: Package,
-                  color: 'bg-blue-50 text-blue-700'
-                },
-                {
-                  label: 'طلبات جديدة بانتظار المراجعة',
-                  value: stats.newOrders,
-                  icon: Clock,
-                  color: 'bg-amber-50 text-amber-700'
-                },
-                {
-                  label: 'طلبات تم تسليمها',
-                  value: stats.completedOrders,
-                  icon: CheckCircle2,
-                  color: 'bg-emerald-50 text-emerald-700'
-                },
-                {
-                  label: 'إجمالي الإيرادات (باستثناء الملغي)',
-                  value: `${stats.revenue.toLocaleString('ar-EG')} ${settings.currency}`,
-                  icon: TrendingUp,
-                  color: 'bg-purple-50 text-purple-700'
-                }
-              ].map((card, i) => {
-                const Icon = card.icon;
-                return (
-                  <div
-                    key={i}
-                    className="bg-white rounded-3xl p-6 border border-slate-100 shadow-xs flex items-center justify-between"
-                  >
-                    <div>
-                      <p className="text-xs font-bold text-slate-500">{card.label}</p>
-                      <h3 className="text-2xl font-black text-slate-900 mt-1">{card.value}</h3>
-                    </div>
-                    <div
-                      className={`w-12 h-12 rounded-2xl ${card.color} flex items-center justify-center`}
-                    >
-                      <Icon className="w-6 h-6" />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Status Distribution Bar Chart & Donut */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 bg-white rounded-3xl p-6 border border-slate-100 shadow-xs space-y-5">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-extrabold text-slate-900 flex items-center gap-2">
-                    <BarChart3 className="w-5 h-5 text-blue-600" />
-                    <span>توزيع الطلبات حسب الحالة</span>
-                  </h3>
-                  <span className="text-xs text-slate-400">تحديث لحظي</span>
-                </div>
-
-                <div className="space-y-4">
-                  {ORDER_STATUSES.map((st) => {
-                    const count = orders.filter((o) => o.status === st.id).length;
-                    const pct = stats.totalOrders ? Math.round((count / stats.totalOrders) * 100) : 0;
-                    return (
-                      <div key={st.id} className="space-y-1.5">
-                        <div className="flex justify-between text-xs font-bold">
-                          <span className="text-slate-700">{st.label}</span>
-                          <span className="text-slate-500">
-                            {count} طلب ({pct}%)
-                          </span>
-                        </div>
-                        <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
-                          <div
-                            style={{ width: `${pct}%` }}
-                            className="h-full bg-gradient-to-l from-blue-600 to-teal-500 rounded-full transition-all duration-500"
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-sm">
+                <span className="text-xs font-bold text-slate-500">إجمالي الطلبات</span>
+                <p className="text-3xl font-black text-slate-900 mt-1">{stats.total}</p>
               </div>
-
-              <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-xs flex flex-col justify-between">
-                <h3 className="font-extrabold text-slate-900">مؤشر إنجاز الطلبات</h3>
-                <div className="my-6 flex items-center justify-center">
-                  {(() => {
-                    const completionPct = stats.totalOrders
-                      ? Math.round((stats.completedOrders / stats.totalOrders) * 100)
-                      : 0;
-                    return (
-                      <div
-                        style={{
-                          background: `conic-gradient(#0d9488 ${completionPct * 3.6}deg, #e2e8f0 0deg)`
-                        }}
-                        className="w-40 h-40 rounded-full flex items-center justify-center p-4"
-                      >
-                        <div className="w-full h-full rounded-full bg-white flex flex-col items-center justify-center">
-                          <span className="text-3xl font-black text-slate-900">{completionPct}%</span>
-                          <span className="text-[11px] font-bold text-slate-500">نسبة التسليم</span>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-                <div className="text-xs text-center text-slate-500">
-                  إجمالي المذكرات المنشورة حاليًا:{' '}
-                  <strong className="text-slate-900">
-                    {notebooks.filter((n) => n.published !== false).length}
-                  </strong>{' '}
-                  مذكرة
-                </div>
+              <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-sm">
+                <span className="text-xs font-bold text-blue-600">طلبات جديدة بانتظار المراجعة</span>
+                <p className="text-3xl font-black text-blue-800 mt-1">{stats.newCount}</p>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 2: ORDERS MANAGEMENT */}
-        {activeTab === 'orders' && (
-          <div className="space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-black text-slate-900">إدارة طلبات المعلمين</h1>
-                <p className="text-sm text-slate-500">
-                  مراجعة بيانات التخصيص، تحميل الشعارات، وإرسال المذكرات الجاهزة
+              <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-sm">
+                <span className="text-xs font-bold text-emerald-600">طلبات جاهزة / مُسلّمة</span>
+                <p className="text-3xl font-black text-emerald-700 mt-1">{stats.completedCount}</p>
+              </div>
+              <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-sm">
+                <span className="text-xs font-bold text-amber-600">إجمالي الإيرادات</span>
+                <p className="text-3xl font-black text-slate-900 mt-1">
+                  {stats.revenue} <span className="text-sm">{settings.currency}</span>
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => exportOrdersToCSV(filteredOrders, settings.currency)}
-                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-2 shadow-sm"
-              >
-                <Download className="w-4 h-4" />
-                <span>تصدير Excel (CSV)</span>
-              </button>
             </div>
 
-            {/* Filters */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
-                <input
-                  type="text"
-                  placeholder="بحث برقم الطلب، اسم المعلم، الهاتف، أو اسم المذكرة..."
-                  value={orderSearch}
-                  onChange={(e) => setOrderSearch(e.target.value)}
-                  className="w-full pr-10 pl-4 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <select
-                value={orderStatusFilter}
-                onChange={(e) => setOrderStatusFilter(e.target.value)}
-                className="px-4 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold text-slate-700 bg-white"
-              >
-                <option value="all">جميع الحالات ({orders.length})</option>
-                {ORDER_STATUSES.map((st) => (
-                  <option key={st.id} value={st.id}>
-                    {st.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Orders Table */}
-            <div className="bg-white rounded-3xl border border-slate-100 shadow-xs overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-right text-xs sm:text-sm">
-                  <thead className="bg-slate-50 text-slate-600 font-extrabold border-b border-slate-100">
-                    <tr>
-                      <th className="p-4">رقم الطلب</th>
-                      <th className="p-4">المعلم</th>
-                      <th className="p-4">المذكرة</th>
-                      <th className="p-4">الهاتف</th>
-                      <th className="p-4">السعر والدفع</th>
-                      <th className="p-4">الحالة</th>
-                      <th className="p-4">إجراءات</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredOrders.length === 0 ? (
-                      <tr>
-                        <td colSpan="7" className="p-8 text-center text-slate-400">
-                          لا توجد طلبات مطابقة للبحث.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredOrders.map((ord) => {
-                        const st =
-                          ORDER_STATUSES.find((s) => s.id === ord.status) || ORDER_STATUSES[0];
-                        const payStatus =
-                          ord.paymentStatus || (ord.paymentReceiptUrl ? 'pending_review' : 'unpaid');
-                        return (
-                          <tr key={ord.id} className="hover:bg-slate-50/70 transition">
-                            <td className="p-4 font-mono font-bold text-blue-700 text-xs">
-                              {ord.orderNumber}
-                            </td>
-                            <td className="p-4 font-bold text-slate-900">{ord.teacherName}</td>
-                            <td className="p-4 text-slate-600 max-w-[200px] truncate">
-                              {ord.customNotebookTitle}
-                            </td>
-                            <td className="p-4 font-mono text-xs">{ord.phone}</td>
-                            <td className="p-4 space-y-1">
-                              <div className="font-extrabold text-emerald-700">
-                                {ord.price ? `${ord.price} ${settings.currency}` : 'بالاتفاق'}
-                              </div>
-                              <span
-                                className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                                  payStatus === 'paid'
-                                    ? 'bg-emerald-100 text-emerald-800'
-                                    : payStatus === 'pending_review'
-                                    ? 'bg-amber-100 text-amber-800'
-                                    : 'bg-slate-100 text-slate-500'
-                                }`}
-                              >
-                                {payStatus === 'paid'
-                                  ? '✓ مدفوع ومؤكد'
-                                  : payStatus === 'pending_review'
-                                  ? '⏳ إيصال مرفق'
-                                  : 'لم يُدفع بعد'}
-                              </span>
-                            </td>
-                            <td className="p-4">
-                              <span
-                                className={`px-3 py-1 rounded-full text-xs font-bold border ${st.color}`}
-                              >
-                                {st.label}
-                              </span>
-                            </td>
-                            <td className="p-4">
-                              <button
-                                type="button"
-                                onClick={() => setSelectedOrder(ord)}
-                                className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs"
-                              >
-                                التفاصيل والتسليم
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 3: NOTEBOOKS CRUD */}
-        {activeTab === 'notebooks' && (
-          <div className="space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-black text-slate-900">إدارة المذكرات التعليمية</h1>
-                <p className="text-sm text-slate-500">
-                  إضافة مذكرات جديدة، تعديل الأسعار، رفع عينات المطالعة، أو إخفاء المذكرات مؤقتًا
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={openAddNotebookModal}
-                className="px-5 py-3 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs sm:text-sm font-black flex items-center gap-2 shadow-lg"
-              >
-                <Plus className="w-4 h-4" />
-                <span>إضافة مذكرة جديدة</span>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-              {notebooks.map((nb) => {
-                const discountPct = calcDiscountPercent(nb.price, nb.oldPrice);
-                return (
-                  <div
-                    key={nb.id}
-                    className={`bg-white rounded-3xl border overflow-hidden shadow-xs flex flex-col justify-between ${
-                      nb.published === false ? 'opacity-65 border-slate-300' : 'border-slate-100'
-                    }`}
-                  >
-                    <div>
-                      <NotebookCoverArt
-                        notebook={nb}
-                        stageName={lookUp.stageName(nb.stageId)}
-                        subjectName={lookUp.subjectName(nb.subjectId)}
-                        className="h-44"
-                      />
-                      <div className="p-5 space-y-2">
-                        <div className="flex items-center justify-between gap-2 text-[11px] font-bold">
-                          <span className="text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full">
-                            {lookUp.categoryName(nb.categoryId)}
-                          </span>
-                          <span
-                            className={`px-2.5 py-0.5 rounded-full ${
-                              nb.published === false
-                                ? 'bg-slate-200 text-slate-600'
-                                : 'bg-emerald-50 text-emerald-700'
-                            }`}
-                          >
-                            {nb.published === false ? 'مخفية' : 'منشورة'}
-                          </span>
-                        </div>
-                        <h3 className="font-extrabold text-slate-900 line-clamp-2">{nb.title}</h3>
-                        <p className="text-xs text-slate-500">
-                          {lookUp.stageName(nb.stageId)} • {lookUp.gradeName(nb.gradeId)} •{' '}
-                          {lookUp.subjectName(nb.subjectId)}
-                        </p>
-                        <div className="flex flex-wrap items-center gap-2 pt-1">
-                          <span className="font-black text-base text-emerald-700">
-                            السعر {nb.price} {settings.currency}
-                          </span>
-                          {Number(nb.oldPrice) > Number(nb.price) && (
-                            <>
-                              <span className="text-xs text-slate-400">
-                                بدلًا من <span className="line-through">{nb.oldPrice}</span>{' '}
-                                {settings.currency}
-                              </span>
-                              {discountPct > 0 && (
-                                <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 text-[10px] font-extrabold">
-                                  وفر {discountPct}%
-                                </span>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => openEditNotebookModal(nb)}
-                        className="flex-1 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-xs font-bold text-slate-800 flex items-center justify-center gap-1"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                        <span>تعديل</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onSaveNotebook({ ...nb, published: nb.published === false })}
-                        title={nb.published === false ? 'نشر المذكرة' : 'إخفاء المذكرة مؤقتًا'}
-                        className="p-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-700"
-                      >
-                        {nb.published === false ? (
-                          <Eye className="w-4 h-4 text-emerald-600" />
-                        ) : (
-                          <EyeOff className="w-4 h-4 text-amber-600" />
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setConfirmDialog({
-                            title: 'حذف المذكرة',
-                            message: `هل أنت متأكد من حذف "${nb.title}" نهائيًا؟`,
-                            onConfirm: async () => {
-                              await onDeleteNotebook(nb.id);
-                              showToast('تم حذف المذكرة بنجاح', 'success');
-                            }
-                          })
-                        }
-                        className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* TAB 4: OFFERS, COUPONS & BUNDLES */}
-        {activeTab === 'offers' && (
-          <div className="space-y-8 max-w-5xl">
-            <div>
-              <h1 className="text-2xl font-black text-slate-900">إدارة العروض، الكوبونات، والباقات</h1>
-              <p className="text-sm text-slate-500">
-                تحكم في شريط العروض العلوي، أكواد الخصم، وخصم طلب أكثر من مذكرة لزيادة مبيعاتك
-              </p>
-            </div>
-
-            {/* Announcement Bar Settings */}
-            <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-xs space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-amber-500" />
-                  <span>شريط العروض العلوي وظهور العروض بالرئيسية</span>
-                </h3>
-                <label className="flex items-center gap-2 text-xs font-bold cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(settingsForm.announcementBar?.enabled)}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        announcementBar: {
-                          ...settingsForm.announcementBar,
-                          enabled: e.target.checked
-                        }
-                      })
-                    }
-                    className="w-4 h-4 accent-blue-600"
-                  />
-                  <span>إظهار شريط العروض أعلى الموقع</span>
-                </label>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <div className="md:col-span-3">
-                  <label className="block text-xs font-bold text-slate-600 mb-1">
-                    نص الإعلان في الشريط العلوي
-                  </label>
-                  <input
-                    type="text"
-                    value={settingsForm.announcementBar?.text || ''}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        announcementBar: {
-                          ...settingsForm.announcementBar,
-                          text: e.target.value
-                        }
-                      })
-                    }
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">لون خلفية الشريط</label>
-                  <input
-                    type="color"
-                    value={settingsForm.announcementBar?.bgColor || '#0f172a'}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        announcementBar: {
-                          ...settingsForm.announcementBar,
-                          bgColor: e.target.value
-                        }
-                      })
-                    }
-                    className="w-full h-11 rounded-xl border border-slate-200 p-1 cursor-pointer"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
-                <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={settingsForm.showOffersOnHome !== false}
-                    onChange={(e) =>
-                      setSettingsForm({ ...settingsForm, showOffersOnHome: e.target.checked })
-                    }
-                    className="w-4 h-4 accent-blue-600"
-                  />
-                  <span>إظهار قسم العروض والباقات في الصفحة الرئيسية</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await onSaveSettings(settingsForm);
-                    showToast('تم حفظ إعدادات شريط العروض بنجاح', 'success');
-                  }}
-                  className="px-5 py-2 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-extrabold"
-                >
-                  حفظ إعدادات الشريط
-                </button>
-              </div>
-            </div>
-
-            {/* Multi-Order Automatic Discount Settings */}
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                await onSaveSettings(settingsForm);
-                showToast('تم حفظ إعدادات خصم الكمية بنجاح', 'success');
-              }}
-              className="bg-white rounded-3xl p-6 border border-slate-100 shadow-xs space-y-4"
-            >
-              <div className="flex items-center justify-between">
-                <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
-                  <Layers className="w-5 h-5 text-teal-600" />
-                  <span>خصم طلب أكثر من مذكرة (خصم الكمية التلقائي)</span>
-                </h3>
-                <label className="flex items-center gap-2 text-xs font-bold cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(settingsForm.multiOrderDiscount?.enabled)}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        multiOrderDiscount: {
-                          ...settingsForm.multiOrderDiscount,
-                          enabled: e.target.checked
-                        }
-                      })
-                    }
-                    className="w-4 h-4 accent-teal-600"
-                  />
-                  <span>تفعيل الخصم التلقائي</span>
-                </label>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">
-                    الحد الأدنى لعدد المذكرات
-                  </label>
-                  <input
-                    type="number"
-                    min="2"
-                    value={settingsForm.multiOrderDiscount?.minItems || 2}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        multiOrderDiscount: {
-                          ...settingsForm.multiOrderDiscount,
-                          minItems: Number(e.target.value)
-                        }
-                      })
-                    }
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">نوع الخصم</label>
-                  <select
-                    value={settingsForm.multiOrderDiscount?.type || 'percent'}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        multiOrderDiscount: {
-                          ...settingsForm.multiOrderDiscount,
-                          type: e.target.value
-                        }
-                      })
-                    }
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm bg-white"
-                  >
-                    <option value="percent">نسبة مئوية (%)</option>
-                    <option value="fixed">مبلغ ثابت ({settings.currency})</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">قيمة الخصم</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={settingsForm.multiOrderDiscount?.value || 15}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        multiOrderDiscount: {
-                          ...settingsForm.multiOrderDiscount,
-                          value: Number(e.target.value)
-                        }
-                      })
-                    }
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">
-                  رسالة العرض الترويجية للمعلم
-                </label>
-                <input
-                  type="text"
-                  value={settingsForm.multiOrderDiscount?.label || ''}
-                  onChange={(e) =>
-                    setSettingsForm({
-                      ...settingsForm,
-                      multiOrderDiscount: {
-                        ...settingsForm.multiOrderDiscount,
-                        label: e.target.value
-                      }
-                    })
-                  }
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold"
-              >
-                حفظ إعدادات خصم الكمية
-              </button>
-            </form>
-
-            {/* Next-Order Special Coupon Auto Settings */}
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                await onSaveSettings(settingsForm);
-                showToast('تم حفظ إعدادات كوبون الطلب القادم بنجاح', 'success');
-              }}
-              className="bg-white rounded-3xl p-6 border border-slate-100 shadow-xs space-y-4"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
-                    <Gift className="w-5 h-5 text-purple-600" />
-                    <span>كوبون الهدية الخاص للطلب القادم (بعد إتمام التسليم)</span>
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    يُصدر كود سري مخصص لكل عميل لتشجيعه على الطلب التالي، ويمكنك إيقافه أو حذفه لأي عميل من تفاصيل طلبه.
-                  </p>
-                </div>
-                <label className="flex items-center gap-2 text-xs font-bold cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(settingsForm.nextOrderCouponAuto?.enabled)}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        nextOrderCouponAuto: {
-                          ...settingsForm.nextOrderCouponAuto,
-                          enabled: e.target.checked
-                        }
-                      })
-                    }
-                    className="w-4 h-4 accent-purple-600"
-                  />
-                  <span>إصدار تلقائي عند تحويل الطلب إلى (تم التسليم)</span>
-                </label>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">
-                    نوع الخصم الافتراضي
-                  </label>
-                  <select
-                    value={settingsForm.nextOrderCouponAuto?.type || 'percent'}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        nextOrderCouponAuto: {
-                          ...settingsForm.nextOrderCouponAuto,
-                          type: e.target.value
-                        }
-                      })
-                    }
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm bg-white"
-                  >
-                    <option value="percent">نسبة مئوية (%)</option>
-                    <option value="fixed">مبلغ ثابت ({settings.currency})</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">
-                    قيمة الخصم الافتراضية
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={settingsForm.nextOrderCouponAuto?.value || 15}
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        nextOrderCouponAuto: {
-                          ...settingsForm.nextOrderCouponAuto,
-                          value: Number(e.target.value)
-                        }
-                      })
-                    }
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">
-                    عدد مرات الاستخدام (0 = بلا حدود)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={
-                      settingsForm.nextOrderCouponAuto?.maxUses !== undefined
-                        ? settingsForm.nextOrderCouponAuto.maxUses
-                        : 1
-                    }
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        nextOrderCouponAuto: {
-                          ...settingsForm.nextOrderCouponAuto,
-                          maxUses: Math.max(0, Number(e.target.value) || 0)
-                        }
-                      })
-                    }
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">
-                    مدة الصلاحية بالأيام (0 = بلا حدود)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={
-                      settingsForm.nextOrderCouponAuto?.validDays !== undefined
-                        ? settingsForm.nextOrderCouponAuto.validDays
-                        : 30
-                    }
-                    onChange={(e) =>
-                      setSettingsForm({
-                        ...settingsForm,
-                        nextOrderCouponAuto: {
-                          ...settingsForm.nextOrderCouponAuto,
-                          validDays: Math.max(0, Number(e.target.value) || 0)
-                        }
-                      })
-                    }
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="px-5 py-2.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white text-xs font-extrabold"
-              >
-                حفظ إعدادات كوبون الطلب القادم
-              </button>
-            </form>
-
-            {/* Coupons Management */}
-            <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-xs space-y-5">
-              <div className="flex items-center justify-between">
-                <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
-                  <Tag className="w-5 h-5 text-blue-600" />
-                  <span>أكواد وكوبونات الخصم ({coupons.length})</span>
-                </h3>
-                {editingCouponId && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingCouponId('');
-                      setCouponForm({
-                        code: '',
-                        type: 'percent',
-                        value: 15,
-                        minOrder: 0,
-                        description: '',
-                        isPrivate: false,
-                        maxUses: 0,
-                        expiresAt: ''
-                      });
-                    }}
-                    className="text-xs font-bold text-rose-600 hover:underline"
-                  >
-                    إلغاء التعديل
-                  </button>
-                )}
-              </div>
-
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  const cleanCode = couponForm.code.trim().toUpperCase();
-                  if (!cleanCode) return showToast('يرجى إدخال كود الكوبون', 'error');
-                  const existing = editingCouponId
-                    ? coupons.find((c) => c.id === editingCouponId)
-                    : null;
-                  await onSaveCoupon({
-                    ...(existing || {}),
-                    id: editingCouponId || `cp_${Date.now()}`,
-                    code: cleanCode,
-                    type: couponForm.type,
-                    value: Number(couponForm.value) || 10,
-                    minOrder: Number(couponForm.minOrder) || 0,
-                    description: couponForm.description.trim() || `خصم خاص بكود ${cleanCode}`,
-                    isPrivate: Boolean(couponForm.isPrivate),
-                    maxUses: Math.max(0, Number(couponForm.maxUses) || 0),
-                    usedCount: existing ? Number(existing.usedCount) || 0 : 0,
-                    expiresAt: couponForm.expiresAt || '',
-                    active: existing ? existing.active !== false : true
-                  });
-                  setEditingCouponId('');
-                  setCouponForm({
-                    code: '',
-                    type: 'percent',
-                    value: 15,
-                    minOrder: 0,
-                    description: '',
-                    isPrivate: false,
-                    maxUses: 0,
-                    expiresAt: ''
-                  });
-                  showToast(
-                    editingCouponId ? 'تم تحديث بيانات الكوبون بنجاح' : 'تمت إضافة كود الخصم بنجاح',
-                    'success'
-                  );
-                }}
-                className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200/70"
-              >
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                      كود الكوبون
-                    </label>
-                    <input
-                      type="text"
-                      dir="ltr"
-                      placeholder="مثال: EID25"
-                      value={couponForm.code}
-                      onChange={(e) =>
-                        setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })
-                      }
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-mono text-xs uppercase text-left"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">نوع الخصم</label>
-                    <select
-                      value={couponForm.type}
-                      onChange={(e) => setCouponForm({ ...couponForm, type: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white"
-                    >
-                      <option value="percent">نسبة %</option>
-                      <option value="fixed">مبلغ ({settings.currency})</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                      قيمة الخصم
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      placeholder="15"
-                      value={couponForm.value}
-                      onChange={(e) => setCouponForm({ ...couponForm, value: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                      الحد الأدنى للطلب ({settings.currency})
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      placeholder="0 = بدون حد أدنى"
-                      value={couponForm.minOrder}
-                      onChange={(e) => setCouponForm({ ...couponForm, minOrder: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                      عدد مرات الاستخدام (0 أو فارغ = بلا حدود)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      placeholder="بلا حدود"
-                      value={couponForm.maxUses || ''}
-                      onChange={(e) =>
-                        setCouponForm({
-                          ...couponForm,
-                          maxUses: Math.max(0, Number(e.target.value) || 0)
-                        })
-                      }
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                      تاريخ انتهاء الصلاحية (فارغ = بلا حدود)
-                    </label>
-                    <input
-                      type="date"
-                      value={couponForm.expiresAt || ''}
-                      onChange={(e) => setCouponForm({ ...couponForm, expiresAt: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                      وصف الكوبون (اختياري)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="وصف مختصر يظهر للمعلم"
-                      value={couponForm.description}
-                      onChange={(e) =>
-                        setCouponForm({ ...couponForm, description: e.target.value })
-                      }
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="py-2.5 px-4 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-extrabold flex items-center justify-center gap-1"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>{editingCouponId ? 'حفظ التعديلات' : 'إضافة الكوبون'}</span>
-                  </button>
-                </div>
-
-                <div className="flex flex-wrap gap-6 pt-1">
-                  <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(couponForm.isPrivate)}
-                      onChange={(e) =>
-                        setCouponForm({ ...couponForm, isPrivate: e.target.checked })
-                      }
-                      className="w-4 h-4 accent-purple-600"
-                    />
-                    <span>كوبون خاص مخفي (لا يظهر في صفحة العروض، يُعطى لمن تملك الكود فقط)</span>
-                  </label>
-                </div>
-              </form>
-
-              <div className="divide-y divide-slate-100">
-                {coupons.map((cp) => {
-                  const exhausted = isCouponExhausted(cp);
-                  const maxUses = Number(cp.maxUses) || 0;
-                  const usedCount = Number(cp.usedCount) || 0;
+            <div className="p-6 rounded-3xl bg-white border border-slate-200 space-y-4">
+              <h3 className="font-black text-base text-slate-900">توزيع حالات الطلبات</h3>
+              <div className="space-y-3">
+                {ORDER_STATUSES.map((st) => {
+                  const count = orders.filter((o) => o.status === st.id).length;
+                  const pct = orders.length ? Math.round((count / orders.length) * 100) : 0;
                   return (
-                    <div
-                      key={cp.id}
-                      className="py-3.5 flex flex-wrap items-center justify-between gap-3"
-                    >
-                      <div className="flex flex-wrap items-center gap-2.5">
-                        <span className="px-3 py-1 rounded-lg bg-blue-50 text-blue-800 font-mono font-black text-xs border border-blue-200">
-                          {cp.code}
+                    <div key={st.id} className="space-y-1">
+                      <div className="flex justify-between text-xs font-bold">
+                        <span>{st.label}</span>
+                        <span>
+                          {count} ({pct}%)
                         </span>
-                        <span className="text-xs font-extrabold text-emerald-700">
-                          خصم{' '}
-                          {cp.type === 'percent' ? `${cp.value}%` : `${cp.value} ${settings.currency}`}
-                        </span>
-                        {cp.isPrivate && (
-                          <span className="px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 text-[10px] font-bold">
-                            خاص ومخفي
-                          </span>
-                        )}
-                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold">
-                          {maxUses > 0 ? `الاستخدام: ${usedCount} / ${maxUses}` : 'مرات بلا حدود'}
-                        </span>
-                        <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 text-[10px] font-bold">
-                          {cp.expiresAt
-                            ? `ينتهي: ${new Date(cp.expiresAt).toLocaleDateString('ar-EG')}`
-                            : 'صلاحية بلا حدود'}
-                        </span>
-                        <span className="text-xs text-slate-500">{cp.description}</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingCouponId(cp.id);
-                            setCouponForm({
-                              code: cp.code || '',
-                              type: cp.type || 'percent',
-                              value: cp.value || 15,
-                              minOrder: cp.minOrder || 0,
-                              description: cp.description || '',
-                              isPrivate: Boolean(cp.isPrivate),
-                              maxUses: Number(cp.maxUses) || 0,
-                              expiresAt: cp.expiresAt || ''
-                            });
-                          }}
-                          className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold"
-                        >
-                          تعديل
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onSaveCoupon({ ...cp, active: cp.active === false })}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold ${
-                            !exhausted
-                              ? 'bg-emerald-50 text-emerald-700'
-                              : 'bg-slate-200 text-slate-600'
-                          }`}
-                        >
-                          {!exhausted ? 'مُفعّل' : cp.active === false ? 'موقوف' : 'منتهي الصلاحية/العدد'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setConfirmDialog({
-                              title: 'حذف الكوبون',
-                              message: `هل تريد حذف كود الخصم "${cp.code}"؟`,
-                              onConfirm: () => onDeleteCoupon(cp.id)
-                            })
-                          }
-                          className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                      <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                        <div
+                          style={{ width: `${pct}%` }}
+                          className="h-full bg-blue-700 rounded-full transition-all"
+                        />
                       </div>
                     </div>
                   );
                 })}
               </div>
             </div>
-
-            {/* Bundles Management */}
-            <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-xs space-y-5">
-              <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
-                <Package className="w-5 h-5 text-teal-600" />
-                <span>الباقات والعروض المجمّعة ({bundles.length})</span>
-              </h3>
-
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  if (!bundleForm.title.trim()) return showToast('يرجى إدخال عنوان الباقة', 'error');
-                  const features = bundleForm.featuresText
-                    .split('\n')
-                    .map((l) => l.trim())
-                    .filter(Boolean);
-                  await onSaveBundle({
-                    id: `bnd_${Date.now()}`,
-                    title: bundleForm.title.trim(),
-                    subtitle: bundleForm.subtitle.trim(),
-                    price: Number(bundleForm.price) || 0,
-                    oldPrice: Number(bundleForm.oldPrice) || 0,
-                    badge: bundleForm.badge.trim() || 'باقة موفرة',
-                    features:
-                      features.length > 0
-                        ? features
-                        : ['تصميم احترافي باسم المعلم وشعاره', 'تسليم PDF عالي الدقة'],
-                    active: true
-                  });
-                  setBundleForm({
-                    title: '',
-                    subtitle: '',
-                    price: 600,
-                    oldPrice: 800,
-                    badge: 'عرض مجمّع',
-                    featuresText: ''
-                  });
-                  showToast('تمت إضافة الباقة بنجاح', 'success');
-                }}
-                className="space-y-3 bg-slate-50 p-4 rounded-2xl"
-              >
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                  <input
-                    type="text"
-                    placeholder="عنوان الباقة (مثال: باقة 3 مذكرات)"
-                    value={bundleForm.title}
-                    onChange={(e) => setBundleForm({ ...bundleForm, title: e.target.value })}
-                    className="sm:col-span-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs"
-                  />
-                  <input
-                    type="number"
-                    placeholder={`السعر (${settings.currency})`}
-                    value={bundleForm.price}
-                    onChange={(e) => setBundleForm({ ...bundleForm, price: e.target.value })}
-                    className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs"
-                  />
-                  <input
-                    type="number"
-                    placeholder="بدلًا من (السعر قبل الخصم)"
-                    value={bundleForm.oldPrice}
-                    onChange={(e) => setBundleForm({ ...bundleForm, oldPrice: e.target.value })}
-                    className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs"
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <input
-                    type="text"
-                    placeholder="وصف مختصر للباقة"
-                    value={bundleForm.subtitle}
-                    onChange={(e) => setBundleForm({ ...bundleForm, subtitle: e.target.value })}
-                    className="sm:col-span-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs"
-                  />
-                  <input
-                    type="text"
-                    placeholder="شارة الباقة (مثل: وفر 200 ج.م)"
-                    value={bundleForm.badge}
-                    onChange={(e) => setBundleForm({ ...bundleForm, badge: e.target.value })}
-                    className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs"
-                  />
-                </div>
-                <textarea
-                  rows="2"
-                  placeholder="مميزات الباقة (اكتب كل ميزة في سطر مستقل)..."
-                  value={bundleForm.featuresText}
-                  onChange={(e) => setBundleForm({ ...bundleForm, featuresText: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs"
-                />
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold flex items-center gap-1.5"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>إضافة باقة جديدة</span>
-                </button>
-              </form>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {bundles.map((bnd) => (
-                  <div
-                    key={bnd.id}
-                    className="p-4 rounded-2xl border border-slate-200 flex items-start justify-between gap-3"
-                  >
-                    <div className="space-y-1">
-                      <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-extrabold">
-                        {bnd.badge}
-                      </span>
-                      <h4 className="font-extrabold text-sm text-slate-900">{bnd.title}</h4>
-                      <p className="text-xs text-slate-500">{bnd.subtitle}</p>
-                      <div className="text-xs font-black text-emerald-700 pt-1">
-                        {bnd.price} {settings.currency}{' '}
-                        {bnd.oldPrice > bnd.price && (
-                          <span className="line-through text-slate-400 font-normal mr-1">
-                            {bnd.oldPrice}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => onSaveBundle({ ...bnd, active: bnd.active === false })}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold ${
-                          bnd.active !== false
-                            ? 'bg-emerald-50 text-emerald-700'
-                            : 'bg-slate-200 text-slate-600'
-                        }`}
-                      >
-                        {bnd.active !== false ? 'نشط' : 'مخفي'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setConfirmDialog({
-                            title: 'حذف الباقة',
-                            message: `هل تريد حذف "${bnd.title}"؟`,
-                            onConfirm: () => onDeleteBundle(bnd.id)
-                          })
-                        }
-                        className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 self-end"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         )}
 
-        {/* TAB 5: STRUCTURE (STAGES, GRADES, SUBJECTS) */}
-        {activeTab === 'structure' && (
-          <div className="space-y-6 max-w-4xl">
-            <div>
-              <h1 className="text-2xl font-black text-slate-900">الأقسام والمراحل والصفوف والمواد</h1>
-              <p className="text-sm text-slate-500">
-                أضف أو احذف المراحل والصفوف والمواد الدراسية التي تظهر في القوائم والفلاتر
-              </p>
+        {/* TAB 2: ORDERS */}
+        {activeTab === 'orders' && (
+          <div className="space-y-4">
+            <div className="p-4 rounded-3xl bg-white border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2 flex-1">
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
+                  <input
+                    type="text"
+                    placeholder="ابحث برقم الطلب أو اسم العميل أو الهاتف..."
+                    value={orderSearch}
+                    onChange={(e) => setOrderSearch(e.target.value)}
+                    className="w-full pr-9 pl-3 py-2 rounded-xl border border-slate-200 text-xs"
+                  />
+                </div>
+                <select
+                  value={orderStatusFilter}
+                  onChange={(e) => setOrderStatusFilter(e.target.value)}
+                  className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold bg-white"
+                >
+                  <option value="all">جميع الحالات</option>
+                  {ORDER_STATUSES.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={handleExportOrdersCsv}
+                className="px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-extrabold flex items-center gap-1.5"
+              >
+                <Download className="w-4 h-4" />
+                <span>تصدير Excel</span>
+              </button>
             </div>
 
+            {filteredOrders.length === 0 ? (
+              <div className="p-12 rounded-3xl bg-white border border-slate-200 text-center text-slate-500 text-sm font-bold">
+                لا توجد طلبات مطابقة حاليًا
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredOrders.map((ord) => {
+                  const statusObj =
+                    ORDER_STATUSES.find((s) => s.id === ord.status) || ORDER_STATUSES[0];
+                  const draftUrl =
+                    deliveryDrafts[ord.id] !== undefined
+                      ? deliveryDrafts[ord.id]
+                      : ord.deliveryUrl || '';
+                  const draftNotes =
+                    adminNotesDrafts[ord.id] !== undefined
+                      ? adminNotesDrafts[ord.id]
+                      : ord.adminNotes || '';
+
+                  const waMsg =
+                    `السلام عليكم أ/ ${ord.teacherName}\n` +
+                    `بخصوص طلبك رقم (${ord.orderNumber}) على ${settings.platformName}:\n` +
+                    `الحالة الحالية: ${statusObj.label}\n` +
+                    (draftUrl ? `رابط تحميل مذكرتك جاهز الآن:\n${draftUrl}\n` : '') +
+                    (ord.nextOrderCoupon?.isActive
+                      ? `هدية خاصة لك: استخدم كود (${ord.nextOrderCoupon.code}) للحصول على خصم ${ord.nextOrderCoupon.value}% في طلبك القادم!`
+                      : '');
+
+                  return (
+                    <div
+                      key={ord.id}
+                      className="p-5 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span dir="ltr" className="font-mono font-black text-sm text-blue-900">
+                              {ord.orderNumber}
+                            </span>
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold border ${statusObj.color}`}
+                            >
+                              {statusObj.label}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-1">
+                            {new Date(ord.createdAt || Date.now()).toLocaleString('ar-EG')}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={ord.status}
+                            onChange={async (e) => {
+                              const nextStatus = e.target.value;
+                              let nextCoupon = ord.nextOrderCoupon || null;
+                              if (
+                                nextStatus === 'delivered' &&
+                                !nextCoupon &&
+                                settings.autoNextOrderCouponEnabled
+                              ) {
+                                const code = `VIP${Math.floor(1000 + Math.random() * 9000)}`;
+                                nextCoupon = {
+                                  code,
+                                  type: 'percent',
+                                  value: Number(settings.autoNextOrderCouponPercent || 15),
+                                  isActive: true
+                                };
+                                await onSaveCoupon({
+                                  id: `cpn_${Date.now()}`,
+                                  code,
+                                  type: 'percent',
+                                  value: Number(settings.autoNextOrderCouponPercent || 15),
+                                  description: `كوبون ولاء للطلب ${ord.orderNumber}`,
+                                  minOrderAmount: 0,
+                                  maxUses: 1,
+                                  usedCount: 0,
+                                  expiresAt: '',
+                                  isPublic: false,
+                                  isActive: true
+                                });
+                              }
+                              await onUpdateOrder(ord.id, {
+                                status: nextStatus,
+                                nextOrderCoupon: nextCoupon
+                              });
+                              showToast('تم تحديث حالة الطلب', 'success');
+                            }}
+                            className="px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-extrabold bg-slate-50"
+                          >
+                            {ORDER_STATUSES.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.label}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => onDeleteOrder(ord.id)}
+                            className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600"
+                            title="حذف الطلب"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Customer & Custom Fields Info */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                        <div className="p-3.5 rounded-2xl bg-slate-50 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span>
+                              الاسم: <strong>{ord.teacherName}</strong>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard?.writeText(ord.teacherName);
+                                showToast('تم نسخ الاسم', 'success');
+                              }}
+                              className="text-blue-700 font-bold flex items-center gap-1"
+                            >
+                              <Copy className="w-3.5 h-3.5" /> نسخ
+                            </button>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>
+                              العنوان على الغلاف: <strong>{ord.customNotebookTitle}</strong>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard?.writeText(ord.customNotebookTitle);
+                                showToast('تم نسخ العنوان', 'success');
+                              }}
+                              className="text-blue-700 font-bold flex items-center gap-1"
+                            >
+                              <Copy className="w-3.5 h-3.5" /> نسخ
+                            </button>
+                          </div>
+                          {ord.phone && (
+                            <div className="flex items-center justify-between">
+                              <span>
+                                الهاتف: <strong dir="ltr">{ord.phone}</strong>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard?.writeText(ord.phone);
+                                  showToast('تم نسخ الرقم', 'success');
+                                }}
+                                className="text-blue-700 font-bold flex items-center gap-1"
+                              >
+                                <Copy className="w-3.5 h-3.5" /> نسخ
+                              </button>
+                            </div>
+                          )}
+                          {/* Render Any Custom Fields Submitted by User */}
+                          {Array.isArray(ord.customFieldEntries) &&
+                            ord.customFieldEntries.map((entry, idx) => (
+                              <div key={idx} className="pt-1 border-t border-slate-200/70">
+                                <span>
+                                  {entry.label}: <strong>{entry.value}</strong>
+                                </span>
+                              </div>
+                            ))}
+                          {ord.notes && (
+                            <div className="pt-1 border-t border-slate-200/70 text-slate-600">
+                              ملاحظات: {ord.notes}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="p-3.5 rounded-2xl bg-slate-50 space-y-2">
+                          <div>
+                            المطلوب: <strong>{ord.notebookTitle}</strong>
+                          </div>
+                          <div>
+                            الإجمالي المدفوع/المطلوب:{' '}
+                            <strong className="text-emerald-700">
+                              {ord.totalAmount} {settings.currency}
+                            </strong>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 pt-1">
+                            {ord.logoUrl && (
+                              <a
+                                href={ord.logoUrl}
+                                download={`logo_${ord.orderNumber}.png`}
+                                className="px-3 py-1.5 rounded-xl bg-blue-100 text-blue-800 font-extrabold flex items-center gap-1"
+                              >
+                                <Download className="w-3.5 h-3.5" /> تحميل الشعار
+                              </a>
+                            )}
+                            {ord.paymentReceiptUrl && (
+                              <a
+                                href={ord.paymentReceiptUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3 py-1.5 rounded-xl bg-emerald-100 text-emerald-800 font-extrabold flex items-center gap-1"
+                              >
+                                <Eye className="w-3.5 h-3.5" /> عرض إيصال الدفع
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Delivery Link & Admin Notes */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                        <div className="flex gap-2">
+                          <input
+                            type="url"
+                            dir="ltr"
+                            placeholder="ألصق رابط ملف المذكرة النهائي (Google Drive)..."
+                            value={draftUrl}
+                            onChange={(e) =>
+                              setDeliveryDrafts((prev) => ({ ...prev, [ord.id]: e.target.value }))
+                            }
+                            className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs text-left"
+                          />
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await onUpdateOrder(ord.id, {
+                                deliveryUrl: draftUrl.trim(),
+                                status: draftUrl.trim() ? 'ready' : ord.status
+                              });
+                              showToast('تم حفظ رابط التسليم وتحديث الحالة', 'success');
+                            }}
+                            className="px-3.5 py-2 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-extrabold shrink-0"
+                          >
+                            حفظ الرابط
+                          </button>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2">
+                          {ord.phone && (
+                            <a
+                              href={`https://wa.me/2${ord.phone.replace(/^0/, '')}?text=${encodeURIComponent(
+                                waMsg
+                              )}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center gap-1.5"
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                              <span>إرسال واتساب للعميل</span>
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: NOTEBOOKS */}
+        {activeTab === 'notebooks' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             <form
-              onSubmit={handleAddStructure}
-              className="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs flex flex-wrap gap-3 items-end"
+              onSubmit={handleSaveNotebookSubmit}
+              className="lg:col-span-5 p-5 rounded-3xl bg-white border border-slate-200 space-y-3.5 h-fit"
             >
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">النوع</label>
+              <h3 className="font-black text-base text-slate-900">
+                {editingNotebook ? 'تعديل المذكرة' : 'إضافة مذكرة جديدة'}
+              </h3>
+              <input
+                type="text"
+                required
+                placeholder="عنوان المذكرة..."
+                value={nbForm.title}
+                onChange={(e) => setNbForm({ ...nbForm, title: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
+              />
+              <div className="grid grid-cols-2 gap-2">
                 <select
-                  value={newStructType}
-                  onChange={(e) => setNewStructType(e.target.value)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold bg-white"
+                  value={nbForm.categoryId}
+                  onChange={(e) => setNbForm({ ...nbForm, categoryId: e.target.value })}
+                  className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold bg-white"
                 >
-                  <option value="subjects">مادة دراسية</option>
-                  <option value="grades">صف دراسي</option>
-                  <option value="stages">مرحلة تعليمية</option>
-                  <option value="categories">قسم رئيسي</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={nbForm.stageId}
+                  onChange={(e) => {
+                    const stId = e.target.value;
+                    const firstGrade = grades.find((g) => g.stageId === stId);
+                    setNbForm({
+                      ...nbForm,
+                      stageId: stId,
+                      gradeId: firstGrade ? firstGrade.id : ''
+                    });
+                  }}
+                  className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold bg-white"
+                >
+                  {stages.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={nbForm.gradeId}
+                  onChange={(e) => setNbForm({ ...nbForm, gradeId: e.target.value })}
+                  className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold bg-white"
+                >
+                  {grades
+                    .filter((g) => g.stageId === nbForm.stageId)
+                    .map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name}
+                      </option>
+                    ))}
+                </select>
+                <select
+                  value={nbForm.subjectId}
+                  onChange={(e) => setNbForm({ ...nbForm, subjectId: e.target.value })}
+                  className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold bg-white"
+                >
+                  {subjects.map((sub) => (
+                    <option key={sub.id} value={sub.id}>
+                      {sub.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
-              {newStructType === 'grades' && (
+              <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">تابع لمرحلة</label>
-                  <select
-                    value={newStructStageId}
-                    onChange={(e) => setNewStructStageId(e.target.value)}
-                    className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold bg-white"
-                  >
-                    {stages.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-1">
+                    السعر الحالي
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    value={nbForm.price}
+                    onChange={(e) => setNbForm({ ...nbForm, price: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                  />
                 </div>
-              )}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-1">
+                    السعر قبل الخصم
+                  </label>
+                  <input
+                    type="number"
+                    value={nbForm.oldPrice}
+                    onChange={(e) => setNbForm({ ...nbForm, oldPrice: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-1">
+                    عدد الصفحات
+                  </label>
+                  <input
+                    type="number"
+                    value={nbForm.pagesCount}
+                    onChange={(e) => setNbForm({ ...nbForm, pagesCount: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"
+                  />
+                </div>
+              </div>
 
-              <div className="flex-1 min-w-[200px]">
-                <label className="block text-xs font-bold text-slate-600 mb-1">الاسم</label>
+              <input
+                type="text"
+                placeholder="شارة التمييز (مثال: الأكثر طلبًا / عرض خاص)"
+                value={nbForm.badge}
+                onChange={(e) => setNbForm({ ...nbForm, badge: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"
+              />
+
+              <textarea
+                rows="3"
+                placeholder="وصف المذكرة..."
+                value={nbForm.description}
+                onChange={(e) => setNbForm({ ...nbForm, description: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"
+              />
+
+              {/* Cover Upload */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  صورة غلاف المذكرة (اختياري)
+                </label>
                 <input
-                  type="text"
-                  placeholder="اكتب الاسم هنا..."
-                  value={newStructName}
-                  onChange={(e) => setNewStructName(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm"
+                  type="file"
+                  accept="image/*"
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    const data = await compressImageFile(f, 700, 0.82);
+                    setNbForm({ ...nbForm, coverUrl: data });
+                  }}
+                  className="text-xs"
                 />
               </div>
 
-              <button
-                type="submit"
-                className="px-5 py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs sm:text-sm font-black flex items-center gap-1.5"
-              >
-                <Plus className="w-4 h-4" />
-                <span>إضافة</span>
-              </button>
+              {/* Sample Images Upload */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  صور صفحات عينة المعاينة (حتى 8 صفحات)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={async (e) => {
+                    const files = Array.from(e.target.files || []).slice(0, 8);
+                    const compressedList = [];
+                    for (const f of files) {
+                      compressedList.push(await compressImageFile(f, 800, 0.78));
+                    }
+                    setNbForm({ ...nbForm, sampleType: 'images', sampleImages: compressedList });
+                  }}
+                  className="text-xs"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-black"
+                >
+                  {editingNotebook ? 'حفظ التعديلات' : '+ إضافة المذكرة'}
+                </button>
+                {editingNotebook && (
+                  <button
+                    type="button"
+                    onClick={() => setEditingNotebook(null)}
+                    className="px-4 py-2.5 rounded-xl bg-slate-100 text-xs font-bold"
+                  >
+                    إلغاء
+                  </button>
+                )}
+              </div>
             </form>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {[
-                { key: 'categories', title: 'الأقسام الرئيسية', list: categories },
-                { key: 'stages', title: 'المراحل التعليمية', list: stages },
-                { key: 'grades', title: 'الصفوف الدراسية', list: grades },
-                { key: 'subjects', title: 'المواد الدراسية', list: subjects }
-              ].map((group) => (
+            <div className="lg:col-span-7 space-y-3">
+              {notebooks.map((nb) => (
                 <div
-                  key={group.key}
-                  className="bg-white rounded-3xl p-5 border border-slate-100 shadow-xs space-y-3"
+                  key={nb.id}
+                  className="p-4 rounded-2xl bg-white border border-slate-200 flex items-center justify-between gap-3"
                 >
-                  <h3 className="font-extrabold text-slate-900 border-b border-slate-100 pb-2.5">
-                    {group.title} ({group.list.length})
-                  </h3>
-                  <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {group.list.map((item) => (
-                      <div
-                        key={item.id}
-                        className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 text-xs font-bold"
-                      >
-                        <span>
-                          {item.name}
-                          {item.stageId ? ` (${lookUp.stageName(item.stageId)})` : ''}
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-extrabold text-sm text-slate-900">{nb.title}</h4>
+                      {!nb.isActive && (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
+                          مخفية
                         </span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setConfirmDialog({
-                              title: 'تأكيد الحذف',
-                              message: `هل تريد حذف "${item.name}"؟`,
-                              onConfirm: () => onDeleteStructureItem(group.key, item.id)
-                            })
-                          }
-                          className="text-rose-500 hover:text-rose-700 p-1"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      السعر: <strong className="text-blue-800">{nb.price} {settings.currency}</strong>{' '}
+                      • {nb.pagesCount} صفحة
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingNotebook(nb);
+                        setNbForm({
+                          ...nb,
+                          featuresText: (nb.features || []).join('\n')
+                        });
+                      }}
+                      className="p-2 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100"
+                      title="تعديل"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onSaveNotebook({ ...nb, isActive: !nb.isActive })}
+                      className="p-2 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100"
+                      title={nb.isActive ? 'إخفاء' : 'نشر'}
+                    >
+                      {nb.isActive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDeleteNotebook(nb.id)}
+                      className="p-2 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100"
+                      title="حذف"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -3614,238 +2272,427 @@ const AdminDashboard = ({
           </div>
         )}
 
-        {/* TAB 6: WEBSITE SETTINGS */}
-        {activeTab === 'settings' && (
-          <div className="space-y-6 max-w-4xl">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h1 className="text-2xl font-black text-slate-900">إعدادات وهوية المنصة</h1>
-                <p className="text-sm text-slate-500">
-                  تخصيص اسم الموقع، الشعار، الألوان، أرقام التواصل، والنسخ الاحتياطي
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleDownloadBackup}
-                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>نسخة احتياطية (JSON)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => backupFileInputRef.current?.click()}
-                  className="px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-800 text-xs font-bold flex items-center gap-1.5"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>استعادة نسخة</span>
-                </button>
+        {/* TAB 4: OFFERS & COUPONS */}
+        {activeTab === 'offers' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Coupons */}
+            <div className="p-5 rounded-3xl bg-white border border-slate-200 space-y-4">
+              <h3 className="font-black text-base text-slate-900">إدارة كوبونات الخصم</h3>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!cpnForm.code.trim()) return;
+                  await onSaveCoupon({
+                    id: `cpn_${Date.now()}`,
+                    ...cpnForm,
+                    code: cpnForm.code.trim().toUpperCase(),
+                    value: Number(cpnForm.value || 0),
+                    minOrderAmount: Number(cpnForm.minOrderAmount || 0),
+                    maxUses: cpnForm.maxUses ? Number(cpnForm.maxUses) : null,
+                    usedCount: 0
+                  });
+                  setCpnForm({ ...cpnForm, code: '', description: '' });
+                  showToast('تم إضافة كوبون الخصم', 'success');
+                }}
+                className="space-y-2.5 p-3.5 rounded-2xl bg-slate-50 border border-slate-200"
+              >
+                <div className="grid grid-cols-3 gap-2">
+                  <input
+                    type="text"
+                    required
+                    dir="ltr"
+                    placeholder="الكود (SAVE20)"
+                    value={cpnForm.code}
+                    onChange={(e) => setCpnForm({ ...cpnForm, code: e.target.value.toUpperCase() })}
+                    className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono uppercase"
+                  />
+                  <select
+                    value={cpnForm.type}
+                    onChange={(e) => setCpnForm({ ...cpnForm, type: e.target.value })}
+                    className="px-2 py-2 rounded-xl border border-slate-200 text-xs font-bold bg-white"
+                  >
+                    <option value="percent">نسبة مئوية %</option>
+                    <option value="fixed">مبلغ ثابت ({settings.currency})</option>
+                  </select>
+                  <input
+                    type="number"
+                    required
+                    placeholder="القيمة"
+                    value={cpnForm.value}
+                    onChange={(e) => setCpnForm({ ...cpnForm, value: e.target.value })}
+                    className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                  />
+                </div>
                 <input
-                  ref={backupFileInputRef}
-                  type="file"
-                  accept=".json,application/json"
-                  onChange={handleRestoreBackupFile}
-                  className="hidden"
+                  type="text"
+                  placeholder="وصف العرض للكوبون..."
+                  value={cpnForm.description}
+                  onChange={(e) => setCpnForm({ ...cpnForm, description: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"
                 />
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-1.5 text-xs font-bold">
+                    <input
+                      type="checkbox"
+                      checked={cpnForm.isPublic}
+                      onChange={(e) => setCpnForm({ ...cpnForm, isPublic: e.target.checked })}
+                    />
+                    <span>كوبون عام ظاهر في صفحة العروض</span>
+                  </label>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-extrabold"
+                  >
+                    + إنشاء كوبون
+                  </button>
+                </div>
+              </form>
+
+              <div className="space-y-2">
+                {coupons.map((c) => (
+                  <div
+                    key={c.id}
+                    className="p-3 rounded-2xl border border-slate-200 flex items-center justify-between text-xs"
+                  >
+                    <div>
+                      <span className="font-mono font-black text-blue-800">{c.code}</span> —{' '}
+                      <strong>
+                        {c.value}
+                        {c.type === 'percent' ? '%' : ` ${settings.currency}`}
+                      </strong>
+                      <p className="text-slate-500 text-[11px]">{c.description}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onDeleteCoupon(c.id)}
+                      className="p-1.5 rounded-lg bg-rose-50 text-rose-600"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
 
+            {/* Bundles */}
+            <div className="p-5 rounded-3xl bg-white border border-slate-200 space-y-4">
+              <h3 className="font-black text-base text-slate-900">إدارة الباقات المجمعة</h3>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!bndForm.title.trim()) return;
+                  await onSaveBundle({
+                    id: `bnd_${Date.now()}`,
+                    ...bndForm,
+                    price: Number(bndForm.price || 0),
+                    oldPrice: Number(bndForm.oldPrice || 0)
+                  });
+                  setBndForm({ ...bndForm, title: '', description: '', itemsSummary: '' });
+                  showToast('تمت إضافة الباقة بنجاح', 'success');
+                }}
+                className="space-y-2.5 p-3.5 rounded-2xl bg-slate-50 border border-slate-200"
+              >
+                <input
+                  type="text"
+                  required
+                  placeholder="اسم الباقة..."
+                  value={bndForm.title}
+                  onChange={(e) => setBndForm({ ...bndForm, title: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                />
+                <input
+                  type="text"
+                  placeholder="محتويات الباقة باختصار..."
+                  value={bndForm.itemsSummary}
+                  onChange={(e) => setBndForm({ ...bndForm, itemsSummary: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="number"
+                    required
+                    placeholder="سعر الباقة"
+                    value={bndForm.price}
+                    onChange={(e) => setBndForm({ ...bndForm, price: e.target.value })}
+                    className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                  />
+                  <input
+                    type="number"
+                    placeholder="السعر قبل الخصم"
+                    value={bndForm.oldPrice}
+                    onChange={(e) => setBndForm({ ...bndForm, oldPrice: e.target.value })}
+                    className="px-3 py-2 rounded-xl border border-slate-200 text-xs"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full py-2 rounded-xl bg-teal-700 text-white text-xs font-extrabold"
+                >
+                  + إضافة باقة جديدة
+                </button>
+              </form>
+
+              <div className="space-y-2">
+                {bundles.map((b) => (
+                  <div
+                    key={b.id}
+                    className="p-3 rounded-2xl border border-slate-200 flex items-center justify-between text-xs"
+                  >
+                    <div>
+                      <strong className="text-slate-900">{b.title}</strong>
+                      <p className="text-slate-500 text-[11px]">
+                        {b.price} {settings.currency} (بدلًا من {b.oldPrice} {settings.currency})
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onDeleteBundle(b.id)}
+                      className="p-1.5 rounded-lg bg-rose-50 text-rose-600"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: TAXONOMY */}
+        {activeTab === 'taxonomy' && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {/* Categories */}
+            <div className="p-5 rounded-3xl bg-white border border-slate-200 space-y-3">
+              <h3 className="font-black text-sm">الأقسام الرئيسية</h3>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="اسم قسم جديد..."
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!newCatName.trim()) return;
+                    await onSaveCategories([
+                      ...categories,
+                      {
+                        id: `cat_${Date.now()}`,
+                        name: newCatName.trim(),
+                        description: 'قسم دراسي مضاف',
+                        color: 'from-blue-700 to-indigo-800',
+                        badge: newCatName.trim()
+                      }
+                    ]);
+                    setNewCatName('');
+                    showToast('تمت إضافة القسم', 'success');
+                  }}
+                  className="px-3 py-2 rounded-xl bg-blue-700 text-white text-xs font-bold"
+                >
+                  +
+                </button>
+              </div>
+              {categories.map((c) => (
+                <div
+                  key={c.id}
+                  className="px-3 py-2 rounded-xl bg-slate-50 flex items-center justify-between text-xs font-bold"
+                >
+                  <span>{c.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => onSaveCategories(categories.filter((x) => x.id !== c.id))}
+                    className="text-rose-500"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Stages & Grades */}
+            <div className="p-5 rounded-3xl bg-white border border-slate-200 space-y-3">
+              <h3 className="font-black text-sm">المراحل والصفوف الدراسية</h3>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="مرحلة جديدة..."
+                  value={newStageName}
+                  onChange={(e) => setNewStageName(e.target.value)}
+                  className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!newStageName.trim()) return;
+                    await onSaveStages([
+                      ...stages,
+                      { id: `st_${Date.now()}`, name: newStageName.trim(), order: stages.length + 1 }
+                    ]);
+                    setNewStageName('');
+                  }}
+                  className="px-3 py-2 rounded-xl bg-blue-700 text-white text-xs font-bold"
+                >
+                  +
+                </button>
+              </div>
+              <div className="flex gap-2 pt-2 border-t border-slate-100">
+                <select
+                  value={newGradeStageId}
+                  onChange={(e) => setNewGradeStageId(e.target.value)}
+                  className="px-2 py-2 rounded-xl border border-slate-200 text-xs bg-white"
+                >
+                  {stages.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  placeholder="صف دراسي جديد..."
+                  value={newGradeName}
+                  onChange={(e) => setNewGradeName(e.target.value)}
+                  className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!newGradeName.trim()) return;
+                    await onSaveGrades([
+                      ...grades,
+                      { id: `gr_${Date.now()}`, stageId: newGradeStageId, name: newGradeName.trim() }
+                    ]);
+                    setNewGradeName('');
+                  }}
+                  className="px-3 py-2 rounded-xl bg-teal-700 text-white text-xs font-bold"
+                >
+                  +
+                </button>
+              </div>
+              <div className="max-h-56 overflow-y-auto space-y-1.5">
+                {grades.map((g) => (
+                  <div
+                    key={g.id}
+                    className="px-3 py-1.5 rounded-xl bg-slate-50 flex items-center justify-between text-xs"
+                  >
+                    <span>{g.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => onSaveGrades(grades.filter((x) => x.id !== g.id))}
+                      className="text-rose-500"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Subjects */}
+            <div className="p-5 rounded-3xl bg-white border border-slate-200 space-y-3">
+              <h3 className="font-black text-sm">المواد الدراسية</h3>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="مادة دراسية جديدة..."
+                  value={newSubjectName}
+                  onChange={(e) => setNewSubjectName(e.target.value)}
+                  className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!newSubjectName.trim()) return;
+                    await onSaveSubjects([
+                      ...subjects,
+                      { id: `sub_${Date.now()}`, name: newSubjectName.trim(), visible: true }
+                    ]);
+                    setNewSubjectName('');
+                  }}
+                  className="px-3 py-2 rounded-xl bg-blue-700 text-white text-xs font-bold"
+                >
+                  +
+                </button>
+              </div>
+              {subjects.map((sub) => (
+                <div
+                  key={sub.id}
+                  className="px-3 py-2 rounded-xl bg-slate-50 flex items-center justify-between text-xs font-bold"
+                >
+                  <span>{sub.name}</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onSaveSubjects(
+                          subjects.map((x) =>
+                            x.id === sub.id ? { ...x, visible: !x.visible } : x
+                          )
+                        )
+                      }
+                      className="text-amber-700"
+                    >
+                      {sub.visible !== false ? 'ظاهرة' : 'مخفية'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onSaveSubjects(subjects.filter((x) => x.id !== sub.id))}
+                      className="text-rose-500"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 6: SETTINGS */}
+        {activeTab === 'settings' && (
+          <div className="space-y-6">
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
                 await onSaveSettings(settingsForm);
-                showToast('تم حفظ جميع الإعدادات بنجاح', 'success');
+                showToast('تم حفظ جميع إعدادات الموقع بنجاح!', 'success');
               }}
-              className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-100 shadow-xs space-y-5"
+              className="p-6 rounded-3xl bg-white border border-slate-200 space-y-6"
             >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">اسم المنصة</label>
-                  <input
-                    type="text"
-                    value={settingsForm.siteName || ''}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, siteName: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">العملة</label>
-                  <input
-                    type="text"
-                    value={settingsForm.currency || 'ج.م'}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, currency: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">رقم الواتساب</label>
-                  <input
-                    type="text"
-                    dir="ltr"
-                    value={settingsForm.whatsappNumber || ''}
-                    onChange={(e) =>
-                      setSettingsForm({ ...settingsForm, whatsappNumber: e.target.value })
-                    }
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-left font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">
-                    رقم خدمة العملاء
-                  </label>
-                  <input
-                    type="text"
-                    dir="ltr"
-                    placeholder="01000000000"
-                    value={settingsForm.phone || ''}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, phone: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-left font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">
-                    البريد الإلكتروني
-                  </label>
-                  <input
-                    type="email"
-                    dir="ltr"
-                    value={settingsForm.email || ''}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, email: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-left"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">
-                    رابط جروب الواتساب (اختياري)
-                  </label>
-                  <input
-                    type="url"
-                    dir="ltr"
-                    placeholder="https://chat.whatsapp.com/..."
-                    value={settingsForm.whatsappGroupUrl || ''}
-                    onChange={(e) =>
-                      setSettingsForm({ ...settingsForm, whatsappGroupUrl: e.target.value })
-                    }
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-left"
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-600 mb-1">
-                    رابط صفحة الفيسبوك (اختياري)
-                  </label>
-                  <input
-                    type="url"
-                    dir="ltr"
-                    placeholder="https://facebook.com/yourpage"
-                    value={settingsForm.facebookUrl || ''}
-                    onChange={(e) =>
-                      setSettingsForm({ ...settingsForm, facebookUrl: e.target.value })
-                    }
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-left"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">
-                    رابط قناة / جروب التليجرام (اختياري)
-                  </label>
-                  <input
-                    type="url"
-                    dir="ltr"
-                    placeholder="https://t.me/yourchannel"
-                    value={settingsForm.telegramUrl || ''}
-                    onChange={(e) =>
-                      setSettingsForm({ ...settingsForm, telegramUrl: e.target.value })
-                    }
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-left"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">
-                    رابط قناة اليوتيوب (اختياري)
-                  </label>
-                  <input
-                    type="url"
-                    dir="ltr"
-                    placeholder="https://youtube.com/@yourchannel"
-                    value={settingsForm.youtubeUrl || ''}
-                    onChange={(e) =>
-                      setSettingsForm({ ...settingsForm, youtubeUrl: e.target.value })
-                    }
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-left"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">
-                    رابط الإنستجرام (اختياري)
-                  </label>
-                  <input
-                    type="url"
-                    dir="ltr"
-                    placeholder="https://instagram.com/yourpage"
-                    value={settingsForm.instagramUrl || ''}
-                    onChange={(e) =>
-                      setSettingsForm({ ...settingsForm, instagramUrl: e.target.value })
-                    }
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-left"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">
-                    رابط التيك توك (اختياري)
-                  </label>
-                  <input
-                    type="url"
-                    dir="ltr"
-                    placeholder="https://tiktok.com/@youraccount"
-                    value={settingsForm.tiktokUrl || ''}
-                    onChange={(e) =>
-                      setSettingsForm({ ...settingsForm, tiktokUrl: e.target.value })
-                    }
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-left"
-                  />
-                </div>
-              </div>
+              <h3 className="font-black text-lg text-slate-900">إعدادات الهوية والتواصل والنظام</h3>
 
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
+              {/* Brand & Logo */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">اللون الرئيسي</label>
-                  <input
-                    type="color"
-                    value={settingsForm.primaryColor || '#1d4ed8'}
-                    onChange={(e) =>
-                      setSettingsForm({ ...settingsForm, primaryColor: e.target.value })
-                    }
-                    className="w-full h-11 rounded-xl border border-slate-200 p-1 cursor-pointer"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">اللون الثانوي</label>
-                  <input
-                    type="color"
-                    value={settingsForm.secondaryColor || '#0d9488'}
-                    onChange={(e) =>
-                      setSettingsForm({ ...settingsForm, secondaryColor: e.target.value })
-                    }
-                    className="w-full h-11 rounded-xl border border-slate-200 p-1 cursor-pointer"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">
-                    حجم الشعار في الهيدر
+                  <label className="block text-xs font-extrabold text-slate-700 mb-1">
+                    اسم المنصة
                   </label>
-                  <select
-                    value={settingsForm.logoSize || 'lg'}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, logoSize: e.target.value })}
-                    className="w-full h-11 px-3 rounded-xl border border-slate-200 text-xs font-bold bg-white"
-                  >
-                    <option value="md">متوسط</option>
-                    <option value="lg">كبير (موصى به)</option>
-                    <option value="xl">كبير جدًا وبارز</option>
-                  </select>
+                  <input
+                    type="text"
+                    value={settingsForm.platformName || ''}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, platformName: e.target.value })
+                    }
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold"
+                  />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">
+                  <label className="block text-xs font-extrabold text-slate-700 mb-1">
+                    الوصف المختصر أسفل الاسم
+                  </label>
+                  <input
+                    type="text"
+                    value={settingsForm.platformTagline || ''}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, platformTagline: e.target.value })
+                    }
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-extrabold text-slate-700 mb-1">
                     شعار المنصة (Logo)
                   </label>
                   <input
@@ -3854,268 +2701,743 @@ const AdminDashboard = ({
                     onChange={async (e) => {
                       const f = e.target.files?.[0];
                       if (!f) return;
-                      const data = await compressImageFile(f, 500, 0.9);
+                      const data = await compressImageFile(f, 400, 0.88);
                       setSettingsForm({ ...settingsForm, logoUrl: data });
                     }}
-                    className="w-full text-xs text-slate-500 file:ml-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-blue-50 file:text-blue-700 file:font-bold"
+                    className="text-xs"
                   />
                 </div>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                <label className="block text-xs font-extrabold text-slate-700">
-                  صورة خلفية القسم الترحيبي في الصفحة الرئيسية (اختياري)
-                </label>
-                <div className="flex flex-wrap items-center gap-3">
+                <div>
+                  <label className="block text-xs font-extrabold text-slate-700 mb-1">
+                    صورة خلفية الواجهة الترحيبية (اختياري)
+                  </label>
                   <input
                     type="file"
                     accept="image/*"
                     onChange={async (e) => {
                       const f = e.target.files?.[0];
                       if (!f) return;
-                      const data = await compressImageFile(f, 1400, 0.85);
-                      setSettingsForm({ ...settingsForm, heroBgImage: data });
-                      showToast('تم رفع صورة الخلفية، اضغط حفظ الإعدادات لتطبيقها', 'info');
+                      const data = await compressImageFile(f, 1200, 0.78);
+                      setSettingsForm({ ...settingsForm, heroBannerUrl: data });
                     }}
-                    className="flex-1 text-xs text-slate-500 file:ml-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-indigo-50 file:text-indigo-700 file:font-bold"
+                    className="text-xs"
                   />
-                  {settingsForm.heroBgImage && (
-                    <div className="flex items-center gap-2">
-                      <img
-                        src={settingsForm.heroBgImage}
-                        alt="معاينة خلفية الرئيسية"
-                        className="w-20 h-12 rounded-xl object-cover border border-slate-300"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setSettingsForm({ ...settingsForm, heroBgImage: '' })}
-                        className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold"
-                      >
-                        إزالة الصورة
-                      </button>
-                    </div>
-                  )}
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">
-                  العنوان الترحيبي الرئيسي
-                </label>
-                <input
-                  type="text"
-                  value={settingsForm.heroTitle || ''}
-                  onChange={(e) => setSettingsForm({ ...settingsForm, heroTitle: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">الوصف الترحيبي</label>
-                <textarea
-                  rows="2"
-                  value={settingsForm.heroSubtitle || ''}
-                  onChange={(e) =>
-                    setSettingsForm({ ...settingsForm, heroSubtitle: e.target.value })
-                  }
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Hero & About Texts */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">
-                    عنوان قسم التعريف بالمنصة (في الصفحة الرئيسية)
+                  <label className="block text-xs font-extrabold text-slate-700 mb-1">
+                    العنوان الرئيسي في الواجهة
+                  </label>
+                  <input
+                    type="text"
+                    value={settingsForm.heroTitle || ''}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, heroTitle: e.target.value })
+                    }
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-extrabold text-slate-700 mb-1">
+                    عنوان قسم التعريف بالمنصة
                   </label>
                   <input
                     type="text"
                     value={settingsForm.aboutTitle || ''}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, aboutTitle: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
-                  />
-                </div>
-                <div className="flex items-end pb-2">
-                  <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={settingsForm.showAbout !== false}
-                      onChange={(e) =>
-                        setSettingsForm({ ...settingsForm, showAbout: e.target.checked })
-                      }
-                      className="w-4 h-4 accent-blue-600"
-                    />
-                    <span>إظهار قسم التعريف بالمنصة في الصفحة الرئيسية</span>
-                  </label>
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-600 mb-1">
-                    نص التعريف بالمنصة ومميزاتها
-                  </label>
-                  <textarea
-                    rows="2"
-                    value={settingsForm.aboutDescription || ''}
                     onChange={(e) =>
-                      setSettingsForm({ ...settingsForm, aboutDescription: e.target.value })
+                      setSettingsForm({ ...settingsForm, aboutTitle: e.target.value })
                     }
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">
-                  رسالة تأكيد الطلب وبيانات الدفع (فودافون كاش / إنستاباي)
-                </label>
                 <textarea
                   rows="2"
-                  value={settingsForm.paymentInfo || ''}
+                  placeholder="النص الترحيبي أسفل العنوان..."
+                  value={settingsForm.heroSubtitle || ''}
                   onChange={(e) =>
-                    setSettingsForm({ ...settingsForm, paymentInfo: e.target.value })
+                    setSettingsForm({ ...settingsForm, heroSubtitle: e.target.value })
                   }
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs"
+                />
+                <textarea
+                  rows="2"
+                  placeholder="وصف قسم التعريف بالمنصة..."
+                  value={settingsForm.aboutDescription || ''}
+                  onChange={(e) =>
+                    setSettingsForm({ ...settingsForm, aboutDescription: e.target.value })
+                  }
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs"
                 />
               </div>
 
-              {/* Important Notices Control Box */}
-              <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h4 className="font-extrabold text-sm text-amber-950 flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-amber-600" />
-                    <span>خانة التنبيهات الهامة للزوار</span>
-                  </h4>
-                  <label className="flex items-center gap-2 text-xs font-bold text-amber-900 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(settingsForm.showImportantNotices)}
-                      onChange={(e) =>
-                        setSettingsForm({
-                          ...settingsForm,
-                          showImportantNotices: e.target.checked
-                        })
-                      }
-                      className="w-4 h-4 accent-amber-600"
-                    />
-                    <span>إظهار خانة التنبيهات في الموقع</span>
-                  </label>
-                </div>
-
+              {/* Contact, Payment & Social Links */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    عنوان صندوق التنبيهات
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                    رقم الواتساب (بصيغة 2010...)
                   </label>
                   <input
                     type="text"
-                    value={settingsForm.importantNoticesTitle || ''}
+                    dir="ltr"
+                    value={settingsForm.whatsappNumber || ''}
                     onChange={(e) =>
-                      setSettingsForm({ ...settingsForm, importantNoticesTitle: e.target.value })
+                      setSettingsForm({ ...settingsForm, whatsappNumber: e.target.value })
                     }
-                    className="w-full px-3.5 py-2 rounded-xl border border-amber-200 bg-white text-xs sm:text-sm"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-left font-mono"
                   />
                 </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                    رقم خدمة العملاء
+                  </label>
+                  <input
+                    type="text"
+                    dir="ltr"
+                    value={settingsForm.customerServicePhone || ''}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, customerServicePhone: e.target.value })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-left font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                    البريد الإلكتروني
+                  </label>
+                  <input
+                    type="email"
+                    dir="ltr"
+                    value={settingsForm.contactEmail || ''}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, contactEmail: e.target.value })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-left"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                    رابط جروب الواتساب
+                  </label>
+                  <input
+                    type="text"
+                    dir="ltr"
+                    value={settingsForm.whatsappGroupUrl || ''}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, whatsappGroupUrl: e.target.value })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-left"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                    رابط صفحة الفيسبوك
+                  </label>
+                  <input
+                    type="text"
+                    dir="ltr"
+                    value={settingsForm.facebookUrl || ''}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, facebookUrl: e.target.value })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-left"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                    رابط قناة التليجرام
+                  </label>
+                  <input
+                    type="text"
+                    dir="ltr"
+                    value={settingsForm.telegramUrl || ''}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, telegramUrl: e.target.value })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-left"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                    رابط قناة اليوتيوب
+                  </label>
+                  <input
+                    type="text"
+                    dir="ltr"
+                    value={settingsForm.youtubeUrl || ''}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, youtubeUrl: e.target.value })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-left"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                    رابط إنستجرام
+                  </label>
+                  <input
+                    type="text"
+                    dir="ltr"
+                    value={settingsForm.instagramUrl || ''}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, instagramUrl: e.target.value })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-left"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                    رابط تيك توك
+                  </label>
+                  <input
+                    type="text"
+                    dir="ltr"
+                    value={settingsForm.tiktokUrl || ''}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, tiktokUrl: e.target.value })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-left"
+                  />
+                </div>
+              </div>
 
-                <div className="space-y-2">
-                  <label className="block text-xs font-bold text-slate-700">قائمة التنبيهات</label>
-                  {(settingsForm.importantNotices || []).map((notice, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={notice}
-                        onChange={(e) => {
-                          const updated = [...(settingsForm.importantNotices || [])];
-                          updated[idx] = e.target.value;
-                          setSettingsForm({ ...settingsForm, importantNotices: updated });
-                        }}
-                        className="flex-1 px-3 py-2 rounded-xl border border-amber-200 bg-white text-xs"
-                      />
+              {/* Payment & Announcement */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-extrabold text-slate-700 mb-1">
+                    بيانات التحويل والدفع (فودافون كاش / إنستاباي)
+                  </label>
+                  <textarea
+                    rows="2"
+                    value={settingsForm.paymentDetails || ''}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, paymentDetails: e.target.value })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-extrabold text-slate-700 mb-1">
+                    نص شريط العروض العلوي
+                  </label>
+                  <textarea
+                    rows="2"
+                    value={settingsForm.announcementText || ''}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, announcementText: e.target.value })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Important Notices Editor */}
+              <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-amber-950">
+                    خانة التنبيهات الهامة للعملاء
+                  </span>
+                  <label className="flex items-center gap-1.5 text-xs font-bold">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(settingsForm.importantNoticesEnabled)}
+                      onChange={(e) =>
+                        setSettingsForm({
+                          ...settingsForm,
+                          importantNoticesEnabled: e.target.checked
+                        })
+                      }
+                    />
+                    <span>إظهار التنبيهات</span>
+                  </label>
+                </div>
+                <div className="space-y-1.5">
+                  {(settingsForm.importantNoticesList || []).map((notice, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-white border border-amber-200 text-xs"
+                    >
+                      <span>{notice}</span>
                       <button
                         type="button"
-                        onClick={() => {
-                          const updated = (settingsForm.importantNotices || []).filter(
-                            (_, i) => i !== idx
-                          );
-                          setSettingsForm({ ...settingsForm, importantNotices: updated });
-                        }}
-                        className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600"
-                        title="حذف التنبيه"
+                        onClick={() =>
+                          setSettingsForm({
+                            ...settingsForm,
+                            importantNoticesList: settingsForm.importantNoticesList.filter(
+                              (_, i) => i !== idx
+                            )
+                          })
+                        }
+                        className="text-rose-500"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   ))}
-                  <div className="flex gap-2 pt-1">
-                    <input
-                      type="text"
-                      placeholder="أضف تنبيهًا جديدًا للمعلمين..."
-                      value={newNoticeInput}
-                      onChange={(e) => setNewNoticeInput(e.target.value)}
-                      className="flex-1 px-3 py-2 rounded-xl border border-amber-200 bg-white text-xs"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!newNoticeInput.trim()) return;
-                        setSettingsForm({
-                          ...settingsForm,
-                          importantNotices: [
-                            ...(settingsForm.importantNotices || []),
-                            newNoticeInput.trim()
-                          ]
-                        });
-                        setNewNoticeInput('');
-                      }}
-                      className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold"
-                    >
-                      + إضافة تنبيه
-                    </button>
-                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="أضف تنبيهًا جديدًا..."
+                    value={newNoticeText}
+                    onChange={(e) => setNewNoticeText(e.target.value)}
+                    className="flex-1 px-3 py-2 rounded-xl border border-amber-200 bg-white text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!newNoticeText.trim()) return;
+                      setSettingsForm({
+                        ...settingsForm,
+                        importantNoticesList: [
+                          ...(settingsForm.importantNoticesList || []),
+                          newNoticeText.trim()
+                        ]
+                      });
+                      setNewNoticeText('');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-amber-600 text-white text-xs font-extrabold"
+                  >
+                    + إضافة تنبيه
+                  </button>
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-6 pt-1">
-                <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(settingsForm.allowLogoUpload)}
-                    onChange={(e) =>
-                      setSettingsForm({ ...settingsForm, allowLogoUpload: e.target.checked })
-                    }
-                    className="w-4 h-4 accent-blue-600"
-                  />
-                  <span>السماح للمعلم برفع الشعار في نموذج الطلب</span>
-                </label>
-                <label className="flex items-center gap-2 text-xs font-bold text-emerald-800 cursor-pointer">
+              {/* General Toggles */}
+              <div className="flex flex-wrap items-center gap-6 text-xs font-bold text-slate-800">
+                <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={Boolean(settingsForm.requirePaymentProof)}
                     onChange={(e) =>
                       setSettingsForm({ ...settingsForm, requirePaymentProof: e.target.checked })
                     }
-                    className="w-4 h-4 accent-emerald-600"
                   />
                   <span>جعل إرفاق صورة إيصال التحويل إلزاميًا عند الطلب</span>
                 </label>
-                <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={settingsForm.showReviews !== false}
-                    onChange={(e) =>
-                      setSettingsForm({ ...settingsForm, showReviews: e.target.checked })
-                    }
-                    className="w-4 h-4 accent-blue-600"
-                  />
-                  <span>إظهار قسم آراء العملاء (اسكرينات واتساب) في الرئيسية</span>
-                </label>
-                <label className="flex items-center gap-2 text-xs font-bold text-rose-700 cursor-pointer">
+                <label className="flex items-center gap-2 cursor-pointer text-rose-700">
                   <input
                     type="checkbox"
                     checked={Boolean(settingsForm.maintenanceMode)}
                     onChange={(e) =>
                       setSettingsForm({ ...settingsForm, maintenanceMode: e.target.checked })
                     }
-                    className="w-4 h-4 accent-rose-600"
                   />
                   <span>تفعيل وضع الصيانة (إغلاق واجهة الموقع مؤقتًا)</span>
                 </label>
+              </div>
+
+              {/* Order Form Fields Full Customization Box */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-blue-50/60 border border-blue-200 space-y-4">
+                <div>
+                  <h4 className="font-extrabold text-sm text-blue-950 flex items-center gap-2">
+                    <SlidersHorizontal className="w-4 h-4 text-blue-700" />
+                    <span>إضافة / إخفاء / تغيير أسماء وخصائص حقول نموذج الطلب</span>
+                  </h4>
+                  <p className="text-[11px] text-blue-900/75 mt-0.5">
+                    غيّر اسم أي حقل، عدّل النص التوضيحي بداخله، أظهره أو أخفه، اجعله إلزاميًا أو اختياريًا، أو أضف حقولًا جديدة بالكامل.
+                  </p>
+                </div>
+
+                {/* Built-in Fields Full Editor Cards */}
+                <div className="space-y-3">
+                  {[
+                    {
+                      badge: 'الحقل 1 (الاسم)',
+                      labelKey: 'teacherNameLabel',
+                      placeholderKey: 'teacherNamePlaceholder',
+                      showKey: 'showTeacherNameField',
+                      defaultShow: true,
+                      reqKey: 'requireTeacherNameField',
+                      defaultReq: true
+                    },
+                    {
+                      badge: 'الحقل 2 (العنوان / المطلوب)',
+                      labelKey: 'customTitleLabel',
+                      placeholderKey: 'customTitlePlaceholder',
+                      showKey: 'showCustomTitleField',
+                      defaultShow: true,
+                      reqKey: 'requireCustomTitleField',
+                      defaultReq: true
+                    },
+                    {
+                      badge: 'الحقل 3 (التواصل)',
+                      labelKey: 'phoneLabel',
+                      placeholderKey: 'phonePlaceholder',
+                      showKey: 'showPhoneField',
+                      defaultShow: true,
+                      reqKey: 'requirePhoneField',
+                      defaultReq: true
+                    },
+                    {
+                      badge: 'الحقل 4 (الملاحظات)',
+                      labelKey: 'notesLabel',
+                      placeholderKey: 'notesPlaceholder',
+                      showKey: 'showNotesField',
+                      defaultShow: true,
+                      reqKey: 'requireNotesField',
+                      defaultReq: false
+                    }
+                  ].map((item) => {
+                    const isShown =
+                      settingsForm.orderFormFields?.[item.showKey] !== undefined
+                        ? Boolean(settingsForm.orderFormFields[item.showKey])
+                        : item.defaultShow;
+                    const isReq =
+                      settingsForm.orderFormFields?.[item.reqKey] !== undefined
+                        ? Boolean(settingsForm.orderFormFields[item.reqKey])
+                        : item.defaultReq;
+
+                    return (
+                      <div
+                        key={item.labelKey}
+                        className={`p-3.5 rounded-2xl border transition space-y-2.5 ${
+                          isShown
+                            ? 'bg-white border-blue-100'
+                            : 'bg-slate-100/80 border-slate-200 opacity-75'
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-800 text-[11px] font-extrabold">
+                            {item.badge}
+                          </span>
+                          <div className="flex items-center gap-4">
+                            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={isShown}
+                                onChange={(e) =>
+                                  setSettingsForm({
+                                    ...settingsForm,
+                                    orderFormFields: {
+                                      ...settingsForm.orderFormFields,
+                                      [item.showKey]: e.target.checked
+                                    }
+                                  })
+                                }
+                                className="w-4 h-4 accent-blue-700"
+                              />
+                              <span>إظهار الحقل</span>
+                            </label>
+                            <label className="flex items-center gap-1.5 text-xs font-bold text-rose-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                disabled={!isShown}
+                                checked={isReq}
+                                onChange={(e) =>
+                                  setSettingsForm({
+                                    ...settingsForm,
+                                    orderFormFields: {
+                                      ...settingsForm.orderFormFields,
+                                      [item.reqKey]: e.target.checked
+                                    }
+                                  })
+                                }
+                                className="w-4 h-4 accent-rose-600"
+                              />
+                              <span>إلزامي</span>
+                            </label>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 mb-1">
+                              اسم الحقل الظاهر للعميل
+                            </label>
+                            <input
+                              type="text"
+                              value={settingsForm.orderFormFields?.[item.labelKey] || ''}
+                              onChange={(e) =>
+                                setSettingsForm({
+                                  ...settingsForm,
+                                  orderFormFields: {
+                                    ...settingsForm.orderFormFields,
+                                    [item.labelKey]: e.target.value
+                                  }
+                                })
+                              }
+                              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-xs font-bold"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 mb-1">
+                              النص التوضيحي داخل الخانة (Placeholder)
+                            </label>
+                            <input
+                              type="text"
+                              value={settingsForm.orderFormFields?.[item.placeholderKey] || ''}
+                              onChange={(e) =>
+                                setSettingsForm({
+                                  ...settingsForm,
+                                  orderFormFields: {
+                                    ...settingsForm.orderFormFields,
+                                    [item.placeholderKey]: e.target.value
+                                  }
+                                })
+                              }
+                              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-xs"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Logo & Payment Section Labels & Visibility */}
+                  <div className="p-3.5 rounded-2xl bg-white border border-blue-100 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-bold text-slate-700">
+                          اسم حقل رفع الشعار / الملف
+                        </label>
+                        <label className="flex items-center gap-1 text-[11px] font-bold text-blue-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(settingsForm.allowLogoUpload)}
+                            onChange={(e) =>
+                              setSettingsForm({
+                                ...settingsForm,
+                                allowLogoUpload: e.target.checked
+                              })
+                            }
+                            className="w-3.5 h-3.5 accent-blue-700"
+                          />
+                          <span>إظهار</span>
+                        </label>
+                      </div>
+                      <input
+                        type="text"
+                        value={settingsForm.orderFormFields?.logoLabel || ''}
+                        onChange={(e) =>
+                          setSettingsForm({
+                            ...settingsForm,
+                            orderFormFields: {
+                              ...settingsForm.orderFormFields,
+                              logoLabel: e.target.value
+                            }
+                          })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-xs font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-bold text-slate-700">
+                          اسم قسم الدفع وإرفاق الإيصال
+                        </label>
+                        <label className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={settingsForm.orderFormFields?.showPaymentSection !== false}
+                            onChange={(e) =>
+                              setSettingsForm({
+                                ...settingsForm,
+                                orderFormFields: {
+                                  ...settingsForm.orderFormFields,
+                                  showPaymentSection: e.target.checked
+                                }
+                              })
+                            }
+                            className="w-3.5 h-3.5 accent-emerald-600"
+                          />
+                          <span>إظهار</span>
+                        </label>
+                      </div>
+                      <input
+                        type="text"
+                        value={settingsForm.orderFormFields?.paymentSectionLabel || ''}
+                        onChange={(e) =>
+                          setSettingsForm({
+                            ...settingsForm,
+                            orderFormFields: {
+                              ...settingsForm.orderFormFields,
+                              paymentSectionLabel: e.target.value
+                            }
+                          })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-xs font-bold"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Custom Fields List & Adder */}
+                <div className="space-y-2.5 pt-2 border-t border-blue-200/70">
+                  <label className="block text-xs font-extrabold text-slate-800">
+                    حقول إضافية مخصصة في نموذج الطلب (
+                    {(settingsForm.orderFormFields?.customFields || []).length})
+                  </label>
+
+                  {(settingsForm.orderFormFields?.customFields || []).map((cf, idx) => (
+                    <div
+                      key={cf.id}
+                      className="p-3 rounded-2xl bg-white border border-slate-200 space-y-2"
+                    >
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          value={cf.label}
+                          onChange={(e) => {
+                            const updated = [...(settingsForm.orderFormFields?.customFields || [])];
+                            updated[idx] = { ...cf, label: e.target.value };
+                            setSettingsForm({
+                              ...settingsForm,
+                              orderFormFields: {
+                                ...settingsForm.orderFormFields,
+                                customFields: updated
+                              }
+                            });
+                          }}
+                          className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-extrabold"
+                          placeholder="اسم الحقل"
+                        />
+                        <input
+                          type="text"
+                          value={cf.placeholder || ''}
+                          onChange={(e) => {
+                            const updated = [...(settingsForm.orderFormFields?.customFields || [])];
+                            updated[idx] = { ...cf, placeholder: e.target.value };
+                            setSettingsForm({
+                              ...settingsForm,
+                              orderFormFields: {
+                                ...settingsForm.orderFormFields,
+                                customFields: updated
+                              }
+                            });
+                          }}
+                          className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs"
+                          placeholder="النص التوضيحي"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between pt-1">
+                        <div className="flex items-center gap-4">
+                          <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={cf.visible !== false}
+                              onChange={(e) => {
+                                const updated = [
+                                  ...(settingsForm.orderFormFields?.customFields || [])
+                                ];
+                                updated[idx] = { ...cf, visible: e.target.checked };
+                                setSettingsForm({
+                                  ...settingsForm,
+                                  orderFormFields: {
+                                    ...settingsForm.orderFormFields,
+                                    customFields: updated
+                                  }
+                                });
+                              }}
+                              className="w-4 h-4 accent-blue-700"
+                            />
+                            <span>إظهار</span>
+                          </label>
+                          <label className="flex items-center gap-1.5 text-xs font-bold text-rose-700 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(cf.required)}
+                              onChange={(e) => {
+                                const updated = [
+                                  ...(settingsForm.orderFormFields?.customFields || [])
+                                ];
+                                updated[idx] = { ...cf, required: e.target.checked };
+                                setSettingsForm({
+                                  ...settingsForm,
+                                  orderFormFields: {
+                                    ...settingsForm.orderFormFields,
+                                    customFields: updated
+                                  }
+                                });
+                              }}
+                              className="w-4 h-4 accent-rose-600"
+                            />
+                            <span>إلزامي</span>
+                          </label>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextList = (
+                              settingsForm.orderFormFields?.customFields || []
+                            ).filter((_, i) => i !== idx);
+                            setSettingsForm({
+                              ...settingsForm,
+                              orderFormFields: {
+                                ...settingsForm.orderFormFields,
+                                customFields: nextList
+                              }
+                            });
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>حذف</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                    <input
+                      type="text"
+                      placeholder="اسم الحقل الجديد (مثال: المحافظة)"
+                      value={newCustomFieldLabel}
+                      onChange={(e) => setNewCustomFieldLabel(e.target.value)}
+                      className="px-3 py-2 rounded-xl border border-blue-200 bg-white text-xs"
+                    />
+                    <input
+                      type="text"
+                      placeholder="نص توضيحي داخل الخانة (اختياري)"
+                      value={newCustomFieldPlaceholder}
+                      onChange={(e) => setNewCustomFieldPlaceholder(e.target.value)}
+                      className="px-3 py-2 rounded-xl border border-blue-200 bg-white text-xs"
+                    />
+                    <div className="flex items-center gap-2">
+                      <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={newCustomFieldRequired}
+                          onChange={(e) => setNewCustomFieldRequired(e.target.checked)}
+                          className="w-4 h-4 accent-blue-700"
+                        />
+                        <span>إلزامي</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!newCustomFieldLabel.trim()) return;
+                          const createdField = {
+                            id: `cf_${Date.now()}`,
+                            label: newCustomFieldLabel.trim(),
+                            placeholder: newCustomFieldPlaceholder.trim(),
+                            required: Boolean(newCustomFieldRequired),
+                            visible: true
+                          };
+                          setSettingsForm({
+                            ...settingsForm,
+                            orderFormFields: {
+                              ...settingsForm.orderFormFields,
+                              customFields: [
+                                ...(settingsForm.orderFormFields?.customFields || []),
+                                createdField
+                              ]
+                            }
+                          });
+                          setNewCustomFieldLabel('');
+                          setNewCustomFieldPlaceholder('');
+                          setNewCustomFieldRequired(false);
+                        }}
+                        className="flex-1 py-2 px-3 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-extrabold"
+                      >
+                        + إضافة حقل
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <button
@@ -4127,202 +3449,62 @@ const AdminDashboard = ({
               </button>
             </form>
 
-            {/* Subjects Visibility & Quick Management inside Settings */}
-            <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-xs space-y-4">
-              <div>
-                <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
-                  <BookOpen className="w-5 h-5 text-blue-600" />
-                  <span>التحكم في المواد الدراسية المعروضة على الموقع</span>
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  أضف مواد جديدة، عدّل اسم أي مادة، أو أخفِها مؤقتًا من قوائم التصفح والبحث دون حذفها
+            {/* Backup & Password Management */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="p-5 rounded-3xl bg-white border border-slate-200 space-y-3">
+                <h4 className="font-black text-sm text-slate-900">النسخ الاحتياطي والاستعادة</h4>
+                <p className="text-xs text-slate-500">
+                  احفظ نسخة احتياطية كاملة من المذكرات والطلبات والإعدادات بصيغة JSON.
                 </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleDownloadBackup}
+                    className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-extrabold flex items-center gap-1.5"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>نسخة احتياطية (JSON)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => fileRestoreRef.current?.click()}
+                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-extrabold flex items-center gap-1.5"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>استعادة من ملف</span>
+                  </button>
+                  <input
+                    ref={fileRestoreRef}
+                    type="file"
+                    accept=".json"
+                    onChange={handleRestoreBackup}
+                    className="hidden"
+                  />
+                </div>
               </div>
 
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="أدخل اسم مادة دراسية جديدة (مثل: الأحياء، الجغرافيا)..."
-                  value={newSubjectSettingName}
-                  onChange={(e) => setNewSubjectSettingName(e.target.value)}
-                  className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm"
-                />
+              <div className="p-5 rounded-3xl bg-white border border-slate-200 space-y-3">
+                <h4 className="font-black text-sm text-slate-900">تغيير كلمة مرور المدير</h4>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="password"
+                    placeholder="كلمة المرور الجديدة"
+                    value={newAdminPass}
+                    onChange={(e) => setNewAdminPass(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-slate-200 text-xs"
+                  />
+                  <input
+                    type="password"
+                    placeholder="تأكيد كلمة المرور"
+                    value={confirmAdminPass}
+                    onChange={(e) => setConfirmAdminPass(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-slate-200 text-xs"
+                  />
+                </div>
                 <button
                   type="button"
-                  onClick={async () => {
-                    if (!newSubjectSettingName.trim()) return;
-                    await onSaveStructureItem('subjects', {
-                      id: `sub_${Date.now()}`,
-                      name: newSubjectSettingName.trim(),
-                      order: subjects.length + 1,
-                      visible: true
-                    });
-                    setNewSubjectSettingName('');
-                    showToast('تمت إضافة المادة بنجاح', 'success');
-                  }}
-                  className="px-5 py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-extrabold flex items-center gap-1.5"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>إضافة مادة</span>
-                </button>
-              </div>
-
-              <div className="divide-y divide-slate-100">
-                {subjects.map((sub) => {
-                  const isVisible = sub.visible !== false;
-                  const isEditingThis = editingSubjectId === sub.id;
-                  return (
-                    <div
-                      key={sub.id}
-                      className="py-3 flex flex-wrap items-center justify-between gap-3"
-                    >
-                      {isEditingThis ? (
-                        <div className="flex-1 flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={editingSubjectName}
-                            onChange={(e) => setEditingSubjectName(e.target.value)}
-                            className="flex-1 px-3 py-1.5 rounded-xl border border-blue-300 text-xs font-bold"
-                          />
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              if (!editingSubjectName.trim()) return;
-                              await onSaveStructureItem('subjects', {
-                                ...sub,
-                                name: editingSubjectName.trim()
-                              });
-                              setEditingSubjectId('');
-                              showToast('تم تحديث اسم المادة', 'success');
-                            }}
-                            className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold"
-                          >
-                            حفظ
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingSubjectId('')}
-                            className="px-2.5 py-1.5 rounded-xl bg-slate-100 text-slate-600 text-xs font-bold"
-                          >
-                            إلغاء
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2.5">
-                          <span
-                            className={`font-extrabold text-xs sm:text-sm ${
-                              isVisible ? 'text-slate-900' : 'text-slate-400 line-through'
-                            }`}
-                          >
-                            {sub.name}
-                          </span>
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              isVisible
-                                ? 'bg-emerald-50 text-emerald-700'
-                                : 'bg-slate-200 text-slate-600'
-                            }`}
-                          >
-                            {isVisible ? 'ظاهرة في الموقع' : 'مخفية من الموقع'}
-                          </span>
-                        </div>
-                      )}
-
-                      {!isEditingThis && (
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingSubjectId(sub.id);
-                              setEditingSubjectName(sub.name);
-                            }}
-                            className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold"
-                          >
-                            تعديل الاسم
-                          </button>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              await onSaveStructureItem('subjects', { ...sub, visible: !isVisible });
-                              showToast(
-                                !isVisible
-                                  ? `تم إظهار مادة ${sub.name} في الموقع`
-                                  : `تم إخفاء مادة ${sub.name} من الموقع`,
-                                'info'
-                              );
-                            }}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 ${
-                              isVisible
-                                ? 'bg-amber-50 hover:bg-amber-100 text-amber-800'
-                                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
-                            }`}
-                          >
-                            {isVisible ? (
-                              <>
-                                <EyeOff className="w-3.5 h-3.5" />
-                                <span>إخفاء</span>
-                              </>
-                            ) : (
-                              <>
-                                <Eye className="w-3.5 h-3.5" />
-                                <span>إظهار</span>
-                              </>
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setConfirmDialog({
-                                title: 'حذف المادة الدراسية',
-                                message: `هل تريد حذف مادة "${sub.name}" نهائيًا؟`,
-                                onConfirm: () => onDeleteStructureItem('subjects', sub.id)
-                              })
-                            }
-                            className="p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Admin Password Update Box */}
-            <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-xs space-y-3">
-              <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
-                <KeyRound className="w-4 h-4 text-amber-600" />
-                <span>تغيير كلمة مرور المدير</span>
-              </h3>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <input
-                  type="password"
-                  dir="ltr"
-                  placeholder="كلمة المرور الجديدة (6 أحرف فأكثر)"
-                  value={newAdminPass}
-                  onChange={(e) => setNewAdminPass(e.target.value)}
-                  className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-left"
-                />
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (newAdminPass.length < 6) {
-                      return showToast('كلمة المرور يجب أن تكون 6 أحرف على الأقل', 'error');
-                    }
-                    const salt = generateSalt();
-                    const passwordHash = await hashPasswordWithSalt(newAdminPass, salt);
-                    await onUpdateAdminPassword({
-                      email: adminMeta.email,
-                      salt,
-                      passwordHash,
-                      updatedAt: new Date().toISOString()
-                    });
-                    setNewAdminPass('');
-                    showToast('تم تحديث كلمة مرور المدير بنجاح', 'success');
-                  }}
-                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold"
+                  onClick={handleUpdateAdminPassword}
+                  className="px-4 py-2 rounded-xl bg-blue-700 text-white text-xs font-extrabold"
                 >
                   تحديث كلمة المرور
                 </button>
@@ -4330,1800 +3512,568 @@ const AdminDashboard = ({
             </div>
           </div>
         )}
-
-        {/* TAB: CLIENT REVIEWS & WHATSAPP SCREENSHOTS */}
-        {activeTab === 'reviews' && (
-          <div className="space-y-6 max-w-4xl">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h1 className="text-2xl font-black text-slate-900">آراء العملاء واسكرينات الواتساب</h1>
-                <p className="text-sm text-slate-500">
-                  أضف لقطات شاشة (Screenshots) من محادثات الواتساب أو تقييمات المعلمين لتظهر في الصفحة الرئيسية وتزيد ثقة الزوار.
-                </p>
-              </div>
-              <label className="flex items-center gap-2 text-xs font-extrabold text-blue-800 bg-blue-50 px-4 py-2.5 rounded-xl cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.showReviews !== false}
-                  onChange={async (e) => {
-                    await onSaveSettings({ ...settings, showReviews: e.target.checked });
-                    showToast(
-                      e.target.checked
-                        ? 'تم إظهار قسم آراء العملاء في الصفحة الرئيسية'
-                        : 'تم إخفاء قسم آراء العملاء من الصفحة الرئيسية',
-                      'success'
-                    );
-                  }}
-                  className="w-4 h-4 accent-blue-600"
-                />
-                <span>إظهار القسم في الرئيسية</span>
-              </label>
-            </div>
-
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                if (!reviewForm.teacherName.trim() && !reviewForm.screenshotUrl) {
-                  return showToast(
-                    'يرجى إدخال اسم المعلم أو رفع صورة اسكرين شوت للمحادثة',
-                    'error'
-                  );
-                }
-                await onSaveReview({
-                  id: `rev_${Date.now()}`,
-                  teacherName: reviewForm.teacherName.trim() || 'معلم مشترك',
-                  subjectAndStage: reviewForm.subjectAndStage.trim(),
-                  quote: reviewForm.quote.trim(),
-                  screenshotUrl: reviewForm.screenshotUrl,
-                  active: true,
-                  createdAt: new Date().toISOString()
-                });
-                setReviewForm({
-                  teacherName: '',
-                  subjectAndStage: '',
-                  quote: '',
-                  screenshotUrl: ''
-                });
-                showToast('تمت إضافة رأي العميل بنجاح', 'success');
-              }}
-              className="bg-white rounded-3xl p-6 border border-slate-100 shadow-xs space-y-4"
-            >
-              <h3 className="font-extrabold text-base text-slate-900">
-                إضافة تقييم / اسكرين محادثة واتساب
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">اسم المعلم</label>
-                  <input
-                    type="text"
-                    placeholder="مثال: أ/ محمد السيد"
-                    value={reviewForm.teacherName}
-                    onChange={(e) => setReviewForm({ ...reviewForm, teacherName: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1">
-                    التخصص / المرحلة
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="مثال: معلم كيمياء — المرحلة الثانوية"
-                    value={reviewForm.subjectAndStage}
-                    onChange={(e) =>
-                      setReviewForm({ ...reviewForm, subjectAndStage: e.target.value })
-                    }
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">
-                  صورة اسكرين شوت لمحادثة الواتساب (موصى به)
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={async (e) => {
-                      const f = e.target.files?.[0];
-                      if (!f) return;
-                      try {
-                        const imgData = await compressImageFile(f, 800, 0.8);
-                        setReviewForm({ ...reviewForm, screenshotUrl: imgData });
-                        showToast('تم إرفاق صورة الاسكرين شوت', 'success');
-                      } catch {
-                        showToast('تعذر معالجة الصورة', 'error');
-                      }
-                    }}
-                    className="flex-1 text-xs text-slate-500 file:ml-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-emerald-50 file:text-emerald-700 file:font-bold"
-                  />
-                  {reviewForm.screenshotUrl && (
-                    <div className="relative w-14 h-14 rounded-xl overflow-hidden border border-slate-200">
-                      <img
-                        src={reviewForm.screenshotUrl}
-                        alt="معاينة الاسكرين"
-                        className="w-full h-full object-cover"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setReviewForm({ ...reviewForm, screenshotUrl: '' })}
-                        className="absolute top-0.5 left-0.5 p-0.5 rounded-full bg-rose-600 text-white"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">
-                  نص التعليق أو مقتطف من رأي المعلم (اختياري إذا رفعت صورة)
-                </label>
-                <textarea
-                  rows="2"
-                  placeholder="اكتب رأي المعلم في جودة المذكرة وسرعة التسليم..."
-                  value={reviewForm.quote}
-                  onChange={(e) => setReviewForm({ ...reviewForm, quote: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center gap-2 shadow"
-              >
-                <Plus className="w-4 h-4" />
-                <span>إضافة التقييم للموقع</span>
-              </button>
-            </form>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {reviews.map((rev) => (
-                <div
-                  key={rev.id}
-                  className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs flex flex-col justify-between"
-                >
-                  <div>
-                    {rev.screenshotUrl && (
-                      <div className="h-52 bg-slate-100 overflow-hidden border-b border-slate-100">
-                        <img
-                          src={rev.screenshotUrl}
-                          alt={rev.teacherName}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    )}
-                    <div className="p-4 space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-extrabold text-sm text-slate-900">
-                          {rev.teacherName}
-                        </span>
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            rev.active !== false
-                              ? 'bg-emerald-50 text-emerald-700'
-                              : 'bg-slate-200 text-slate-600'
-                          }`}
-                        >
-                          {rev.active !== false ? 'ظاهر' : 'مخفي'}
-                        </span>
-                      </div>
-                      {rev.subjectAndStage && (
-                        <p className="text-[11px] font-bold text-blue-700">{rev.subjectAndStage}</p>
-                      )}
-                      {rev.quote && (
-                        <p className="text-xs text-slate-600 leading-relaxed">"{rev.quote}"</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onSaveReview({ ...rev, active: rev.active === false })}
-                      className="flex-1 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-100"
-                    >
-                      {rev.active !== false ? 'إخفاء' : 'إظهار'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setConfirmDialog({
-                          title: 'حذف التقييم',
-                          message: `هل تريد حذف تقييم "${rev.teacherName}"؟`,
-                          onConfirm: async () => {
-                            await onDeleteReview(rev.id);
-                            showToast('تم حذف التقييم بنجاح', 'success');
-                          }
-                        })
-                      }
-                      className="p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </main>
-
-      {/* ADD / EDIT NOTEBOOK MODAL */}
-      {nbModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs overflow-y-auto">
-          <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden my-8">
-            <div className="bg-slate-900 px-6 py-4 text-white flex items-center justify-between">
-              <h3 className="font-black text-base">
-                {editingNb ? 'تعديل بيانات المذكرة' : 'إضافة مذكرة تعليمية جديدة'}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setNbModalOpen(false)}
-                className="p-1.5 rounded-lg bg-white/10"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form
-              onSubmit={handleSaveNbSubmit}
-              className="p-6 space-y-4 max-h-[82vh] overflow-y-auto text-xs sm:text-sm"
-            >
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">عنوان المذكرة *</label>
-                <input
-                  type="text"
-                  required
-                  value={nbForm.title}
-                  onChange={(e) => setNbForm({ ...nbForm, title: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">القسم</label>
-                  <select
-                    value={nbForm.categoryId}
-                    onChange={(e) => setNbForm({ ...nbForm, categoryId: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                  >
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">المرحلة</label>
-                  <select
-                    value={nbForm.stageId}
-                    onChange={(e) => {
-                      const nextStage = e.target.value;
-                      const firstGrade = grades.find((g) => g.stageId === nextStage)?.id || '';
-                      setNbForm({ ...nbForm, stageId: nextStage, gradeId: firstGrade });
-                    }}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                  >
-                    {stages.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">الصف</label>
-                  <select
-                    value={nbForm.gradeId}
-                    onChange={(e) => setNbForm({ ...nbForm, gradeId: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                  >
-                    {grades
-                      .filter((g) => g.stageId === nbForm.stageId)
-                      .map((g) => (
-                        <option key={g.id} value={g.id}>
-                          {g.name}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">المادة</label>
-                  <select
-                    value={nbForm.subjectId}
-                    onChange={(e) => setNbForm({ ...nbForm, subjectId: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                  >
-                    {subjects.map((sub) => (
-                      <option key={sub.id} value={sub.id}>
-                        {sub.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    السعر الحالي ({settings.currency})
-                  </label>
-                  <input
-                    type="number"
-                    value={nbForm.price}
-                    onChange={(e) => setNbForm({ ...nbForm, price: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    بدلًا من (قبل الخصم)
-                  </label>
-                  <input
-                    type="number"
-                    placeholder="اختياري"
-                    value={nbForm.oldPrice}
-                    onChange={(e) => setNbForm({ ...nbForm, oldPrice: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">عدد الصفحات</label>
-                  <input
-                    type="number"
-                    value={nbForm.pageCount}
-                    onChange={(e) => setNbForm({ ...nbForm, pageCount: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">شارة مميزة</label>
-                  <input
-                    type="text"
-                    placeholder="الأكثر طلبًا / جديد"
-                    value={nbForm.badge}
-                    onChange={(e) => setNbForm({ ...nbForm, badge: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">وصف مختصر</label>
-                <input
-                  type="text"
-                  value={nbForm.shortDesc}
-                  onChange={(e) => setNbForm({ ...nbForm, shortDesc: e.target.value })}
-                  className="w-full px-4 py-2 rounded-xl border border-slate-200"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">الوصف التفصيلي</label>
-                <textarea
-                  rows="3"
-                  value={nbForm.fullDesc}
-                  onChange={(e) => setNbForm({ ...nbForm, fullDesc: e.target.value })}
-                  className="w-full px-4 py-2 rounded-xl border border-slate-200"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    صورة غلاف المذكرة
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={async (e) => {
-                      const f = e.target.files?.[0];
-                      if (!f) return;
-                      const data = await compressImageFile(f, 700, 0.85);
-                      setNbForm({ ...nbForm, coverUrl: data });
-                    }}
-                    className="w-full text-xs text-slate-500 file:ml-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-blue-50 file:text-blue-700 file:font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    عدد صفحات المعاينة المسموحة للمعلم
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="15"
-                    value={nbForm.previewPagesCount}
-                    onChange={(e) => setNbForm({ ...nbForm, previewPagesCount: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200"
-                  />
-                </div>
-              </div>
-
-              {/* Sample Preview Switcher: Images OR PDF */}
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
-                <div>
-                  <label className="block text-xs font-extrabold text-blue-900 mb-1">
-                    رابط Google Drive لعينة مطالعة أكبر (اختياري)
-                  </label>
-                  <input
-                    type="url"
-                    dir="ltr"
-                    placeholder="https://drive.google.com/file/d/.../view"
-                    value={nbForm.drivePreviewUrl || ''}
-                    onChange={(e) => setNbForm({ ...nbForm, drivePreviewUrl: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-blue-200 bg-white text-xs text-left outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    سيظهر زر بارز للمعلم في صفحة تفاصيل المذكرة بعنوان «تصفح عينة أكبر على Google Drive».
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/80">
-                  <label className="text-xs font-extrabold text-slate-800">
-                    نوع عينة المطالعة المباشرة داخل الموقع
-                  </label>
-                  <div className="inline-flex rounded-xl bg-white p-1 border border-slate-200">
-                    <button
-                      type="button"
-                      onClick={() => setNbForm({ ...nbForm, previewType: 'images' })}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
-                        nbForm.previewType !== 'pdf'
-                          ? 'bg-blue-700 text-white'
-                          : 'text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      صور صفحات (موصى به)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setNbForm({ ...nbForm, previewType: 'pdf' })}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
-                        nbForm.previewType === 'pdf'
-                          ? 'bg-blue-700 text-white'
-                          : 'text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      ملف PDF منفصل
-                    </button>
-                  </div>
-                </div>
-
-                {nbForm.previewType === 'pdf' ? (
-                  <div className="space-y-2">
-                    <input
-                      type="file"
-                      accept=".pdf,application/pdf"
-                      onChange={async (e) => {
-                        const f = e.target.files?.[0];
-                        if (!f) return;
-                        try {
-                          const pdfData = await readPdfAsDataUrl(f);
-                          setNbForm({ ...nbForm, previewPdfData: pdfData, previewType: 'pdf' });
-                          showToast('تم رفع ملف PDF للمعاينة بنجاح', 'success');
-                        } catch (err) {
-                          showToast(err.message, 'error');
-                        }
-                      }}
-                      className="w-full text-xs text-slate-500 file:ml-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-purple-50 file:text-purple-700 file:font-bold"
-                    />
-                    {nbForm.previewPdfData && (
-                      <div className="flex items-center justify-between text-xs text-emerald-700 bg-emerald-50 px-3 py-2 rounded-xl">
-                        <span className="font-bold">✓ تم إرفاق ملف PDF للعينة بنجاح</span>
-                        <button
-                          type="button"
-                          onClick={() => setNbForm({ ...nbForm, previewPdfData: '' })}
-                          className="text-rose-600 font-bold"
-                        >
-                          إزالة الملف
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={async (e) => {
-                        const files = Array.from(e.target.files || []).slice(0, 8);
-                        if (!files.length) return;
-                        const compressedList = [];
-                        for (const f of files) {
-                          compressedList.push(await compressImageFile(f, 800, 0.78));
-                        }
-                        setNbForm({
-                          ...nbForm,
-                          previewType: 'images',
-                          previewImages: [...(nbForm.previewImages || []), ...compressedList].slice(
-                            0,
-                            8
-                          )
-                        });
-                      }}
-                      className="w-full text-xs text-slate-500 file:ml-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-teal-50 file:text-teal-700 file:font-bold"
-                    />
-                    {nbForm.previewImages?.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {nbForm.previewImages.map((imgSrc, i) => (
-                          <div
-                            key={i}
-                            className="relative w-14 h-16 rounded-lg overflow-hidden border border-slate-200 bg-white"
-                          >
-                            <img src={imgSrc} alt="" className="w-full h-full object-cover" />
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setNbForm({
-                                  ...nbForm,
-                                  previewImages: nbForm.previewImages.filter((_, idx) => idx !== i)
-                                })
-                              }
-                              className="absolute top-0.5 left-0.5 p-0.5 rounded-full bg-rose-600 text-white"
-                            >
-                              <X className="w-2.5 h-2.5" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setNbModalOpen(false)}
-                  className="px-5 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-bold"
-                >
-                  إلغاء
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-blue-700 text-white font-black"
-                >
-                  حفظ المذكرة
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ORDER DETAIL & DELIVERY MODAL */}
-      {selectedOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs overflow-y-auto">
-          <div className="w-full max-w-xl bg-white rounded-3xl shadow-2xl overflow-hidden my-8">
-            <div className="bg-slate-900 px-6 py-4 text-white flex items-center justify-between">
-              <div>
-                <h3 className="font-black text-base">تفاصيل الطلب #{selectedOrder.orderNumber}</h3>
-                <span className="text-xs text-slate-400">
-                  {new Date(selectedOrder.createdAt).toLocaleString('ar-EG')}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedOrder(null)}
-                className="p-1.5 rounded-lg bg-white/10"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4 max-h-[82vh] overflow-y-auto text-sm">
-              {/* Quick Copy Buttons for Customization */}
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard?.writeText(selectedOrder.teacherName);
-                    showToast('تم نسخ اسم المعلم', 'success');
-                  }}
-                  className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-800 text-xs font-bold flex items-center gap-1.5"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>نسخ اسم المعلم</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard?.writeText(selectedOrder.phone);
-                    showToast('تم نسخ رقم الهاتف', 'success');
-                  }}
-                  className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-800 text-xs font-bold flex items-center gap-1.5"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>نسخ الهاتف</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard?.writeText(selectedOrder.customNotebookTitle);
-                    showToast('تم نسخ اسم المذكرة المطلوب', 'success');
-                  }}
-                  className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-800 text-xs font-bold flex items-center gap-1.5"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>نسخ عنوان الغلاف</span>
-                </button>
-              </div>
-
-              <div className="bg-slate-50 rounded-2xl p-4 space-y-2.5 border border-slate-200/80 text-xs sm:text-sm">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">اسم المعلم:</span>
-                  <span className="font-extrabold text-slate-900">{selectedOrder.teacherName}</span>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <span className="text-slate-500 shrink-0">العنوان المطلوب طباعته:</span>
-                  <span className="font-extrabold text-blue-800 text-left">
-                    {selectedOrder.customNotebookTitle}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">رقم الهاتف:</span>
-                  <span className="font-mono font-bold">{selectedOrder.phone}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">المذكرة الأصلية:</span>
-                  <span className="font-bold text-slate-700">{selectedOrder.notebookTitle}</span>
-                </div>
-                {selectedOrder.couponCode && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">كود الخصم المستخدم:</span>
-                    <span className="font-mono font-bold text-rose-600">
-                      {selectedOrder.couponCode} (-{selectedOrder.couponDiscountAmount}{' '}
-                      {settings.currency})
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {selectedOrder.logoUrl && (
-                <div className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200 bg-white">
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={selectedOrder.logoUrl}
-                      alt="شعار المعلم"
-                      className="w-14 h-14 object-contain rounded-xl border border-slate-100 p-1"
-                    />
-                    <div>
-                      <p className="text-xs font-bold text-slate-800">شعار المعلم المرفق</p>
-                      <p className="text-[11px] text-slate-400">جاهز للتحميل والاستخدام في التصميم</p>
-                    </div>
-                  </div>
-                  <a
-                    href={selectedOrder.logoUrl}
-                    download={`logo-${selectedOrder.orderNumber}.png`}
-                    className="px-3.5 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold flex items-center gap-1.5"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>تحميل الشعار</span>
-                  </a>
-                </div>
-              )}
-
-              {selectedOrder.notes && (
-                <div className="bg-amber-50 p-3.5 rounded-2xl border border-amber-100">
-                  <span className="text-xs font-bold text-amber-800 block mb-1">ملاحظات المعلم:</span>
-                  <p className="text-xs text-slate-700 leading-relaxed">{selectedOrder.notes}</p>
-                </div>
-              )}
-
-              {/* Payment Verification & Receipt Review Section */}
-              {(() => {
-                const payStatus =
-                  selectedOrder.paymentStatus ||
-                  (selectedOrder.paymentReceiptUrl ? 'pending_review' : 'unpaid');
-                return (
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 text-slate-900">
-                        <Receipt className="w-4 h-4 text-blue-700" />
-                        <span className="text-xs font-extrabold">
-                          التحقق من الدفع وإيصال التحويل
-                        </span>
-                      </div>
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${
-                          payStatus === 'paid'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : payStatus === 'pending_review'
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-rose-100 text-rose-700'
-                        }`}
-                      >
-                        {payStatus === 'paid'
-                          ? '✓ تم تأكيد استلام المبلغ'
-                          : payStatus === 'pending_review'
-                          ? '⏳ إيصال مرفق بانتظار المراجعة'
-                          : 'لم يتم إرفاق إيصال دفع'}
-                      </span>
-                    </div>
-
-                    {selectedOrder.paymentReceiptUrl ? (
-                      <div className="space-y-2">
-                        <a
-                          href={selectedOrder.paymentReceiptUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block rounded-xl overflow-hidden border border-slate-200 bg-white max-h-56"
-                        >
-                          <img
-                            src={selectedOrder.paymentReceiptUrl}
-                            alt="إيصال التحويل"
-                            className="w-full max-h-56 object-contain mx-auto"
-                          />
-                        </a>
-                        <div className="flex items-center justify-between text-[11px] text-slate-500">
-                          <span>اضغط على الصورة لتكبيرها في نافذة مستقلة</span>
-                          <a
-                            href={selectedOrder.paymentReceiptUrl}
-                            download={`receipt-${selectedOrder.orderNumber}.jpg`}
-                            className="text-blue-700 font-bold hover:underline"
-                          >
-                            تحميل الإيصال
-                          </a>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-slate-500">
-                        لم يرفع المعلم صورة إيصال التحويل بعد (يمكنه رفعها من صفحة تتبع الطلب أو إرسالها على واتساب).
-                      </p>
-                    )}
-
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const updated = { ...selectedOrder, paymentStatus: 'paid' };
-                          await onUpdateOrder(updated);
-                          setSelectedOrder(updated);
-                          showToast('تم تأكيد استلام الدفع بنجاح', 'success');
-                        }}
-                        className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold"
-                      >
-                        ✓ تأكيد استلام الدفع
-                      </button>
-                      {payStatus === 'paid' && (
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const updated = {
-                              ...selectedOrder,
-                              paymentStatus: selectedOrder.paymentReceiptUrl
-                                ? 'pending_review'
-                                : 'unpaid'
-                            };
-                            await onUpdateOrder(updated);
-                            setSelectedOrder(updated);
-                            showToast('تم إلغاء تأكيد الدفع', 'success');
-                          }}
-                          className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-bold"
-                        >
-                          إعادة للمراجعة
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">
-                  تحديث حالة الطلب
-                </label>
-                <select
-                  value={selectedOrder.status}
-                  onChange={async (e) => {
-                    const nextStatus = e.target.value;
-                    let updated = { ...selectedOrder, status: nextStatus };
-                    if (
-                      nextStatus === 'delivered' &&
-                      settings.nextOrderCouponAuto?.enabled &&
-                      !selectedOrder.nextOrderCouponCode
-                    ) {
-                      const autoCp = await onIssueNextOrderCoupon(updated, {
-                        type: settings.nextOrderCouponAuto.type || 'percent',
-                        value: Number(settings.nextOrderCouponAuto.value) || 15,
-                        maxUses:
-                          settings.nextOrderCouponAuto.maxUses !== undefined
-                            ? Number(settings.nextOrderCouponAuto.maxUses)
-                            : 1,
-                        validDays:
-                          settings.nextOrderCouponAuto.validDays !== undefined
-                            ? Number(settings.nextOrderCouponAuto.validDays)
-                            : 30
-                      });
-                      if (autoCp) {
-                        updated = {
-                          ...updated,
-                          nextOrderCouponId: autoCp.id,
-                          nextOrderCouponCode: autoCp.code,
-                          nextOrderCouponEnabled: true
-                        };
-                        showToast(
-                          `تم تحديث الحالة وإصدار كوبون الطلب القادم (${autoCp.code}) تلقائيًا`,
-                          'success'
-                        );
-                      }
-                    } else {
-                      await onUpdateOrder(updated);
-                      showToast('تم تحديث حالة الطلب', 'success');
-                    }
-                    setSelectedOrder(updated);
-                  }}
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 font-bold text-xs sm:text-sm bg-white"
-                >
-                  {ORDER_STATUSES.map((st) => (
-                    <option key={st.id} value={st.id}>
-                      {st.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">
-                  رابط المذكرة النهائية بعد التخصيص (Google Drive / رابط مباشر)
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="url"
-                    dir="ltr"
-                    placeholder="https://drive.google.com/..."
-                    value={selectedOrder.deliveryUrl || ''}
-                    onChange={(e) =>
-                      setSelectedOrder({ ...selectedOrder, deliveryUrl: e.target.value })
-                    }
-                    className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-left"
-                  />
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const nextStatus =
-                        selectedOrder.deliveryUrl?.trim() &&
-                        ['new', 'reviewing', 'customizing'].includes(selectedOrder.status)
-                          ? 'ready'
-                          : selectedOrder.status;
-                      const updated = { ...selectedOrder, status: nextStatus };
-                      await onUpdateOrder(updated);
-                      setSelectedOrder(updated);
-                      showToast(
-                        nextStatus === 'ready'
-                          ? 'تم حفظ رابط التسليم وتعيين الحالة إلى (جاهز للتسليم)'
-                          : 'تم حفظ رابط التسليم بنجاح',
-                        'success'
-                      );
-                    }}
-                    className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold"
-                  >
-                    حفظ الرابط
-                  </button>
-                </div>
-              </div>
-
-              {/* Next-Order Special Coupon Full Control Box */}
-              {(() => {
-                const linkedCoupon = selectedOrder.nextOrderCouponId
-                  ? coupons.find((c) => c.id === selectedOrder.nextOrderCouponId)
-                  : coupons.find((c) => c.code === selectedOrder.nextOrderCouponCode);
-                const isCouponActiveOnOrder = Boolean(
-                  selectedOrder.nextOrderCouponCode &&
-                    selectedOrder.nextOrderCouponEnabled !== false &&
-                    linkedCoupon &&
-                    !isCouponExhausted(linkedCoupon)
-                );
-
-                return (
-                  <div className="p-4 rounded-2xl bg-purple-50/80 border border-purple-200 space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 text-purple-900">
-                        <Gift className="w-4 h-4 text-purple-700" />
-                        <span className="text-xs font-extrabold">
-                          كوبون خصم خاص للطلب القادم (تحكم كامل)
-                        </span>
-                      </div>
-                      {selectedOrder.nextOrderCouponCode && (
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-                            isCouponActiveOnOrder
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-slate-200 text-slate-600'
-                          }`}
-                        >
-                          {isCouponActiveOnOrder
-                            ? 'مُفعّل ويظهر للعميل'
-                            : linkedCoupon && isCouponExhausted(linkedCoupon)
-                            ? 'منتهي الصلاحية أو العدد'
-                            : 'موقوف ومخفي عن العميل'}
-                        </span>
-                      )}
-                    </div>
-
-                    {selectedOrder.nextOrderCouponCode ? (
-                      <div className="space-y-2.5">
-                        <div className="flex flex-wrap items-center justify-between gap-2 bg-white px-3.5 py-2.5 rounded-xl border border-purple-200">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-mono font-black text-sm text-purple-800">
-                              {selectedOrder.nextOrderCouponCode}
-                            </span>
-                            {linkedCoupon && (
-                              <>
-                                <span className="text-xs font-bold text-emerald-700">
-                                  (خصم{' '}
-                                  {linkedCoupon.type === 'percent'
-                                    ? `${linkedCoupon.value}%`
-                                    : `${linkedCoupon.value} ${settings.currency}`}
-                                  )
-                                </span>
-                                <span className="text-[11px] text-slate-500">
-                                  • {formatCouponLimitsAr(linkedCoupon)}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              navigator.clipboard?.writeText(selectedOrder.nextOrderCouponCode);
-                              showToast('تم نسخ الكوبون الخاص', 'success');
-                            }}
-                            className="p-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-700"
-                            title="نسخ الكود"
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const nextEnabled = !isCouponActiveOnOrder;
-                              await onToggleNextOrderCoupon(selectedOrder, nextEnabled);
-                              setSelectedOrder({
-                                ...selectedOrder,
-                                nextOrderCouponEnabled: nextEnabled
-                              });
-                              showToast(
-                                nextEnabled
-                                  ? 'تم تفعيل الكوبون وإظهاره للعميل'
-                                  : 'تم إيقاف الكوبون وإخفاؤه عن العميل',
-                                'info'
-                              );
-                            }}
-                            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold border transition ${
-                              isCouponActiveOnOrder
-                                ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200'
-                                : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600'
-                            }`}
-                          >
-                            {isCouponActiveOnOrder
-                              ? 'إيقاف وإخفاء الكوبون مؤقتًا'
-                              : 'تفعيل وإظهار الكوبون للعميل'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              await onRemoveNextOrderCoupon(selectedOrder);
-                              setSelectedOrder({
-                                ...selectedOrder,
-                                nextOrderCouponId: '',
-                                nextOrderCouponCode: '',
-                                nextOrderCouponEnabled: false
-                              });
-                              showToast('تم حذف كوبون الطلب القادم نهائيًا', 'success');
-                            }}
-                            className="py-2 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold flex items-center gap-1"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            <span>حذف الكوبون</span>
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-2.5">
-                        <p className="text-[11px] text-purple-800">
-                          أنشئ كود خصم سري مخصص لهذا المعلم فقط لطلبه القادم (يمكنك تحديد عدد المرات ومدة الصلاحية بالأيام أو تركها 0 بلا حدود):
-                        </p>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                          <div>
-                            <label className="block text-[10px] font-bold text-purple-900 mb-0.5">
-                              النوع
-                            </label>
-                            <select
-                              value={nextCpType}
-                              onChange={(e) => setNextCpType(e.target.value)}
-                              className="w-full px-2.5 py-2 rounded-xl border border-purple-200 bg-white text-xs font-bold"
-                            >
-                              <option value="percent">نسبة %</option>
-                              <option value="fixed">مبلغ ({settings.currency})</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-bold text-purple-900 mb-0.5">
-                              القيمة
-                            </label>
-                            <input
-                              type="number"
-                              min="1"
-                              value={nextCpValue}
-                              onChange={(e) => setNextCpValue(Number(e.target.value))}
-                              className="w-full px-2.5 py-2 rounded-xl border border-purple-200 bg-white text-xs"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-bold text-purple-900 mb-0.5">
-                              المرات (0=بلا حدود)
-                            </label>
-                            <input
-                              type="number"
-                              min="0"
-                              value={nextCpMaxUses}
-                              onChange={(e) =>
-                                setNextCpMaxUses(Math.max(0, Number(e.target.value) || 0))
-                              }
-                              className="w-full px-2.5 py-2 rounded-xl border border-purple-200 bg-white text-xs"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-bold text-purple-900 mb-0.5">
-                              الأيام (0=بلا حدود)
-                            </label>
-                            <input
-                              type="number"
-                              min="0"
-                              value={nextCpValidDays}
-                              onChange={(e) =>
-                                setNextCpValidDays(Math.max(0, Number(e.target.value) || 0))
-                              }
-                              className="w-full px-2.5 py-2 rounded-xl border border-purple-200 bg-white text-xs"
-                            />
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const createdCp = await onIssueNextOrderCoupon(selectedOrder, {
-                              type: nextCpType,
-                              value: Number(nextCpValue) || 15,
-                              maxUses: Math.max(0, Number(nextCpMaxUses) || 0),
-                              validDays: Math.max(0, Number(nextCpValidDays) || 0)
-                            });
-                            if (createdCp) {
-                              setSelectedOrder({
-                                ...selectedOrder,
-                                nextOrderCouponId: createdCp.id,
-                                nextOrderCouponCode: createdCp.code,
-                                nextOrderCouponEnabled: true
-                              });
-                              showToast(
-                                `تم إنشاء كوبون خاص (${createdCp.code}) للطلب القادم`,
-                                'success'
-                              );
-                            }
-                          }}
-                          className="w-full px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-white text-xs font-extrabold"
-                        >
-                          + إصدار كوبون خاص الآن
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-
-              <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">
-                  ملاحظات إدارية (خاصة بالإدارة فقط)
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="ملاحظة داخلية..."
-                    value={selectedOrder.adminNotes || ''}
-                    onChange={(e) =>
-                      setSelectedOrder({ ...selectedOrder, adminNotes: e.target.value })
-                    }
-                    className="flex-1 px-3.5 py-2 rounded-xl border border-slate-200 text-xs"
-                  />
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      await onUpdateOrder(selectedOrder);
-                      showToast('تم حفظ الملاحظة الإدارية', 'success');
-                    }}
-                    className="px-4 py-2 rounded-xl bg-slate-800 text-white text-xs font-bold"
-                  >
-                    حفظ
-                  </button>
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-slate-100 flex flex-wrap gap-2">
-                {(() => {
-                  const linkedCp = selectedOrder.nextOrderCouponId
-                    ? coupons.find((c) => c.id === selectedOrder.nextOrderCouponId)
-                    : coupons.find((c) => c.code === selectedOrder.nextOrderCouponCode);
-                  const hasValidNextCoupon =
-                    selectedOrder.nextOrderCouponCode &&
-                    selectedOrder.nextOrderCouponEnabled !== false &&
-                    linkedCp &&
-                    !isCouponExhausted(linkedCp);
-
-                  const couponLine = hasValidNextCoupon
-                    ? `\n🎁 هدية خاصة لطلبك القادم: استخدم الكود (${
-                        selectedOrder.nextOrderCouponCode
-                      }) للحصول على خصم ${
-                        linkedCp.type === 'percent'
-                          ? `${linkedCp.value}%`
-                          : `${linkedCp.value} ${settings.currency}`
-                      } (${formatCouponLimitsAr(linkedCp)})!`
-                    : '';
-
-                  return (
-                    <a
-                      href={buildWhatsAppUrl(
-                        selectedOrder.phone,
-                        `مرحبًا أستاذ/ة ${selectedOrder.teacherName}،\nبخصوص طلبكم رقم (${
-                          selectedOrder.orderNumber
-                        }) من ${settings.siteName}:\n${
-                          selectedOrder.deliveryUrl
-                            ? `تم تجهيز مذكرتكم الخاصة (${selectedOrder.customNotebookTitle}) ويمكنكم تحميلها مباشرة من الرابط التالي:\n${selectedOrder.deliveryUrl}`
-                            : `تم استلام طلبكم (${selectedOrder.customNotebookTitle}) وجارٍ العمل على تجهيزه.`
-                        }${couponLine}`
-                      )}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center justify-center gap-2"
-                    >
-                      <MessageCircle className="w-4 h-4" />
-                      <span>مراسلة المعلم عبر واتساب</span>
-                    </a>
-                  );
-                })()}
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold flex items-center gap-1.5"
-                >
-                  <Printer className="w-4 h-4" />
-                  <span>طباعة</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* CUSTOM CONFIRMATION MODAL */}
-      {confirmDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
-          <div className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl space-y-4 text-center">
-            <div className="w-12 h-12 mx-auto rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center">
-              <AlertCircle className="w-6 h-6" />
-            </div>
-            <h4 className="font-black text-base text-slate-900">{confirmDialog.title}</h4>
-            <p className="text-xs text-slate-500 leading-relaxed">{confirmDialog.message}</p>
-            <div className="flex gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setConfirmDialog(null)}
-                className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold"
-              >
-                إلغاء
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  const fn = confirmDialog.onConfirm;
-                  setConfirmDialog(null);
-                  await fn();
-                }}
-                className="flex-1 py-2.5 rounded-xl bg-rose-600 text-white text-xs font-extrabold"
-              >
-                تأكيد الحذف
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
-};
+}
 
-/* ============================================================================
-   7. MAIN APPLICATION CONTAINER (PUBLIC STOREFRONT + FIREBASE SYNC)
-   ============================================================================ */
+/**
+ * ============================================================================
+ * MAIN APPLICATION COMPONENT (APP)
+ * ============================================================================
+ */
 export default function App() {
-  const [user, setUser] = useState(null);
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
-  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
-  const [stages, setStages] = useState(DEFAULT_STAGES);
-  const [grades, setGrades] = useState(DEFAULT_GRADES);
-  const [subjects, setSubjects] = useState(DEFAULT_SUBJECTS);
-  const [notebooks, setNotebooks] = useState(DEFAULT_NOTEBOOKS);
-  const [orders, setOrders] = useState([]);
-  const [coupons, setCoupons] = useState(DEFAULT_COUPONS);
-  const [bundles, setBundles] = useState(DEFAULT_BUNDLES);
-  const [reviews, setReviews] = useState(DEFAULT_REVIEWS);
-  const [adminMeta, setAdminMeta] = useState(null);
-
-  // Navigation & Filters State
-  const [page, setPage] = useState('home'); // home | browse | details | offers | track | contact | admin
+  // Navigation & UI state
+  const [page, setPage] = useState('home');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [selectedStage, setSelectedStage] = useState('');
-  const [selectedGrade, setSelectedGrade] = useState('');
-  const [selectedSubject, setSelectedSubject] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedNotebookId, setSelectedNotebookId] = useState('');
+  const [toast, setToast] = useState(null);
 
-  // Order Modal State
+  // Browse filters
+  const [selectedCategoryId, setSelectedCategoryId] = useState('');
+  const [selectedStageId, setSelectedStageId] = useState('');
+  const [selectedSubjectId, setSelectedSubjectId] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeNotebook, setActiveNotebook] = useState(null);
+
+  // Order Modal state
   const [orderModalOpen, setOrderModalOpen] = useState(false);
   const [orderTargetNotebook, setOrderTargetNotebook] = useState(null);
-  const [orderInitialItems, setOrderInitialItems] = useState(null);
+  const [orderInitialItems, setOrderInitialItems] = useState([]);
   const [orderInitialCoupon, setOrderInitialCoupon] = useState('');
 
-  // Track Order State
+  // Track Order state
   const [trackQuery, setTrackQuery] = useState('');
-  const [trackResults, setTrackResults] = useState(null);
+  const [trackedOrders, setTrackedOrders] = useState(null);
 
-  // Toast Notification State
-  const [toast, setToast] = useState(null);
-  const showToast = (message, type = 'info') => {
-    setToast({ message, type, id: Date.now() });
-  };
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 3500);
-    return () => clearTimeout(t);
-  }, [toast]);
+  // Admin Auth state
+  const [adminAuthenticated, setAdminAuthenticated] = useState(false);
+  const [adminCredsExists, setAdminCredsExists] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
 
-  // Load localStorage fallback immediately
-  useEffect(() => {
+  // Persistent Data States (LocalStorage + Firebase Firestore Live Sync)
+  const [settings, setSettings] = useState(() => {
     try {
-      const ls = (k) => JSON.parse(localStorage.getItem(`mz_${k}`) || 'null');
-      if (ls('settings')) setSettings({ ...DEFAULT_SETTINGS, ...ls('settings') });
-      if (ls('categories')) setCategories(ls('categories'));
-      if (ls('stages')) setStages(ls('stages'));
-      if (ls('grades')) setGrades(ls('grades'));
-      if (ls('subjects')) setSubjects(ls('subjects'));
-      if (ls('notebooks')) setNotebooks(ls('notebooks'));
-      if (ls('orders')) setOrders(ls('orders'));
-      if (ls('coupons')) setCoupons(ls('coupons'));
-      if (ls('bundles')) setBundles(ls('bundles'));
-      if (ls('reviews')) setReviews(ls('reviews'));
-      if (ls('adminMeta')) setAdminMeta(ls('adminMeta'));
-    } catch {
-      // ignore
+      const saved = localStorage.getItem('muzakkirati_settings');
+      return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
+    } catch (_) {
+      return DEFAULT_SETTINGS;
+    }
+  });
+  const [categories, setCategories] = useState(() => {
+    try {
+      const saved = localStorage.getItem('muzakkirati_categories');
+      return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES;
+    } catch (_) {
+      return DEFAULT_CATEGORIES;
+    }
+  });
+  const [stages, setStages] = useState(() => {
+    try {
+      const saved = localStorage.getItem('muzakkirati_stages');
+      return saved ? JSON.parse(saved) : DEFAULT_STAGES;
+    } catch (_) {
+      return DEFAULT_STAGES;
+    }
+  });
+  const [grades, setGrades] = useState(() => {
+    try {
+      const saved = localStorage.getItem('muzakkirati_grades');
+      return saved ? JSON.parse(saved) : DEFAULT_GRADES;
+    } catch (_) {
+      return DEFAULT_GRADES;
+    }
+  });
+  const [subjects, setSubjects] = useState(() => {
+    try {
+      const saved = localStorage.getItem('muzakkirati_subjects');
+      return saved ? JSON.parse(saved) : DEFAULT_SUBJECTS;
+    } catch (_) {
+      return DEFAULT_SUBJECTS;
+    }
+  });
+  const [notebooks, setNotebooks] = useState(() => {
+    try {
+      const saved = localStorage.getItem('muzakkirati_notebooks');
+      return saved ? JSON.parse(saved) : DEFAULT_NOTEBOOKS;
+    } catch (_) {
+      return DEFAULT_NOTEBOOKS;
+    }
+  });
+  const [coupons, setCoupons] = useState(() => {
+    try {
+      const saved = localStorage.getItem('muzakkirati_coupons');
+      return saved ? JSON.parse(saved) : DEFAULT_COUPONS;
+    } catch (_) {
+      return DEFAULT_COUPONS;
+    }
+  });
+  const [bundles, setBundles] = useState(() => {
+    try {
+      const saved = localStorage.getItem('muzakkirati_bundles');
+      return saved ? JSON.parse(saved) : DEFAULT_BUNDLES;
+    } catch (_) {
+      return DEFAULT_BUNDLES;
+    }
+  });
+  const [orders, setOrders] = useState(() => {
+    try {
+      const saved = localStorage.getItem('muzakkirati_orders');
+      return saved ? JSON.parse(saved) : [];
+    } catch (_) {
+      return [];
+    }
+  });
+
+  const showToast = (message, type = 'info') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3600);
+  };
+
+  // Check admin session & credentials on mount
+  useEffect(() => {
+    const creds = localStorage.getItem('muzakkirati_admin_creds');
+    setAdminCredsExists(Boolean(creds));
+    const session = localStorage.getItem('muzakkirati_admin_session');
+    if (session) {
+      try {
+        const parsed = JSON.parse(session);
+        if (parsed.expiresAt && parsed.expiresAt > Date.now()) {
+          setAdminAuthenticated(true);
+        }
+      } catch (_) {
+        // ignore invalid session
+      }
     }
   }, []);
 
   // Firebase Auth & Real-time Listeners
   useEffect(() => {
-    if (!firebaseEnabled || !auth) return;
-    const unsubAuth = onAuthStateChanged(auth, (u) => {
-      if (u) setUser(u);
-      else signInAnonymously(auth).catch(() => {});
+    if (!auth || !db) return;
+    let unsubConfig = () => {};
+    let unsubNotebooks = () => {};
+    let unsubOrders = () => {};
+    let unsubCoupons = () => {};
+    let unsubBundles = () => {};
+
+    signInAnonymously(auth).catch(() => {});
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      if (!user) return;
+      const basePath = ['artifacts', appId, 'public', 'data'];
+
+      unsubConfig = onSnapshot(doc(db, ...basePath, 'config', 'main'), (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.settings) {
+            setSettings((prev) => ({ ...DEFAULT_SETTINGS, ...prev, ...data.settings }));
+            localStorage.setItem('muzakkirati_settings', JSON.stringify(data.settings));
+          }
+          if (data.categories) setCategories(data.categories);
+          if (data.stages) setStages(data.stages);
+          if (data.grades) setGrades(data.grades);
+          if (data.subjects) setSubjects(data.subjects);
+          if (data.adminCreds) {
+            localStorage.setItem('muzakkirati_admin_creds', JSON.stringify(data.adminCreds));
+            setAdminCredsExists(true);
+          }
+        }
+      });
+
+      unsubNotebooks = onSnapshot(collection(db, ...basePath, 'notebooks'), (snap) => {
+        if (!snap.empty) {
+          const list = snap.docs.map((d) => d.data());
+          setNotebooks(list);
+          localStorage.setItem('muzakkirati_notebooks', JSON.stringify(list));
+        }
+      });
+
+      unsubOrders = onSnapshot(collection(db, ...basePath, 'orders'), (snap) => {
+        const list = snap.docs.map((d) => d.data());
+        setOrders(list);
+        localStorage.setItem('muzakkirati_orders', JSON.stringify(list));
+      });
+
+      unsubCoupons = onSnapshot(collection(db, ...basePath, 'coupons'), (snap) => {
+        if (!snap.empty) {
+          const list = snap.docs.map((d) => d.data());
+          setCoupons(list);
+          localStorage.setItem('muzakkirati_coupons', JSON.stringify(list));
+        }
+      });
+
+      unsubBundles = onSnapshot(collection(db, ...basePath, 'bundles'), (snap) => {
+        if (!snap.empty) {
+          const list = snap.docs.map((d) => d.data());
+          setBundles(list);
+          localStorage.setItem('muzakkirati_bundles', JSON.stringify(list));
+        }
+      });
     });
-    return () => unsubAuth();
+
+    return () => {
+      unsubAuth();
+      unsubConfig();
+      unsubNotebooks();
+      unsubOrders();
+      unsubCoupons();
+      unsubBundles();
+    };
   }, []);
 
-  useEffect(() => {
-    if (!firebaseEnabled || !db || !user) return;
-    const baseCol = (colName) =>
-      collection(db, 'artifacts', appId, 'public', 'data', colName);
-
-    const handleSnapErr = (err) => {
-      if (err?.code === 'permission-denied') {
-        firebaseEnabled = false;
-      }
-      console.warn('Firestore listener fallback to localStorage:', err?.code || err);
-    };
-
-    const unsubs = [
-      onSnapshot(
-        doc(db, 'artifacts', appId, 'public', 'data', 'meta', 'settings'),
-        (snap) => {
-          if (snap.exists()) setSettings({ ...DEFAULT_SETTINGS, ...snap.data() });
-        },
-        handleSnapErr
-      ),
-      onSnapshot(
-        doc(db, 'artifacts', appId, 'public', 'data', 'meta', 'admin'),
-        (snap) => {
-          if (snap.exists()) setAdminMeta(snap.data());
-        },
-        handleSnapErr
-      ),
-      onSnapshot(
-        baseCol('categories'),
-        (snap) => {
-          if (!snap.empty) setCategories(snap.docs.map((d) => d.data()));
-        },
-        handleSnapErr
-      ),
-      onSnapshot(
-        baseCol('stages'),
-        (snap) => {
-          if (!snap.empty) setStages(snap.docs.map((d) => d.data()));
-        },
-        handleSnapErr
-      ),
-      onSnapshot(
-        baseCol('grades'),
-        (snap) => {
-          if (!snap.empty) setGrades(snap.docs.map((d) => d.data()));
-        },
-        handleSnapErr
-      ),
-      onSnapshot(
-        baseCol('subjects'),
-        (snap) => {
-          if (!snap.empty) setSubjects(snap.docs.map((d) => d.data()));
-        },
-        handleSnapErr
-      ),
-      onSnapshot(
-        baseCol('notebooks'),
-        (snap) => {
-          if (!snap.empty) setNotebooks(snap.docs.map((d) => d.data()));
-        },
-        handleSnapErr
-      ),
-      onSnapshot(
-        baseCol('orders'),
-        (snap) => {
-          setOrders(snap.docs.map((d) => d.data()));
-        },
-        handleSnapErr
-      ),
-      onSnapshot(
-        baseCol('coupons'),
-        (snap) => {
-          if (!snap.empty) setCoupons(snap.docs.map((d) => d.data()));
-        },
-        handleSnapErr
-      ),
-      onSnapshot(
-        baseCol('bundles'),
-        (snap) => {
-          if (!snap.empty) setBundles(snap.docs.map((d) => d.data()));
-        },
-        handleSnapErr
-      ),
-      onSnapshot(
-        baseCol('reviews'),
-        (snap) => {
-          if (!snap.empty) setReviews(snap.docs.map((d) => d.data()));
-        },
-        handleSnapErr
-      )
-    ];
-    return () => unsubs.forEach((u) => u());
-  }, [user]);
-
-  // Persistence Handlers (sync to both localStorage & Firestore with safe fallback)
-  const persistLocal = (key, data) => {
-    try {
-      localStorage.setItem(`mz_${key}`, JSON.stringify(data));
-    } catch {
-      // ignore quota limits
-    }
-  };
-
-  const getDocRef = (colName, id) =>
-    doc(db, 'artifacts', appId, 'public', 'data', colName, id);
-
-  const safeCloudSet = async (ref, data) => {
-    if (!firebaseEnabled || !db) return;
-    try {
-      await setDoc(ref, data);
-    } catch (err) {
-      if (err?.code === 'permission-denied') firebaseEnabled = false;
-      console.warn('Firestore write fallback to localStorage:', err?.code || err);
-    }
-  };
-
-  const safeCloudDelete = async (ref) => {
-    if (!firebaseEnabled || !db) return;
-    try {
-      await deleteDoc(ref);
-    } catch (err) {
-      if (err?.code === 'permission-denied') firebaseEnabled = false;
-      console.warn('Firestore delete fallback to localStorage:', err?.code || err);
+  // Persistence helpers
+  const persistConfigDoc = async (partial) => {
+    if (db) {
+      try {
+        await setDoc(
+          doc(db, 'artifacts', appId, 'public', 'data', 'config', 'main'),
+          partial,
+          { merge: true }
+        );
+      } catch (_) {}
     }
   };
 
   const handleSaveSettings = async (nextSettings) => {
     setSettings(nextSettings);
-    persistLocal('settings', nextSettings);
-    await safeCloudSet(
-      doc(db, 'artifacts', appId, 'public', 'data', 'meta', 'settings'),
-      nextSettings
-    );
+    localStorage.setItem('muzakkirati_settings', JSON.stringify(nextSettings));
+    await persistConfigDoc({ settings: nextSettings });
   };
 
-  const handleRestoreBackup = async (backup) => {
-    if (backup.settings) {
-      const merged = { ...DEFAULT_SETTINGS, ...backup.settings };
-      await handleSaveSettings(merged);
-    }
-    const collectionsToRestore = [
-      ['categories', setCategories],
-      ['stages', setStages],
-      ['grades', setGrades],
-      ['subjects', setSubjects],
-      ['notebooks', setNotebooks],
-      ['orders', setOrders],
-      ['coupons', setCoupons],
-      ['bundles', setBundles],
-      ['reviews', setReviews]
-    ];
-    for (const [key, setter] of collectionsToRestore) {
-      if (Array.isArray(backup[key])) {
-        setter(backup[key]);
-        persistLocal(key, backup[key]);
-        if (firebaseEnabled && db) {
-          for (const item of backup[key]) {
-            if (item?.id) {
-              await safeCloudSet(getDocRef(key, item.id), item);
-            }
-          }
-        }
-      }
-    }
+  const handleSaveCategories = async (next) => {
+    setCategories(next);
+    localStorage.setItem('muzakkirati_categories', JSON.stringify(next));
+    await persistConfigDoc({ categories: next });
   };
 
-  const handleUpdateAdminPassword = async (metaObj) => {
-    setAdminMeta(metaObj);
-    persistLocal('adminMeta', metaObj);
-    await safeCloudSet(doc(db, 'artifacts', appId, 'public', 'data', 'meta', 'admin'), metaObj);
+  const handleSaveStages = async (next) => {
+    setStages(next);
+    localStorage.setItem('muzakkirati_stages', JSON.stringify(next));
+    await persistConfigDoc({ stages: next });
+  };
+
+  const handleSaveGrades = async (next) => {
+    setGrades(next);
+    localStorage.setItem('muzakkirati_grades', JSON.stringify(next));
+    await persistConfigDoc({ grades: next });
+  };
+
+  const handleSaveSubjects = async (next) => {
+    setSubjects(next);
+    localStorage.setItem('muzakkirati_subjects', JSON.stringify(next));
+    await persistConfigDoc({ subjects: next });
   };
 
   const handleSaveNotebook = async (nbObj) => {
-    const updated = notebooks.some((n) => n.id === nbObj.id)
+    const next = notebooks.some((n) => n.id === nbObj.id)
       ? notebooks.map((n) => (n.id === nbObj.id ? nbObj : n))
       : [nbObj, ...notebooks];
-    setNotebooks(updated);
-    persistLocal('notebooks', updated);
-    await safeCloudSet(getDocRef('notebooks', nbObj.id), nbObj);
+    setNotebooks(next);
+    localStorage.setItem('muzakkirati_notebooks', JSON.stringify(next));
+    if (db) {
+      try {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'notebooks', nbObj.id), nbObj);
+      } catch (_) {}
+    }
   };
 
   const handleDeleteNotebook = async (id) => {
-    const updated = notebooks.filter((n) => n.id !== id);
-    setNotebooks(updated);
-    persistLocal('notebooks', updated);
-    await safeCloudDelete(getDocRef('notebooks', id));
+    const next = notebooks.filter((n) => n.id !== id);
+    setNotebooks(next);
+    localStorage.setItem('muzakkirati_notebooks', JSON.stringify(next));
+    if (db) {
+      try {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'notebooks', id));
+      } catch (_) {}
+    }
+    showToast('تم حذف المذكرة', 'success');
   };
 
-  const handleSubmitOrder = async (orderObj, usedCouponId = '') => {
-    const updated = [orderObj, ...orders];
-    setOrders(updated);
-    persistLocal('orders', updated);
-    await safeCloudSet(getDocRef('orders', orderObj.id), orderObj);
-    // Increment coupon usage count and auto-deactivate if maxUses reached
-    if (usedCouponId) {
-      const targetCp = coupons.find((c) => c.id === usedCouponId);
-      if (targetCp) {
-        const nextUsedCount = (Number(targetCp.usedCount) || 0) + 1;
-        const maxUses = Number(targetCp.maxUses) || 0;
-        const reachedLimit = maxUses > 0 && nextUsedCount >= maxUses;
-        const updatedCp = {
-          ...targetCp,
-          usedCount: nextUsedCount,
-          active: reachedLimit ? false : targetCp.active !== false
-        };
-        const updatedCoupons = coupons.map((c) => (c.id === usedCouponId ? updatedCp : c));
-        setCoupons(updatedCoupons);
-        persistLocal('coupons', updatedCoupons);
-        await safeCloudSet(getDocRef('coupons', usedCouponId), updatedCp);
+  const handleSubmitOrder = async (orderObj, appliedCouponId) => {
+    const nextOrders = [orderObj, ...orders];
+    setOrders(nextOrders);
+    localStorage.setItem('muzakkirati_orders', JSON.stringify(nextOrders));
+    if (db) {
+      try {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', orderObj.id), orderObj);
+      } catch (_) {}
+    }
+    if (appliedCouponId) {
+      const target = coupons.find((c) => c.id === appliedCouponId);
+      if (target) {
+        await handleSaveCoupon({ ...target, usedCount: Number(target.usedCount || 0) + 1 });
       }
     }
   };
 
-  const handleUpdateOrder = async (orderObj) => {
-    const updated = orders.map((o) => (o.id === orderObj.id ? orderObj : o));
-    setOrders(updated);
-    persistLocal('orders', updated);
-    await safeCloudSet(getDocRef('orders', orderObj.id), orderObj);
+  const handleUpdateOrder = async (orderId, updates) => {
+    const next = orders.map((o) => (o.id === orderId ? { ...o, ...updates } : o));
+    setOrders(next);
+    localStorage.setItem('muzakkirati_orders', JSON.stringify(next));
+    if (db) {
+      try {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', orderId), updates);
+      } catch (_) {}
+    }
   };
 
-  const handleSaveStructureItem = async (type, item) => {
-    const map = {
-      categories: [categories, setCategories],
-      stages: [stages, setStages],
-      grades: [grades, setGrades],
-      subjects: [subjects, setSubjects]
-    };
-    const [list, setter] = map[type];
-    const updated = list.some((i) => i.id === item.id)
-      ? list.map((i) => (i.id === item.id ? item : i))
-      : [...list, item];
-    setter(updated);
-    persistLocal(type, updated);
-    await safeCloudSet(getDocRef(type, item.id), item);
+  const handleDeleteOrder = async (orderId) => {
+    const next = orders.filter((o) => o.id !== orderId);
+    setOrders(next);
+    localStorage.setItem('muzakkirati_orders', JSON.stringify(next));
+    if (db) {
+      try {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'orders', orderId));
+      } catch (_) {}
+    }
+    showToast('تم حذف الطلب', 'success');
   };
 
-  const handleDeleteStructureItem = async (type, id) => {
-    const map = {
-      categories: [categories, setCategories],
-      stages: [stages, setStages],
-      grades: [grades, setGrades],
-      subjects: [subjects, setSubjects]
-    };
-    const [list, setter] = map[type];
-    const updated = list.filter((i) => i.id !== id);
-    setter(updated);
-    persistLocal(type, updated);
-    await safeCloudDelete(getDocRef(type, id));
-  };
-
-  const handleSaveCoupon = async (cpObj) => {
-    const updated = coupons.some((c) => c.id === cpObj.id)
-      ? coupons.map((c) => (c.id === cpObj.id ? cpObj : c))
-      : [cpObj, ...coupons];
-    setCoupons(updated);
-    persistLocal('coupons', updated);
-    await safeCloudSet(getDocRef('coupons', cpObj.id), cpObj);
+  const handleSaveCoupon = async (cpnObj) => {
+    const next = coupons.some((c) => c.id === cpnObj.id)
+      ? coupons.map((c) => (c.id === cpnObj.id ? cpnObj : c))
+      : [cpnObj, ...coupons];
+    setCoupons(next);
+    localStorage.setItem('muzakkirati_coupons', JSON.stringify(next));
+    if (db) {
+      try {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'coupons', cpnObj.id), cpnObj);
+      } catch (_) {}
+    }
   };
 
   const handleDeleteCoupon = async (id) => {
-    const updated = coupons.filter((c) => c.id !== id);
-    setCoupons(updated);
-    persistLocal('coupons', updated);
-    await safeCloudDelete(getDocRef('coupons', id));
-  };
-
-  const handleIssueNextOrderCoupon = async (
-    orderObj,
-    { type = 'percent', value = 15, maxUses = 1, validDays = 30 } = {}
-  ) => {
-    const randSuffix = Math.random().toString(36).substring(2, 7).toUpperCase();
-    const code = `NEXT-${randSuffix}`;
-    let expiresAt = '';
-    if (Number(validDays) > 0) {
-      const expDate = new Date();
-      expDate.setDate(expDate.getDate() + Number(validDays));
-      expiresAt = expDate.toISOString().slice(0, 10);
+    const next = coupons.filter((c) => c.id !== id);
+    setCoupons(next);
+    localStorage.setItem('muzakkirati_coupons', JSON.stringify(next));
+    if (db) {
+      try {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'coupons', id));
+      } catch (_) {}
     }
-    const newCp = {
-      id: `cp_next_${Date.now()}`,
-      code,
-      type,
-      value: Number(value) || 15,
-      minOrder: 0,
-      description: `كوبون خاص للطلب القادم (طلب #${orderObj.orderNumber})`,
-      active: true,
-      isPrivate: true,
-      maxUses: Math.max(0, Number(maxUses) || 0),
-      usedCount: 0,
-      expiresAt,
-      forOrderId: orderObj.id
-    };
-    await handleSaveCoupon(newCp);
-    const updatedOrder = {
-      ...orderObj,
-      nextOrderCouponId: newCp.id,
-      nextOrderCouponCode: newCp.code,
-      nextOrderCouponEnabled: true
-    };
-    await handleUpdateOrder(updatedOrder);
-    return newCp;
-  };
-
-  const handleToggleNextOrderCoupon = async (orderObj, enabled) => {
-    const linkedCp = orderObj.nextOrderCouponId
-      ? coupons.find((c) => c.id === orderObj.nextOrderCouponId)
-      : coupons.find((c) => c.code === orderObj.nextOrderCouponCode);
-    if (linkedCp) {
-      await handleSaveCoupon({ ...linkedCp, active: Boolean(enabled) });
-    }
-    await handleUpdateOrder({ ...orderObj, nextOrderCouponEnabled: Boolean(enabled) });
-  };
-
-  const handleRemoveNextOrderCoupon = async (orderObj) => {
-    const linkedCp = orderObj.nextOrderCouponId
-      ? coupons.find((c) => c.id === orderObj.nextOrderCouponId)
-      : coupons.find((c) => c.code === orderObj.nextOrderCouponCode);
-    if (linkedCp) {
-      await handleDeleteCoupon(linkedCp.id);
-    }
-    await handleUpdateOrder({
-      ...orderObj,
-      nextOrderCouponId: '',
-      nextOrderCouponCode: '',
-      nextOrderCouponEnabled: false
-    });
   };
 
   const handleSaveBundle = async (bndObj) => {
-    const updated = bundles.some((b) => b.id === bndObj.id)
+    const next = bundles.some((b) => b.id === bndObj.id)
       ? bundles.map((b) => (b.id === bndObj.id ? bndObj : b))
       : [bndObj, ...bundles];
-    setBundles(updated);
-    persistLocal('bundles', updated);
-    await safeCloudSet(getDocRef('bundles', bndObj.id), bndObj);
+    setBundles(next);
+    localStorage.setItem('muzakkirati_bundles', JSON.stringify(next));
+    if (db) {
+      try {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bundles', bndObj.id), bndObj);
+      } catch (_) {}
+    }
   };
 
   const handleDeleteBundle = async (id) => {
-    const updated = bundles.filter((b) => b.id !== id);
-    setBundles(updated);
-    persistLocal('bundles', updated);
-    await safeCloudDelete(getDocRef('bundles', id));
+    const next = bundles.filter((b) => b.id !== id);
+    setBundles(next);
+    localStorage.setItem('muzakkirati_bundles', JSON.stringify(next));
+    if (db) {
+      try {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'bundles', id));
+      } catch (_) {}
+    }
   };
 
-  const handleSaveReview = async (revObj) => {
-    const updated = reviews.some((r) => r.id === revObj.id)
-      ? reviews.map((r) => (r.id === revObj.id ? revObj : r))
-      : [revObj, ...reviews];
-    setReviews(updated);
-    persistLocal('reviews', updated);
-    await safeCloudSet(getDocRef('reviews', revObj.id), revObj);
+  const handleAdminLoginSubmit = async (e) => {
+    e.preventDefault();
+    if (!loginEmail.trim() || !loginPassword) {
+      return showToast('يرجى إدخال البريد الإلكتروني وكلمة المرور', 'error');
+    }
+    const rawCreds = localStorage.getItem('muzakkirati_admin_creds');
+    if (!rawCreds) {
+      if (loginPassword.length < 6) {
+        return showToast('يرجى اختيار كلمة مرور من 6 أحرف على الأقل', 'error');
+      }
+      const salt = generateSalt();
+      const hash = await hashPasswordWithSalt(loginPassword, salt);
+      const credsObj = { email: loginEmail.trim().toLowerCase(), salt, hash };
+      localStorage.setItem('muzakkirati_admin_creds', JSON.stringify(credsObj));
+      await persistConfigDoc({ adminCreds: credsObj });
+      localStorage.setItem(
+        'muzakkirati_admin_session',
+        JSON.stringify({ expiresAt: Date.now() + 86400000 })
+      );
+      setAdminCredsExists(true);
+      setAdminAuthenticated(true);
+      showToast('تم إنشاء حساب المدير وتأمين لوحة التحكم بنجاح!', 'success');
+    } else {
+      const parsed = JSON.parse(rawCreds);
+      const attemptHash = await hashPasswordWithSalt(loginPassword, parsed.salt);
+      if (
+        loginEmail.trim().toLowerCase() === parsed.email &&
+        attemptHash === parsed.hash
+      ) {
+        localStorage.setItem(
+          'muzakkirati_admin_session',
+          JSON.stringify({ expiresAt: Date.now() + 86400000 })
+        );
+        setAdminAuthenticated(true);
+        showToast('مرحبًا بك في لوحة التحكم!', 'success');
+      } else {
+        showToast('بيانات الدخول غير صحيحة', 'error');
+      }
+    }
   };
 
-  const handleDeleteReview = async (id) => {
-    const updated = reviews.filter((r) => r.id !== id);
-    setReviews(updated);
-    persistLocal('reviews', updated);
-    await safeCloudDelete(getDocRef('reviews', id));
-  };
+  // LookUp helpers
+  const lookUp = useMemo(() => {
+    const catMap = Object.fromEntries(categories.map((c) => [c.id, c]));
+    const stageMap = Object.fromEntries(stages.map((s) => [s.id, s]));
+    const gradeMap = Object.fromEntries(grades.map((g) => [g.id, g]));
+    const subMap = Object.fromEntries(subjects.map((s) => [s.id, s]));
+    return { catMap, stageMap, gradeMap, subMap };
+  }, [categories, stages, grades, subjects]);
 
-  // Lookup Helpers
-  const lookUp = useMemo(
-    () => ({
-      categoryName: (id) => categories.find((c) => c.id === id)?.name || '',
-      stageName: (id) => stages.find((s) => s.id === id)?.name || '',
-      gradeName: (id) => grades.find((g) => g.id === id)?.name || '',
-      subjectName: (id) => subjects.find((s) => s.id === id)?.name || ''
-    }),
-    [categories, stages, grades, subjects]
-  );
-
-  // Visible subjects only (hidden subjects are excluded from public storefront)
-  const visibleSubjects = useMemo(
-    () => subjects.filter((s) => s.visible !== false),
+  const visibleSubjectIds = useMemo(
+    () => new Set(subjects.filter((s) => s.visible !== false).map((s) => s.id)),
     [subjects]
   );
-  const hiddenSubjectIds = useMemo(
-    () => new Set(subjects.filter((s) => s.visible === false).map((s) => s.id)),
-    [subjects]
-  );
 
-  // Published Notebooks & Filtered Results
   const publishedNotebooks = useMemo(
-    () => notebooks.filter((n) => n.published !== false && !hiddenSubjectIds.has(n.subjectId)),
-    [notebooks, hiddenSubjectIds]
-  );
-
-  const activeCoupons = useMemo(
-    () => coupons.filter((c) => !isCouponExhausted(c) && !c.isPrivate),
-    [coupons]
-  );
-  const activeBundles = useMemo(() => bundles.filter((b) => b.active !== false), [bundles]);
-  const activeReviews = useMemo(() => reviews.filter((r) => r.active !== false), [reviews]);
-  const discountedNotebooks = useMemo(
-    () =>
-      publishedNotebooks.filter(
-        (nb) => Number(nb.oldPrice) > Number(nb.price) || nb.badge === 'عرض خاص'
-      ),
-    [publishedNotebooks]
+    () => notebooks.filter((n) => n.isActive !== false && visibleSubjectIds.has(n.subjectId)),
+    [notebooks, visibleSubjectIds]
   );
 
   const filteredNotebooks = useMemo(() => {
-    return publishedNotebooks.filter((nb) => {
-      if (selectedCategory && nb.categoryId !== selectedCategory) return false;
-      if (selectedStage && nb.stageId !== selectedStage) return false;
-      if (selectedGrade && nb.gradeId !== selectedGrade) return false;
-      if (selectedSubject && nb.subjectId !== selectedSubject) return false;
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const match =
-          nb.title.toLowerCase().includes(q) ||
-          nb.shortDesc?.toLowerCase().includes(q) ||
-          lookUp.subjectName(nb.subjectId).toLowerCase().includes(q) ||
-          lookUp.gradeName(nb.gradeId).toLowerCase().includes(q);
-        if (!match) return false;
-      }
-      return true;
-    });
+    return publishedNotebooks
+      .filter((n) => (selectedCategoryId ? n.categoryId === selectedCategoryId : true))
+      .filter((n) => (selectedStageId ? n.stageId === selectedStageId : true))
+      .filter((n) => (selectedSubjectId ? n.subjectId === selectedSubjectId : true))
+      .filter((n) => {
+        const q = searchQuery.trim().toLowerCase();
+        if (!q) return true;
+        return (
+          n.title.toLowerCase().includes(q) ||
+          String(n.description || '').toLowerCase().includes(q)
+        );
+      });
   }, [
     publishedNotebooks,
-    selectedCategory,
-    selectedStage,
-    selectedGrade,
-    selectedSubject,
-    searchQuery,
-    lookUp
+    selectedCategoryId,
+    selectedStageId,
+    selectedSubjectId,
+    searchQuery
   ]);
 
-  const selectedNotebook = useMemo(
-    () => notebooks.find((n) => n.id === selectedNotebookId) || null,
-    [notebooks, selectedNotebookId]
-  );
-
-  const openCategoryBrowse = (catId) => {
-    setSelectedCategory(catId);
-    setSelectedStage('');
-    setSelectedGrade('');
-    setSelectedSubject('');
-    setPage('browse');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const openNotebookDetails = (nb) => {
-    setSelectedNotebookId(nb.id);
-    setPage('details');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const openOrderFor = (nb, initialItems = null, couponCode = '') => {
-    setOrderTargetNotebook(nb);
-    setOrderInitialItems(initialItems);
-    setOrderInitialCoupon(couponCode);
+  const openOrderForNotebook = (nb) => {
+    setOrderTargetNotebook(nb || null);
+    setOrderInitialItems(nb ? [nb] : []);
+    setOrderInitialCoupon('');
     setOrderModalOpen(true);
   };
 
-  const handleTrackSearch = (e) => {
-    e.preventDefault();
-    const q = trackQuery.trim().replace(/[\s\-()]/g, '');
-    if (!q) return showToast('يرجى إدخال رقم الطلب أو رقم الهاتف', 'error');
-    const matches = orders.filter(
-      (o) =>
-        o.orderNumber?.toLowerCase() === q.toLowerCase() ||
-        o.phone?.replace(/[\s\-()]/g, '').includes(q)
-    );
-    setTrackResults(matches);
-  };
-
-  /* -------------------- RENDER ADMIN VIEW -------------------- */
+  // Render Admin View
   if (page === 'admin') {
+    if (!adminAuthenticated) {
+      return (
+        <div
+          dir="rtl"
+          className="min-h-screen bg-slate-950 flex items-center justify-center p-4 text-slate-900"
+        >
+          <div className="w-full max-w-md rounded-3xl bg-white p-7 shadow-2xl space-y-5">
+            <div className="text-center space-y-1.5">
+              <div className="w-14 h-14 rounded-2xl bg-blue-900 text-white flex items-center justify-center mx-auto">
+                <Lock className="w-7 h-7" />
+              </div>
+              <h2 className="text-xl font-black text-slate-900">
+                {adminCredsExists ? 'تسجيل دخول الإدارة' : 'إعداد حساب المدير لأول مرة'}
+              </h2>
+              <p className="text-xs text-slate-500">
+                {adminCredsExists
+                  ? 'أدخل البريد الإلكتروني وكلمة المرور للوصول إلى لوحة التحكم'
+                  : 'أنشئ بريدك الإلكتروني وكلمة المرور الخاصة بك لتأمين لوحة التحكم'}
+              </p>
+            </div>
+            <form onSubmit={handleAdminLoginSubmit} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-extrabold text-slate-700 mb-1">
+                  البريد الإلكتروني للمدير
+                </label>
+                <input
+                  type="email"
+                  required
+                  dir="ltr"
+                  placeholder="admin@domain.com"
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-left"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-extrabold text-slate-700 mb-1">
+                  كلمة المرور
+                </label>
+                <input
+                  type="password"
+                  required
+                  dir="ltr"
+                  placeholder="••••••••"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-left"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full py-3 rounded-xl bg-blue-800 hover:bg-blue-900 text-white text-sm font-black shadow-lg"
+              >
+                {adminCredsExists ? 'دخول لوحة التحكم' : 'حفظ الحساب والدخول'}
+              </button>
+            </form>
+            <button
+              type="button"
+              onClick={() => setPage('home')}
+              className="w-full text-center text-xs font-bold text-slate-500 hover:text-slate-800"
+            >
+              ← العودة إلى واجهة الموقع
+            </button>
+          </div>
+          {toast && (
+            <div className="fixed bottom-5 left-5 z-50 px-5 py-3 rounded-2xl bg-slate-900 text-white text-xs font-bold shadow-2xl border border-slate-700">
+              {toast.message}
+            </div>
+          )}
+        </div>
+      );
+    }
+
     return (
-      <div dir="rtl" className="font-sans text-slate-900">
+      <div dir="rtl">
         <AdminDashboard
           settings={settings}
-          categories={categories}
-          stages={stages}
-          grades={grades}
-          subjects={subjects}
-          notebooks={notebooks}
-          orders={orders}
-          coupons={coupons}
-          bundles={bundles}
-          reviews={reviews}
-          adminMeta={adminMeta}
-          lookUp={lookUp}
           onSaveSettings={handleSaveSettings}
-          onRestoreBackup={handleRestoreBackup}
+          categories={categories}
+          onSaveCategories={handleSaveCategories}
+          stages={stages}
+          onSaveStages={handleSaveStages}
+          grades={grades}
+          onSaveGrades={handleSaveGrades}
+          subjects={subjects}
+          onSaveSubjects={handleSaveSubjects}
+          notebooks={notebooks}
           onSaveNotebook={handleSaveNotebook}
           onDeleteNotebook={handleDeleteNotebook}
+          orders={orders}
           onUpdateOrder={handleUpdateOrder}
-          onSaveStructureItem={handleSaveStructureItem}
-          onDeleteStructureItem={handleDeleteStructureItem}
+          onDeleteOrder={handleDeleteOrder}
+          coupons={coupons}
           onSaveCoupon={handleSaveCoupon}
           onDeleteCoupon={handleDeleteCoupon}
+          bundles={bundles}
           onSaveBundle={handleSaveBundle}
           onDeleteBundle={handleDeleteBundle}
-          onSaveReview={handleSaveReview}
-          onDeleteReview={handleDeleteReview}
-          onUpdateAdminPassword={handleUpdateAdminPassword}
-          onIssueNextOrderCoupon={handleIssueNextOrderCoupon}
-          onToggleNextOrderCoupon={handleToggleNextOrderCoupon}
-          onRemoveNextOrderCoupon={handleRemoveNextOrderCoupon}
-          onExitAdmin={() => setPage('home')}
+          onLogout={() => {
+            localStorage.removeItem('muzakkirati_admin_session');
+            setAdminAuthenticated(false);
+            setPage('home');
+          }}
+          onBackToSite={() => setPage('home')}
           showToast={showToast}
         />
         {toast && (
-          <div className="fixed bottom-5 left-5 z-50 px-5 py-3 rounded-2xl bg-slate-900 text-white text-xs sm:text-sm font-bold shadow-2xl border border-slate-700">
+          <div className="fixed bottom-5 left-5 z-50 px-5 py-3 rounded-2xl bg-slate-900 text-white text-xs font-bold shadow-2xl border border-slate-700">
             {toast.message}
           </div>
         )}
@@ -6131,24 +4081,24 @@ export default function App() {
     );
   }
 
-  /* -------------------- RENDER MAINTENANCE MODE -------------------- */
+  // Maintenance Mode Gate for Visitors
   if (settings.maintenanceMode) {
     return (
       <div
         dir="rtl"
-        className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6 text-center space-y-6"
+        className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6 text-center space-y-5"
       >
-        <div className="w-20 h-20 rounded-3xl bg-amber-500/15 text-amber-400 flex items-center justify-center">
-          <Settings className="w-10 h-10 animate-spin" />
+        <div className="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+          <Settings className="w-8 h-8 animate-spin" />
         </div>
-        <h1 className="text-2xl sm:text-3xl font-black">{settings.siteName}</h1>
-        <p className="text-slate-300 max-w-md text-sm leading-relaxed">
-          نقوم حاليًا بتحديث المذكرات وإضافة إصدارات جديدة للمعلمين. سنعود للعمل خلال دقائق قليلة.
+        <h1 className="text-2xl font-black">{settings.platformName}</h1>
+        <p className="text-sm text-slate-300 max-w-md">
+          الموقع في وضع التحديث والصيانة حاليًا لتقديم تجربة أفضل. سنعود للعمل خلال دقائق!
         </p>
         <button
           type="button"
           onClick={() => setPage('admin')}
-          className="text-xs text-slate-500 hover:text-slate-300 underline"
+          className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold"
         >
           دخول الإدارة
         </button>
@@ -6156,76 +4106,54 @@ export default function App() {
     );
   }
 
-  /* -------------------- RENDER PUBLIC STOREFRONT -------------------- */
   return (
-    <div dir="rtl" className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
-      {/* Top Announcement Bar */}
-      {settings.announcementBar?.enabled && settings.announcementBar?.text && (
-        <div
-          style={{
-            backgroundColor: settings.announcementBar.bgColor || '#0f172a',
-            color: settings.announcementBar.textColor || '#ffffff'
-          }}
-          className="px-4 py-2 text-center text-xs sm:text-sm font-bold flex flex-wrap items-center justify-center gap-2"
-        >
-          <span>{settings.announcementBar.text}</span>
+    <div dir="rtl" className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
+      {/* Announcement Bar */}
+      {settings.announcementEnabled && settings.announcementText && (
+        <div className="bg-slate-950 text-white px-4 py-2 text-center text-xs font-bold flex flex-wrap items-center justify-center gap-2">
+          <span>{settings.announcementText}</span>
           <button
             type="button"
             onClick={() => setPage('offers')}
-            className="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[11px] font-black hover:bg-amber-300 transition"
+            className="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 font-black text-[11px] hover:bg-amber-300 transition"
           >
             استفد من العرض ←
           </button>
         </div>
       )}
 
-      {/* HEADER */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 min-h-[100px] flex items-center justify-between gap-4">
-          {/* Logo & Brand */}
+      {/* Main Sticky Header */}
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between gap-3">
+          {/* Brand */}
           <button
             type="button"
             onClick={() => setPage('home')}
-            className="flex items-center gap-3.5 sm:gap-4 text-right group"
+            className="flex items-center gap-3 text-right"
           >
             {settings.logoUrl ? (
               <img
                 src={settings.logoUrl}
-                alt={settings.siteName}
-                className={`${
-                  settings.logoSize === 'xl'
-                    ? 'w-20 h-20 sm:w-24 sm:h-24'
-                    : settings.logoSize === 'md'
-                    ? 'w-14 h-14'
-                    : 'w-16 h-16 sm:w-20 sm:h-20'
-                } rounded-2xl object-contain bg-white p-1.5 border border-slate-200 shadow-sm shrink-0 transition-transform group-hover:scale-105`}
+                alt={settings.platformName}
+                className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl object-contain border border-slate-200 bg-white p-1"
               />
             ) : (
-              <div
-                style={{
-                  background: `linear-gradient(135deg, ${settings.primaryColor}, ${settings.secondaryColor})`
-                }}
-                className={`${
-                  settings.logoSize === 'xl'
-                    ? 'w-16 h-16 sm:w-20 sm:h-20'
-                    : 'w-14 h-14 sm:w-16 sm:h-16'
-                } rounded-2xl text-white flex items-center justify-center shadow-lg shrink-0`}
-              >
-                <BookOpen className="w-8 h-8" />
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-blue-800 to-teal-600 text-white flex items-center justify-center shadow-md">
+                <BookOpen className="w-6 h-6" />
               </div>
             )}
             <div>
-              <span className="font-black text-xl sm:text-2xl lg:text-[26px] text-slate-900 block leading-tight tracking-tight">
-                {settings.siteName}
+              <span className="block text-sm sm:text-lg font-black text-slate-900 leading-tight">
+                {settings.platformName}
               </span>
-              <span className="text-xs sm:text-sm font-bold text-slate-500 block mt-0.5">
-                {settings.tagline || 'خدمات تجهيز وتصميم المذكرات للمعلمين'}
+              <span className="hidden sm:block text-[11px] text-slate-500 font-semibold">
+                {settings.platformTagline}
               </span>
             </div>
           </button>
 
           {/* Desktop Navigation */}
-          <nav className="hidden lg:flex items-center gap-1 text-sm font-bold text-slate-700">
+          <nav className="hidden lg:flex items-center gap-1">
             {[
               { id: 'home', label: 'الرئيسية' },
               { id: 'browse', label: 'المذكرات' },
@@ -6237,13 +4165,17 @@ export default function App() {
                 key={nav.id}
                 type="button"
                 onClick={() => {
-                  if (nav.id === 'browse') openCategoryBrowse('');
-                  else setPage(nav.id);
+                  if (nav.id === 'browse') {
+                    setSelectedCategoryId('');
+                    setSelectedStageId('');
+                    setSelectedSubjectId('');
+                  }
+                  setPage(nav.id);
                 }}
-                className={`px-3.5 py-2 rounded-xl transition ${
+                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition ${
                   page === nav.id
-                    ? 'bg-blue-50 text-blue-700 font-extrabold'
-                    : 'hover:bg-slate-100 text-slate-700'
+                    ? 'bg-blue-50 text-blue-800'
+                    : 'text-slate-700 hover:bg-slate-100'
                 }`}
               >
                 {nav.label}
@@ -6251,44 +4183,38 @@ export default function App() {
             ))}
           </nav>
 
-          {/* Header Actions */}
+          {/* Action Buttons */}
           <div className="flex items-center gap-2">
-            {settings.whatsappNumber && (
-              <a
-                href={buildWhatsAppUrl(
-                  settings.whatsappNumber,
-                  `مرحبًا، أود الاستفسار عن المذكرات المتاحة في ${settings.siteName}`
-                )}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shadow-sm transition"
-              >
-                <MessageCircle className="w-4 h-4" />
-                <span>واتساب</span>
-              </a>
-            )}
+            <a
+              href={`https://wa.me/${settings.whatsappNumber}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm"
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span className="hidden sm:inline">واتساب</span>
+            </a>
             <button
               type="button"
               onClick={() => setPage('admin')}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold shadow-sm transition"
+              className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold flex items-center gap-1.5"
             >
-              <Shield className="w-4 h-4 text-teal-400" />
+              <ShieldCheck className="w-4 h-4 text-teal-400" />
               <span>لوحة التحكم</span>
             </button>
             <button
               type="button"
-              onClick={() => setMobileMenuOpen((prev) => !prev)}
-              aria-label="القائمة"
-              className="lg:hidden p-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100"
+              onClick={() => setMobileMenuOpen((v) => !v)}
+              className="lg:hidden p-2 rounded-xl bg-slate-100 text-slate-800"
             >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              <Menu className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Mobile Navigation Menu */}
+        {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <div className="lg:hidden border-t border-slate-100 bg-white px-4 py-3 space-y-1.5 shadow-lg">
+          <div className="lg:hidden px-4 pb-4 pt-2 bg-white border-t border-slate-100 flex flex-col gap-1">
             {[
               { id: 'home', label: 'الرئيسية' },
               { id: 'browse', label: 'المذكرات' },
@@ -6300,13 +4226,10 @@ export default function App() {
                 key={nav.id}
                 type="button"
                 onClick={() => {
-                  if (nav.id === 'browse') openCategoryBrowse('');
-                  else setPage(nav.id);
+                  setPage(nav.id);
                   setMobileMenuOpen(false);
                 }}
-                className={`w-full text-right px-4 py-2.5 rounded-xl text-sm font-bold block ${
-                  page === nav.id ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'
-                }`}
+                className="w-full text-right px-4 py-2.5 rounded-xl text-sm font-bold text-slate-800 hover:bg-slate-100"
               >
                 {nav.label}
               </button>
@@ -6315,61 +4238,67 @@ export default function App() {
         )}
       </header>
 
-      {/* MAIN CONTENT */}
+      {/* MAIN CONTENT PAGES */}
       <main className="flex-1">
+        {/* ==================== HOME PAGE ==================== */}
         {page === 'home' && (
-          <div className="space-y-14 pb-16">
-            {/* HERO SECTION */}
+          <div className="space-y-12 pb-16">
+            {/* Hero Banner */}
             <section
               style={
-                settings.heroBgImage
+                settings.heroBannerUrl
                   ? {
-                      backgroundImage: `linear-gradient(135deg, rgba(15, 23, 42, 0.86) 0%, rgba(15, 23, 42, 0.72) 100%), url("${settings.heroBgImage}")`,
+                      backgroundImage: `linear-gradient(to left, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.72)), url(${settings.heroBannerUrl})`,
                       backgroundSize: 'cover',
                       backgroundPosition: 'center'
                     }
-                  : {
-                      background: `linear-gradient(135deg, ${settings.primaryColor} 0%, #0f172a 100%)`
-                    }
+                  : undefined
               }
-              className="relative overflow-hidden text-white py-14 sm:py-20"
+              className={`${
+                settings.heroBannerUrl
+                  ? 'bg-slate-900'
+                  : 'bg-gradient-to-l from-blue-950 via-blue-900 to-teal-800'
+              } text-white py-14 sm:py-20 px-4 sm:px-6`}
             >
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-                <div className="lg:col-span-7 space-y-6 text-center lg:text-right">
-                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/15 backdrop-blur-xs text-xs font-bold text-amber-300">
-                    <Sparkles className="w-4 h-4" />
+              <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+                <div className="lg:col-span-7 space-y-5">
+                  <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/10 border border-white/15 text-amber-300 text-xs font-extrabold">
+                    <Sparkles className="w-3.5 h-3.5" />
                     <span>مذكرات منسقة وجاهزة للطباعة باسمك وشعارك الخاص</span>
-                  </div>
-                  <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black leading-tight">
+                  </span>
+                  <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black leading-tight">
                     {settings.heroTitle}
                   </h1>
-                  <p className="text-sm sm:text-base text-slate-200 leading-relaxed max-w-2xl mx-auto lg:mx-0">
+                  <p className="text-sm sm:text-base text-slate-200 leading-relaxed max-w-2xl">
                     {settings.heroSubtitle}
                   </p>
-                  <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 pt-2">
+                  <div className="flex flex-wrap items-center gap-3 pt-2">
                     <button
                       type="button"
-                      onClick={() => openCategoryBrowse('')}
-                      className="px-7 py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-sm shadow-xl flex items-center gap-2 transition"
+                      onClick={() => setPage('browse')}
+                      className="px-6 py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-sm font-black flex items-center gap-2 shadow-xl transition"
                     >
-                      <BookOpen className="w-5 h-5" />
+                      <BookOpen className="w-4 h-4" />
                       <span>استعرض المذكرات المتاحة</span>
                     </button>
                     <button
                       type="button"
-                      onClick={() => openOrderFor(null)}
-                      className="px-7 py-3.5 rounded-2xl bg-white/15 hover:bg-white/25 text-white font-extrabold text-sm backdrop-blur-xs border border-white/20 flex items-center gap-2 transition"
+                      onClick={() => openOrderForNotebook(null)}
+                      className="px-6 py-3.5 rounded-2xl bg-white/15 hover:bg-white/25 border border-white/20 text-white text-sm font-extrabold flex items-center gap-2 transition"
                     >
-                      <ShoppingBag className="w-5 h-5" />
+                      <FileText className="w-4 h-4" />
                       <span>اطلب مذكرة خاصة</span>
                     </button>
                   </div>
                 </div>
 
+                {/* Trust Card */}
                 <div className="lg:col-span-5">
-                  <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-3xl p-6 space-y-4 shadow-2xl">
-                    <div className="flex items-center justify-between border-b border-white/15 pb-3">
-                      <span className="font-extrabold text-sm">لماذا يثق بنا المعلمون؟</span>
+                  <div className="p-6 rounded-3xl bg-white/10 backdrop-blur-md border border-white/15 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-extrabold text-amber-300">
+                        لماذا يثق بنا المعلمون؟
+                      </span>
                       <Award className="w-5 h-5 text-amber-300" />
                     </div>
                     <ul className="space-y-3 text-xs sm:text-sm text-slate-100">
@@ -6395,213 +4324,210 @@ export default function App() {
               </div>
             </section>
 
-            {/* ABOUT PLATFORM SECTION (تعريف بالمنصة) */}
-            {settings.showAbout !== false && (
-              <section className="max-w-7xl mx-auto px-4 sm:px-6">
-                <div className="bg-white rounded-3xl p-7 sm:p-10 border border-slate-200/80 shadow-xs grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-                  <div className="lg:col-span-7 space-y-4">
-                    <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-extrabold">
-                      <BookOpen className="w-4 h-4" />
-                      <span>تعرف على منصتنا</span>
-                    </span>
-                    <h2 className="text-2xl sm:text-3xl font-black text-slate-900 leading-snug">
-                      {settings.aboutTitle || 'لماذا يختار المعلمون منصة مذكرتي التعليمية؟'}
-                    </h2>
-                    <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
-                      {settings.aboutDescription}
-                    </p>
-                    <div className="flex flex-wrap gap-3 pt-2">
-                      <button
-                        type="button"
-                        onClick={() => openCategoryBrowse('')}
-                        className="px-6 py-3 rounded-2xl bg-blue-700 hover:bg-blue-800 text-white text-xs sm:text-sm font-extrabold shadow transition"
-                      >
-                        تصفح أحدث المذكرات المتاحة
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPage('contact')}
-                        className="px-6 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs sm:text-sm font-extrabold transition"
-                      >
-                        تواصل معنا
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="lg:col-span-5 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    {[
-                      {
-                        icon: Award,
-                        title: 'محتوى علمي منقح',
-                        desc: 'مذكرات محدثة ومطابقة لأحدث مواصفات المناهج والامتحانات.'
-                      },
-                      {
-                        icon: Sparkles,
-                        title: 'تخصيص باسمك وشعارك',
-                        desc: 'إضافة اسم المعلم ورقم هاتفه وشعاره على الغلاف وجميع الصفحات.'
-                      },
-                      {
-                        icon: Clock,
-                        title: 'سرعة في التنفيذ',
-                        desc: 'تجهيز وتسليم نسخة PDF عالية الدقة جاهزة للطباعة خلال 24 ساعة.'
-                      },
-                      {
-                        icon: Eye,
-                        title: 'معاينة قبل الطلب',
-                        desc: 'اطّلع على عينات حقيقية من صفحات المذكرة قبل تأكيد طلبك.'
-                      }
-                    ].map((feat, i) => {
-                      const FIcon = feat.icon;
-                      return (
-                        <div
-                          key={i}
-                          className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-1.5"
-                        >
-                          <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center">
-                            <FIcon className="w-5 h-5" />
-                          </div>
-                          <h3 className="font-extrabold text-sm text-slate-900">{feat.title}</h3>
-                          <p className="text-xs text-slate-500 leading-relaxed">{feat.desc}</p>
-                        </div>
-                      );
-                    })}
+            {/* About Platform Section */}
+            <section className="max-w-7xl mx-auto px-4 sm:px-6">
+              <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200/80 shadow-sm grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+                <div className="lg:col-span-7 space-y-3">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-800 text-xs font-extrabold">
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>تعرف على منصتنا</span>
+                  </span>
+                  <h2 className="text-xl sm:text-2xl font-black text-slate-900">
+                    {settings.aboutTitle}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                    {settings.aboutDescription}
+                  </p>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setPage('browse')}
+                      className="px-4 py-2 rounded-xl bg-blue-800 text-white text-xs font-extrabold"
+                    >
+                      تصفح أحدث المذكرات المتاحة
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPage('contact')}
+                      className="px-4 py-2 rounded-xl bg-slate-100 text-slate-800 text-xs font-extrabold"
+                    >
+                      تواصل معنا
+                    </button>
                   </div>
                 </div>
-              </section>
-            )}
-
-            {/* 3 MAIN CATEGORIES SECTION */}
-            <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
-              <div className="text-center space-y-1">
-                <h2 className="text-2xl sm:text-3xl font-black text-slate-900">
-                  اختر القسم الدراسي
-                </h2>
-                <p className="text-sm text-slate-500">
-                  ابدأ باختيار القسم ثم المرحلة التعليمية والمادة الدراسية
-                </p>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {categories.map((cat) => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => openCategoryBrowse(cat.id)}
-                    className={`text-right rounded-3xl p-7 text-white bg-gradient-to-br ${
-                      cat.gradient || 'from-blue-600 to-indigo-700'
-                    } shadow-lg hover:shadow-2xl hover:-translate-y-1 transition-all flex flex-col justify-between min-h-[190px]`}
-                  >
-                    <div className="space-y-2">
-                      <span className="inline-block px-3 py-1 rounded-full bg-white/15 text-xs font-bold">
-                        {publishedNotebooks.filter((n) => n.categoryId === cat.id).length} مذكرة متاحة
-                      </span>
-                      <h3 className="text-xl sm:text-2xl font-black">{cat.name}</h3>
-                      <p className="text-xs sm:text-sm text-white/85 leading-relaxed">
-                        {cat.description}
-                      </p>
-                    </div>
-                    <div className="pt-4 flex items-center gap-1.5 text-xs font-extrabold text-amber-200">
-                      <span>تصفح المراحل والمواد</span>
-                      <ChevronLeft className="w-4 h-4" />
-                    </div>
-                  </button>
-                ))}
+                <div className="lg:col-span-5 grid grid-cols-2 gap-3">
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                    <Award className="w-6 h-6 text-blue-700 mb-2" />
+                    <h4 className="font-extrabold text-xs text-slate-900">محتوى علمي منقح</h4>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      مذكرات محدثة ومطابقة لأحدث مواصفات المناهج والامتحانات.
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                    <Sparkles className="w-6 h-6 text-indigo-600 mb-2" />
+                    <h4 className="font-extrabold text-xs text-slate-900">تخصيص باسمك وشعارك</h4>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      إضافة اسم المعلم ورقم هاتفه وشعاره على الغلاف وجميع الصفحات.
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                    <Clock className="w-6 h-6 text-teal-600 mb-2" />
+                    <h4 className="font-extrabold text-xs text-slate-900">سرعة في التنفيذ</h4>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      تجهيز وتسليم نسخة PDF عالية الدقة جاهزة للطباعة خلال 24 ساعة.
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                    <Eye className="w-6 h-6 text-amber-600 mb-2" />
+                    <h4 className="font-extrabold text-xs text-slate-900">معاينة قبل الطلب</h4>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      اطلع على عينات حقيقية من صفحات المذكرة قبل تأكيد طلبك.
+                    </p>
+                  </div>
+                </div>
               </div>
             </section>
 
-            {/* FEATURED / NEW NOTEBOOKS */}
-            <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-8">
-              <div className="flex flex-wrap items-end justify-between gap-4">
+            {/* Main 3 Categories */}
+            <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
+              <div className="text-center space-y-1">
+                <h2 className="text-xl sm:text-3xl font-black text-slate-900">اختر القسم الدراسي</h2>
+                <p className="text-xs sm:text-sm text-slate-500">
+                  ابدأ باختيار القسم ثم المرحلة التعليمية والمادة الدراسية
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                {categories.map((cat) => {
+                  const count = publishedNotebooks.filter((n) => n.categoryId === cat.id).length;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategoryId(cat.id);
+                        setSelectedStageId('');
+                        setSelectedSubjectId('');
+                        setPage('browse');
+                      }}
+                      className={`text-right p-6 rounded-3xl bg-gradient-to-br ${cat.color} text-white shadow-lg hover:scale-[1.01] transition space-y-3`}
+                    >
+                      <span className="inline-block px-3 py-1 rounded-full bg-white/15 text-[11px] font-extrabold">
+                        {count} مذكرة متاحة
+                      </span>
+                      <h3 className="text-xl font-black">{cat.name}</h3>
+                      <p className="text-xs text-white/85 leading-relaxed">{cat.description}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* Latest Notebooks */}
+            <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
+              <div className="flex items-center justify-between">
                 <div>
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-extrabold mb-2">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>إصدارات حديثة ومحدثة</span>
-                  </span>
-                  <h2 className="text-2xl sm:text-3xl font-black text-slate-900">
-                    ما الجديد المتاح من المذكرات
+                  <h2 className="text-xl sm:text-2xl font-black text-slate-900">
+                    أحدث المذكرات المتاحة
                   </h2>
-                  <p className="text-sm text-slate-500 mt-1">
-                    معاينة مجانية قبل الطلب وتسليم فوري ببياناتك الكاملة
+                  <p className="text-xs text-slate-500">
+                    جاهزة للتخصيص باسمك وشعارك والطباعة الفورية
                   </p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => openCategoryBrowse('')}
-                  className="text-sm font-extrabold text-blue-700 hover:underline flex items-center gap-1"
+                  onClick={() => setPage('browse')}
+                  className="text-xs sm:text-sm font-extrabold text-blue-800 hover:underline"
                 >
-                  <span>عرض كل المذكرات</span>
-                  <ChevronLeft className="w-4 h-4" />
+                  عرض الكل ←
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 {publishedNotebooks.slice(0, 4).map((nb) => {
-                  const discountPct = calcDiscountPercent(nb.price, nb.oldPrice);
+                  const hasDiscount = Number(nb.oldPrice) > Number(nb.price);
+                  const savePct = hasDiscount
+                    ? Math.round(((nb.oldPrice - nb.price) / nb.oldPrice) * 100)
+                    : 0;
                   return (
                     <div
                       key={nb.id}
-                      className="group bg-white rounded-3xl border border-slate-200/80 overflow-hidden shadow-xs hover:shadow-xl transition flex flex-col justify-between"
+                      className="rounded-3xl bg-white border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col"
                     >
-                      <div>
-                        <div
-                          onClick={() => openNotebookDetails(nb)}
-                          className="cursor-pointer"
-                        >
-                          <NotebookCoverArt
-                            notebook={nb}
-                            stageName={lookUp.stageName(nb.stageId)}
-                            subjectName={lookUp.subjectName(nb.subjectId)}
+                      <div className="relative h-44 bg-gradient-to-br from-blue-900 to-teal-700 p-4 flex flex-col justify-between text-white">
+                        {nb.coverUrl ? (
+                          <img
+                            src={nb.coverUrl}
+                            alt={nb.title}
+                            className="absolute inset-0 w-full h-full object-cover"
                           />
+                        ) : null}
+                        <div className="relative z-10 flex items-center justify-between gap-2">
+                          {nb.badge && (
+                            <span className="px-2.5 py-1 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black">
+                              {nb.badge}
+                            </span>
+                          )}
+                          {hasDiscount && (
+                            <span className="px-2.5 py-1 rounded-full bg-rose-600 text-white text-[10px] font-black">
+                              وفر {savePct}%
+                            </span>
+                          )}
                         </div>
-                        <div className="p-5 space-y-2.5">
-                          <div className="flex items-center justify-between text-[11px] font-bold text-slate-500">
-                            <span>{lookUp.gradeName(nb.gradeId)}</span>
-                            <span>{nb.pageCount} صفحة</span>
+                        {!nb.coverUrl && (
+                          <div className="relative z-10">
+                            <span className="text-[11px] text-blue-100 font-bold">
+                              {lookUp.subMap[nb.subjectId]?.name}
+                            </span>
+                            <h4 className="font-black text-sm line-clamp-2 mt-0.5">{nb.title}</h4>
                           </div>
-                          <h3
-                            onClick={() => openNotebookDetails(nb)}
-                            className="font-extrabold text-slate-900 text-base leading-snug line-clamp-2 cursor-pointer group-hover:text-blue-700 transition"
-                          >
-                            {nb.title}
-                          </h3>
-                          <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
-                            {nb.shortDesc}
-                          </p>
-                        </div>
+                        )}
                       </div>
 
-                      <div className="p-5 pt-0 space-y-3">
-                        <div className="flex flex-wrap items-baseline gap-2 pt-2 border-t border-slate-100">
-                          <span className="text-lg font-black text-blue-700">
-                            {nb.price} {settings.currency}
-                          </span>
-                          {Number(nb.oldPrice) > Number(nb.price) && (
-                            <span className="text-xs text-slate-400">
-                              بدلًا من <span className="line-through">{nb.oldPrice}</span>
+                      <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
+                        <div>
+                          <div className="flex flex-wrap gap-1 mb-1.5">
+                            <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-bold">
+                              {lookUp.gradeMap[nb.gradeId]?.name}
                             </span>
-                          )}
-                          {discountPct > 0 && (
-                            <span className="mr-auto px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 text-[10px] font-extrabold">
-                              وفر {discountPct}%
+                            <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 text-[10px] font-bold">
+                              {nb.pagesCount} صفحة
                             </span>
-                          )}
+                          </div>
+                          <h3 className="font-extrabold text-sm text-slate-900 line-clamp-2">
+                            {nb.title}
+                          </h3>
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => openNotebookDetails(nb)}
-                            className="py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-extrabold flex items-center justify-center gap-1"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>معاينة</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openOrderFor(nb)}
-                            className="py-2.5 px-3 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-extrabold flex items-center justify-center gap-1 shadow-sm"
-                          >
-                            <ShoppingBag className="w-3.5 h-3.5" />
-                            <span>اطلب الآن</span>
-                          </button>
+
+                        <div className="space-y-2.5 pt-2 border-t border-slate-100">
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-base font-black text-blue-800">
+                              {nb.price} {settings.currency}
+                            </span>
+                            {hasDiscount && (
+                              <span className="text-xs text-slate-400 line-through">
+                                بدلًا من {nb.oldPrice} {settings.currency}
+                              </span>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveNotebook(nb);
+                                setPage('details');
+                              }}
+                              className="py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-extrabold"
+                            >
+                              معاينة العينة
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openOrderForNotebook(nb)}
+                              className="py-2 rounded-xl bg-blue-800 hover:bg-blue-900 text-white text-xs font-extrabold"
+                            >
+                              اطلب الآن
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -6609,390 +4535,154 @@ export default function App() {
                 })}
               </div>
             </section>
-
-            {/* CLIENT REVIEWS & WHATSAPP SCREENSHOTS SECTION */}
-            {settings.showReviews !== false && activeReviews.length > 0 && (
-              <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-8">
-                <div className="text-center space-y-2">
-                  <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-extrabold">
-                    <Quote className="w-4 h-4" />
-                    <span>تجارب حقيقية من معلمينا</span>
-                  </span>
-                  <h2 className="text-2xl sm:text-3xl font-black text-slate-900">
-                    آراء المعلمين وتقييماتهم عبر الواتساب
-                  </h2>
-                  <p className="text-sm text-slate-500 max-w-xl mx-auto">
-                    نفخر بثقة مئات المعلمين في جميع المحافظات وجودة المذكرات التي نقدمها لهم.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {activeReviews.map((rev) => (
-                    <div
-                      key={rev.id}
-                      className="bg-white rounded-3xl border border-slate-200/80 shadow-xs hover:shadow-xl transition overflow-hidden flex flex-col justify-between"
-                    >
-                      {rev.screenshotUrl ? (
-                        <div className="bg-slate-900/5 border-b border-slate-100 p-2">
-                          <img
-                            src={rev.screenshotUrl}
-                            alt={rev.teacherName}
-                            className="w-full max-h-80 object-contain rounded-2xl mx-auto"
-                          />
-                        </div>
-                      ) : null}
-
-                      <div className="p-6 space-y-3 flex-1 flex flex-col justify-between">
-                        {rev.quote && (
-                          <p className="text-sm text-slate-700 leading-relaxed font-semibold">
-                            «{rev.quote}»
-                          </p>
-                        )}
-                        <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                          <div>
-                            <div className="font-black text-sm text-slate-900">{rev.teacherName}</div>
-                            {rev.subjectAndStage && (
-                              <div className="text-xs text-blue-700 font-bold">
-                                {rev.subjectAndStage}
-                              </div>
-                            )}
-                          </div>
-                          <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-extrabold">
-                            ★★★★★
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* SPECIAL OFFERS & BUNDLES SECTION ON HOME */}
-            {settings.showOffersOnHome !== false &&
-              (activeBundles.length > 0 || activeCoupons.length > 0) && (
-                <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
-                  <div className="flex flex-wrap items-end justify-between gap-4">
-                    <div>
-                      <h2 className="text-2xl sm:text-3xl font-black text-slate-900">
-                        العروض والباقات الموفرة
-                      </h2>
-                      <p className="text-sm text-slate-500 mt-1">
-                        خصومات حصرية وأكواد توفير للمعلمين
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setPage('offers')}
-                      className="text-sm font-extrabold text-blue-700 hover:underline flex items-center gap-1"
-                    >
-                      <span>عرض جميع العروض والكوبونات</span>
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  {activeCoupons.length > 0 && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {activeCoupons.slice(0, 2).map((cp) => (
-                        <div
-                          key={cp.id}
-                          className="bg-gradient-to-l from-blue-50 to-teal-50 border border-blue-200/80 rounded-3xl p-5 flex items-center justify-between gap-4"
-                        >
-                          <div className="space-y-1">
-                            <span className="px-3 py-1 rounded-lg bg-blue-700 text-white font-mono font-black text-xs">
-                              {cp.code}
-                            </span>
-                            <p className="text-xs sm:text-sm font-bold text-slate-800 pt-1">
-                              {cp.description}
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              navigator.clipboard?.writeText(cp.code);
-                              showToast(`تم نسخ الكود (${cp.code})`, 'success');
-                            }}
-                            className="px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-xs font-extrabold text-slate-800 shrink-0 flex items-center gap-1.5 shadow-xs"
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                            <span>نسخ الكود</span>
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {activeBundles.length > 0 && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {activeBundles.slice(0, 2).map((bnd) => (
-                        <div
-                          key={bnd.id}
-                          className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs flex flex-col justify-between space-y-4"
-                        >
-                          <div className="space-y-2">
-                            <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-extrabold">
-                              {bnd.badge}
-                            </span>
-                            <h3 className="text-lg font-black text-slate-900">{bnd.title}</h3>
-                            <p className="text-xs text-slate-500">{bnd.subtitle}</p>
-                            <ul className="space-y-1.5 pt-2 text-xs text-slate-700">
-                              {(bnd.features || []).map((f, idx) => (
-                                <li key={idx} className="flex items-center gap-2">
-                                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                                  <span>{f}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                          <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
-                            <div>
-                              <span className="text-xl font-black text-emerald-700">
-                                {bnd.price} {settings.currency}
-                              </span>
-                              {bnd.oldPrice > bnd.price && (
-                                <span className="text-xs text-slate-400 line-through mr-2">
-                                  {bnd.oldPrice} {settings.currency}
-                                </span>
-                              )}
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                openOrderFor(null, [
-                                  { id: bnd.id, title: bnd.title, price: Number(bnd.price) || 0 }
-                                ])
-                              }
-                              className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold"
-                            >
-                              اطلب الباقة الآن
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </section>
-              )}
           </div>
         )}
 
-        {/* PAGE: BROWSE & HIERARCHICAL FILTERING */}
+        {/* ==================== BROWSE PAGE ==================== */}
         {page === 'browse' && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10 space-y-8">
-            {/* Breadcrumbs */}
-            <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h1 className="text-2xl font-black text-slate-900">تصفح المذكرات التعليمية</h1>
+                <p className="text-xs text-slate-500">
+                  اختر القسم والمرحلة والمادة أو ابحث مباشرة باسم المذكرة
+                </p>
+              </div>
               <button
                 type="button"
-                onClick={() => setPage('home')}
-                className="hover:text-blue-700"
+                onClick={() => openOrderForNotebook(null)}
+                className="px-4 py-2.5 rounded-xl bg-blue-800 text-white text-xs font-extrabold"
               >
-                الرئيسية
+                + اطلب مذكرة خاصة
               </button>
-              <ChevronLeft className="w-3.5 h-3.5" />
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedCategory('');
-                  setSelectedStage('');
-                  setSelectedGrade('');
-                  setSelectedSubject('');
-                }}
-                className={!selectedCategory ? 'text-blue-700 font-extrabold' : 'hover:text-blue-700'}
-              >
-                كل المذكرات
-              </button>
-              {selectedCategory && (
-                <>
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                  <span className="text-blue-700 font-extrabold">
-                    {lookUp.categoryName(selectedCategory)}
-                  </span>
-                </>
-              )}
-              {selectedStage && (
-                <>
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                  <span className="text-blue-700 font-extrabold">
-                    {lookUp.stageName(selectedStage)}
-                  </span>
-                </>
-              )}
             </div>
 
-            {/* Stage & Subject Quick Pills */}
-            <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-5">
-              <div className="flex flex-col md:flex-row gap-3">
-                <div className="relative flex-1">
-                  <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
-                  <input
-                    type="text"
-                    placeholder="ابحث باسم المذكرة، الصف الدراسي، أو المادة..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pr-10 pl-4 py-3 rounded-2xl border border-slate-200 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="px-4 py-3 rounded-2xl border border-slate-200 text-xs sm:text-sm font-bold bg-white"
-                >
-                  <option value="">كل الأقسام</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={selectedStage}
-                  onChange={(e) => {
-                    setSelectedStage(e.target.value);
-                    setSelectedGrade('');
-                  }}
-                  className="px-4 py-3 rounded-2xl border border-slate-200 text-xs sm:text-sm font-bold bg-white"
-                >
-                  <option value="">كل المراحل</option>
-                  {stages.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-                {selectedStage && (
-                  <select
-                    value={selectedGrade}
-                    onChange={(e) => setSelectedGrade(e.target.value)}
-                    className="px-4 py-3 rounded-2xl border border-slate-200 text-xs sm:text-sm font-bold bg-white"
-                  >
-                    <option value="">كل الصفوف</option>
-                    {grades
-                      .filter((g) => g.stageId === selectedStage)
-                      .map((g) => (
-                        <option key={g.id} value={g.id}>
-                          {g.name}
-                        </option>
-                      ))}
-                  </select>
-                )}
+            {/* Filters Bar */}
+            <div className="p-4 rounded-3xl bg-white border border-slate-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
+                <input
+                  type="text"
+                  placeholder="ابحث باسم المذكرة..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pr-9 pl-3 py-2 rounded-xl border border-slate-200 text-xs"
+                />
               </div>
-
-              {/* Visible Subjects Filter Pills */}
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-extrabold text-slate-500 ml-1">المادة:</span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedSubject('')}
-                  className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition ${
-                    !selectedSubject
-                      ? 'bg-blue-700 text-white'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  الكل
-                </button>
-                {visibleSubjects.map((sub) => (
-                  <button
-                    key={sub.id}
-                    type="button"
-                    onClick={() => setSelectedSubject(sub.id)}
-                    className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition ${
-                      selectedSubject === sub.id
-                        ? 'bg-blue-700 text-white'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                    }`}
-                  >
-                    {sub.name}
-                  </button>
+              <select
+                value={selectedCategoryId}
+                onChange={(e) => setSelectedCategoryId(e.target.value)}
+                className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold bg-white"
+              >
+                <option value="">جميع الأقسام</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
                 ))}
-              </div>
+              </select>
+              <select
+                value={selectedStageId}
+                onChange={(e) => setSelectedStageId(e.target.value)}
+                className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold bg-white"
+              >
+                <option value="">جميع المراحل</option>
+                {stages.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={selectedSubjectId}
+                onChange={(e) => setSelectedSubjectId(e.target.value)}
+                className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold bg-white"
+              >
+                <option value="">جميع المواد</option>
+                {subjects
+                  .filter((s) => s.visible !== false)
+                  .map((sub) => (
+                    <option key={sub.id} value={sub.id}>
+                      {sub.name}
+                    </option>
+                  ))}
+              </select>
             </div>
 
             {/* Results Grid */}
             {filteredNotebooks.length === 0 ? (
-              <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 space-y-3">
-                <BookOpen className="w-12 h-12 mx-auto text-slate-300" />
-                <h3 className="font-black text-lg text-slate-800">
+              <div className="p-12 rounded-3xl bg-white border border-slate-200 text-center space-y-3">
+                <p className="text-sm font-bold text-slate-600">
                   لا توجد مذكرات مطابقة لخيارات البحث الحالية
-                </h3>
-                <p className="text-xs text-slate-500">
-                  يمكنك تغيير الفلاتر أو طلب تجهيز مذكرة خاصة بمواصفاتك مباشرةً.
                 </p>
                 <button
                   type="button"
-                  onClick={() => openOrderFor(null)}
-                  className="px-6 py-3 rounded-2xl bg-blue-700 text-white text-xs font-extrabold"
+                  onClick={() => {
+                    setSelectedCategoryId('');
+                    setSelectedStageId('');
+                    setSelectedSubjectId('');
+                    setSearchQuery('');
+                  }}
+                  className="px-4 py-2 rounded-xl bg-blue-800 text-white text-xs font-bold"
                 >
-                  اطلب مذكرة خاصة الآن
+                  عرض جميع المذكرات
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {filteredNotebooks.map((nb) => {
-                  const discountPct = calcDiscountPercent(nb.price, nb.oldPrice);
+                  const hasDiscount = Number(nb.oldPrice) > Number(nb.price);
                   return (
                     <div
                       key={nb.id}
-                      className="group bg-white rounded-3xl border border-slate-200/80 overflow-hidden shadow-xs hover:shadow-xl transition flex flex-col justify-between"
+                      className="rounded-3xl bg-white border border-slate-200 p-5 flex flex-col justify-between space-y-4 shadow-sm"
                     >
-                      <div>
-                        <div
-                          onClick={() => openNotebookDetails(nb)}
-                          className="cursor-pointer"
-                        >
-                          <NotebookCoverArt
-                            notebook={nb}
-                            stageName={lookUp.stageName(nb.stageId)}
-                            subjectName={lookUp.subjectName(nb.subjectId)}
-                          />
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap gap-1.5">
+                          <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-800 text-[11px] font-bold">
+                            {lookUp.catMap[nb.categoryId]?.name}
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[11px] font-bold">
+                            {lookUp.gradeMap[nb.gradeId]?.name}
+                          </span>
                         </div>
-                        <div className="p-5 space-y-2">
-                          <div className="flex items-center justify-between text-[11px] font-bold text-slate-500">
-                            <span>{lookUp.gradeName(nb.gradeId)}</span>
-                            <span>{nb.pageCount} صفحة</span>
-                          </div>
-                          <h3
-                            onClick={() => openNotebookDetails(nb)}
-                            className="font-extrabold text-slate-900 text-base leading-snug line-clamp-2 cursor-pointer group-hover:text-blue-700 transition"
-                          >
-                            {nb.title}
-                          </h3>
-                          <p className="text-xs text-slate-500 line-clamp-2">{nb.shortDesc}</p>
-                        </div>
+                        <h3 className="font-black text-base text-slate-900">{nb.title}</h3>
+                        <p className="text-xs text-slate-600 line-clamp-2">{nb.description}</p>
                       </div>
 
-                      <div className="p-5 pt-0 space-y-3">
-                        <div className="flex flex-wrap items-baseline gap-2 pt-2 border-t border-slate-100">
-                          <span className="text-lg font-black text-blue-700">
-                            {nb.price} {settings.currency}
+                      <div className="space-y-3 pt-3 border-t border-slate-100">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="text-lg font-black text-blue-800">
+                              {nb.price} {settings.currency}
+                            </span>
+                            {hasDiscount && (
+                              <span className="mr-2 text-xs text-slate-400 line-through">
+                                {nb.oldPrice} {settings.currency}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-xs font-bold text-slate-500">
+                            {nb.pagesCount} صفحة
                           </span>
-                          {Number(nb.oldPrice) > Number(nb.price) && (
-                            <span className="text-xs text-slate-400">
-                              بدلًا من <span className="line-through">{nb.oldPrice}</span>
-                            </span>
-                          )}
-                          {discountPct > 0 && (
-                            <span className="mr-auto px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 text-[10px] font-extrabold">
-                              وفر {discountPct}%
-                            </span>
-                          )}
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <button
                             type="button"
-                            onClick={() => openNotebookDetails(nb)}
-                            className="py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-extrabold flex items-center justify-center gap-1"
+                            onClick={() => {
+                              setActiveNotebook(nb);
+                              setPage('details');
+                            }}
+                            className="py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-extrabold"
                           >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>معاينة</span>
+                            معاينة التفاصيل
                           </button>
                           <button
                             type="button"
-                            onClick={() => openOrderFor(nb)}
-                            className="py-2.5 px-3 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-extrabold flex items-center justify-center gap-1"
+                            onClick={() => openOrderForNotebook(nb)}
+                            className="py-2.5 rounded-xl bg-blue-800 hover:bg-blue-900 text-white text-xs font-extrabold"
                           >
-                            <ShoppingBag className="w-3.5 h-3.5" />
-                            <span>اطلب الآن</span>
+                            اطلب الآن
                           </button>
                         </div>
                       </div>
@@ -7004,735 +4694,323 @@ export default function App() {
           </div>
         )}
 
-        {/* PAGE: NOTEBOOK DETAILS & SAMPLE PREVIEW */}
-        {page === 'details' && selectedNotebook && (
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 space-y-10">
+        {/* ==================== DETAILS PAGE ==================== */}
+        {page === 'details' && activeNotebook && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
             <button
               type="button"
               onClick={() => setPage('browse')}
-              className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-600 hover:text-blue-700"
+              className="text-xs font-extrabold text-blue-800 flex items-center gap-1"
             >
               <ArrowRight className="w-4 h-4" />
               <span>العودة إلى قائمة المذكرات</span>
             </button>
 
-            <div className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-200/80 shadow-xs grid grid-cols-1 lg:grid-cols-12 gap-8">
-              <div className="lg:col-span-5">
-                <NotebookCoverArt
-                  notebook={selectedNotebook}
-                  stageName={lookUp.stageName(selectedNotebook.stageId)}
-                  subjectName={lookUp.subjectName(selectedNotebook.subjectId)}
-                  className="h-72 sm:h-80 rounded-2xl shadow-lg"
-                />
-              </div>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              <div className="lg:col-span-5 space-y-5">
+                <div className="p-6 rounded-3xl bg-white border border-slate-200 space-y-4 shadow-sm">
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-800 text-xs font-extrabold">
+                      {lookUp.catMap[activeNotebook.categoryId]?.name}
+                    </span>
+                    <span className="px-3 py-1 rounded-full bg-teal-50 text-teal-800 text-xs font-extrabold">
+                      {lookUp.gradeMap[activeNotebook.gradeId]?.name}
+                    </span>
+                  </div>
+                  <h1 className="text-xl sm:text-2xl font-black text-slate-900">
+                    {activeNotebook.title}
+                  </h1>
+                  <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                    {activeNotebook.description}
+                  </p>
 
-              <div className="lg:col-span-7 space-y-5">
-                <div className="flex flex-wrap gap-2 text-xs font-bold">
-                  <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-700">
-                    {lookUp.categoryName(selectedNotebook.categoryId)}
-                  </span>
-                  <span className="px-3 py-1 rounded-full bg-teal-50 text-teal-700">
-                    {lookUp.stageName(selectedNotebook.stageId)}
-                  </span>
-                  <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-700">
-                    {lookUp.gradeName(selectedNotebook.gradeId)}
-                  </span>
-                  <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-800">
-                    {lookUp.subjectName(selectedNotebook.subjectId)}
-                  </span>
-                </div>
-
-                <h1 className="text-2xl sm:text-3xl font-black text-slate-900 leading-snug">
-                  {selectedNotebook.title}
-                </h1>
-
-                <p className="text-sm text-slate-600 leading-relaxed">
-                  {selectedNotebook.fullDesc || selectedNotebook.shortDesc}
-                </p>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-100 text-xs">
-                  <div>
-                    <span className="text-slate-400 block">التكلفة</span>
-                    <strong className="text-lg font-black text-blue-700">
-                      {selectedNotebook.price} {settings.currency}
-                    </strong>
-                    {Number(selectedNotebook.oldPrice) > Number(selectedNotebook.price) && (
-                      <span className="block text-slate-400 line-through">
-                        بدلًا من {selectedNotebook.oldPrice} {settings.currency}
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                    <div>
+                      <span className="text-[11px] font-bold text-slate-500 block">
+                        سعر المذكرة شاملة التخصيص
                       </span>
+                      <span className="text-2xl font-black text-blue-800">
+                        {activeNotebook.price} {settings.currency}
+                      </span>
+                    </div>
+                    <span className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-extrabold">
+                      {activeNotebook.pagesCount} صفحة PDF
+                    </span>
+                  </div>
+
+                  {Array.isArray(activeNotebook.features) &&
+                    activeNotebook.features.length > 0 && (
+                      <ul className="space-y-2 text-xs text-slate-700">
+                        {activeNotebook.features.map((f, i) => (
+                          <li key={i} className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                            <span>{f}</span>
+                          </li>
+                        ))}
+                      </ul>
                     )}
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block">عدد الصفحات</span>
-                    <strong className="text-base font-black text-slate-900">
-                      {selectedNotebook.pageCount} صفحة
-                    </strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block">صيغة التسليم</span>
-                    <strong className="text-sm font-black text-emerald-700">
-                      PDF جاهز للطباعة
-                    </strong>
-                  </div>
-                </div>
 
-                <ImportantNoticesBox settings={settings} />
-
-                <div className="flex flex-wrap gap-3 pt-2">
                   <button
                     type="button"
-                    onClick={() => openOrderFor(selectedNotebook)}
-                    className="flex-1 sm:flex-none px-8 py-4 rounded-2xl bg-gradient-to-l from-blue-700 to-teal-600 hover:opacity-95 text-white font-black text-sm shadow-xl flex items-center justify-center gap-2 transition"
+                    onClick={() => openOrderForNotebook(activeNotebook)}
+                    className="w-full py-3.5 rounded-2xl bg-gradient-to-l from-blue-800 to-teal-700 text-white text-sm font-black shadow-lg"
                   >
-                    <ShoppingBag className="w-5 h-5" />
-                    <span>اطلب تجهيز المذكرة باسمك الآن</span>
+                    اطلب هذه المذكرة باسمك وشعارك الآن
                   </button>
-                  {selectedNotebook.drivePreviewUrl?.trim() && (
-                    <a
-                      href={normalizeExternalUrl(selectedNotebook.drivePreviewUrl)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 sm:flex-none px-6 py-4 rounded-2xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-800 font-extrabold text-sm flex items-center justify-center gap-2 transition"
-                    >
-                      <ExternalLink className="w-5 h-5 text-blue-700" />
-                      <span>تصفح عينة أكبر على Google Drive</span>
-                    </a>
-                  )}
                 </div>
               </div>
-            </div>
 
-            {/* Protected Sample Viewer */}
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Eye className="w-5 h-5 text-blue-700" />
-                  <h2 className="text-xl font-black text-slate-900">
-                    معاينة عينة من المذكرة قبل الطلب
-                  </h2>
-                </div>
-                {selectedNotebook.drivePreviewUrl?.trim() && (
-                  <a
-                    href={normalizeExternalUrl(selectedNotebook.drivePreviewUrl)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-4 py-2 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-xs"
-                  >
-                    <span>فتح ملف العينة الموسّع (Google Drive)</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                )}
+              <div className="lg:col-span-7">
+                <ProtectedPreviewer
+                  notebook={activeNotebook}
+                  platformName={settings.platformName}
+                />
               </div>
-              <ProtectedPreviewer
-                notebook={selectedNotebook}
-                lookUp={lookUp}
-                settings={settings}
-              />
             </div>
           </div>
         )}
 
-        {/* PAGE: OFFERS & BUNDLES */}
+        {/* ==================== OFFERS PAGE ==================== */}
         {page === 'offers' && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10 space-y-12">
-            <div className="text-center space-y-2">
-              <h1 className="text-3xl font-black text-slate-900">العروض، الكوبونات، والباقات</h1>
-              <p className="text-sm text-slate-500">
-                استفد من خصومات الكمية وأكواد التوفير الحصرية للمعلمين
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+            <div>
+              <h1 className="text-2xl font-black text-slate-900">العروض والباقات وأكواد الخصم</h1>
+              <p className="text-xs text-slate-500">
+                استفد من الخصومات الحصرية عند طلب مذكرة أو باقة كاملة
               </p>
             </div>
 
-            {settings.multiOrderDiscount?.enabled && (
-              <div className="bg-gradient-to-l from-teal-700 to-blue-800 text-white rounded-3xl p-7 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl">
-                <div className="space-y-1 text-center md:text-right">
-                  <span className="px-3 py-1 rounded-full bg-amber-400 text-slate-950 text-xs font-black">
-                    خصم الكمية التلقائي
-                  </span>
-                  <h3 className="text-xl sm:text-2xl font-black pt-1">
-                    {settings.multiOrderDiscount.label}
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => openOrderFor(null)}
-                  className="px-6 py-3.5 rounded-2xl bg-white text-slate-900 font-black text-xs sm:text-sm shrink-0 shadow-lg"
-                >
-                  ابدأ طلبك المجمّع الآن
-                </button>
-              </div>
-            )}
-
-            {activeCoupons.length > 0 && (
-              <div className="space-y-4">
-                <h2 className="text-xl font-black text-slate-900">أكواد الخصم المتاحة</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {activeCoupons.map((cp) => (
-                    <div
-                      key={cp.id}
-                      className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-3"
+            {/* Public Coupons */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {coupons
+                .filter((c) => c.isActive && c.isPublic)
+                .map((c) => (
+                  <div
+                    key={c.id}
+                    className="p-5 rounded-3xl bg-white border border-blue-200 flex items-center justify-between gap-4 shadow-sm"
+                  >
+                    <div className="space-y-1">
+                      <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-800 font-mono font-black text-sm">
+                        {c.code}
+                      </span>
+                      <p className="text-xs font-bold text-slate-700 pt-1">{c.description}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(c.code);
+                        showToast(`تم نسخ كود الخصم (${c.code})`, 'success');
+                      }}
+                      className="px-4 py-2 rounded-xl bg-blue-800 text-white text-xs font-extrabold shrink-0"
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="px-3.5 py-1.5 rounded-xl bg-blue-50 text-blue-800 font-mono font-black text-sm border border-blue-200">
-                          {cp.code}
+                      نسخ الكود
+                    </button>
+                  </div>
+                ))}
+            </div>
+
+            {/* Bundles */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {bundles
+                .filter((b) => b.isActive !== false)
+                .map((b) => (
+                  <div
+                    key={b.id}
+                    className="p-6 rounded-3xl bg-gradient-to-br from-slate-900 to-blue-950 text-white space-y-3 shadow-lg"
+                  >
+                    <h3 className="text-lg font-black">{b.title}</h3>
+                    <p className="text-xs text-slate-300">{b.description}</p>
+                    <p className="text-xs text-amber-300 font-bold">{b.itemsSummary}</p>
+                    <div className="flex items-center justify-between pt-3 border-t border-white/15">
+                      <div>
+                        <span className="text-xl font-black text-amber-400">
+                          {b.price} {settings.currency}
                         </span>
-                        <span className="text-sm font-black text-emerald-700">
-                          خصم{' '}
-                          {cp.type === 'percent'
-                            ? `${cp.value}%`
-                            : `${cp.value} ${settings.currency}`}
-                        </span>
+                        {b.oldPrice > b.price && (
+                          <span className="mr-2 text-xs text-slate-400 line-through">
+                            {b.oldPrice} {settings.currency}
+                          </span>
+                        )}
                       </div>
-                      <p className="text-xs text-slate-600 leading-relaxed">{cp.description}</p>
-                      <p className="text-[11px] text-slate-400 font-bold">
-                        {formatCouponLimitsAr(cp)}
-                      </p>
                       <button
                         type="button"
                         onClick={() => {
-                          navigator.clipboard?.writeText(cp.code);
-                          showToast(`تم نسخ الكود (${cp.code})`, 'success');
+                          setOrderTargetNotebook(null);
+                          setOrderInitialItems([
+                            { id: b.id, title: b.title, price: Number(b.price || 0) }
+                          ]);
+                          setOrderModalOpen(true);
                         }}
-                        className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold flex items-center justify-center gap-1.5"
+                        className="px-5 py-2.5 rounded-xl bg-amber-400 text-slate-950 text-xs font-black"
                       >
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>نسخ كود الخصم</span>
+                        اطلب الباقة الآن
                       </button>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {activeBundles.length > 0 && (
-              <div className="space-y-4">
-                <h2 className="text-xl font-black text-slate-900">الباقات المجمّعة</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {activeBundles.map((bnd) => (
-                    <div
-                      key={bnd.id}
-                      className="bg-white rounded-3xl p-7 border border-slate-200 shadow-xs flex flex-col justify-between space-y-5"
-                    >
-                      <div className="space-y-2">
-                        <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-extrabold">
-                          {bnd.badge}
-                        </span>
-                        <h3 className="text-xl font-black text-slate-900">{bnd.title}</h3>
-                        <p className="text-xs sm:text-sm text-slate-500">{bnd.subtitle}</p>
-                        <ul className="space-y-2 pt-3 text-xs sm:text-sm text-slate-700">
-                          {(bnd.features || []).map((f, idx) => (
-                            <li key={idx} className="flex items-center gap-2">
-                              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                              <span>{f}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-                        <div>
-                          <span className="text-2xl font-black text-emerald-700">
-                            {bnd.price} {settings.currency}
-                          </span>
-                          {bnd.oldPrice > bnd.price && (
-                            <span className="text-xs text-slate-400 line-through mr-2">
-                              {bnd.oldPrice} {settings.currency}
-                            </span>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            openOrderFor(null, [
-                              { id: bnd.id, title: bnd.title, price: Number(bnd.price) || 0 }
-                            ])
-                          }
-                          className="px-6 py-3 rounded-2xl bg-blue-700 hover:bg-blue-800 text-white text-xs sm:text-sm font-black"
-                        >
-                          اطلب الباقة الآن
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {discountedNotebooks.length > 0 && (
-              <div className="space-y-4">
-                <h2 className="text-xl font-black text-slate-900">مذكرات عليها خصم حالي</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {discountedNotebooks.map((nb) => (
-                    <div
-                      key={nb.id}
-                      className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs flex flex-col justify-between"
-                    >
-                      <div onClick={() => openNotebookDetails(nb)} className="cursor-pointer">
-                        <NotebookCoverArt
-                          notebook={nb}
-                          stageName={lookUp.stageName(nb.stageId)}
-                          subjectName={lookUp.subjectName(nb.subjectId)}
-                        />
-                        <div className="p-4">
-                          <h3 className="font-extrabold text-sm text-slate-900 line-clamp-2">
-                            {nb.title}
-                          </h3>
-                        </div>
-                      </div>
-                      <div className="p-4 pt-0 space-y-2">
-                        <div className="flex items-baseline gap-2">
-                          <span className="font-black text-blue-700">
-                            {nb.price} {settings.currency}
-                          </span>
-                          {nb.oldPrice > nb.price && (
-                            <span className="text-xs text-slate-400 line-through">
-                              {nb.oldPrice}
-                            </span>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => openOrderFor(nb)}
-                          className="w-full py-2.5 rounded-xl bg-blue-700 text-white text-xs font-extrabold"
-                        >
-                          اطلب بالعرض الآن
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                  </div>
+                ))}
+            </div>
           </div>
         )}
 
-        {/* PAGE: TRACK ORDER */}
+        {/* ==================== TRACK ORDER PAGE ==================== */}
         {page === 'track' && (
-          <div className="max-w-3xl mx-auto px-4 sm:px-6 py-12 space-y-8">
-            <div className="text-center space-y-2">
-              <h1 className="text-3xl font-black text-slate-900">تتبع حالة طلبك واستلام المذكرة</h1>
-              <p className="text-sm text-slate-500">
-                أدخل رقم الطلب (مثال: MZ-261125-1234) أو رقم هاتفك المسجل في الطلب
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 space-y-6">
+            <div className="text-center space-y-1.5">
+              <h1 className="text-2xl font-black text-slate-900">تتبع حالة طلبك</h1>
+              <p className="text-xs text-slate-500">
+                أدخل رقم الطلب (مثل MZ-261125-1234) أو رقم هاتفك لمتابعة التجهيز وتحميل المذكرة
               </p>
             </div>
 
             <form
-              onSubmit={handleTrackSearch}
-              className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs flex flex-col sm:flex-row gap-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const q = trackQuery.trim().toLowerCase();
+                if (!q) return;
+                const matches = orders.filter(
+                  (o) =>
+                    String(o.orderNumber || '').toLowerCase() === q ||
+                    String(o.phone || '').includes(q)
+                );
+                setTrackedOrders(matches);
+              }}
+              className="flex gap-2"
             >
               <input
                 type="text"
-                placeholder="رقم الطلب أو رقم الهاتف..."
+                dir="ltr"
+                placeholder="MZ-XXXXXX-XXXX أو 010XXXXXXXX"
                 value={trackQuery}
                 onChange={(e) => setTrackQuery(e.target.value)}
-                className="flex-1 px-4 py-3 rounded-2xl border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 px-4 py-3 rounded-2xl border border-slate-300 bg-white text-sm text-left font-mono"
               />
               <button
                 type="submit"
-                className="px-7 py-3 rounded-2xl bg-blue-700 hover:bg-blue-800 text-white font-black text-sm flex items-center justify-center gap-2"
+                className="px-6 py-3 rounded-2xl bg-blue-800 hover:bg-blue-900 text-white text-sm font-black"
               >
-                <Search className="w-4 h-4" />
-                <span>بحث عن الطلب</span>
+                بحث
               </button>
             </form>
 
-            {trackResults !== null && (
-              <div className="space-y-4">
-                {trackResults.length === 0 ? (
-                  <div className="bg-white rounded-3xl p-8 text-center border border-slate-200 text-sm text-slate-500">
-                    لم يتم العثور على طلبات مطابقة. تأكد من رقم الطلب أو رقم الهاتف.
-                  </div>
-                ) : (
-                  trackResults.map((ord) => {
-                    const currentSt =
-                      ORDER_STATUSES.find((s) => s.id === ord.status) || ORDER_STATUSES[0];
-                    const linkedCp = ord.nextOrderCouponId
-                      ? coupons.find((c) => c.id === ord.nextOrderCouponId)
-                      : coupons.find((c) => c.code === ord.nextOrderCouponCode);
-                    const showGiftCoupon = Boolean(
-                      ord.nextOrderCouponCode &&
-                        ord.nextOrderCouponEnabled !== false &&
-                        linkedCp &&
-                        !isCouponExhausted(linkedCp)
-                    );
-
+            {trackedOrders !== null &&
+              (trackedOrders.length === 0 ? (
+                <div className="p-8 rounded-3xl bg-white border border-slate-200 text-center text-sm font-bold text-slate-600">
+                  لم يتم العثور على طلبات مطابقة لبيانات البحث المدخلة
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {trackedOrders.map((ord) => {
+                    const st = ORDER_STATUSES.find((s) => s.id === ord.status) || ORDER_STATUSES[0];
                     return (
                       <div
                         key={ord.id}
-                        className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-5"
+                        className="p-6 rounded-3xl bg-white border border-slate-200 space-y-4 shadow-sm"
                       >
-                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-4">
-                          <div>
-                            <span className="text-xs text-slate-400 block">رقم الطلب</span>
-                            <span className="font-mono font-black text-lg text-blue-700">
-                              {ord.orderNumber}
-                            </span>
-                          </div>
+                        <div className="flex items-center justify-between">
+                          <span dir="ltr" className="font-mono font-black text-base text-blue-900">
+                            {ord.orderNumber}
+                          </span>
                           <span
-                            className={`px-4 py-1.5 rounded-full text-xs font-extrabold border ${currentSt.color}`}
+                            className={`px-3 py-1 rounded-full text-xs font-extrabold border ${st.color}`}
                           >
-                            {currentSt.label}
+                            {st.label}
                           </span>
                         </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm">
-                          <div>
-                            <span className="text-slate-500">اسم المعلم: </span>
-                            <strong>{ord.teacherName}</strong>
-                          </div>
-                          <div>
-                            <span className="text-slate-500">المذكرة: </span>
-                            <strong>{ord.customNotebookTitle}</strong>
-                          </div>
-                          <div>
-                            <span className="text-slate-500">التكلفة: </span>
-                            <strong className="text-emerald-700">
-                              {ord.price ? `${ord.price} ${settings.currency}` : 'بالاتفاق'}
-                            </strong>
-                          </div>
-                          <div>
-                            <span className="text-slate-500">تاريخ الطلب: </span>
-                            <span>{new Date(ord.createdAt).toLocaleDateString('ar-EG')}</span>
-                          </div>
+                        <div className="text-xs text-slate-700 space-y-1">
+                          <p>
+                            الاسم: <strong>{ord.teacherName}</strong>
+                          </p>
+                          <p>
+                            المطلوب: <strong>{ord.customNotebookTitle}</strong>
+                          </p>
                         </div>
 
-                        {/* Payment Status & Receipt Upload in Track Order */}
-                        {ord.status !== 'cancelled' && (
-                          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                            <div className="space-y-1 text-right">
-                              <div className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
-                                <Receipt className="w-4 h-4 text-blue-700" />
-                                <span>
-                                  حالة الدفع:{' '}
-                                  {ord.paymentStatus === 'paid' ? (
-                                    <span className="text-emerald-700">✓ تم تأكيد استلام الدفع</span>
-                                  ) : ord.paymentReceiptUrl ? (
-                                    <span className="text-amber-700">
-                                      ⏳ تم رفع الإيصال (قيد المراجعة)
-                                    </span>
-                                  ) : (
-                                    <span className="text-rose-700">
-                                      بانتظار إرسال إيصال التحويل
-                                    </span>
-                                  )}
-                                </span>
-                              </div>
-                              {settings.paymentInfo && ord.paymentStatus !== 'paid' && (
-                                <p className="text-[11px] text-slate-600 whitespace-pre-line">
-                                  {settings.paymentInfo}
-                                </p>
-                              )}
-                            </div>
-                            {ord.paymentStatus !== 'paid' && (
-                              <label className="cursor-pointer px-4 py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-extrabold flex items-center gap-1.5 shrink-0 shadow-xs">
-                                <Upload className="w-3.5 h-3.5" />
-                                <span>
-                                  {ord.paymentReceiptUrl
-                                    ? 'تحديث صورة الإيصال'
-                                    : 'رفع صورة إيصال الدفع'}
-                                </span>
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  onChange={async (e) => {
-                                    const f = e.target.files?.[0];
-                                    if (!f) return;
-                                    try {
-                                      const imgData = await compressImageFile(f, 900, 0.8);
-                                      const updated = {
-                                        ...ord,
-                                        paymentReceiptUrl: imgData,
-                                        paymentStatus: 'pending_review'
-                                      };
-                                      await handleUpdateOrder(updated);
-                                      setTrackResults((prev) =>
-                                        prev.map((item) => (item.id === ord.id ? updated : item))
-                                      );
-                                      showToast(
-                                        'تم رفع صورة إيصال الدفع بنجاح وسيتم مراجعتها فورًا',
-                                        'success'
-                                      );
-                                    } catch {
-                                      showToast('تعذر رفع صورة الإيصال', 'error');
-                                    }
-                                  }}
-                                  className="hidden"
-                                />
-                              </label>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Conditional Delivery Box */}
-                        {ord.deliveryUrl && ['ready', 'delivered'].includes(ord.status) ? (
-                          <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-                            <div>
-                              <h4 className="font-black text-emerald-900 text-sm">
-                                مذكرتك جاهزة للتحميل الآن! 🎉
-                              </h4>
-                              <p className="text-xs text-emerald-700 mt-0.5">
-                                تم تخصيص المذكرة ببياناتك الكاملة بصيغة PDF عالية الدقة.
-                              </p>
-                            </div>
+                        {(ord.status === 'ready' || ord.status === 'delivered') &&
+                          ord.deliveryUrl && (
                             <a
-                              href={normalizeExternalUrl(ord.deliveryUrl)}
+                              href={ord.deliveryUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black flex items-center gap-2 shadow-lg shrink-0"
+                              className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-black flex items-center justify-center gap-2 shadow-lg"
                             >
                               <Download className="w-4 h-4" />
-                              <span>تحميل مذكرتك PDF</span>
+                              <span>تحميل مذكرتك الجاهزة (PDF)</span>
                             </a>
-                          </div>
-                        ) : (
-                          ord.status !== 'cancelled' && (
-                            <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-100 text-xs text-blue-900">
-                              سيظهر زر تحميل ملف PDF النهائي هنا فور الانتهاء من كتابة بياناتك وتخصيص المذكرة.
-                            </div>
-                          )
-                        )}
-
-                        {/* Next-Order Special Coupon Gift Box */}
-                        {showGiftCoupon && (
-                          <div className="p-5 rounded-2xl bg-gradient-to-l from-purple-50 to-indigo-50 border border-purple-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-                            <div className="space-y-1 text-right">
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-purple-700 text-white text-[10px] font-extrabold">
-                                <Gift className="w-3 h-3" />
-                                <span>هدية خاصة لطلبك القادم</span>
-                              </span>
-                              <p className="text-xs font-bold text-purple-950">
-                                استخدم الكود{' '}
-                                <span className="font-mono font-black bg-white px-2 py-0.5 rounded border border-purple-200">
-                                  {ord.nextOrderCouponCode}
-                                </span>{' '}
-                                للحصول على خصم{' '}
-                                {linkedCp.type === 'percent'
-                                  ? `${linkedCp.value}%`
-                                  : `${linkedCp.value} ${settings.currency}`}{' '}
-                                ({formatCouponLimitsAr(linkedCp)})
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => openOrderFor(null, null, ord.nextOrderCouponCode)}
-                              className="px-5 py-2.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white text-xs font-extrabold shrink-0"
-                            >
-                              استخدم الكوبون الآن
-                            </button>
-                          </div>
-                        )}
+                          )}
                       </div>
                     );
-                  })
-                )}
-              </div>
-            )}
+                  })}
+                </div>
+              ))}
           </div>
         )}
 
-        {/* PAGE: CONTACT US */}
+        {/* ==================== CONTACT PAGE ==================== */}
         {page === 'contact' && (
-          <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12 space-y-8">
-            <div className="text-center space-y-2">
-              <h1 className="text-3xl font-black text-slate-900">تواصل معنا</h1>
-              <p className="text-sm text-slate-500">
-                فريقنا جاهز للرد على جميع استفساراتك وتجهيز مذكراتك في أسرع وقت
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10 space-y-6">
+            <div className="text-center space-y-1.5">
+              <h1 className="text-2xl font-black text-slate-900">تواصل معنا</h1>
+              <p className="text-xs text-slate-500">
+                فريقنا جاهز للرد على استفساراتك وتنفيذ طلبات التخصيص الخاصة
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {settings.whatsappNumber && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <a
+                href={`https://wa.me/${settings.whatsappNumber}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-5 rounded-3xl bg-emerald-600 text-white flex items-center gap-4 shadow-md"
+              >
+                <MessageCircle className="w-8 h-8 shrink-0" />
+                <div>
+                  <h3 className="font-black text-base">تواصل مباشر عبر واتساب</h3>
+                  <p className="text-xs text-emerald-100 mt-0.5">رد سريع على جميع الاستفسارات</p>
+                </div>
+              </a>
+
+              {settings.customerServicePhone && (
                 <a
-                  href={buildWhatsAppUrl(
-                    settings.whatsappNumber,
-                    `مرحبًا، أود التواصل مع إدارة ${settings.siteName}`
-                  )}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-emerald-50/70 p-6 rounded-3xl border border-emerald-200 hover:border-emerald-500 hover:shadow-md shadow-xs text-center space-y-3 transition"
+                  href={`tel:${settings.customerServicePhone}`}
+                  className="p-5 rounded-3xl bg-white border border-slate-200 flex items-center gap-4 shadow-sm"
                 >
-                  <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
-                    <MessageCircle className="w-6 h-6" />
+                  <Phone className="w-8 h-8 text-blue-700 shrink-0" />
+                  <div>
+                    <h3 className="font-black text-base text-slate-900">رقم خدمة العملاء</h3>
+                    <p dir="ltr" className="text-xs font-mono font-bold text-slate-600 mt-0.5">
+                      {settings.customerServicePhone}
+                    </p>
                   </div>
-                  <h3 className="font-extrabold text-slate-900">واتساب مباشر</h3>
-                  <p className="text-xs text-slate-600 font-mono" dir="ltr">
-                    {settings.whatsappNumber}
-                  </p>
-                  <span className="inline-flex items-center gap-1 text-xs font-extrabold text-emerald-700">
-                    <span>ابدأ المحادثة</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </span>
                 </a>
               )}
 
-              {(settings.phone || settings.whatsappNumber) && (
-                <a
-                  href={`tel:${String(settings.phone || settings.whatsappNumber).replace(
-                    /[^\d+]/g,
-                    ''
-                  )}`}
-                  className="bg-blue-50/70 p-6 rounded-3xl border border-blue-200 hover:border-blue-500 hover:shadow-md shadow-xs text-center space-y-3 transition"
-                >
-                  <div className="w-12 h-12 mx-auto rounded-2xl bg-blue-700 text-white flex items-center justify-center shadow-xs">
-                    <Phone className="w-6 h-6" />
-                  </div>
-                  <h3 className="font-extrabold text-slate-900">خدمة العملاء</h3>
-                  <p className="text-xs text-slate-600 font-mono" dir="ltr">
-                    {settings.phone || settings.whatsappNumber}
-                  </p>
-                  <span className="inline-flex items-center gap-1 text-xs font-extrabold text-blue-700">
-                    <span>اتصال هاتفي مباشر</span>
-                  </span>
-                </a>
-              )}
-
-              {settings.email && (
-                <a
-                  href={`mailto:${settings.email}`}
-                  className="bg-slate-50 p-6 rounded-3xl border border-slate-200 hover:border-slate-400 hover:shadow-md shadow-xs text-center space-y-3 transition"
-                >
-                  <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-900 text-white flex items-center justify-center shadow-xs">
-                    <Mail className="w-6 h-6" />
-                  </div>
-                  <h3 className="font-extrabold text-slate-900">البريد الإلكتروني</h3>
-                  <p className="text-xs text-slate-600 font-mono" dir="ltr">
-                    {settings.email}
-                  </p>
-                  <span className="inline-flex items-center gap-1 text-xs font-extrabold text-slate-700">
-                    <span>إرسال رسالة</span>
-                  </span>
-                </a>
-              )}
-
-              {settings.whatsappGroupUrl?.trim() && (
+              {settings.whatsappGroupUrl && (
                 <a
                   href={normalizeExternalUrl(settings.whatsappGroupUrl)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="bg-teal-50/70 p-6 rounded-3xl border border-teal-200 hover:border-teal-500 hover:shadow-md shadow-xs text-center space-y-3 transition"
+                  className="p-5 rounded-3xl bg-white border border-slate-200 flex items-center gap-4 shadow-sm"
                 >
-                  <div className="w-12 h-12 mx-auto rounded-2xl bg-teal-600 text-white flex items-center justify-center shadow-xs">
-                    <Users className="w-6 h-6" />
+                  <Users className="w-8 h-8 text-emerald-600 shrink-0" />
+                  <div>
+                    <h3 className="font-black text-base text-slate-900">جروب الواتساب للمعلمين</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">انضم لمتابعة أحدث المذكرات</p>
                   </div>
-                  <h3 className="font-extrabold text-slate-900">جروب الواتساب</h3>
-                  <p className="text-xs text-slate-600">
-                    انضم لجروب المعلمين لمتابعة أحدث المذكرات والعروض الحصرية.
-                  </p>
-                  <span className="inline-flex items-center gap-1 text-xs font-extrabold text-teal-700">
-                    <span>انضم الآن</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </span>
                 </a>
               )}
 
-              {settings.facebookUrl?.trim() && (
+              {settings.facebookUrl && (
                 <a
                   href={normalizeExternalUrl(settings.facebookUrl)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="bg-indigo-50/70 p-6 rounded-3xl border border-indigo-200 hover:border-indigo-500 hover:shadow-md shadow-xs text-center space-y-3 transition"
+                  className="p-5 rounded-3xl bg-white border border-slate-200 flex items-center gap-4 shadow-sm"
                 >
-                  <div className="w-12 h-12 mx-auto rounded-2xl bg-[#1877F2] text-white flex items-center justify-center shadow-xs">
-                    <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z" />
-                    </svg>
+                  <ExternalLink className="w-8 h-8 text-blue-600 shrink-0" />
+                  <div>
+                    <h3 className="font-black text-base text-slate-900">صفحة الفيسبوك الرسمية</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">تابع عروضنا ومنشوراتنا اليومية</p>
                   </div>
-                  <h3 className="font-extrabold text-slate-900">صفحة الفيسبوك</h3>
-                  <p className="text-xs text-slate-600">
-                    تابع صفحتنا الرسمية على فيسبوك للاطلاع على العينات وآراء المعلمين.
-                  </p>
-                  <span className="inline-flex items-center gap-1 text-xs font-extrabold text-[#1877F2]">
-                    <span>زيارة الصفحة</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </span>
-                </a>
-              )}
-
-              {settings.telegramUrl?.trim() && (
-                <a
-                  href={normalizeExternalUrl(settings.telegramUrl)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-sky-50/70 p-6 rounded-3xl border border-sky-200 hover:border-sky-500 hover:shadow-md shadow-xs text-center space-y-3 transition"
-                >
-                  <div className="w-12 h-12 mx-auto rounded-2xl bg-sky-500 text-white flex items-center justify-center shadow-xs">
-                    <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
-                    </svg>
-                  </div>
-                  <h3 className="font-extrabold text-slate-900">قناة التليجرام</h3>
-                  <p className="text-xs text-slate-600">
-                    اشترك في قناتنا على تليجرام لتحميل العينات المجانية ومتابعة الإصدارات.
-                  </p>
-                  <span className="inline-flex items-center gap-1 text-xs font-extrabold text-sky-700">
-                    <span>اشترك الآن</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </span>
-                </a>
-              )}
-
-              {settings.youtubeUrl?.trim() && (
-                <a
-                  href={normalizeExternalUrl(settings.youtubeUrl)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-rose-50/70 p-6 rounded-3xl border border-rose-200 hover:border-rose-500 hover:shadow-md shadow-xs text-center space-y-3 transition"
-                >
-                  <div className="w-12 h-12 mx-auto rounded-2xl bg-rose-600 text-white flex items-center justify-center shadow-xs">
-                    <Play className="w-6 h-6 fill-current" />
-                  </div>
-                  <h3 className="font-extrabold text-slate-900">قناة اليوتيوب</h3>
-                  <p className="text-xs text-slate-600">
-                    شاهد استعراضات مصورة للمذكرات وتصميماتها من الداخل.
-                  </p>
-                  <span className="inline-flex items-center gap-1 text-xs font-extrabold text-rose-700">
-                    <span>مشاهدة القناة</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </span>
-                </a>
-              )}
-
-              {settings.instagramUrl?.trim() && (
-                <a
-                  href={normalizeExternalUrl(settings.instagramUrl)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-fuchsia-50/70 p-6 rounded-3xl border border-fuchsia-200 hover:border-fuchsia-500 hover:shadow-md shadow-xs text-center space-y-3 transition"
-                >
-                  <div className="w-12 h-12 mx-auto rounded-2xl bg-gradient-to-tr from-amber-500 via-pink-600 to-purple-700 text-white flex items-center justify-center shadow-xs">
-                    <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
-                    </svg>
-                  </div>
-                  <h3 className="font-extrabold text-slate-900">إنستجرام</h3>
-                  <p className="text-xs text-slate-600">
-                    شاهد أحدث أغلفة المذكرات والتصميمات التعليمية على حسابنا.
-                  </p>
-                  <span className="inline-flex items-center gap-1 text-xs font-extrabold text-pink-700">
-                    <span>متابعة الحساب</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </span>
-                </a>
-              )}
-
-              {settings.tiktokUrl?.trim() && (
-                <a
-                  href={normalizeExternalUrl(settings.tiktokUrl)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-slate-900 text-white p-6 rounded-3xl border border-slate-800 hover:shadow-md shadow-xs text-center space-y-3 transition"
-                >
-                  <div className="w-12 h-12 mx-auto rounded-2xl bg-white/10 text-white flex items-center justify-center">
-                    <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z" />
-                    </svg>
-                  </div>
-                  <h3 className="font-extrabold text-white">تيك توك</h3>
-                  <p className="text-xs text-slate-300">
-                    مقاطع قصيرة لاستعراض جودة الطباعة وتفاصيل المذكرات.
-                  </p>
-                  <span className="inline-flex items-center gap-1 text-xs font-extrabold text-teal-300">
-                    <span>زيارة الحساب</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </span>
                 </a>
               )}
             </div>
@@ -7740,94 +5018,59 @@ export default function App() {
         )}
       </main>
 
-      {/* FOOTER */}
-      <footer className="bg-slate-900 text-slate-400 border-t border-slate-800 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
-          <div className="text-center md:text-right space-y-1">
-            <div>
-              <span className="font-extrabold text-white">{settings.siteName}</span> — جميع الحقوق
-              محفوظة © {new Date().getFullYear()}
-            </div>
-            {(settings.phone || settings.whatsappNumber) && (
-              <div className="text-slate-400">
-                خدمة العملاء:{' '}
-                <a
-                  href={`tel:${String(settings.phone || settings.whatsappNumber).replace(
-                    /[^\d+]/g,
-                    ''
-                  )}`}
-                  dir="ltr"
-                  className="font-mono text-slate-200 hover:text-white"
-                >
-                  {settings.phone || settings.whatsappNumber}
-                </a>
-              </div>
-            )}
+      {/* Footer */}
+      <footer className="bg-slate-950 text-slate-300 py-8 px-4 sm:px-6 border-t border-slate-800">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
+          <div>
+            <strong className="text-white">{settings.platformName}</strong> — جميع الحقوق محفوظة ©{' '}
+            {new Date().getFullYear()}
           </div>
-
-          <div className="flex flex-wrap items-center justify-center gap-2.5">
-            {settings.whatsappGroupUrl?.trim() && (
-              <a
-                href={normalizeExternalUrl(settings.whatsappGroupUrl)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white font-bold flex items-center gap-1.5 transition"
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>جروب واتساب</span>
-              </a>
-            )}
-            {settings.facebookUrl?.trim() && (
-              <a
-                href={normalizeExternalUrl(settings.facebookUrl)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 rounded-xl bg-blue-600/20 hover:bg-[#1877F2] text-blue-300 hover:text-white font-bold flex items-center gap-1.5 transition"
-              >
-                <span>فيسبوك</span>
-              </a>
-            )}
-            {settings.telegramUrl?.trim() && (
+          <div className="flex flex-wrap items-center gap-2">
+            {settings.telegramUrl && (
               <a
                 href={normalizeExternalUrl(settings.telegramUrl)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-3 py-1.5 rounded-xl bg-sky-600/20 hover:bg-sky-500 text-sky-300 hover:text-white font-bold flex items-center gap-1.5 transition"
+                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold"
               >
-                <span>تليجرام</span>
+                تليجرام
               </a>
             )}
-            {settings.youtubeUrl?.trim() && (
+            {settings.youtubeUrl && (
               <a
                 href={normalizeExternalUrl(settings.youtubeUrl)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-3 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white font-bold flex items-center gap-1.5 transition"
+                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold"
               >
-                <span>يوتيوب</span>
+                يوتيوب
               </a>
             )}
-            {settings.instagramUrl?.trim() && (
+            {settings.instagramUrl && (
               <a
                 href={normalizeExternalUrl(settings.instagramUrl)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-3 py-1.5 rounded-xl bg-pink-600/20 hover:bg-pink-600 text-pink-300 hover:text-white font-bold flex items-center gap-1.5 transition"
+                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold"
               >
-                <span>إنستجرام</span>
+                إنستجرام
               </a>
             )}
-            {settings.tiktokUrl?.trim() && (
+            {settings.tiktokUrl && (
               <a
                 href={normalizeExternalUrl(settings.tiktokUrl)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white font-bold flex items-center gap-1.5 transition"
+                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold"
               >
-                <span>تيك توك</span>
+                تيك توك
               </a>
             )}
-            <button type="button" onClick={() => setPage('track')} className="hover:text-white px-1">
+            <button
+              type="button"
+              onClick={() => setPage('track')}
+              className="hover:text-white px-1"
+            >
               تتبع طلبك
             </button>
             <button
