@@ -122,6 +122,12 @@ const DEFAULT_SETTINGS = {
   showNotices: true,
   allowTeacherLogo: true,
   showHomeSections: true,
+  showHeroSection: true,
+  showHeroTrustBox: true,
+  showAboutSection: true,
+  showFeaturedSection: true,
+  featuredCount: 6,
+  homeLayoutOrder: ['hero', 'sections', 'about', 'featured'],
   homeSectionsTitle: 'أقسام المذكرات والكورسات الرئيسية',
   homeSectionsSubtitle: 'اختر القسم المناسب لبدء تصفح المذكرات المنسقة والجاهزة باسمك وشعارك',
   homeSections: [
@@ -131,7 +137,8 @@ const DEFAULT_SETTINGS = {
       description: 'مذكرات شرح وتدريبات شاملة لجميع المواد والمراحل الدراسية للفصل الدراسي الأول.',
       categoryId: 'cat-1',
       badge: 'متاح الآن',
-      buttonText: 'تصفح مذكرات الترم الأول'
+      buttonText: 'تصفح مذكرات الترم الأول',
+      coverImage: ''
     },
     {
       id: 'sec-term-2',
@@ -139,7 +146,8 @@ const DEFAULT_SETTINGS = {
       description: 'مذكرات محدثة ومنسقة للفصل الدراسي الثاني جاهزة للطباعة باسمك وشعارك الخاص.',
       categoryId: 'cat-2',
       badge: 'محدّث',
-      buttonText: 'تصفح مذكرات الترم الثاني'
+      buttonText: 'تصفح مذكرات الترم الثاني',
+      coverImage: ''
     },
     {
       id: 'sec-foundation',
@@ -147,7 +155,8 @@ const DEFAULT_SETTINGS = {
       description: 'سلاسل تأسيس احترافية لبناء مهارات الطلاب في القراءة والكتابة والقواعد والرياضيات.',
       categoryId: 'cat-3',
       badge: 'تأسيس شامل',
-      buttonText: 'استعرض كورسات التأسيس'
+      buttonText: 'استعرض كورسات التأسيس',
+      coverImage: ''
     }
   ],
   notices: [
@@ -759,6 +768,16 @@ export default function App() {
       if (cleanSettings.heroBgUrl?.startsWith('data:image')) {
         cleanSettings.heroBgUrl = await compressImageDataUrl(cleanSettings.heroBgUrl, 1200, 0.72);
       }
+      if (Array.isArray(cleanSettings.homeSections)) {
+        cleanSettings.homeSections = await Promise.all(
+          cleanSettings.homeSections.map(async (sec) => ({
+            ...sec,
+            coverImage: sec.coverImage?.startsWith('data:image')
+              ? await compressImageDataUrl(sec.coverImage, 760, 0.7)
+              : sec.coverImage || ''
+          }))
+        );
+      }
       await saveCloudDoc(['config', 'settings'], cleanSettings);
       await saveCloudDoc(['config', 'categories'], { items: categories });
       await saveCloudDoc(['config', 'stages'], { items: stages });
@@ -1221,7 +1240,8 @@ function HomePage({
   onPreviewNotebook,
   onGoContact
 }) {
-  const featuredNotebooks = notebooks.slice(0, 6);
+  const featuredLimit = Math.max(1, Number(settings.featuredCount) || 6);
+  const featuredNotebooks = notebooks.slice(0, featuredLimit);
   const bgOpacity = Math.min(100, Math.max(0, Number(settings.heroBgOpacity ?? 65))) / 100;
   const overlayOpacity = Math.min(100, Math.max(0, Number(settings.heroOverlayOpacity ?? 55))) / 100;
   const overlayColor = settings.heroOverlayColor || '#020617';
@@ -1231,10 +1251,16 @@ function HomePage({
     ? settings.homeSections
     : DEFAULT_SETTINGS.homeSections;
 
-  return (
-    <div>
-      {/* Hero Section */}
+  const layoutOrder = Array.isArray(settings.homeLayoutOrder) && settings.homeLayoutOrder.length > 0
+    ? settings.homeLayoutOrder
+    : ['hero', 'sections', 'about', 'featured'];
+
+  const renderHeroBlock = () => {
+    if (settings.showHeroSection === false) return null;
+    const showTrustBox = settings.showHeroTrustBox !== false;
+    return (
       <section
+        key="hero"
         style={{ minHeight: `${heroMinHeight}px` }}
         className="relative overflow-hidden bg-slate-950 text-white py-16 sm:py-24 flex items-center"
       >
@@ -1255,7 +1281,7 @@ function HomePage({
         />
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-12 gap-10 items-center w-full">
-          <div className="lg:col-span-7 space-y-6">
+          <div className={`${showTrustBox ? 'lg:col-span-7' : 'lg:col-span-10 mx-auto text-center'} space-y-6`}>
             <div className="inline-flex items-center gap-2 bg-amber-400/15 border border-amber-400/30 text-amber-300 px-4 py-1.5 rounded-full text-xs font-extrabold">
               <Sparkles className="w-4 h-4" />
               <span>مذكرات منسقة وجاهزة للطباعة باسمك وشعارك الخاص</span>
@@ -1265,11 +1291,11 @@ function HomePage({
               {settings.heroTitle}
             </h2>
 
-            <p className="text-base sm:text-lg text-slate-300 leading-relaxed max-w-2xl">
+            <p className={`text-base sm:text-lg text-slate-300 leading-relaxed max-w-2xl ${!showTrustBox ? 'mx-auto' : ''}`}>
               {settings.heroSubtitle}
             </p>
 
-            <div className="flex flex-wrap items-center gap-4 pt-2">
+            <div className={`flex flex-wrap items-center gap-4 pt-2 ${!showTrustBox ? 'justify-center' : ''}`}>
               <button
                 onClick={() => onExploreCatalog('all')}
                 className="flex items-center gap-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 px-7 py-4 rounded-2xl text-sm sm:text-base font-black transition shadow-xl shadow-amber-400/20 cursor-pointer"
@@ -1288,74 +1314,98 @@ function HomePage({
             </div>
           </div>
 
-          <div className="lg:col-span-5">
-            <div className="bg-white/10 backdrop-blur-md border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl">
-              <div className="flex items-center justify-between mb-5">
-                <span className="text-amber-300 font-black text-sm">لماذا يثق بنا المعلمون؟</span>
-                <ShieldCheck className="w-6 h-6 text-amber-400" />
+          {showTrustBox && (
+            <div className="lg:col-span-5">
+              <div className="bg-white/10 backdrop-blur-md border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl">
+                <div className="flex items-center justify-between mb-5">
+                  <span className="text-amber-300 font-black text-sm">لماذا يثق بنا المعلمون؟</span>
+                  <ShieldCheck className="w-6 h-6 text-amber-400" />
+                </div>
+                <ul className="space-y-4 text-sm text-slate-100 font-semibold">
+                  <li className="flex items-start gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                    <span>إضافة اسمك ورقم هاتفك وشعارك على الغلاف وجميع الصفحات</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                    <span>ملفات PDF فائقة الجودة جاهزة للطباعة الفورية</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                    <span>معاينة عينات حقيقية من المذكرة قبل تأكيد الطلب</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                    <span>تسليم سريع ومتابعة مباشرة لحالة طلبك خطوة بخطوة</span>
+                  </li>
+                </ul>
               </div>
-              <ul className="space-y-4 text-sm text-slate-100 font-semibold">
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span>إضافة اسمك ورقم هاتفك وشعارك على الغلاف وجميع الصفحات</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span>ملفات PDF فائقة الجودة جاهزة للطباعة الفورية</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span>معاينة عينات حقيقية من المذكرة قبل تأكيد الطلب</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span>تسليم سريع ومتابعة مباشرة لحالة طلبك خطوة بخطوة</span>
-                </li>
-              </ul>
             </div>
-          </div>
+          )}
         </div>
       </section>
+    );
+  };
 
-      {/* Main Home Sections (Term 1, Term 2, Foundation Courses, etc.) */}
-      {settings.showHomeSections !== false && homeSections.length > 0 && (
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14">
-          <div className="text-center max-w-2xl mx-auto mb-9">
-            <span className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-900 px-3.5 py-1 rounded-full text-xs font-black mb-2">
-              <Layers className="w-3.5 h-3.5" />
-              <span>الأقسام الرئيسية</span>
-            </span>
-            <h3 className="text-2xl sm:text-3xl font-black text-slate-900">
-              {settings.homeSectionsTitle || 'أقسام المذكرات والكورسات الرئيسية'}
-            </h3>
-            {settings.homeSectionsSubtitle && (
-              <p className="text-sm text-slate-500 mt-1.5">{settings.homeSectionsSubtitle}</p>
-            )}
-          </div>
+  const renderSectionsBlock = () => {
+    if (settings.showHomeSections === false || homeSections.length === 0) return null;
+    return (
+      <section key="sections" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
+        <div className="text-center max-w-2xl mx-auto mb-9">
+          <span className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-900 px-3.5 py-1 rounded-full text-xs font-black mb-2">
+            <Layers className="w-3.5 h-3.5" />
+            <span>الأقسام الرئيسية</span>
+          </span>
+          <h3 className="text-2xl sm:text-3xl font-black text-slate-900">
+            {settings.homeSectionsTitle || 'أقسام المذكرات والكورسات الرئيسية'}
+          </h3>
+          {settings.homeSectionsSubtitle && (
+            <p className="text-sm text-slate-500 mt-1.5">{settings.homeSectionsSubtitle}</p>
+          )}
+        </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {homeSections.map((sec, idx) => {
-              const sectionCount = sec.categoryId
-                ? notebooks.filter((n) => n.categoryId === sec.categoryId).length
-                : notebooks.length;
-              const accentStyles = [
-                'from-blue-700 to-indigo-800 shadow-blue-700/20',
-                'from-emerald-600 to-teal-800 shadow-emerald-700/20',
-                'from-amber-500 to-orange-600 shadow-amber-600/20'
-              ];
-              const badgeStyles = [
-                'bg-blue-50 text-blue-700',
-                'bg-emerald-50 text-emerald-700',
-                'bg-amber-50 text-amber-800'
-              ];
-              return (
-                <div
-                  key={sec.id || idx}
-                  onClick={() => onExploreCatalog(sec.categoryId || 'all')}
-                  className="bg-white rounded-3xl p-7 border border-slate-200/80 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between cursor-pointer group"
-                >
-                  <div>
-                    <div className="flex items-center justify-between gap-2 mb-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {homeSections.map((sec, idx) => {
+            const sectionCount = sec.categoryId
+              ? notebooks.filter((n) => n.categoryId === sec.categoryId).length
+              : notebooks.length;
+            const accentStyles = [
+              'from-blue-700 to-indigo-800 shadow-blue-700/20',
+              'from-emerald-600 to-teal-800 shadow-emerald-700/20',
+              'from-amber-500 to-orange-600 shadow-amber-600/20'
+            ];
+            const badgeStyles = [
+              'bg-blue-50 text-blue-700',
+              'bg-emerald-50 text-emerald-700',
+              'bg-amber-50 text-amber-800'
+            ];
+            return (
+              <div
+                key={sec.id || idx}
+                onClick={() => onExploreCatalog(sec.categoryId || 'all')}
+                className="bg-white rounded-3xl overflow-hidden border border-slate-200/80 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between cursor-pointer group"
+              >
+                <div>
+                  {sec.coverImage ? (
+                    <div className="relative h-48 w-full overflow-hidden bg-slate-900">
+                      <img
+                        src={sec.coverImage}
+                        alt={sec.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent" />
+                      {sec.badge && (
+                        <span
+                          className={`absolute top-3 right-3 text-xs font-black px-3 py-1 rounded-full shadow ${
+                            badgeStyles[idx % badgeStyles.length]
+                          }`}
+                        >
+                          {sec.badge}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="px-7 pt-7 flex items-center justify-between gap-2 mb-4">
                       <div
                         className={`w-13 h-13 rounded-2xl bg-gradient-to-br ${
                           accentStyles[idx % accentStyles.length]
@@ -1373,7 +1423,9 @@ function HomePage({
                         </span>
                       )}
                     </div>
+                  )}
 
+                  <div className={`px-7 ${sec.coverImage ? 'pt-5' : ''}`}>
                     <h4 className="text-xl font-black text-slate-900 group-hover:text-blue-700 transition mb-2">
                       {sec.title}
                     </h4>
@@ -1381,24 +1433,28 @@ function HomePage({
                       {sec.description}
                     </p>
                   </div>
-
-                  <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-                    <span className="text-xs font-extrabold text-slate-500">
-                      {sectionCount > 0 ? `${sectionCount} مذكرة متاحة` : 'استعرض القسم'}
-                    </span>
-                    <span className="text-xs sm:text-sm font-black text-blue-700 group-hover:translate-x-[-4px] transition-transform">
-                      {sec.buttonText || 'تصفح القسم'} ←
-                    </span>
-                  </div>
                 </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
 
-      {/* About Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
+                <div className="px-7 pb-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-slate-500">
+                    {sectionCount > 0 ? `${sectionCount} مذكرة متاحة` : 'استعرض القسم'}
+                  </span>
+                  <span className="text-xs sm:text-sm font-black text-blue-700 group-hover:translate-x-[-4px] transition-transform">
+                    {sec.buttonText || 'تصفح القسم'} ←
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    );
+  };
+
+  const renderAboutBlock = () => {
+    if (settings.showAboutSection === false) return null;
+    return (
+      <section key="about" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="bg-white rounded-3xl p-8 sm:p-12 border border-slate-200/80 shadow-sm grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
           <div className="lg:col-span-6 space-y-4">
             <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 px-3.5 py-1.5 rounded-full text-xs font-extrabold">
@@ -1464,9 +1520,13 @@ function HomePage({
           </div>
         </div>
       </section>
+    );
+  };
 
-      {/* Featured Notebooks Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+  const renderFeaturedBlock = () => {
+    if (settings.showFeaturedSection === false) return null;
+    return (
+      <section key="featured" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
           <div>
             <h3 className="text-2xl font-black text-slate-900">أحدث المذكرات المتاحة</h3>
@@ -1495,6 +1555,21 @@ function HomePage({
           ))}
         </div>
       </section>
+    );
+  };
+
+  const sectionRenderers = {
+    hero: renderHeroBlock,
+    sections: renderSectionsBlock,
+    about: renderAboutBlock,
+    featured: renderFeaturedBlock
+  };
+
+  return (
+    <div>
+      {layoutOrder.map((blockKey) =>
+        sectionRenderers[blockKey] ? sectionRenderers[blockKey]() : null
+      )}
     </div>
   );
 }
@@ -3594,17 +3669,31 @@ function AdminSettingsTab({ settings, categories = [], onSaveSettings }) {
         description: s.description || '',
         categoryId: s.categoryId || '',
         badge: s.badge || '',
-        buttonText: s.buttonText || 'تصفح القسم'
+        buttonText: s.buttonText || 'تصفح القسم',
+        coverImage: s.coverImage || ''
       }));
     }
     return DEFAULT_SETTINGS.homeSections;
+  }, [settings]);
+
+  const safeLayoutOrder = useMemo(() => {
+    const base = ['hero', 'sections', 'about', 'featured'];
+    if (Array.isArray(settings?.homeLayoutOrder) && settings.homeLayoutOrder.length > 0) {
+      const valid = settings.homeLayoutOrder.filter((k) => base.includes(k));
+      base.forEach((k) => {
+        if (!valid.includes(k)) valid.push(k);
+      });
+      return valid;
+    }
+    return base;
   }, [settings]);
 
   const [form, setForm] = useState(() => ({
     ...DEFAULT_SETTINGS,
     ...(settings || {}),
     orderFormFields: safeOrderFields,
-    homeSections: safeHomeSections
+    homeSections: safeHomeSections,
+    homeLayoutOrder: safeLayoutOrder
   }));
 
   useEffect(() => {
@@ -3613,9 +3702,10 @@ function AdminSettingsTab({ settings, categories = [], onSaveSettings }) {
       ...prev,
       ...(settings || {}),
       orderFormFields: safeOrderFields,
-      homeSections: safeHomeSections
+      homeSections: safeHomeSections,
+      homeLayoutOrder: safeLayoutOrder
     }));
-  }, [settings, safeOrderFields, safeHomeSections]);
+  }, [settings, safeOrderFields, safeHomeSections, safeLayoutOrder]);
 
   const handleImageUpload = async (field, e) => {
     const file = e.target.files?.[0];
@@ -3623,6 +3713,37 @@ function AdminSettingsTab({ settings, categories = [], onSaveSettings }) {
     const maxW = field === 'logoUrl' ? 400 : 1200;
     const compressed = await fileToCompressedDataUrl(file, maxW, 0.75);
     setForm((prev) => ({ ...prev, [field]: compressed }));
+  };
+
+  const handleSectionCoverUpload = async (idx, e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const compressed = await fileToCompressedDataUrl(file, 760, 0.72);
+    updateHomeSection(idx, { coverImage: compressed });
+  };
+
+  const moveHomeSection = (idx, direction) => {
+    setForm((prev) => {
+      const current = [...(Array.isArray(prev.homeSections) ? prev.homeSections : safeHomeSections)];
+      const targetIdx = idx + direction;
+      if (targetIdx < 0 || targetIdx >= current.length) return prev;
+      const temp = current[idx];
+      current[idx] = current[targetIdx];
+      current[targetIdx] = temp;
+      return { ...prev, homeSections: current };
+    });
+  };
+
+  const moveLayoutBlock = (idx, direction) => {
+    setForm((prev) => {
+      const current = [...(Array.isArray(prev.homeLayoutOrder) ? prev.homeLayoutOrder : safeLayoutOrder)];
+      const targetIdx = idx + direction;
+      if (targetIdx < 0 || targetIdx >= current.length) return prev;
+      const temp = current[idx];
+      current[idx] = current[targetIdx];
+      current[targetIdx] = temp;
+      return { ...prev, homeLayoutOrder: current };
+    });
   };
 
   const updateOrderField = (idx, patch) => {
@@ -3686,7 +3807,8 @@ function AdminSettingsTab({ settings, categories = [], onSaveSettings }) {
             description: 'وصف مختصر لمحتوى هذا القسم...',
             categoryId: categories[0]?.id || '',
             badge: 'جديد',
-            buttonText: 'استعرض القسم'
+            buttonText: 'استعرض القسم',
+            coverImage: ''
           }
         ]
       };
@@ -3814,42 +3936,40 @@ function AdminSettingsTab({ settings, categories = [], onSaveSettings }) {
                 className="w-full accent-blue-700 cursor-pointer"
               />
             </div>
+          </div>
 
-            {/* Hero Min Height */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="bg-white p-3.5 rounded-xl border border-slate-200">
               <div className="flex justify-between text-xs font-extrabold text-slate-700 mb-1.5">
-                <span>ارتفاع قسم الخلفية</span>
+                <span>ارتفاع الواجهة الترحيبية</span>
                 <span className="text-blue-700">{form.heroMinHeight || 540}px</span>
               </div>
               <input
                 type="range"
-                min={420}
-                max={800}
-                step={20}
+                min={360}
+                max={780}
+                step={10}
                 value={form.heroMinHeight || 540}
                 onChange={(e) => setForm({ ...form, heroMinHeight: Number(e.target.value) })}
                 className="w-full accent-blue-700 cursor-pointer"
               />
             </div>
 
-            {/* Hero Image Fit */}
-            <div className="bg-white p-3.5 rounded-xl border border-slate-200 sm:col-span-2">
-              <label className="block text-xs font-extrabold text-slate-700 mb-1.5">
-                طريقة عرض صورة الخلفية
-              </label>
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200 flex items-center justify-between">
+              <span className="text-xs font-extrabold text-slate-700">طريقة احتواء صورة الخلفية</span>
               <select
                 value={form.heroBgFit || 'cover'}
                 onChange={(e) => setForm({ ...form, heroBgFit: e.target.value })}
-                className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold bg-slate-50"
+                className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold bg-slate-50"
               >
-                <option value="cover">ملء الإطار بالكامل (Cover - الأنسب للخلفيات)</option>
+                <option value="cover">ملء الإطار بالكامل (Cover)</option>
                 <option value="contain">إظهار الصورة كاملة بدون قص (Contain)</option>
               </select>
             </div>
           </div>
         </div>
 
-        <div>
+        <div className="md:col-span-2">
           <label className="block text-xs font-extrabold text-slate-700 mb-1">العنوان الرئيسي في الواجهة</label>
           <input
             type="text"
@@ -3858,38 +3978,19 @@ function AdminSettingsTab({ settings, categories = [], onSaveSettings }) {
             className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-bold"
           />
         </div>
-        <div>
-          <label className="block text-xs font-extrabold text-slate-700 mb-1">عنوان قسم التعريف بالمنصة</label>
-          <input
-            type="text"
-            value={form.aboutTitle || ''}
-            onChange={(e) => setForm({ ...form, aboutTitle: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-bold"
-          />
-        </div>
 
         <div className="md:col-span-2">
-          <label className="block text-xs font-extrabold text-slate-700 mb-1">النص الترحيبي أسفل العنوان الرئيسي</label>
+          <label className="block text-xs font-extrabold text-slate-700 mb-1">النص الفرعي للواجهة</label>
           <textarea
             rows={2}
             value={form.heroSubtitle || ''}
             onChange={(e) => setForm({ ...form, heroSubtitle: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
-          />
-        </div>
-
-        <div className="md:col-span-2">
-          <label className="block text-xs font-extrabold text-slate-700 mb-1">نص التعريف بالمنصة</label>
-          <textarea
-            rows={2}
-            value={form.aboutBody || ''}
-            onChange={(e) => setForm({ ...form, aboutBody: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs"
           />
         </div>
 
         <div>
-          <label className="block text-xs font-extrabold text-slate-700 mb-1">رقم الواتساب (بصيغة 2010...)</label>
+          <label className="block text-xs font-extrabold text-slate-700 mb-1">رقم الواتساب (مع كود الدولة مثل 2010...)</label>
           <input
             type="text"
             dir="ltr"
@@ -3898,59 +3999,9 @@ function AdminSettingsTab({ settings, categories = [], onSaveSettings }) {
             className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
           />
         </div>
-        <div>
-          <label className="block text-xs font-extrabold text-slate-700 mb-1">رقم خدمة العملاء</label>
-          <input
-            type="text"
-            dir="ltr"
-            value={form.supportPhone || ''}
-            onChange={(e) => setForm({ ...form, supportPhone: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-extrabold text-slate-700 mb-1">البريد الإلكتروني</label>
-          <input
-            type="email"
-            dir="ltr"
-            value={form.email || ''}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-extrabold text-slate-700 mb-1">رابط جروب الواتساب</label>
-          <input
-            type="text"
-            dir="ltr"
-            value={form.whatsappGroupUrl || ''}
-            onChange={(e) => setForm({ ...form, whatsappGroupUrl: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-extrabold text-slate-700 mb-1">رابط صفحة الفيسبوك</label>
-          <input
-            type="text"
-            dir="ltr"
-            value={form.facebookUrl || ''}
-            onChange={(e) => setForm({ ...form, facebookUrl: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-extrabold text-slate-700 mb-1">رابط قناة التليجرام</label>
-          <input
-            type="text"
-            dir="ltr"
-            value={form.telegramUrl || ''}
-            onChange={(e) => setForm({ ...form, telegramUrl: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
-          />
-        </div>
 
         <div>
-          <label className="block text-xs font-extrabold text-slate-700 mb-1">بيانات التحويل والدفع</label>
+          <label className="block text-xs font-extrabold text-slate-700 mb-1">تعليمات الدفع والتحويل</label>
           <input
             type="text"
             value={form.paymentInstructions || ''}
@@ -3958,8 +4009,9 @@ function AdminSettingsTab({ settings, categories = [], onSaveSettings }) {
             className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
           />
         </div>
-        <div>
-          <label className="block text-xs font-extrabold text-slate-700 mb-1">نص شريط العروض العلوي</label>
+
+        <div className="md:col-span-2">
+          <label className="block text-xs font-extrabold text-slate-700 mb-1">نص الشريط الترويجي العلوي</label>
           <input
             type="text"
             value={form.promoBannerText || ''}
@@ -3969,25 +4021,129 @@ function AdminSettingsTab({ settings, categories = [], onSaveSettings }) {
         </div>
       </div>
 
+      {/* Full Home Page Layout & Visibility Controller */}
+      <div className="border-t border-slate-200 pt-6 space-y-4">
+        <div>
+          <h4 className="font-black text-slate-900">التحكم الكامل في تخطيط الصفحة الرئيسية وترتيب أقسامها</h4>
+          <p className="text-[11px] text-slate-500">
+            تحكم في إظهار أو إخفاء أي قسم في الصفحة الرئيسية، وأعد ترتيب أماكن ظهورها للأعلى أو للأسفل كما تشاء
+          </p>
+        </div>
+
+        <div className="space-y-2.5">
+          {(Array.isArray(form.homeLayoutOrder) ? form.homeLayoutOrder : safeLayoutOrder).map((blockKey, idx, arr) => {
+            const blockMeta = {
+              hero: {
+                title: '1. الواجهة الترحيبية الرئيسية (Hero Banner)',
+                desc: 'القسم العلوي الكبير الذي يحتوي على العنوان الرئيسي وصورة الخلفية',
+                toggleKey: 'showHeroSection'
+              },
+              sections: {
+                title: '2. بطاقات الأقسام والمراحل الرئيسية',
+                desc: 'بطاقات مذكرات الترم الأول والترم الثاني وكورسات التأسيس',
+                toggleKey: 'showHomeSections'
+              },
+              about: {
+                title: '3. قسم التعريف بالمنصة ومميزاتها',
+                desc: 'بطاقة لماذا يختار المعلمون المنصة والمميزات الأربع',
+                toggleKey: 'showAboutSection'
+              },
+              featured: {
+                title: '4. قسم أحدث المذكرات المتاحة',
+                desc: 'شبكة عرض أحدث المذكرات في الصفحة الرئيسية',
+                toggleKey: 'showFeaturedSection'
+              }
+            }[blockKey];
+
+            if (!blockMeta) return null;
+            const isVisible = form[blockMeta.toggleKey] !== false;
+
+            return (
+              <div
+                key={blockKey}
+                className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-3"
+              >
+                <div>
+                  <p className="text-xs sm:text-sm font-black text-slate-900">{blockMeta.title}</p>
+                  <p className="text-[11px] text-slate-500">{blockMeta.desc}</p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {blockKey === 'hero' && (
+                    <label className="flex items-center gap-1.5 text-[11px] font-bold bg-white border border-slate-200 px-2.5 py-1.5 rounded-xl cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.showHeroTrustBox !== false}
+                        onChange={(e) => setForm({ ...form, showHeroTrustBox: e.target.checked })}
+                        className="accent-blue-700"
+                      />
+                      <span>بطاقة «لماذا يثق بنا المعلمون»</span>
+                    </label>
+                  )}
+
+                  {blockKey === 'featured' && (
+                    <div className="flex items-center gap-1.5 text-[11px] font-bold bg-white border border-slate-200 px-2.5 py-1 rounded-xl">
+                      <span>العدد:</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={24}
+                        value={form.featuredCount || 6}
+                        onChange={(e) => setForm({ ...form, featuredCount: Number(e.target.value) })}
+                        className="w-12 text-center font-black text-blue-700 outline-none"
+                      />
+                    </div>
+                  )}
+
+                  <label className="flex items-center gap-1.5 text-xs font-extrabold bg-white border border-slate-200 px-3 py-1.5 rounded-xl cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isVisible}
+                      onChange={(e) => setForm({ ...form, [blockMeta.toggleKey]: e.target.checked })}
+                      className="w-4 h-4 accent-blue-700"
+                    />
+                    <span className={isVisible ? 'text-emerald-700' : 'text-rose-600'}>
+                      {isVisible ? 'ظاهر' : 'مخفي'}
+                    </span>
+                  </label>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={idx === 0}
+                      onClick={() => moveLayoutBlock(idx, -1)}
+                      title="نقل للأعلى"
+                      className="p-2 rounded-xl bg-white border border-slate-200 hover:bg-blue-50 disabled:opacity-35 text-slate-700 cursor-pointer"
+                    >
+                      <ArrowUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={idx === arr.length - 1}
+                      onClick={() => moveLayoutBlock(idx, 1)}
+                      title="نقل للأسفل"
+                      className="p-2 rounded-xl bg-white border border-slate-200 hover:bg-blue-50 disabled:opacity-35 text-slate-700 cursor-pointer"
+                    >
+                      <ArrowDown className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Manage Home Page Main Sections (Term 1, Term 2, Foundation Courses, etc.) */}
       <div className="border-t border-slate-200 pt-6 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h4 className="font-black text-slate-900">إدارة بطاقات الأقسام الرئيسية في الصفحة الرئيسية</h4>
+            <h4 className="font-black text-slate-900">إدارة بطاقات الأقسام الرئيسية وصور أغلفتها</h4>
             <p className="text-[11px] text-slate-500">
-              تحكم كامل بالحذف أو التعديل أو الإضافة في بطاقات الصفحة الرئيسية (مثل: مذكرات الترم الأول، مذكرات الترم الثاني، كورسات التأسيس)
+              ضع صورة غلاف لكل مرحلة/قسم، وعدّل النصوص، أو غيّر ترتيب البطاقات بالحذف والإضافة
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <label className="flex items-center gap-2 text-xs font-extrabold text-blue-800 bg-blue-50 border border-blue-200 px-3 py-2 rounded-xl cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.showHomeSections !== false}
-                onChange={(e) => setForm({ ...form, showHomeSections: e.target.checked })}
-                className="w-4 h-4 accent-blue-700"
-              />
-              <span>{form.showHomeSections !== false ? 'ظاهرة في الرئيسية' : 'مخفية'}</span>
-            </label>
             <button
               type="button"
               onClick={addHomeSection}
@@ -4020,18 +4176,73 @@ function AdminSettingsTab({ settings, categories = [], onSaveSettings }) {
         </div>
 
         <div className="space-y-3">
-          {(Array.isArray(form.homeSections) ? form.homeSections : safeHomeSections).map((sec, idx) => (
+          {(Array.isArray(form.homeSections) ? form.homeSections : safeHomeSections).map((sec, idx, arr) => (
             <div key={sec.id || idx} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs font-black text-blue-700">بطاقة رقم #{idx + 1}</span>
-                <button
-                  type="button"
-                  onClick={() => removeHomeSection(idx)}
-                  className="flex items-center gap-1 text-xs font-bold text-rose-600 hover:text-rose-700 cursor-pointer"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>حذف البطاقة</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={idx === 0}
+                    onClick={() => moveHomeSection(idx, -1)}
+                    title="تقديم البطاقة"
+                    className="p-1.5 rounded-lg bg-white border border-slate-200 hover:bg-blue-50 disabled:opacity-35 cursor-pointer"
+                  >
+                    <ArrowUp className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={idx === arr.length - 1}
+                    onClick={() => moveHomeSection(idx, 1)}
+                    title="تأخير البطاقة"
+                    className="p-1.5 rounded-lg bg-white border border-slate-200 hover:bg-blue-50 disabled:opacity-35 cursor-pointer"
+                  >
+                    <ArrowDown className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeHomeSection(idx)}
+                    className="flex items-center gap-1 text-xs font-bold text-rose-600 hover:text-rose-700 cursor-pointer mr-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>حذف</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Cover Image Upload & Preview for this Card */}
+              <div className="bg-white p-3 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  {sec.coverImage ? (
+                    <img
+                      src={sec.coverImage}
+                      alt={sec.title}
+                      className="w-16 h-12 rounded-lg object-cover border border-slate-200"
+                    />
+                  ) : (
+                    <div className="w-16 h-12 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center text-[10px] font-bold">
+                      بدون غلاف
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-xs font-extrabold text-slate-800">صورة غلاف البطاقة / المرحلة</p>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleSectionCoverUpload(idx, e)}
+                      className="text-[11px] text-slate-600 mt-1"
+                    />
+                  </div>
+                </div>
+                {sec.coverImage && (
+                  <button
+                    type="button"
+                    onClick={() => updateHomeSection(idx, { coverImage: '' })}
+                    className="text-xs font-bold text-rose-600 hover:underline cursor-pointer"
+                  >
+                    إزالة الصورة
+                  </button>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
