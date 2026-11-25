@@ -90,7 +90,13 @@ const DEFAULT_SETTINGS = {
   platformName: 'منصة العباقرة للمذكرات التعليمية',
   platformTagline: 'مذكرات دراسية احترافية مُخصّصة باسمك وشعارك الخاص',
   logoUrl: '',
+  logoSize: 48,
   heroBgUrl: '',
+  heroBgOpacity: 65,
+  heroBgFit: 'cover',
+  heroOverlayColor: '#020617',
+  heroOverlayOpacity: 55,
+  heroMinHeight: 540,
   heroTitle: 'مذكرتك التعليمية الجاهزة... باسمك وشعارك وهويتك الاحترافية',
   heroSubtitle:
     'نوفر للمعلمين مذكرات دراسية منسقة ومحدثة وفق أحدث المناهج بصيغة PDF عالية الدقة، مع إضافة اسم المعلم، رقم الهاتف، والشعار الخاص به على الغلاف وجميع الصفحات.',
@@ -826,6 +832,7 @@ export default function App() {
         <div className="bg-slate-950 text-white py-2.5 px-4 text-center text-xs sm:text-sm font-bold flex flex-wrap items-center justify-center gap-3">
           <span>{settings.promoBannerText}</span>
           <button
+            type="button"
             onClick={() => setActivePage('offers')}
             className="bg-amber-400 hover:bg-amber-300 text-slate-950 px-3 py-1 rounded-full text-xs font-black transition cursor-pointer"
           >
@@ -834,9 +841,9 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Navigation Header */}
+      {/* Main Header */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 min-h-20 flex items-center justify-between gap-4">
           {/* Brand Logo & Name (5 rapid clicks opens hidden Admin Login) */}
           <div
             onClick={handleSecretLogoClick}
@@ -846,10 +853,20 @@ export default function App() {
               <img
                 src={settings.logoUrl}
                 alt={settings.platformName}
-                className="w-12 h-12 rounded-2xl object-cover border border-slate-200 shadow-sm group-hover:scale-105 transition"
+                style={{
+                  width: `${Number(settings.logoSize) || 48}px`,
+                  height: `${Number(settings.logoSize) || 48}px`
+                }}
+                className="rounded-2xl object-contain bg-white border border-slate-200 shadow-sm group-hover:scale-105 transition shrink-0"
               />
             ) : (
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-700 to-indigo-800 text-white flex items-center justify-center shadow-lg shadow-blue-700/20 group-hover:scale-105 transition">
+              <div
+                style={{
+                  width: `${Number(settings.logoSize) || 48}px`,
+                  height: `${Number(settings.logoSize) || 48}px`
+                }}
+                className="rounded-2xl bg-gradient-to-br from-blue-700 to-indigo-800 text-white flex items-center justify-center shadow-lg shadow-blue-700/20 group-hover:scale-105 transition shrink-0"
+              >
                 <BookOpen className="w-6 h-6" />
               </div>
             )}
@@ -1165,21 +1182,36 @@ function HomePage({
   onGoContact
 }) {
   const featuredNotebooks = notebooks.slice(0, 6);
+  const bgOpacity = Math.min(100, Math.max(0, Number(settings.heroBgOpacity ?? 65))) / 100;
+  const overlayOpacity = Math.min(100, Math.max(0, Number(settings.heroOverlayOpacity ?? 55))) / 100;
+  const overlayColor = settings.heroOverlayColor || '#020617';
+  const heroMinHeight = Number(settings.heroMinHeight) || 540;
+  const heroBgFit = settings.heroBgFit === 'contain' ? 'object-contain' : 'object-cover';
 
   return (
     <div>
       {/* Hero Section */}
-      <section className="relative overflow-hidden bg-slate-950 text-white py-16 sm:py-24">
+      <section
+        style={{ minHeight: `${heroMinHeight}px` }}
+        className="relative overflow-hidden bg-slate-950 text-white py-16 sm:py-24 flex items-center"
+      >
         {settings.heroBgUrl && (
           <img
             src={settings.heroBgUrl}
             alt=""
-            className="absolute inset-0 w-full h-full object-cover opacity-25"
+            style={{ opacity: bgOpacity }}
+            className={`absolute inset-0 w-full h-full ${heroBgFit} object-center transition-opacity duration-300`}
           />
         )}
-        <div className="absolute inset-0 bg-gradient-to-l from-slate-950 via-slate-950/90 to-blue-950/75" />
+        <div
+          style={{
+            backgroundColor: overlayColor,
+            opacity: settings.heroBgUrl ? overlayOpacity : 0.92
+          }}
+          className="absolute inset-0 transition-all duration-300"
+        />
 
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-12 gap-10 items-center w-full">
           <div className="lg:col-span-7 space-y-6">
             <div className="inline-flex items-center gap-2 bg-amber-400/15 border border-amber-400/30 text-amber-300 px-4 py-1.5 rounded-full text-xs font-extrabold">
               <Sparkles className="w-4 h-4" />
@@ -3268,6 +3300,115 @@ function AdminSettingsTab({ settings, onSaveSettings }) {
         <div>
           <label className="block text-xs font-extrabold text-slate-700 mb-1">صورة خلفية الواجهة الترحيبية</label>
           <input type="file" accept="image/*" onChange={(e) => handleImageUpload('heroBgUrl', e)} className="text-xs" />
+        </div>
+
+        {/* Visual Controls for Logo Size, Hero Background Clarity & Overlay Color */}
+        <div className="md:col-span-2 bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs sm:text-sm font-black text-slate-900">
+              التحكم في حجم الشعار وصورة الخلفية واللون المغطي لها
+            </h4>
+            {form.heroBgUrl && (
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, heroBgUrl: '' })}
+                className="text-xs font-bold text-rose-600 hover:underline cursor-pointer"
+              >
+                حذف صورة الخلفية
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Logo Size */}
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200">
+              <div className="flex justify-between text-xs font-extrabold text-slate-700 mb-1.5">
+                <span>حجم الشعار (Logo)</span>
+                <span className="text-blue-700">{form.logoSize || 48}px</span>
+              </div>
+              <input
+                type="range"
+                min={36}
+                max={120}
+                value={form.logoSize || 48}
+                onChange={(e) => setForm({ ...form, logoSize: Number(e.target.value) })}
+                className="w-full accent-blue-700 cursor-pointer"
+              />
+            </div>
+
+            {/* Hero Image Clarity */}
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200">
+              <div className="flex justify-between text-xs font-extrabold text-slate-700 mb-1.5">
+                <span>وضوح صورة الخلفية</span>
+                <span className="text-blue-700">{form.heroBgOpacity ?? 65}%</span>
+              </div>
+              <input
+                type="range"
+                min={10}
+                max={100}
+                value={form.heroBgOpacity ?? 65}
+                onChange={(e) => setForm({ ...form, heroBgOpacity: Number(e.target.value) })}
+                className="w-full accent-blue-700 cursor-pointer"
+              />
+            </div>
+
+            {/* Hero Overlay Color & Opacity */}
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200">
+              <div className="flex items-center justify-between text-xs font-extrabold text-slate-700 mb-1.5">
+                <span>لون التغطية ودرجته</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={form.heroOverlayColor || '#020617'}
+                    onChange={(e) => setForm({ ...form, heroOverlayColor: e.target.value })}
+                    className="w-6 h-6 rounded border-0 cursor-pointer"
+                    title="اختر لون الطبقة المغطية"
+                  />
+                  <span className="text-blue-700">{form.heroOverlayOpacity ?? 55}%</span>
+                </div>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={95}
+                value={form.heroOverlayOpacity ?? 55}
+                onChange={(e) => setForm({ ...form, heroOverlayOpacity: Number(e.target.value) })}
+                className="w-full accent-blue-700 cursor-pointer"
+              />
+            </div>
+
+            {/* Hero Min Height */}
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200">
+              <div className="flex justify-between text-xs font-extrabold text-slate-700 mb-1.5">
+                <span>ارتفاع قسم الخلفية</span>
+                <span className="text-blue-700">{form.heroMinHeight || 540}px</span>
+              </div>
+              <input
+                type="range"
+                min={420}
+                max={800}
+                step={20}
+                value={form.heroMinHeight || 540}
+                onChange={(e) => setForm({ ...form, heroMinHeight: Number(e.target.value) })}
+                className="w-full accent-blue-700 cursor-pointer"
+              />
+            </div>
+
+            {/* Hero Image Fit */}
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200 sm:col-span-2">
+              <label className="block text-xs font-extrabold text-slate-700 mb-1.5">
+                طريقة عرض صورة الخلفية
+              </label>
+              <select
+                value={form.heroBgFit || 'cover'}
+                onChange={(e) => setForm({ ...form, heroBgFit: e.target.value })}
+                className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold bg-slate-50"
+              >
+                <option value="cover">ملء الإطار بالكامل (Cover - الأنسب للخلفيات)</option>
+                <option value="contain">إظهار الصورة كاملة بدون قص (Contain)</option>
+              </select>
+            </div>
+          </div>
         </div>
 
         <div>
