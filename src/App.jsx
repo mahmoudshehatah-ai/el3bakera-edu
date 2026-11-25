@@ -93,7 +93,7 @@ try {
   firebaseConfig = DEFAULT_FIREBASE_CONFIG;
 }
 
-const appId = typeof __app_id !== 'undefined' && __app_id ? __app_id : 'muzakkirati-edu-app';
+const appId = typeof __app_id !== 'undefined' && __app_id ? __app_id : 'default-app-id';
 
 let db = null;
 let auth = null;
