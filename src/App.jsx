@@ -68,7 +68,7 @@ import {
 // ==========================================
 // 1. إعدادات Firebase والاتصال بالسحابة
 // ==========================================
-const firebaseConfig = {
+const defaultFirebaseConfig = {
   apiKey: "AIzaSyD_du5VY8nJGDJ169Fof9EALI9x2W2d-14",
   authDomain: "el3bakera-edu.firebaseapp.com",
   projectId: "el3bakera-edu",
@@ -77,17 +77,23 @@ const firebaseConfig = {
   appId: "1:74663879858:web:4327c0ea1b825dd6c615ab"
 };
 
+const firebaseConfig =
+  typeof __firebase_config !== 'undefined' && __firebase_config
+    ? JSON.parse(__firebase_config)
+    : defaultFirebaseConfig;
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-const APP_ID = 'el3bakera-edu';
+const APP_ID = typeof __app_id !== 'undefined' && __app_id ? __app_id : 'el3bakera-edu';
 const ADMIN_EMAIL = 'mahmoudelzaaty7@gmail.com';
 const LOCAL_SETTINGS_BACKUP_KEY = 'el3bakera_settings_backup_v2';
 const LEGACY_LOCAL_BACKUP_KEY = 'el3bakera_settings_backup_v1';
 
 const publicCol = (colName) => collection(db, 'artifacts', APP_ID, 'public', 'data', colName);
 const publicDoc = (colName, docId) => doc(db, 'artifacts', APP_ID, 'public', 'data', colName, docId);
+const legacyPublicDoc = (colName, docId) => doc(db, 'artifacts', 'el3bakera-edu', 'public', 'data', colName, docId);
 
 // ==========================================
 // 2. البيانات الافتراضية للمنصة
@@ -396,11 +402,29 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onAddToCart, isInC
       setLoadingSamples(true);
       try {
         const inlineSamples = Array.isArray(notebook.samplePages) ? notebook.samplePages : [];
-        const snap = await getDoc(publicDoc('notebook_samples', notebook.id));
-        const remoteSamples = snap.exists() && Array.isArray(snap.data().pages) ? snap.data().pages : [];
+        let remoteSamples = [];
+        try {
+          const snap = await getDoc(publicDoc('notebook_samples', notebook.id));
+          if (snap.exists() && Array.isArray(snap.data().pages)) {
+            remoteSamples = snap.data().pages;
+          }
+        } catch {
+          // تجاهل
+        }
+        if (remoteSamples.length === 0) {
+          try {
+            const legacySnap = await getDoc(legacyPublicDoc('notebook_samples', notebook.id));
+            if (legacySnap.exists() && Array.isArray(legacySnap.data().pages)) {
+              remoteSamples = legacySnap.data().pages;
+            }
+          } catch {
+            // تجاهل
+          }
+        }
+        const mergedSamples = remoteSamples.length > 0 ? remoteSamples : inlineSamples;
         const allPages = [
           ...(notebook.coverImage ? [notebook.coverImage] : []),
-          ...(remoteSamples.length > 0 ? remoteSamples : inlineSamples)
+          ...mergedSamples.filter((p) => p && p !== notebook.coverImage)
         ];
         if (active) {
           setSamples(allPages);
@@ -3670,11 +3694,12 @@ function MuzakkiratiApp() {
                 </div>
               )}
               <div className="min-w-0">
-                <div className="font-black text-xs sm:text-base lg:text-lg text-slate-900 truncate">
+                <div className="font-black text-sm sm:text-lg lg:text-xl text-blue-700 leading-tight truncate">
                   {settings.siteName}
                 </div>
-                <div className="hidden sm:block text-[11px] text-slate-500 font-bold truncate">
-                  {settings.tagline}
+                <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-slate-600 font-bold truncate mt-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                  <span className="truncate">{settings.tagline}</span>
                 </div>
               </div>
             </div>
