@@ -601,9 +601,23 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onAddToCart, onOrd
     if ((!notebook.sampleUrls || notebook.sampleUrls.length === 0) && notebook.id) {
       setLoadingSamples(true);
       getDoc(publicDoc('notebook_samples', notebook.id))
-        .then((snap) => {
-          if (active && snap.exists() && Array.isArray(snap.data().sampleUrls)) {
-            setSamples(snap.data().sampleUrls);
+        .then(async (snap) => {
+          if (!active) return;
+          if (snap.exists()) {
+            const data = snap.data();
+            let collected = Array.isArray(data.sampleUrls) ? [...data.sampleUrls] : [];
+            const chunksCount = Number(data.chunksCount) || 0;
+            if (chunksCount > 0) {
+              for (let i = 0; i < chunksCount; i++) {
+                try {
+                  const chunkSnap = await getDoc(publicDoc('notebook_samples', `${notebook.id}_part_${i}`));
+                  if (chunkSnap.exists() && Array.isArray(chunkSnap.data().urls)) {
+                    collected = collected.concat(chunkSnap.data().urls);
+                  }
+                } catch {}
+              }
+            }
+            if (active) setSamples(collected);
           }
         })
         .catch(() => {})
@@ -2059,7 +2073,7 @@ function AdminPortal({
   const handleCoverUpload = async (file) => {
     if (!file) return;
     try {
-      const compressed = await compressImageFile(file, 850, 0.8);
+      const compressed = await compressImageFile(file, 780, 0.74);
       setNbForm((prev) => ({ ...prev, coverUrl: compressed }));
       onNotify('تم تجهيز صورة الغلاف بنجاح', 'success');
     } catch {
@@ -2073,7 +2087,7 @@ function AdminPortal({
       const files = Array.from(fileList).slice(0, 15);
       const compressedList = [];
       for (const f of files) {
-        const c = await compressImageFile(f, 950, 0.78);
+        const c = await compressImageFile(f, 820, 0.72);
         compressedList.push(c);
       }
       setNbForm((prev) => ({ ...prev, sampleUrls: compressedList }));
@@ -2091,7 +2105,7 @@ function AdminPortal({
     }
     setSavingNb(true);
     try {
-      // فصل العينات الكبيرة في مستند مستقل لضمان بقاء مستند المذكرة خفيفًا وسريعًا
+      // إبقاء مستند المذكرة الرئيسي خفيفًا جدًا (الغلاف فقط) لتجنب حد 1MB في Firestore نهائيًا
       const coreData = {
         title: nbForm.title.trim(),
         category: nbForm.category,
@@ -2106,7 +2120,8 @@ function AdminPortal({
         customNotice: nbForm.customNotice.trim(),
         driveUrl: nbForm.driveUrl.trim(),
         coverUrl: nbForm.coverUrl,
-        sampleUrls: nbForm.sampleUrls.slice(0, 3),
+        sampleUrls: [],
+        samplesCount: nbForm.sampleUrls.length,
         isComingSoon: Boolean(nbForm.isComingSoon),
         isHidden: Boolean(nbForm.isHidden),
         updatedAt: serverTimestamp()
@@ -2121,11 +2136,26 @@ function AdminPortal({
         targetId = createdRef.id;
       }
 
-      if (targetId && nbForm.sampleUrls.length > 0) {
+      // تقسيم صفحات العينة إلى أجزاء صغيرة (3 صفحات لكل مستند) لضمان عدم تخطي حد 1MB أبدًا
+      if (targetId) {
+        const chunkSize = 3;
+        const chunks = [];
+        for (let i = 0; i < nbForm.sampleUrls.length; i += chunkSize) {
+          chunks.push(nbForm.sampleUrls.slice(i, i + chunkSize));
+        }
+
         await setDoc(publicDoc('notebook_samples', targetId), {
-          sampleUrls: nbForm.sampleUrls,
+          sampleUrls: [],
+          chunksCount: chunks.length,
           updatedAt: serverTimestamp()
         });
+
+        for (let i = 0; i < chunks.length; i++) {
+          await setDoc(publicDoc('notebook_samples', `${targetId}_part_${i}`), {
+            urls: chunks[i],
+            updatedAt: serverTimestamp()
+          });
+        }
       }
 
       onNotify(editingNotebookId ? 'تم تحديث بيانات المذكرة بنجاح!' : 'تمت إضافة المذكرة بنجاح!', 'success');
@@ -2160,8 +2190,18 @@ function AdminPortal({
     let fullSamples = nb.sampleUrls || [];
     try {
       const snap = await getDoc(publicDoc('notebook_samples', nb.id));
-      if (snap.exists() && Array.isArray(snap.data().sampleUrls)) {
-        fullSamples = snap.data().sampleUrls;
+      if (snap.exists()) {
+        const data = snap.data();
+        fullSamples = Array.isArray(data.sampleUrls) ? [...data.sampleUrls] : [];
+        const chunksCount = Number(data.chunksCount) || 0;
+        for (let i = 0; i < chunksCount; i++) {
+          try {
+            const chunkSnap = await getDoc(publicDoc('notebook_samples', `${nb.id}_part_${i}`));
+            if (chunkSnap.exists() && Array.isArray(chunkSnap.data().urls)) {
+              fullSamples = fullSamples.concat(chunkSnap.data().urls);
+            }
+          } catch {}
+        }
       }
     } catch {}
     setNbForm({
