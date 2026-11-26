@@ -3721,6 +3721,42 @@ function MuzakkiratiApp() {
         setPreviewNotebook(null);
         return;
       }
+      if (orderModalOpen) {
+        setOrderModalOpen(false);
+        return;
+      }
+      if (showSocialModal) {
+        setShowSocialModal(false);
+        return;
+      }
+      if (e.state && e.state.mzNav) {
+        setNavState(e.state.mzNav);
+      } else {
+        setNavState({
+          page: 'home',
+          category: 'all',
+          stage: 'all',
+          grade: 'all',
+          subject: 'all'
+        });
+      }
+    };
+
+    const handleKeyDown = (e) => {
+      if (e.altKey && e.shiftKey && (e.key === 'A' || e.key === 'a' || e.code === 'KeyA')) {
+        e.preventDefault();
+        setShowAdmin((prev) => !prev);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [previewNotebook, orderModalOpen, showSocialModal, navState]);
+
   // Firebase Auth & Real-Time Firestore Listeners (Reads both main & settings + legacy paths)
   useEffect(() => {
     if (!auth || !db) return;
