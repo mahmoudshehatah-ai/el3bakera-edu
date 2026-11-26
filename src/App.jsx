@@ -70,12 +70,12 @@ const firebaseConfig =
   typeof __firebase_config !== 'undefined'
     ? JSON.parse(__firebase_config)
     : {
-        apiKey: 'AIzaSyBs5uL3J0mQ2p7W9nX4vR8tY6kL1cM0dE9',
+        apiKey: 'AIzaSyD_du5VY8nJGDJ169Fof9EAlI9x2W2d-14',
         authDomain: 'el3bakera-edu.firebaseapp.com',
         projectId: 'el3bakera-edu',
         storageBucket: 'el3bakera-edu.firebasestorage.app',
-        messagingSenderId: '1049283746512',
-        appId: '1:1049283746512:web:8f9a0b1c2d3e4f5a6b7c8d'
+        messagingSenderId: '74663879858',
+        appId: '1:74663879858:web:4327c0ea1b825dd6c615ab'
       };
 
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'muzakkirati-edu-app';
@@ -2915,21 +2915,32 @@ function AdminPortal({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
+  const [showConfigFixer, setShowConfigFixer] = useState(false);
+  const [rawConfigInput, setRawConfigInput] = useState('');
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    if (!auth) {
-      showToast('خدمة المصادقة غير مهيأة', 'error');
-      return;
-    }
-    setAuthLoading(true);
+  const handleSaveFirebaseConfig = () => {
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
-      showToast('مرحبًا بك في لوحة تحكم الإدارة ✅');
-    } catch (err) {
-      showToast(`تعذر تسجيل الدخول: تأكد من البريد وكلمة المرور (${err.code || ''})`, 'error');
-    } finally {
-      setAuthLoading(false);
+      const text = rawConfigInput.trim();
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        showToast('يرجى لصق كود firebaseConfig كاملًا بين القوسين { ... }', 'error');
+        return;
+      }
+      // Convert JS object literal keys to valid JSON if needed
+      const normalized = jsonMatch[0]
+        .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?\s*:/g, '"$2":')
+        .replace(/'/g, '"')
+        .replace(/,\s*}/g, '}');
+      const parsed = JSON.parse(normalized);
+      if (!parsed.apiKey || !parsed.projectId) {
+        showToast('تأكد من وجود apiKey و projectId في الكود الملصوق', 'error');
+        return;
+      }
+      localStorage.setItem('el3bakera_custom_firebase_config', JSON.stringify(parsed));
+      showToast('تم حفظ بيانات الربط! جاري إعادة تحميل المنصة...');
+      setTimeout(() => window.location.reload(), 900);
+    } catch {
+      showToast('صيغة الكود غير صحيحة — انسخ جزء { apiKey: "...", ... } من إعدادات مشروعك في Firebase', 'error');
     }
   };
 
@@ -3020,6 +3031,39 @@ function AdminPortal({
             >
               نسيت كلمة المرور؟ إرسال رابط الاستعادة لبريدي
             </button>
+
+            <div className="pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowConfigFixer(!showConfigFixer)}
+                className="w-full text-center text-[11px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
+              >
+                {showConfigFixer ? 'إخفاء إعدادات ربط Firebase' : '⚙️ تحديث بيانات ربط مشروع Firebase (لحل خطأ api-key)'}
+              </button>
+
+              {showConfigFixer && (
+                <div className="mt-3 p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    انسخ كود <code className="font-mono text-blue-700">firebaseConfig</code> من إعدادات مشروعك في Firebase (أو من سجل التعديلات في GitHub) والصقه هنا:
+                  </p>
+                  <textarea
+                    rows={4}
+                    dir="ltr"
+                    value={rawConfigInput}
+                    onChange={(e) => setRawConfigInput(e.target.value)}
+                    placeholder='{ apiKey: "AIzaSy...", authDomain: "...", projectId: "el3bakera-edu", ... }'
+                    className="w-full p-2.5 rounded-xl border border-slate-200 text-[11px] font-mono bg-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveFirebaseConfig}
+                    className="w-full py-2 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-extrabold cursor-pointer"
+                  >
+                    حفظ الربط وإعادة الاتصال بالسحابة
+                  </button>
+                </div>
+              )}
+            </div>
           </form>
         </div>
       </div>
