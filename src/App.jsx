@@ -4095,85 +4095,96 @@ function MuzakkiratiApp() {
     <div dir="rtl" className="min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans">
       {/* الشريط الترويجي العلوي */}
       {settings.promoBarEnabled && settings.promoBarText && (
-        <div className="bg-slate-950 text-amber-300 text-xs font-extrabold py-2.5 px-4 text-center border-b border-white/10">
+        <div className="bg-gradient-to-l from-slate-950 via-slate-900 to-slate-950 text-amber-300 text-xs sm:text-sm font-extrabold py-3 px-4 text-center border-b border-white/10">
           <span>{settings.promoBarText}</span>
           <button
             onClick={() => navigateTo('offers')}
-            className="mr-3 px-3 py-0.5 rounded-full bg-amber-400 text-slate-950 hover:bg-amber-300 transition"
+            className="mr-3 px-3.5 py-1 rounded-full bg-amber-400 text-slate-950 hover:bg-amber-300 text-xs sm:text-sm font-black transition shadow-sm"
           >
             استفد من العرض ←
           </button>
         </div>
       )}
 
-      {/* شريط التنقل الرئيسي (Header) */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+      {/* شريط التنقل الرئيسي (Header) بتصميم عصري واضح وخطوط مقروءة */}
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-4">
           {/* الشعار واسم المنصة (النقر 5 مرات يفتح شاشة الإدارة) */}
           <div
             onClick={handleSecretLogoClick}
-            className="flex items-center gap-3 cursor-pointer select-none"
+            className="flex items-center gap-3.5 cursor-pointer select-none group"
           >
             {settings.logoUrl ? (
-              <img
-                src={settings.logoUrl}
-                alt={settings.siteName}
-                style={{ height: `${settings.logoSize || 48}px` }}
-                className="w-auto object-contain rounded-xl"
-              />
+              <div className="rounded-2xl overflow-hidden border border-slate-200/80 shadow-xs bg-slate-900 p-1 shrink-0">
+                <img
+                  src={settings.logoUrl}
+                  alt={settings.siteName}
+                  style={{ height: `${Math.min(Math.max(settings.logoSize || 56, 44), 84)}px` }}
+                  className="w-auto object-contain rounded-xl transition-transform duration-300 group-hover:scale-105"
+                />
+              </div>
             ) : (
-              <div className="w-11 h-11 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-600/20">
-                <BookOpen className="w-6 h-6" />
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-600/20 shrink-0">
+                <BookOpen className="w-7 h-7" />
               </div>
             )}
             <div>
-              <h1 className="font-black text-base sm:text-lg text-slate-900 leading-tight">{settings.siteName}</h1>
-              <p className="text-[11px] text-slate-500 hidden sm:block">{settings.siteSubtitle}</p>
+              <h1 className="font-black text-lg sm:text-xl text-slate-900 leading-snug tracking-tight">
+                {settings.siteName}
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-500 font-medium hidden sm:block mt-0.5">
+                {settings.siteSubtitle}
+              </p>
             </div>
           </div>
 
-          {/* روابط الصفحات */}
-          <nav className="flex items-center gap-1 sm:gap-2 bg-slate-100 p-1.5 rounded-2xl">
+          {/* روابط الصفحات بحجم خط واضح وأيقونات معبّرة */}
+          <nav className="flex items-center gap-1.5 sm:gap-2 bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200/70">
             {[
-              { id: 'home', label: 'الرئيسية' },
-              { id: 'catalog', label: 'المذكرات' },
-              { id: 'offers', label: 'العروض والباقات' },
-              { id: 'track', label: 'تتبع طلبك' }
-            ].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => navigateTo(item.id)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition ${
-                  activePage === item.id
-                    ? 'bg-white text-blue-600 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
+              { id: 'home', label: 'الرئيسية', icon: Home },
+              { id: 'catalog', label: 'المذكرات', icon: BookOpen },
+              { id: 'offers', label: 'العروض والباقات', icon: Percent },
+              { id: 'track', label: 'تتبع طلبك', icon: PackageCheck }
+            ].map((item) => {
+              const NavIcon = item.icon;
+              const isActive = activePage === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => navigateTo(item.id)}
+                  className={`px-4 sm:px-5 py-2.5 rounded-xl text-sm sm:text-base font-extrabold flex items-center gap-2 transition-all ${
+                    isActive
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                      : 'text-slate-700 hover:text-blue-600 hover:bg-white/70'
+                  }`}
+                >
+                  <NavIcon className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
           </nav>
 
           {/* أزرار السلة والتواصل ولوحة الإدارة عند تسجيل الدخول */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             {isAdminAuthenticated && (
               <button
                 onClick={() => setShowAdminPortal(true)}
-                className="px-3.5 py-2 rounded-xl bg-slate-900 text-white text-xs font-extrabold flex items-center gap-1.5"
+                className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-extrabold flex items-center gap-2 shadow-sm transition"
               >
-                <ShieldCheck className="w-4 h-4 text-blue-400" />
-                لوحة التحكم
+                <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
+                <span>لوحة التحكم</span>
               </button>
             )}
 
             <button
               onClick={() => setIsCheckoutOpen(true)}
-              className="relative px-3.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-extrabold text-xs flex items-center gap-1.5 transition"
+              className="relative px-4 py-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200/70 text-blue-700 font-extrabold text-xs sm:text-sm flex items-center gap-2 transition"
             >
-              <ShoppingCart className="w-4 h-4" />
+              <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
               <span>السلة</span>
               {cart.length > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-black">
+                <span className="px-2 py-0.5 rounded-full bg-blue-600 text-white text-xs font-black">
                   {cart.length}
                 </span>
               )}
@@ -4183,9 +4194,9 @@ function MuzakkiratiApp() {
               href={`https://wa.me/${String(settings.whatsappNumber || '').replace(/[^\d]/g, '')}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-sm transition"
+              className="px-4 sm:px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-md shadow-emerald-600/20 transition"
             >
-              <MessageCircle className="w-4 h-4" />
+              <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
               <span className="hidden sm:inline">تواصل معنا</span>
             </a>
           </div>
