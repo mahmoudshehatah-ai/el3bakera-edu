@@ -201,8 +201,11 @@ const DEFAULT_SETTINGS = {
   notebookNoticeTitle: 'تنبيه هام قبل تأكيد الطلب',
   notebookNoticeText: 'يتم تجهيز المذكرة باسمك ورقم هاتفك وشعارك الخاص على الغلاف وجميع الصفحات خلال 24 ساعة من تأكيد الطلب، وتُسلَّم بصيغة PDF عالية الدقة جاهزة للطباعة فورًا.',
   // إعدادات زر وأيقونة Google Drive داخل صفحة المذكرة
-  driveButtonText: 'معاينة نسخة إضافية على Google Drive',
-  driveButtonTheme: 'blue', // 'blue' | 'emerald' | 'amber' | 'rose' | 'purple' | 'slate'
+  driveButtonText: 'معاينة نسخة كاملة على Google Drive',
+  driveButtonSubtext: 'اضغط لتصفح الملف بجودة عالية مباشرة',
+  driveButtonTheme: 'emerald', // 'blue' | 'emerald' | 'amber' | 'rose' | 'purple' | 'slate'
+  // ترتيب أماكن العناصر داخل نافذة تفاصيل المذكرة
+  notebookModalBlocksOrder: ['description', 'customNotice', 'generalNotice', 'driveButton'],
   // إعدادات نموذج الطلب
   orderModalTitle: 'إتمام طلب تخصيص المذكرات',
   orderModalSubtitle: 'أدخل بياناتك ليتم طباعتها باحترافية على غلاف وصفحات المذكرة',
@@ -523,47 +526,47 @@ const getCustomNoticeThemeStyles = (theme = 'rose') => {
   switch (theme) {
     case 'amber':
       return {
-        box: 'bg-gradient-to-l from-amber-50 to-orange-50 border-amber-300 shadow-amber-500/10',
+        box: 'bg-gradient-to-l from-amber-50/90 via-white to-amber-50/40 border-amber-200 border-r-4 border-r-amber-500 shadow-sm',
         title: 'text-amber-950',
-        body: 'text-amber-950',
+        body: 'text-slate-800',
         iconBox: 'bg-amber-500 text-slate-950',
-        badge: 'bg-amber-500 text-slate-950',
+        badge: 'bg-amber-100 text-amber-900 border border-amber-300',
         ping: 'bg-amber-400'
       };
     case 'blue':
       return {
-        box: 'bg-gradient-to-l from-blue-50 to-sky-50 border-blue-300 shadow-blue-500/10',
+        box: 'bg-gradient-to-l from-blue-50/90 via-white to-blue-50/40 border-blue-200 border-r-4 border-r-blue-600 shadow-sm',
         title: 'text-blue-950',
-        body: 'text-blue-950',
+        body: 'text-slate-800',
         iconBox: 'bg-blue-600 text-white',
-        badge: 'bg-blue-600 text-white',
+        badge: 'bg-blue-100 text-blue-900 border border-blue-300',
         ping: 'bg-blue-400'
       };
     case 'emerald':
       return {
-        box: 'bg-gradient-to-l from-emerald-50 to-teal-50 border-emerald-300 shadow-emerald-500/10',
+        box: 'bg-gradient-to-l from-emerald-50/90 via-white to-emerald-50/40 border-emerald-200 border-r-4 border-r-emerald-600 shadow-sm',
         title: 'text-emerald-950',
-        body: 'text-emerald-950',
+        body: 'text-slate-800',
         iconBox: 'bg-emerald-600 text-white',
-        badge: 'bg-emerald-600 text-white',
+        badge: 'bg-emerald-100 text-emerald-900 border border-emerald-300',
         ping: 'bg-emerald-400'
       };
     case 'purple':
       return {
-        box: 'bg-gradient-to-l from-purple-50 to-indigo-50 border-purple-300 shadow-purple-500/10',
+        box: 'bg-gradient-to-l from-purple-50/90 via-white to-purple-50/40 border-purple-200 border-r-4 border-r-purple-600 shadow-sm',
         title: 'text-purple-950',
-        body: 'text-purple-950',
+        body: 'text-slate-800',
         iconBox: 'bg-purple-600 text-white',
-        badge: 'bg-purple-600 text-white',
+        badge: 'bg-purple-100 text-purple-900 border border-purple-300',
         ping: 'bg-purple-400'
       };
     default:
       return {
-        box: 'bg-gradient-to-l from-rose-50 to-red-50 border-rose-300 shadow-rose-500/10',
+        box: 'bg-gradient-to-l from-rose-50/90 via-white to-rose-50/40 border-rose-200 border-r-4 border-r-rose-600 shadow-sm',
         title: 'text-rose-950',
-        body: 'text-rose-950',
+        body: 'text-slate-800',
         iconBox: 'bg-rose-600 text-white',
-        badge: 'bg-rose-600 text-white',
+        badge: 'bg-rose-100 text-rose-900 border border-rose-300',
         ping: 'bg-rose-400'
       };
   }
@@ -701,36 +704,60 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onAddToCart, onOrd
     switch (settings.driveButtonTheme || 'blue') {
       case 'emerald':
         return {
-          btn: 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-900',
-          iconBox: 'bg-emerald-600 text-white'
+          btn: 'bg-gradient-to-l from-emerald-50 via-white to-emerald-50/60 hover:from-emerald-100/80 hover:to-emerald-50 border-emerald-200 hover:border-emerald-400 text-emerald-950',
+          iconBox: 'bg-emerald-600 text-white shadow-emerald-600/20',
+          sub: 'text-emerald-700',
+          arrow: 'text-emerald-600'
         };
       case 'amber':
         return {
-          btn: 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-950',
-          iconBox: 'bg-amber-500 text-slate-950'
+          btn: 'bg-gradient-to-l from-amber-50 via-white to-amber-50/60 hover:from-amber-100/80 hover:to-amber-50 border-amber-300 hover:border-amber-500 text-amber-950',
+          iconBox: 'bg-amber-500 text-slate-950 shadow-amber-500/20',
+          sub: 'text-amber-800',
+          arrow: 'text-amber-700'
         };
       case 'rose':
         return {
-          btn: 'bg-rose-50 hover:bg-rose-100 border-rose-200 text-rose-900',
-          iconBox: 'bg-rose-600 text-white'
+          btn: 'bg-gradient-to-l from-rose-50 via-white to-rose-50/60 hover:from-rose-100/80 hover:to-rose-50 border-rose-200 hover:border-rose-400 text-rose-950',
+          iconBox: 'bg-rose-600 text-white shadow-rose-600/20',
+          sub: 'text-rose-700',
+          arrow: 'text-rose-600'
         };
       case 'purple':
         return {
-          btn: 'bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-900',
-          iconBox: 'bg-purple-600 text-white'
+          btn: 'bg-gradient-to-l from-purple-50 via-white to-purple-50/60 hover:from-purple-100/80 hover:to-purple-50 border-purple-200 hover:border-purple-400 text-purple-950',
+          iconBox: 'bg-purple-600 text-white shadow-purple-600/20',
+          sub: 'text-purple-700',
+          arrow: 'text-purple-600'
         };
       case 'slate':
         return {
           btn: 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-white',
-          iconBox: 'bg-white/15 text-amber-300'
+          iconBox: 'bg-white/15 text-amber-300',
+          sub: 'text-slate-300',
+          arrow: 'text-amber-300'
         };
       default:
         return {
-          btn: 'bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-900',
-          iconBox: 'bg-blue-600 text-white'
+          btn: 'bg-gradient-to-l from-blue-50 via-white to-blue-50/60 hover:from-blue-100/80 hover:to-blue-50 border-blue-200 hover:border-blue-400 text-blue-950',
+          iconBox: 'bg-blue-600 text-white shadow-blue-600/20',
+          sub: 'text-blue-700',
+          arrow: 'text-blue-600'
         };
     }
   }, [settings.driveButtonTheme]);
+
+  const blocksOrder = useMemo(() => {
+    const defaultOrder = ['description', 'customNotice', 'generalNotice', 'driveButton'];
+    if (Array.isArray(settings.notebookModalBlocksOrder) && settings.notebookModalBlocksOrder.length > 0) {
+      const merged = [...settings.notebookModalBlocksOrder];
+      defaultOrder.forEach((k) => {
+        if (!merged.includes(k)) merged.push(k);
+      });
+      return merged;
+    }
+    return defaultOrder;
+  }, [settings.notebookModalBlocksOrder]);
 
   return (
     <div dir="rtl" className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
@@ -861,59 +888,107 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onAddToCart, onOrd
                 )}
               </div>
 
-              {notebook.description && (
-                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed whitespace-pre-line">
-                  {notebook.description}
-                </p>
-              )}
-
-              {/* صندوق التنبيه / الملاحظة الخاصة بهذه المذكرة (منفصل تمامًا مع علامة أهمية بارزة) */}
-              {notebook.customNotice && (
-                <div
-                  className={`relative rounded-2xl p-4 border-2 shadow-md space-y-2 ${customNoticeStyles.box}`}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className={`flex items-center gap-2 font-black text-sm ${customNoticeStyles.title}`}>
-                      <span
-                        className={`relative w-7 h-7 rounded-xl flex items-center justify-center shrink-0 shadow-xs ${customNoticeStyles.iconBox}`}
-                      >
-                        <span
-                          className={`animate-ping absolute inline-flex h-full w-full rounded-xl opacity-45 ${customNoticeStyles.ping}`}
-                        ></span>
-                        <AlertTriangle className="w-4 h-4 relative z-10" />
-                      </span>
-                      <span>{notebook.customNoticeTitle || 'تنبيه هام خاص بهذه المذكرة'}</span>
+              {/* عرض الكتل حسب الترتيب الذي يختاره المدير في لوحة التحكم */}
+              {blocksOrder.map((blockKey) => {
+                if (blockKey === 'description' && notebook.description) {
+                  return (
+                    <div key="description" className="bg-slate-50/80 rounded-2xl p-3.5 border border-slate-200/70">
+                      <p className="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-line">
+                        {notebook.description}
+                      </p>
                     </div>
+                  );
+                }
 
-                    {notebook.customNoticeBadge && (
-                      <span
-                        className={`px-2.5 py-1 rounded-full text-[11px] font-black tracking-wide shadow-2xs flex items-center gap-1 ${customNoticeStyles.badge}`}
-                      >
-                        <Sparkles className="w-3 h-3" />
-                        {notebook.customNoticeBadge}
-                      </span>
-                    )}
-                  </div>
+                if (blockKey === 'customNotice' && notebook.customNotice) {
+                  return (
+                    <div
+                      key="customNotice"
+                      className={`rounded-2xl p-4 border transition-all space-y-2 text-right ${customNoticeStyles.box}`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className={`flex items-center gap-2.5 font-black text-xs sm:text-sm ${customNoticeStyles.title}`}>
+                          <span
+                            className={`relative w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-xs ${customNoticeStyles.iconBox}`}
+                          >
+                            <span
+                              className={`animate-ping absolute inline-flex h-full w-full rounded-xl opacity-35 ${customNoticeStyles.ping}`}
+                            ></span>
+                            <AlertTriangle className="w-4 h-4 relative z-10" />
+                          </span>
+                          <span>{notebook.customNoticeTitle || 'تنبيه هام خاص بهذه المذكرة'}</span>
+                        </div>
 
-                  <p className={`text-xs sm:text-[13px] font-extrabold leading-relaxed pr-1 whitespace-pre-line ${customNoticeStyles.body}`}>
-                    {notebook.customNotice}
-                  </p>
-                </div>
-              )}
+                        {notebook.customNoticeBadge && (
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[11px] font-black shrink-0 flex items-center gap-1 ${customNoticeStyles.badge}`}
+                          >
+                            <Sparkles className="w-3 h-3" />
+                            {notebook.customNoticeBadge}
+                          </span>
+                        )}
+                      </div>
 
-              {safeDriveUrl && (
-                <a
-                  href={safeDriveUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`flex items-center justify-center gap-2.5 w-full py-3 px-4 rounded-2xl border font-extrabold text-xs shadow-2xs transition ${driveThemeStyles.btn}`}
-                >
-                  <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${driveThemeStyles.iconBox}`}>
-                    <ExternalLink className="w-4 h-4" />
-                  </span>
-                  <span>{settings.driveButtonText || 'معاينة نسخة إضافية على Google Drive'}</span>
-                </a>
-              )}
+                      <p className={`text-xs sm:text-[13px] font-bold leading-relaxed whitespace-pre-line pr-1 ${customNoticeStyles.body}`}>
+                        {notebook.customNotice}
+                      </p>
+                    </div>
+                  );
+                }
+
+                if (blockKey === 'generalNotice' && settings.notebookNoticeEnabled && noticeLines.length > 0) {
+                  return (
+                    <div
+                      key="generalNotice"
+                      className="rounded-2xl p-4 bg-slate-50 border border-slate-200/90 space-y-2 text-right"
+                    >
+                      <div className="flex items-center gap-2 text-slate-800 font-black text-xs">
+                        <Bell className="w-4 h-4 text-blue-600 shrink-0" />
+                        <span>{settings.notebookNoticeTitle || 'تنبيه هام قبل تأكيد الطلب'}</span>
+                      </div>
+                      <ul className="space-y-1.5 pr-1">
+                        {noticeLines.map((line, i) => (
+                          <li key={i} className="flex items-start gap-2 text-[11px] sm:text-xs text-slate-600 leading-relaxed">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-600 mt-1.5 shrink-0"></span>
+                            <span>{line}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                }
+
+                if (blockKey === 'driveButton' && safeDriveUrl) {
+                  return (
+                    <a
+                      key="driveButton"
+                      href={safeDriveUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`group flex items-center justify-between gap-3 w-full p-3.5 rounded-2xl border shadow-2xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${driveThemeStyles.btn}`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm transition-transform group-hover:scale-105 ${driveThemeStyles.iconBox}`}
+                        >
+                          <ExternalLink className="w-5 h-5" />
+                        </span>
+                        <div className="min-w-0 text-right">
+                          <span className="block font-black text-xs sm:text-sm truncate">
+                            {settings.driveButtonText || 'معاينة نسخة كاملة على Google Drive'}
+                          </span>
+                          <span className={`block text-[11px] font-semibold truncate mt-0.5 ${driveThemeStyles.sub}`}>
+                            {settings.driveButtonSubtext || 'اضغط لتصفح الملف بجودة عالية مباشرة'}
+                          </span>
+                        </div>
+                      </div>
+                      <ArrowLeft className={`w-4 h-4 shrink-0 transition-transform group-hover:-translate-x-1 ${driveThemeStyles.arrow}`} />
+                    </a>
+                  );
+                }
+
+                return null;
+              })}
             </div>
 
             <div className="pt-4 border-t border-slate-100 space-y-2.5">
@@ -4061,15 +4136,27 @@ function AdminPortal({
                 {/* التحكم في نص ولون أيقونة زر Google Drive */}
                 <div className="pt-3 border-t border-slate-100 space-y-3">
                   <h4 className="text-xs font-black text-slate-800">تخصيص زر وأيقونة Google Drive</h4>
-                  <div>
-                    <label className="text-xs font-bold text-slate-600 block mb-1">النص المكتوب على الزر</label>
-                    <input
-                      type="text"
-                      value={localSettings.driveButtonText || ''}
-                      onChange={(e) => setLocalSettings({ ...localSettings, driveButtonText: e.target.value })}
-                      placeholder="معاينة نسخة إضافية على Google Drive"
-                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 block mb-1">العنوان الرئيسي للزر</label>
+                      <input
+                        type="text"
+                        value={localSettings.driveButtonText || ''}
+                        onChange={(e) => setLocalSettings({ ...localSettings, driveButtonText: e.target.value })}
+                        placeholder="معاينة نسخة كاملة على Google Drive"
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-600 block mb-1">الوصف الفرعي داخل الزر</label>
+                      <input
+                        type="text"
+                        value={localSettings.driveButtonSubtext || ''}
+                        onChange={(e) => setLocalSettings({ ...localSettings, driveButtonSubtext: e.target.value })}
+                        placeholder="اضغط لتصفح الملف بجودة عالية مباشرة"
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs"
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="text-xs font-bold text-slate-600 block mb-1.5">لون الزر والأيقونة</label>
@@ -4097,6 +4184,60 @@ function AdminPortal({
                         </button>
                       ))}
                     </div>
+                  </div>
+                </div>
+
+                {/* التحكم في ترتيب أماكن العناصر داخل نافذة تفاصيل المذكرة */}
+                <div className="pt-3 border-t border-slate-100 space-y-2.5">
+                  <h4 className="text-xs font-black text-slate-800">ترتيب أماكن العناصر داخل صفحة كل مذكرة</h4>
+                  <p className="text-[11px] text-slate-500">رتّب أماكن ظهور الوصف والتنبيهات وزر Google Drive بالأسهم:</p>
+                  <div className="space-y-1.5">
+                    {(localSettings.notebookModalBlocksOrder || ['description', 'customNotice', 'generalNotice', 'driveButton']).map(
+                      (blockKey, idx, arr) => {
+                        const labels = {
+                          description: '1. وصف المذكرة وتفاصيلها',
+                          customNotice: '2. التنبيه الخاص بهذه المذكرة (المميز)',
+                          generalNotice: '3. التنبيهات العامة للمنصة',
+                          driveButton: '4. زر معاينة Google Drive'
+                        };
+                        return (
+                          <div
+                            key={blockKey}
+                            className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
+                          >
+                            <span>{labels[blockKey] || blockKey}</span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setLocalSettings({
+                                    ...localSettings,
+                                    notebookModalBlocksOrder: moveArrayItem(arr, idx, -1)
+                                  })
+                                }
+                                className="p-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-100"
+                                title="تحريك لأعلى"
+                              >
+                                <ChevronUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setLocalSettings({
+                                    ...localSettings,
+                                    notebookModalBlocksOrder: moveArrayItem(arr, idx, 1)
+                                  })
+                                }
+                                className="p-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-100"
+                                title="تحريك لأسفل"
+                              >
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
+                    )}
                   </div>
                 </div>
               </div>
