@@ -68,7 +68,7 @@ import {
 // ==========================================
 // 1. إعدادات Firebase والاتصال بالسحابة
 // ==========================================
-const defaultFirebaseConfig = {
+const firebaseConfig = {
   apiKey: "AIzaSyD_du5VY8nJGDJ169Fof9EALI9x2W2d-14",
   authDomain: "el3bakera-edu.firebaseapp.com",
   projectId: "el3bakera-edu",
@@ -77,16 +77,12 @@ const defaultFirebaseConfig = {
   appId: "1:74663879858:web:4327c0ea1b825dd6c615ab"
 };
 
-const firebaseConfig =
-  typeof __firebase_config !== 'undefined' && __firebase_config
-    ? JSON.parse(__firebase_config)
-    : defaultFirebaseConfig;
-
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-const APP_ID = typeof __app_id !== 'undefined' && __app_id ? __app_id : 'el3bakera-edu';
+// الربط المباشر بمسار مشروعك الفعلي في Firestore لضمان ظهور كل مذكراتك وصورك وإعداداتك
+const APP_ID = 'el3bakera-edu';
 const ADMIN_EMAIL = 'mahmoudelzaaty7@gmail.com';
 const LOCAL_SETTINGS_BACKUP_KEY = 'el3bakera_settings_backup_v2';
 const LEGACY_LOCAL_BACKUP_KEY = 'el3bakera_settings_backup_v1';
