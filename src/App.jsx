@@ -1604,7 +1604,7 @@ const AdminPortal = ({
   const handleCategoryImageUpload = async (catName, file) => {
     if (!file) return;
     try {
-      const dataUrl = await compressImageFile(file, 900, 0.8);
+      const dataUrl = await compressImageFile(file, 720, 0.72);
       setLocalSettings((prev) => ({
         ...prev,
         categoryImages: { ...(prev.categoryImages || {}), [catName]: dataUrl }
@@ -2363,7 +2363,7 @@ const AdminPortal = ({
                     onChange={async (e) => {
                       const f = e.target.files?.[0];
                       if (f) {
-                        const url = await compressImageFile(f, 500, 0.85);
+                        const url = await compressImageFile(f, 400, 0.8);
                         setLocalSettings({ ...localSettings, logoUrl: url });
                       }
                     }}
@@ -2390,7 +2390,7 @@ const AdminPortal = ({
                     onChange={async (e) => {
                       const f = e.target.files?.[0];
                       if (f) {
-                        const url = await compressImageFile(f, 1280, 0.8);
+                        const url = await compressImageFile(f, 1024, 0.72);
                         setLocalSettings({ ...localSettings, heroBgImage: url });
                       }
                     }}
