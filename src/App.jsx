@@ -107,11 +107,11 @@ const publicDoc = (colName, docId) =>
 // 2. Security, Storage & Media Helpers
 // ==========================================
 const LS_KEYS = {
-  NOTEBOOKS: 'mz_notebooks_v4',
-  COUPONS: 'mz_coupons_v4',
-  SETTINGS: 'mz_settings_v4',
-  ORDERS: 'mz_orders_v4',
-  SAMPLES: 'mz_samples_v4'
+  NOTEBOOKS: 'mz_notebooks_v3',
+  COUPONS: 'mz_coupons_v3',
+  SETTINGS: 'mz_settings_v3',
+  ORDERS: 'mz_orders_v3',
+  SAMPLES: 'mz_samples_v3'
 };
 
 function readLS(key, fallback) {
@@ -3505,34 +3505,66 @@ function MuzakkiratiApp() {
     ...DEFAULT_SETTINGS,
     ...readLS(LS_KEYS.SETTINGS, {})
   }));
-  const [notebooks, setNotebooks] = useState(() => readLS(LS_KEYS.NOTEBOOKS, INITIAL_NOTEBOOKS));
-  const [coupons, setCoupons] = useState(() => readLS(LS_KEYS.COUPONS, INITIAL_COUPONS));
+  const [notebooks, setNotebooks] = useState(() =>
+    readLS(LS_KEYS.NOTEBOOKS, INITIAL_NOTEBOOKS)
+  );
+  const [coupons, setCoupons] = useState(() =>
+    readLS(LS_KEYS.COUPONS, INITIAL_COUPONS)
+  );
   const [orders, setOrders] = useState(() => readLS(LS_KEYS.ORDERS, []));
-
-  const [previewNotebook, setPreviewNotebook] = useState(null);
-  const [orderModalTarget, setOrderModalTarget] = useState({ open: false, notebook: null });
-  const [showSocialModal, setShowSocialModal] = useState(false);
-
   const [adminUser, setAdminUser] = useState(null);
   const [showAdminModal, setShowAdminModal] = useState(false);
+  const [showSocialModal, setShowSocialModal] = useState(false);
+  const [previewNotebook, setPreviewNotebook] = useState(null);
+  const [orderModalTarget, setOrderModalTarget] = useState({
+    open: false,
+    notebook: null
+  });
   const [toast, setToast] = useState(null);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
+    setTimeout(() => {
+      setToast((prev) => (prev?.message === message ? null : prev));
+    }, 3500);
   };
 
-  // Check URL hash (#admin)
+  // Check URL hash (#admin) & Keyboard Shortcut (Alt + Shift + A)
   useEffect(() => {
     const checkHash = () => {
       if (window.location.hash === '#admin') {
         setShowAdminModal(true);
       }
     };
+    const handleKeyDown = (e) => {
+      if (e.altKey && e.shiftKey && (e.key === 'A' || e.key === 'a' || e.code === 'KeyA')) {
+        e.preventDefault();
+        setShowAdminModal(true);
+      }
+    };
     checkHash();
     window.addEventListener('hashchange', checkHash);
-    return () => window.removeEventListener('hashchange', checkHash);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('hashchange', checkHash);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
+
+  const logoClickRef = useRef({ count: 0, timer: null });
+  const handleBrandClick = () => {
+    setActivePage('home');
+    logoClickRef.current.count += 1;
+    clearTimeout(logoClickRef.current.timer);
+    if (logoClickRef.current.count >= 5) {
+      logoClickRef.current.count = 0;
+      setShowAdminModal(true);
+      return;
+    }
+    logoClickRef.current.timer = setTimeout(() => {
+      logoClickRef.current.count = 0;
+    }, 1500);
+  };
 
   // Firebase Auth listener
   useEffect(() => {
@@ -3834,8 +3866,8 @@ function MuzakkiratiApp() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-4">
           {/* Brand */}
           <div
-            onClick={() => setActivePage('home')}
-            className="flex items-center gap-3 cursor-pointer"
+            onClick={handleBrandClick}
+            className="flex items-center gap-3 cursor-pointer select-none"
           >
             {settings.logoUrl ? (
               <img
@@ -4037,16 +4069,16 @@ function MuzakkiratiApp() {
             </div>
           </div>
         </div>
-
-        <div className="border-t border-slate-900 py-4 px-4 text-center text-[11px] text-slate-500 flex items-center justify-center gap-2">
+        <div className="border-t border-slate-900 py-4 px-4 text-center text-[11px] text-slate-500 flex items-center justify-center gap-3">
           <span>© {new Date().getFullYear()} {settings.brandName}. جميع الحقوق محفوظة.</span>
           <button
             type="button"
             onClick={() => setShowAdminModal(true)}
             title="دخول الإدارة"
-            className="text-slate-600 hover:text-slate-400 cursor-pointer"
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
           >
             <Lock className="w-3.5 h-3.5" />
+            <span>إدارة</span>
           </button>
         </div>
       </footer>
