@@ -626,6 +626,36 @@ function MuzakkiratiApp() {
       console.warn('Firestore listener notice:', err?.code || err?.message);
     };
 
+    const mapSampleDocsToState = (docsList) => {
+      const nextSamples = {};
+      docsList.forEach((d) => {
+        const data = d.data() || {};
+        const rawTarget = safeText(data.notebookId || data.nbId || data.parentId || '', '');
+        const baseDocId = d.id.includes('_') ? d.id.split('_')[0] : d.id;
+        const imgs = extractAnyImagesFromDoc(data);
+        if (imgs.length > 0) {
+          const keys = Array.from(new Set([rawTarget, baseDocId, d.id].filter(Boolean)));
+          keys.forEach((k) => {
+            nextSamples[k] = [...(nextSamples[k] || []), ...imgs];
+          });
+        }
+      });
+      if (Object.keys(nextSamples).length > 0) {
+        setSamplesMap((prev) => {
+          const merged = { ...prev };
+          for (const [k, arr] of Object.entries(nextSamples)) {
+            merged[k] = Array.from(new Set([...(merged[k] || []), ...arr]));
+          }
+          try {
+            localStorage.setItem(LOCAL_SAMPLES_KEY, JSON.stringify(merged));
+          } catch {
+            // تجاهل
+          }
+          return merged;
+        });
+      }
+    };
+
     try {
       // 1. الإعدادات والوسائط من كافة مستندات settings
       unsubscribers.push(
@@ -675,55 +705,28 @@ function MuzakkiratiApp() {
         onSnapshot(
           publicCol('notebook_samples'),
           (snap) => {
-            const nextSamples = {};
-            snap.docs.forEach((d) => {
-              const data = d.data() || {};
-              const targetId = data.notebookId || data.nbId || d.id;
-              const imgs = extractAnyImagesFromDoc(data);
-              if (imgs.length > 0) {
-                nextSamples[targetId] = [...(nextSamples[targetId] || []), ...imgs];
-                nextSamples[d.id] = [...(nextSamples[d.id] || []), ...imgs];
-              }
-            });
-            if (Object.keys(nextSamples).length > 0) {
-              setSamplesMap((prev) => {
-                const merged = { ...prev };
-                for (const [k, arr] of Object.entries(nextSamples)) {
-                  merged[k] = Array.from(new Set([...(merged[k] || []), ...arr]));
-                }
-                try {
-                  localStorage.setItem(LOCAL_SAMPLES_KEY, JSON.stringify(merged));
-                } catch {
-                  // تجاهل
-                }
-                return merged;
-              });
-            }
+            if (!snap.empty) mapSampleDocsToState(snap.docs);
           },
           handleSnapError
         )
       );
 
-      // 3.5 جلب أي وسائط إضافية من مجموعات أخرى في المسار الأساسي أو القديم
+      // 3.5 جلب أي وسائط إضافية من مجموعات أخرى في المسار الأساسي أو القديم أو الجذر
       (async () => {
         for (const extraCol of ['notebook_media', 'samples', 'media_assets']) {
           try {
             const extraSnap = await getDocs(publicCol(extraCol));
-            if (!extraSnap.empty) {
-              const extraSamples = {};
-              extraSnap.docs.forEach((d) => {
-                const data = d.data() || {};
-                const targetId = data.notebookId || data.nbId || d.id;
-                const imgs = extractAnyImagesFromDoc(data);
-                if (imgs.length > 0) {
-                  extraSamples[targetId] = imgs;
-                  extraSamples[d.id] = imgs;
-                }
-              });
-              if (Object.keys(extraSamples).length > 0) {
-                setSamplesMap((prev) => ({ ...extraSamples, ...prev }));
-              }
-            }
+            if (!extraSnap.empty) mapSampleDocsToState(extraSnap.docs);
+          } catch {
+            // تجاهل
+          }
+        }
+
+        // فحص الجذر المباشر في Firestore إن وُجدت عينات خارج artifacts
+        for (const rootColName of ['notebook_samples', 'samples']) {
+          try {
+            const rootSnap = await getDocs(collection(db, rootColName));
+            if (!rootSnap.empty) mapSampleDocsToState(rootSnap.docs);
           } catch {
             // تجاهل
           }
@@ -742,21 +745,7 @@ function MuzakkiratiApp() {
             });
           }
           const legacySamples = await getDocs(legacyPublicCol('notebook_samples'));
-          if (!legacySamples.empty) {
-            const legMap = {};
-            legacySamples.docs.forEach((d) => {
-              const data = d.data() || {};
-              const targetId = data.notebookId || data.nbId || d.id;
-              const imgs = extractAnyImagesFromDoc(data);
-              if (imgs.length > 0) {
-                legMap[targetId] = imgs;
-                legMap[d.id] = imgs;
-              }
-            });
-            if (Object.keys(legMap).length > 0) {
-              setSamplesMap((prev) => ({ ...legMap, ...prev }));
-            }
-          }
+          if (!legacySamples.empty) mapSampleDocsToState(legacySamples.docs);
         } catch {
           // تجاهل
         }
@@ -809,36 +798,46 @@ function MuzakkiratiApp() {
   // حسابات المذكرات المعروضة
   const getNotebookSamples = (nb) => {
     if (!nb) return [];
-    const fromMap = samplesMap[nb.id] || [];
-    const combined = Array.from(new Set([...fromMap, ...(nb.inlineSamples || [])]));
+    const direct = samplesMap[nb.id] || [];
+    const prefixMatched = Object.entries(samplesMap)
+      .filter(([k]) => k === nb.id || k.startsWith(`${nb.id}_`) || k.startsWith(`${nb.id}-`))
+      .flatMap(([, arr]) => arr);
+    const combined = Array.from(new Set([...direct, ...prefixMatched, ...(nb.inlineSamples || [])]));
     const filtered = combined.filter((img) => img && img !== nb.coverImage);
     return filtered.length > 0 ? filtered : nb.coverImage ? [nb.coverImage] : [];
   };
 
-  // جلب العينات عند فتح نافذة المعاينة إن كانت مخزنة كمجموعة فرعية تحت المذكرة
+  // جلب العينات عند فتح نافذة المعاينة إن كانت مخزنة كمجموعة فرعية تحت المذكرة أو تحت notebook_samples
   useEffect(() => {
     if (!previewNotebook || !db) return;
     let cancelled = false;
     (async () => {
-      try {
-        const subCol = collection(db, 'artifacts', APP_ID, 'public', 'data', 'notebooks', previewNotebook.id, 'samples');
-        const subSnap = await getDocs(subCol);
-        if (!cancelled && !subSnap.empty) {
-          const imgs = [];
-          subSnap.docs.forEach((d) => {
-            extractAnyImagesFromDoc(d.data()).forEach((im) => {
-              if (!imgs.includes(im)) imgs.push(im);
+      const subPaths = [
+        collection(db, 'artifacts', APP_ID, 'public', 'data', 'notebooks', previewNotebook.id, 'samples'),
+        collection(db, 'artifacts', APP_ID, 'public', 'data', 'notebooks', previewNotebook.id, 'pages'),
+        collection(db, 'artifacts', APP_ID, 'public', 'data', 'notebook_samples', previewNotebook.id, 'pages'),
+        collection(db, 'artifacts', LEGACY_APP_ID, 'public', 'data', 'notebooks', previewNotebook.id, 'samples')
+      ];
+      for (const subCol of subPaths) {
+        try {
+          const subSnap = await getDocs(subCol);
+          if (!cancelled && !subSnap.empty) {
+            const imgs = [];
+            subSnap.docs.forEach((d) => {
+              extractAnyImagesFromDoc(d.data()).forEach((im) => {
+                if (!imgs.includes(im)) imgs.push(im);
+              });
             });
-          });
-          if (imgs.length > 0) {
-            setSamplesMap((prev) => ({
-              ...prev,
-              [previewNotebook.id]: Array.from(new Set([...(prev[previewNotebook.id] || []), ...imgs]))
-            }));
+            if (imgs.length > 0) {
+              setSamplesMap((prev) => ({
+                ...prev,
+                [previewNotebook.id]: Array.from(new Set([...(prev[previewNotebook.id] || []), ...imgs]))
+              }));
+            }
           }
+        } catch {
+          // تجاهل
         }
-      } catch {
-        // تجاهل
       }
     })();
     return () => {
