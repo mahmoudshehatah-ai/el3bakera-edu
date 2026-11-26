@@ -1,74 +1,69 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   BookOpen,
-  ShieldCheck,
-  Search,
   ShoppingCart,
-  Plus,
-  Trash2,
-  Edit3,
-  CheckCircle2,
-  X,
-  Eye,
-  Upload,
-  Settings,
-  Layers,
-  Tag,
-  Sparkles,
-  Phone,
-  LogOut,
-  Lock,
-  ExternalLink,
-  Copy,
-  Check,
-  Package,
-  AlertCircle,
+  Search,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
   ChevronDown,
-  Clock,
-  FolderOpen,
-  ArrowRight,
+  Shield,
+  CheckCircle2,
+  Sparkles,
+  Trash2,
+  Plus,
+  Edit3,
+  Copy,
+  Check,
+  X,
+  Eye,
+  EyeOff,
+  ExternalLink,
+  Package,
+  Tag,
   Percent,
-  Gift,
+  Layers,
+  Settings,
+  LogOut,
+  MessageCircle,
+  AlertCircle,
+  Clock,
+  Folder,
   FileText,
+  Upload,
   Download,
-  RefreshCw,
-  Megaphone,
-  CalendarClock,
-  Save,
-  Home
+  Image as ImageIcon,
+  ArrowRight,
+  Home,
+  Gift,
+  Users
 } from 'lucide-react';
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
   getAuth,
   signInWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
-  signInAnonymously,
-  onAuthStateChanged,
-  signOut
+  signOut,
+  onAuthStateChanged
 } from 'firebase/auth';
 import {
   getFirestore,
   collection,
   doc,
   getDoc,
+  getDocs,
   setDoc,
   addDoc,
   updateDoc,
   deleteDoc,
-  onSnapshot,
-  query,
-  where,
-  serverTimestamp
+  onSnapshot
 } from 'firebase/firestore';
 
 // ==========================================
-// 1. إعدادات Firebase والاتصال بالسحابة
+// 1. إعدادات Firebase والتهيئة الأساسية
 // ==========================================
-const firebaseConfig = {
+const DEFAULT_FIREBASE_CONFIG = {
   apiKey: "AIzaSyD_du5VY8nJGDJ169Fof9EALI9x2W2d-14",
   authDomain: "el3bakera-edu.firebaseapp.com",
   projectId: "el3bakera-edu",
@@ -77,132 +72,231 @@ const firebaseConfig = {
   appId: "1:74663879858:web:4327c0ea1b825dd6c615ab"
 };
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+const firebaseApp = getApps().length ? getApp() : initializeApp(DEFAULT_FIREBASE_CONFIG);
+const auth = getAuth(firebaseApp);
+const db = getFirestore(firebaseApp);
 
-// الربط المباشر بمسار مشروعك الفعلي في Firestore لضمان ظهور كل مذكراتك وصورك وإعداداتك
 const APP_ID = 'el3bakera-edu';
 const ADMIN_EMAIL = 'mahmoudelzaaty7@gmail.com';
-const LOCAL_SETTINGS_BACKUP_KEY = 'el3bakera_settings_backup_v2';
-const LEGACY_LOCAL_BACKUP_KEY = 'el3bakera_settings_backup_v1';
+const LOCAL_SETTINGS_KEY = 'el3bakera_settings_cache_v3';
 
 const publicCol = (colName) => collection(db, 'artifacts', APP_ID, 'public', 'data', colName);
 const publicDoc = (colName, docId) => doc(db, 'artifacts', APP_ID, 'public', 'data', colName, docId);
-const legacyPublicDoc = (colName, docId) => doc(db, 'artifacts', 'el3bakera-edu', 'public', 'data', colName, docId);
+const legacyPublicDoc = (colName, docId) => doc(db, 'artifacts', 'default-app-id', 'public', 'data', colName, docId);
 
 // ==========================================
-// 2. البيانات الافتراضية للمنصة
+// 2. البيانات الافتراضية والهياكل الأساسية
 // ==========================================
 const DEFAULT_CATEGORIES = [
-  { id: 'cat_term1', name: 'مذكرات الترم الأول', order: 1, description: 'مذكرات الشرح والمراجعة النهائية للفصل الدراسي الأول' },
-  { id: 'cat_term2', name: 'مذكرات الترم الثاني', order: 2, description: 'مذكرات الشرح والاختبارات الشاملة للفصل الدراسي الثاني' },
-  { id: 'cat_foundation', name: 'كورسات التأسيس', order: 3, description: 'سلاسل التأسيس المتدرجة في القراءة والكتابة والقواعد' }
-];
-
-const DEFAULT_STAGES = [
-  { id: 'stage_primary', name: 'المرحلة الابتدائية', order: 1 },
-  { id: 'stage_prep', name: 'المرحلة الإعدادية', order: 2 },
-  { id: 'stage_sec', name: 'المرحلة الثانوية', order: 3 }
-];
-
-const DEFAULT_GRADES = [
-  { id: 'g_p4', stageId: 'stage_primary', name: 'الصف الرابع الابتدائي', order: 1 },
-  { id: 'g_p5', stageId: 'stage_primary', name: 'الصف الخامس الابتدائي', order: 2 },
-  { id: 'g_p6', stageId: 'stage_primary', name: 'الصف السادس الابتدائي', order: 3 },
-  { id: 'g_m1', stageId: 'stage_prep', name: 'الصف الأول الإعدادي', order: 1 },
-  { id: 'g_m2', stageId: 'stage_prep', name: 'الصف الثاني الإعدادي', order: 2 },
-  { id: 'g_m3', stageId: 'stage_prep', name: 'الصف الثالث الإعدادي', order: 3 },
-  { id: 'g_s1', stageId: 'stage_sec', name: 'الصف الأول الثانوي', order: 1 },
-  { id: 'g_s2', stageId: 'stage_sec', name: 'الصف الثاني الثانوي', order: 2 },
-  { id: 'g_s3', stageId: 'stage_sec', name: 'الصف الثالث الثانوي', order: 3 }
-];
-
-const DEFAULT_SUBJECTS = [
-  { id: 'sub_ar', name: 'اللغة العربية' },
-  { id: 'sub_en', name: 'اللغة الإنجليزية' },
-  { id: 'sub_math', name: 'الرياضيات' },
-  { id: 'sub_sci', name: 'العلوم' },
-  { id: 'sub_soc', name: 'الدراسات الاجتماعية' }
+  {
+    id: 'term1',
+    name: 'مذكرات الترم الأول',
+    description: 'تصفح المراحل والصفوف الدراسية',
+    order: 1,
+    stages: [
+      {
+        id: 'prep',
+        name: 'المرحلة الإعدادية',
+        grades: [
+          { id: 'prep1', name: 'الصف الأول الإعدادي', subjects: ['اللغة العربية', 'الرياضيات', 'العلوم', 'الدراسات الاجتماعية', 'اللغة الإنجليزية'] },
+          { id: 'prep2', name: 'الصف الثاني الإعدادي', subjects: ['اللغة العربية', 'الرياضيات', 'العلوم', 'الدراسات الاجتماعية', 'اللغة الإنجليزية'] },
+          { id: 'prep3', name: 'الصف الثالث الإعدادي', subjects: ['اللغة العربية', 'الرياضيات', 'العلوم', 'الدراسات الاجتماعية', 'اللغة الإنجليزية'] }
+        ]
+      },
+      {
+        id: 'sec',
+        name: 'المرحلة الثانوية',
+        grades: [
+          { id: 'sec1', name: 'الصف الأول الثانوي', subjects: ['اللغة العربية', 'الرياضيات', 'الفيزياء', 'الكيمياء', 'الأحياء', 'التاريخ', 'الجغرافيا'] },
+          { id: 'sec2', name: 'الصف الثاني الثانوي', subjects: ['اللغة العربية', 'الرياضيات', 'الفيزياء', 'الكيمياء', 'الأحياء'] },
+          { id: 'sec3', name: 'الصف الثالث الثانوي', subjects: ['اللغة العربية', 'الرياضيات', 'الفيزياء', 'الكيمياء', 'الأحياء'] }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'term2',
+    name: 'مذكرات الترم الثاني',
+    description: 'تصفح المراحل والصفوف الدراسية',
+    order: 2,
+    stages: [
+      {
+        id: 'prep_t2',
+        name: 'المرحلة الإعدادية',
+        grades: [
+          { id: 'prep1_t2', name: 'الصف الأول الإعدادي', subjects: ['اللغة العربية', 'الرياضيات', 'العلوم'] },
+          { id: 'prep2_t2', name: 'الصف الثاني الإعدادي', subjects: ['اللغة العربية', 'الرياضيات', 'العلوم'] },
+          { id: 'prep3_t2', name: 'الصف الثالث الإعدادي', subjects: ['اللغة العربية', 'الرياضيات', 'العلوم'] }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'foundation',
+    name: 'كورسات التأسيس',
+    description: 'تصفح المراحل والصفوف الدراسية',
+    order: 3,
+    stages: [
+      {
+        id: 'found_stage',
+        name: 'برامج التأسيس الشاملة',
+        grades: [
+          { id: 'found_ar', name: 'تأسيس القراءة والكتابة والنحو', subjects: ['اللغة العربية'] },
+          { id: 'found_en', name: 'تأسيس الصوتيات والقواعد', subjects: ['اللغة الإنجليزية'] },
+          { id: 'found_math', name: 'تأسيس الحساب والمهارات الرياضية', subjects: ['الرياضيات'] }
+        ]
+      }
+    ]
+  }
 ];
 
 const DEFAULT_CUSTOMER_FIELDS = [
-  { id: 'teacherName', label: 'اسم المعلم (كما سيُكتب على المذكرة)', placeholder: 'مثال: أ/ محمود شحاتة', type: 'text', required: true, visible: true, order: 1 },
-  { id: 'whatsapp', label: 'رقم الواتساب للتواصل وإرسال الملفات', placeholder: '010xxxxxxxx', type: 'tel', required: true, visible: true, order: 2 },
-  { id: 'seriesName', label: 'اسم السلسلة أو السنتر (اختياري)', placeholder: 'مثال: سلسلة العباقرة في اللغة العربية', type: 'text', required: false, visible: true, order: 3 },
-  { id: 'governorate', label: 'المحافظة / الإدارة التعليمية', placeholder: 'مثال: الغربية - المحلة الكبرى', type: 'text', required: false, visible: true, order: 4 },
-  { id: 'notes', label: 'ملاحظات إضافية للتصميم', placeholder: 'أي تفاصيل خاصة بالألوان أو البيانات...', type: 'textarea', required: false, visible: true, order: 5 }
+  { id: 'teacherName', label: 'اسم المعلم (كما سيُكتب على المذكرة)', placeholder: 'مثال: أ/ محمود شحاتة', type: 'text', required: true, enabled: true, order: 1 },
+  { id: 'whatsapp', label: 'رقم الواتساب للتواصل وإرسال الملفات', placeholder: '010xxxxxxxx', type: 'tel', required: true, enabled: true, order: 2 },
+  { id: 'centerName', label: 'اسم السلسلة أو السنتر (اختياري)', placeholder: 'مثال: سلسلة العباقرة في اللغة العربية', type: 'text', required: false, enabled: true, order: 3 },
+  { id: 'governorate', label: 'المحافظة / الإدارة التعليمية', placeholder: 'مثال: الغربية - المحلة الكبرى', type: 'text', required: false, enabled: true, order: 4 },
+  { id: 'notes', label: 'ملاحظات إضافية للتصميم', placeholder: 'اكتب أي تفاصيل أو ألوان مفضلة...', type: 'textarea', required: false, enabled: true, order: 5 }
 ];
 
 const DEFAULT_SETTINGS = {
   siteName: 'منصة العباقرة للمذكرات التعليمية',
-  tagline: 'مذكرات دراسية احترافية مخصصة للمعلم باسمه وبياناته الخاصة',
+  siteTagline: 'مذكرات دراسية احترافية مخصصة للمعلم باسمه وبياناته الخاصة',
   logoUrl: '',
-  logoSize: 52,
+  logoSize: 48,
+  whatsappNumber: '201000000000',
   heroBadge: 'تخصيص كامل باسم المعلم ورقم هاتفه وشعاره',
   heroTitle: 'مذكرتك التعليمية الجاهزة... باسمك وشعارك وهويتك الاحترافية',
-  heroSubtitle: 'نوفر للمعلمين مذكرات دراسية منسقة باحترافية ومحدّثة وفق أحدث المناهج بصيغة PDF عالية الدقة، مع إضافة بيانات المعلم على الغلاف وجميع الصفحات.',
+  heroSubtitle: 'نوفر للمعلمين مذكرات دراسية منسقة باحترافية ومحدّثة وفق أحدث المناهج بصيغة PDF عالية الدقة، مع إضافة بيانات المعلم وشعاره على الغلاف وجميع الصفحات.',
   heroBgImage: '',
   heroBgOpacity: 0.28,
   heroMinHeight: 440,
-  whatsappNumber: '201000000000',
-  contactModalTitle: 'تواصل مع إدارة منصة العباقرة',
-  contactModalSubtitle: 'يسعدنا الرد على استفساراتكم وطلبات التخصيص عبر قنواتنا الرسمية:',
-  socialLinks: [
-    { id: 'soc_wa', label: 'تواصل مباشر واتساب', url: 'https://wa.me/201000000000' },
-    { id: 'soc_fb', label: 'صفحتنا على فيسبوك', url: 'https://facebook.com' }
+  trustTitle: 'لماذا يثق بنا المعلمون؟',
+  trustPoints: [
+    'محتوى متكامل ومطابق لأحدث تعليمات الوزارة منسق باحترافية.',
+    'وضع اسم المعلم ورقم الهاتف والشعار على جميع الصفحات.',
+    'معاينة حقيقية لصفحات المذكرة قبل تأكيد الطلب.',
+    'تسليم سريع بصيغة PDF عالية الدقة جاهزة للطباعة.',
+    'خدمة عملاء حقيقية لحل أي مشكلة.'
   ],
   promoBannerEnabled: true,
-  promoBannerText: 'عرض خاص للمعلمين: خصم 15% على جميع المذكرات بمناسبة افتتاح موقعنا',
+  promoBannerText: 'عرض خاص للمعلمين: خصم 15% على جميع مذكرات الترم الأول + إضافة الشعار مجانًا لفترة محدودة!',
   promoBannerColor: 'blue',
   promoBannerCoupon: 'M20',
-  promoBannerCopyText: 'انسخ الكوبون',
+  promoBannerCopyLabel: 'انسخ الكوبون:',
   nextOrderRewardEnabled: true,
-  nextOrderRewardMode: 'auto', // 'auto' | 'custom'
+  nextOrderRewardMode: 'auto',
   nextOrderRewardCustomCode: 'VIP15',
-  nextOrderRewardType: 'percent', // 'percent' | 'fixed'
+  nextOrderRewardType: 'percent',
   nextOrderRewardValue: 15,
   nextOrderRewardValidDays: 7,
   nextOrderRewardTitle: 'هدية خاصة لطلبك القادم!',
-  nextOrderRewardMessage: 'استخدم كود الخصم التالي عند طلبك القادم للحصول على خصم فوري:',
+  nextOrderRewardMessage: 'استخدم هذا الكوبون في طلبك القادم للحصول على خصم إضافي حصري:',
   whatsNewEnabled: true,
   whatsNewTitle: 'ما الجديد؟ أحدث المذكرات والإصدارات',
-  whatsNewMode: 'auto', // 'auto' | 'manual'
-  whatsNewCount: 4,
+  whatsNewMode: 'auto',
   whatsNewManualIds: [],
+  whatsNewCount: 4,
   newsSectionEnabled: true,
   newsSectionTitle: 'أخبار المنصة ومذكرات قيد التجهيز',
   newsItems: [
     {
       id: 'news_1',
-      title: 'تحديث جميع مذكرات الفصل الدراسي الجديد وفق آخر تعديلات الوزارة',
-      date: 'متاح الآن',
-      description: 'تمت مراجعة وتنسيق كافة المذكرات بإخراج فني فاخر وجاهز للطباعة الفورية.'
+      badge: 'تحديث المناهج',
+      title: 'جاري تجهيز مراجعات ليلة الامتحان النهائية لجميع المراحل',
+      body: 'يمكنك حجز نسختك المخصصة مسبقًا الآن وسيتم تسليمها فور الاعتماد النهائي.'
     }
   ],
-  driveButtonLabel: 'معاينة عينة PDF كاملة على Google Drive',
-  driveHelpText: 'يمكنك تصفح عينة كاملة بجودة عالية قبل تأكيد الطلب',
-  customerFields: DEFAULT_CUSTOMER_FIELDS,
-  categoryImages: {},
+  driveButtonLabel: 'معاينة وتحميل عينة PDF كاملة عبر Google Drive',
   categories: DEFAULT_CATEGORIES,
-  stages: DEFAULT_STAGES,
-  grades: DEFAULT_GRADES,
-  subjects: DEFAULT_SUBJECTS,
-  bundles: []
+  categoryImages: {},
+  bundles: [],
+  customerFields: DEFAULT_CUSTOMER_FIELDS,
+  socialLinks: [
+    { id: 'soc_wa', label: 'تواصل مباشر عبر واتساب', url: 'https://wa.me/201000000000' }
+  ]
 };
 
 // ==========================================
-// 3. دوال مساعدة (ضغط الصور، معالجة الروابط، الأيقونات)
+// 3. دوال مساعدة للتطبيع وضغط الصور
 // ==========================================
-function compressImage(file, maxWidth = 900, quality = 0.78) {
+function normalizeNotebook(nb) {
+  if (!nb || typeof nb !== 'object') return nb;
+  const cover =
+    nb.coverImage ||
+    nb.cover ||
+    nb.image ||
+    nb.thumbnail ||
+    (Array.isArray(nb.samplePages) && nb.samplePages[0]) ||
+    '';
+  const samples = Array.isArray(nb.samplePages)
+    ? nb.samplePages
+    : Array.isArray(nb.samples)
+    ? nb.samples
+    : Array.isArray(nb.images)
+    ? nb.images
+    : [];
+  return {
+    ...nb,
+    coverImage: cover,
+    samplePages: samples,
+    price: Number(nb.price) || 0,
+    oldPrice: Number(nb.oldPrice) || 0
+  };
+}
+
+function mergeAndNormalizeSettings(base, incoming) {
+  if (!incoming || typeof incoming !== 'object') return base;
+  const mergedCatImages = {
+    ...(base.categoryImages || {}),
+    ...(incoming.categoryImages || {})
+  };
+  const rawCats = Array.isArray(incoming.categories) && incoming.categories.length > 0
+    ? incoming.categories
+    : base.categories;
+
+  const normalizedCats = rawCats.map((c, idx) => {
+    const id = c.id || `cat_${idx + 1}`;
+    const name = c.name || c.title || c.label || `قسم ${idx + 1}`;
+    if (c.image && !mergedCatImages[id]) {
+      mergedCatImages[id] = c.image;
+    }
+    return {
+      ...c,
+      id,
+      name,
+      stages: Array.isArray(c.stages) ? c.stages : []
+    };
+  });
+
+  return {
+    ...base,
+    ...incoming,
+    logoUrl: incoming.logoUrl ? incoming.logoUrl : base.logoUrl,
+    heroBgImage: incoming.heroBgImage ? incoming.heroBgImage : base.heroBgImage,
+    categories: normalizedCats,
+    categoryImages: mergedCatImages,
+    bundles: Array.isArray(incoming.bundles) ? incoming.bundles : base.bundles,
+    customerFields:
+      Array.isArray(incoming.customerFields) && incoming.customerFields.length > 0
+        ? incoming.customerFields
+        : base.customerFields,
+    socialLinks: Array.isArray(incoming.socialLinks) ? incoming.socialLinks : base.socialLinks,
+    newsItems: Array.isArray(incoming.newsItems) ? incoming.newsItems : base.newsItems,
+    trustPoints:
+      Array.isArray(incoming.trustPoints) && incoming.trustPoints.length > 0
+        ? incoming.trustPoints
+        : base.trustPoints
+  };
+}
+
+function compressImageFile(file, maxWidth = 1100, quality = 0.78) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
+        let { width, height } = img;
         if (width > maxWidth) {
           height = Math.round((height * maxWidth) / width);
           width = maxWidth;
@@ -221,172 +315,29 @@ function compressImage(file, maxWidth = 900, quality = 0.78) {
   });
 }
 
-function normalizeExternalUrl(url) {
-  if (!url) return '';
-  const trimmed = url.trim();
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  return `https://${trimmed}`;
+function isCouponExpired(coupon) {
+  if (!coupon || !coupon.expiresAt) return false;
+  const ts = new Date(coupon.expiresAt).getTime();
+  return !Number.isNaN(ts) && ts < Date.now();
 }
 
-function generateUniqueCouponCode(prefix = 'VIP') {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let rand = '';
-  for (let i = 0; i < 5; i++) {
-    rand += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return `${prefix}-${rand}`;
-}
-
-function mergeAndNormalizeSettings(prev, incoming = {}) {
-  if (!incoming || typeof incoming !== 'object') return prev;
-  const merged = { ...prev, ...incoming };
-  // حماية الصور من الاستبدال بقيم فارغة مهما كان مصدر المستند
-  merged.logoUrl = incoming.logoUrl || prev.logoUrl || '';
-  merged.heroBgImage = incoming.heroBgImage || prev.heroBgImage || '';
-  merged.categoryImages = {
-    ...(prev.categoryImages || {}),
-    ...(incoming.categoryImages || {})
-  };
-
-  // دعم أسماء الحقول القديمة والجديدة للأقسام الرئيسية
-  const rawCats =
-    Array.isArray(incoming.categories) && incoming.categories.length > 0
-      ? incoming.categories
-      : Array.isArray(prev.categories) && prev.categories.length > 0
-      ? prev.categories
-      : DEFAULT_CATEGORIES;
-
-  merged.categories = rawCats.map((c, idx) => {
-    const id = c.id || DEFAULT_CATEGORIES[idx]?.id || `cat_${idx}`;
-    const imgFromObj = c.image || c.coverImage || c.img || '';
-    if (imgFromObj && !merged.categoryImages[id]) {
-      merged.categoryImages[id] = imgFromObj;
-    }
-    return {
-      ...c,
-      id,
-      name: c.name || c.title || c.label || DEFAULT_CATEGORIES[idx]?.name || `قسم ${idx + 1}`,
-      order: c.order ?? idx + 1
-    };
+function formatExpiryArabic(expiresAt) {
+  if (!expiresAt) return '';
+  const d = new Date(expiresAt);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('ar-EG', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
   });
-
-  if (Array.isArray(merged.stages)) {
-    merged.stages = merged.stages.map((s, idx) => ({
-      ...s,
-      name: s.name || s.title || s.label || `مرحلة ${idx + 1}`
-    }));
-  }
-  if (Array.isArray(merged.grades)) {
-    merged.grades = merged.grades.map((g, idx) => ({
-      ...g,
-      name: g.name || g.title || g.label || `صف ${idx + 1}`
-    }));
-  }
-  if (Array.isArray(merged.subjects)) {
-    merged.subjects = merged.subjects.map((sub, idx) => ({
-      ...sub,
-      name: sub.name || sub.title || sub.label || `مادة ${idx + 1}`
-    }));
-  }
-  return merged;
-}
-
-function normalizeNotebook(raw = {}) {
-  const inlineSamples = Array.isArray(raw.samplePages)
-    ? raw.samplePages
-    : Array.isArray(raw.samples)
-    ? raw.samples
-    : Array.isArray(raw.pages)
-    ? raw.pages
-    : [];
-
-  const resolvedCover =
-    raw.coverImage ||
-    raw.cover ||
-    raw.image ||
-    raw.imageUrl ||
-    raw.thumbnail ||
-    inlineSamples[0] ||
-    '';
-
-  return {
-    ...raw,
-    coverImage: resolvedCover,
-    samplePages: inlineSamples
-  };
-}
-
-function SocialPlatformBadge({ url }) {
-  const lower = (url || '').toLowerCase();
-  if (lower.includes('wa.me') || lower.includes('whatsapp')) {
-    return (
-      <span className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-xs shrink-0">
-        WA
-      </span>
-    );
-  }
-  if (lower.includes('facebook') || lower.includes('fb.com')) {
-    return (
-      <span className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-black text-xs shrink-0">
-        FB
-      </span>
-    );
-  }
-  if (lower.includes('t.me') || lower.includes('telegram')) {
-    return (
-      <span className="w-9 h-9 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center font-black text-xs shrink-0">
-        TG
-      </span>
-    );
-  }
-  if (lower.includes('youtube')) {
-    return (
-      <span className="w-9 h-9 rounded-xl bg-red-100 text-red-700 flex items-center justify-center font-black text-xs shrink-0">
-        YT
-      </span>
-    );
-  }
-  return (
-    <span className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
-      <ExternalLink className="w-4 h-4" />
-    </span>
-  );
-}
-
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false };
-  }
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div dir="rtl" className="min-h-screen flex items-center justify-center bg-slate-50 p-6 text-center">
-          <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-lg max-w-md space-y-4">
-            <AlertCircle className="w-12 h-12 text-red-600 mx-auto" />
-            <h2 className="text-xl font-black text-slate-900">حدث خطأ غير متوقع في العرض</h2>
-            <p className="text-sm text-slate-600">يرجى إعادة تحميل الصفحة للاستمرار.</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-6 py-3 rounded-2xl bg-blue-600 text-white font-black text-sm"
-            >
-              إعادة تحميل الصفحة
-            </button>
-          </div>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
 }
 
 // ==========================================
 // 4. مكون معاينة المذكرة المحمية
 // ==========================================
-function ProtectedPreviewModal({ notebook, settings, onClose, onAddToCart, isInCart }) {
+function ProtectedPreviewModal({ notebook, settings, samplesMap, onClose, onAddToCart, isInCart }) {
   const [samples, setSamples] = useState([]);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [loadingSamples, setLoadingSamples] = useState(true);
@@ -394,24 +345,40 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onAddToCart, isInC
   useEffect(() => {
     if (!notebook) return;
     let active = true;
+    const extractPages = (data) => {
+      if (!data || typeof data !== 'object') return [];
+      const arr =
+        (Array.isArray(data.pages) && data.pages) ||
+        (Array.isArray(data.samples) && data.samples) ||
+        (Array.isArray(data.images) && data.images) ||
+        (Array.isArray(data.sampleImages) && data.sampleImages) ||
+        (Array.isArray(data.urls) && data.urls) ||
+        [];
+      return arr
+        .map((item) => (typeof item === 'string' ? item : item?.url || item?.src || ''))
+        .filter(Boolean);
+    };
+
     const loadSamples = async () => {
       setLoadingSamples(true);
       try {
         const inlineSamples = Array.isArray(notebook.samplePages) ? notebook.samplePages : [];
-        let remoteSamples = [];
-        try {
-          const snap = await getDoc(publicDoc('notebook_samples', notebook.id));
-          if (snap.exists() && Array.isArray(snap.data().pages)) {
-            remoteSamples = snap.data().pages;
+        let remoteSamples = Array.isArray(samplesMap?.[notebook.id]) ? samplesMap[notebook.id] : [];
+        if (remoteSamples.length === 0) {
+          try {
+            const snap = await getDoc(publicDoc('notebook_samples', notebook.id));
+            if (snap.exists()) {
+              remoteSamples = extractPages(snap.data());
+            }
+          } catch {
+            // تجاهل
           }
-        } catch {
-          // تجاهل
         }
         if (remoteSamples.length === 0) {
           try {
             const legacySnap = await getDoc(legacyPublicDoc('notebook_samples', notebook.id));
-            if (legacySnap.exists() && Array.isArray(legacySnap.data().pages)) {
-              remoteSamples = legacySnap.data().pages;
+            if (legacySnap.exists()) {
+              remoteSamples = extractPages(legacySnap.data());
             }
           } catch {
             // تجاهل
@@ -439,201 +406,208 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onAddToCart, isInC
         if (active) setLoadingSamples(false);
       }
     };
+
     loadSamples();
     return () => {
       active = false;
     };
-  }, [notebook]);
+  }, [notebook, samplesMap]);
 
   if (!notebook) return null;
 
-  const gradeName = (settings.grades || []).find((g) => g.id === notebook.gradeId)?.name || '';
-  const subjectName = (settings.subjects || []).find((s) => s.id === notebook.subjectId)?.name || '';
-  const driveUrl = normalizeExternalUrl(notebook.driveUrl);
-
-  const alertStyles = {
-    amber: 'bg-amber-50 border-amber-300 text-amber-950',
-    blue: 'bg-blue-50 border-blue-300 text-blue-950',
-    emerald: 'bg-emerald-50 border-emerald-300 text-emerald-950',
-    rose: 'bg-rose-50 border-rose-300 text-rose-950'
-  };
+  const currentImg = samples[currentIdx] || '';
 
   return (
     <div
-      dir="rtl"
-      className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
+      className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
       onClick={onClose}
     >
       <div
-        className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col"
+        className="bg-white rounded-3xl max-w-4xl w-full overflow-hidden shadow-2xl border border-slate-200 my-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* رأس النافذة */}
-        <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between gap-3 shrink-0">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-2.5 py-0.5 rounded-full bg-blue-600 text-[11px] font-bold">{gradeName}</span>
-              {subjectName && (
-                <span className="px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-200 text-[11px] font-bold">
-                  {subjectName}
-                </span>
-              )}
-              {notebook.comingSoon && (
-                <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[11px] font-black">
-                  قيد التجهيز / حجز مسبق
-                </span>
-              )}
+        {/* رأس نافذة المعاينة */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="p-2 rounded-xl bg-blue-600 text-white shrink-0">
+              <Eye className="w-4 h-4" />
+            </span>
+            <div className="min-w-0">
+              <h3 className="font-black text-slate-900 text-sm sm:text-base truncate">{notebook.title}</h3>
+              <p className="text-xs text-slate-500 font-bold truncate">
+                {notebook.gradeName} {notebook.subject ? `• ${notebook.subject}` : ''}
+              </p>
             </div>
-            <h3 className="text-base sm:text-xl font-black mt-1 truncate">{notebook.title}</h3>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="w-10 h-10 rounded-2xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white shrink-0"
+            className="p-2 rounded-xl bg-white hover:bg-slate-100 text-slate-600 border border-slate-200"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* محتوى المعاينة */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1">
-          {notebook.customAlertEnabled && notebook.customAlertText && (
-            <div className={`p-4 rounded-2xl border-2 ${alertStyles[notebook.customAlertColor || 'amber']}`}>
-              {notebook.customAlertBadge && (
-                <span className="inline-block px-2.5 py-0.5 rounded-full bg-black/10 text-xs font-black mb-1">
-                  {notebook.customAlertBadge}
-                </span>
-              )}
-              <p className="text-sm font-bold leading-relaxed">{notebook.customAlertText}</p>
-            </div>
-          )}
-
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-0">
           {/* عارض الصفحات المحمي */}
-          <div className="bg-slate-100 rounded-3xl p-3 sm:p-5 border border-slate-200 select-none" onContextMenu={(e) => e.preventDefault()}>
+          <div className="lg:col-span-7 bg-slate-900 p-4 flex flex-col items-center justify-center relative select-none">
             {loadingSamples ? (
-              <div className="h-72 flex flex-col items-center justify-center text-slate-500 gap-2">
-                <RefreshCw className="w-7 h-7 animate-spin text-blue-600" />
-                <span className="text-sm font-bold">جاري تحميل صفحات العينة...</span>
+              <div className="h-72 sm:h-96 flex items-center justify-center text-white/80 text-sm font-bold">
+                جاري تحميل صفحات العينة...
               </div>
-            ) : samples.length > 0 ? (
-              <div className="space-y-4">
-                <div className="relative flex items-center justify-center bg-white rounded-2xl p-2 border border-slate-200 min-h-[300px] sm:min-h-[420px]">
-                  <img
-                    src={samples[currentIdx]}
-                    alt={`صفحة ${currentIdx + 1}`}
-                    draggable={false}
-                    className="max-h-[440px] w-auto object-contain rounded-xl pointer-events-none"
-                  />
-                  {/* علامة مائية للحماية */}
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-15">
-                    <span className="text-2xl sm:text-4xl font-black text-slate-900 -rotate-12">
-                      {settings.siteName}
-                    </span>
-                  </div>
-
-                  {samples.length > 1 && (
-                    <>
-                      <button
-                        onClick={() => setCurrentIdx((p) => (p > 0 ? p - 1 : samples.length - 1))}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-900/80 text-white flex items-center justify-center hover:bg-slate-900"
-                      >
-                        <ChevronRight className="w-5 h-5" />
-                      </button>
-                      <button
-                        onClick={() => setCurrentIdx((p) => (p < samples.length - 1 ? p + 1 : 0))}
-                        className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-900/80 text-white flex items-center justify-center hover:bg-slate-900"
-                      >
-                        <ChevronLeft className="w-5 h-5" />
-                      </button>
-                    </>
-                  )}
-                </div>
-
-                {/* شريط المصغرات */}
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <span className="text-xs font-black text-slate-600">
-                    صفحة {currentIdx + 1} من {samples.length}
+            ) : currentImg ? (
+              <div
+                className="relative w-full flex items-center justify-center overflow-hidden rounded-2xl bg-slate-800"
+                onContextMenu={(e) => e.preventDefault()}
+              >
+                <img
+                  src={currentImg}
+                  alt={`صفحة ${currentIdx + 1}`}
+                  draggable={false}
+                  className="max-h-[420px] w-auto object-contain pointer-events-none"
+                />
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20 rotate-[-22deg]">
+                  <span className="text-white font-black text-xl sm:text-2xl tracking-wider border-2 border-white/60 px-4 py-1 rounded-xl">
+                    {settings.siteName}
                   </span>
-                  <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                    {samples.map((src, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setCurrentIdx(idx)}
-                        className={`w-12 h-14 rounded-xl overflow-hidden border-2 shrink-0 transition ${
-                          currentIdx === idx ? 'border-blue-600 scale-105' : 'border-transparent opacity-60 hover:opacity-100'
-                        }`}
-                      >
-                        <img src={src} alt="" className="w-full h-full object-cover" />
-                      </button>
-                    ))}
-                  </div>
                 </div>
               </div>
             ) : (
-              <div className="h-56 flex flex-col items-center justify-center text-slate-500 gap-2">
-                <BookOpen className="w-10 h-10 text-slate-400" />
+              <div className="h-72 sm:h-96 flex flex-col items-center justify-center text-slate-400 gap-2">
+                <BookOpen className="w-12 h-12 opacity-40" />
                 <p className="text-sm font-bold">لا توجد صور عينة مرفوعة لهذه المذكرة بعد</p>
               </div>
             )}
-          </div>
 
-          {/* وصف المذكرة ورابط Drive */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-            <div className="space-y-1.5">
-              <h4 className="text-sm font-black text-slate-900">تفاصيل المذكرة:</h4>
-              <p className="text-sm text-slate-600 leading-relaxed">
-                {notebook.description || 'مذكرة شاملة ومنسقة باحترافية عالية وجاهزة للطباعة باسم المعلم ورقم هاتفه وشعاره الخاص.'}
-              </p>
-            </div>
-
-            {driveUrl && (
-              <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 space-y-2">
-                <p className="text-xs font-bold text-blue-900">{settings.driveHelpText}</p>
-                <a
-                  href={driveUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs transition"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  <span>{settings.driveButtonLabel || 'معاينة PDF على Google Drive'}</span>
-                </a>
+            {/* أزرار التقليب والمصغرات */}
+            {samples.length > 1 && (
+              <div className="w-full mt-3 space-y-2">
+                <div className="flex items-center justify-between text-white text-xs font-bold px-1">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentIdx((p) => (p > 0 ? p - 1 : samples.length - 1))}
+                    className="px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 flex items-center gap-1"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                    <span>السابق</span>
+                  </button>
+                  <span>
+                    صفحة {currentIdx + 1} من {samples.length}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentIdx((p) => (p < samples.length - 1 ? p + 1 : 0))}
+                    className="px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 flex items-center gap-1"
+                  >
+                    <span>التالي</span>
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                  {samples.map((src, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setCurrentIdx(i)}
+                      className={`w-12 h-14 rounded-lg overflow-hidden border-2 shrink-0 transition ${
+                        i === currentIdx ? 'border-blue-400 scale-105' : 'border-transparent opacity-60 hover:opacity-100'
+                      }`}
+                    >
+                      <img src={src} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
-        </div>
 
-        {/* شريط السعر والإضافة للسلة */}
-        <div className="px-5 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-4 shrink-0">
-          <div>
-            <span className="text-xs text-slate-500 font-bold block">سعر المذكرة بالتخصيص الكامل:</span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black text-blue-700">{notebook.price} ج.م</span>
-              {Number(notebook.oldPrice) > Number(notebook.price) && (
-                <span className="text-sm text-slate-400 line-through font-bold">{notebook.oldPrice} ج.م</span>
+          {/* تفاصيل المذكرة */}
+          <div className="lg:col-span-5 p-5 flex flex-col justify-between space-y-4 max-h-[82vh] overflow-y-auto">
+            <div className="space-y-3">
+              {notebook.comingSoon && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-black">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>قيد التجهيز — متاح للحجز المسبق</span>
+                </span>
+              )}
+
+              {notebook.alertText && (
+                <div
+                  className={`p-3 rounded-2xl border text-xs font-bold leading-relaxed ${
+                    notebook.alertColor === 'red'
+                      ? 'bg-red-50 border-red-200 text-red-800'
+                      : notebook.alertColor === 'green'
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                      : notebook.alertColor === 'blue'
+                      ? 'bg-blue-50 border-blue-200 text-blue-800'
+                      : 'bg-amber-50 border-amber-200 text-amber-900'
+                  }`}
+                >
+                  {notebook.alertBadge && (
+                    <span className="inline-block px-2 py-0.5 rounded-md bg-white/80 font-black ml-1.5 mb-1">
+                      {notebook.alertBadge}
+                    </span>
+                  )}
+                  <p>{notebook.alertText}</p>
+                </div>
+              )}
+
+              <div className="flex items-baseline gap-2.5">
+                <span className="text-2xl font-black text-blue-700">{notebook.price} ج.م</span>
+                {notebook.oldPrice > notebook.price && (
+                  <span className="text-sm text-slate-400 line-through font-bold">{notebook.oldPrice} ج.م</span>
+                )}
+              </div>
+
+              {notebook.pagesCount && (
+                <p className="text-xs font-bold text-slate-600">
+                  عدد الصفحات: <span className="text-slate-900 font-black">{notebook.pagesCount} صفحة</span>
+                </p>
+              )}
+
+              {notebook.description && (
+                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed whitespace-pre-line">
+                  {notebook.description}
+                </p>
+              )}
+
+              {notebook.driveUrl && (
+                <a
+                  href={notebook.driveUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-2.5 px-4 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-black flex items-center justify-center gap-2 transition"
+                >
+                  <ExternalLink className="w-4 h-4 text-blue-600" />
+                  <span>{settings.driveButtonLabel || 'معاينة عينة PDF عبر Google Drive'}</span>
+                </a>
               )}
             </div>
-          </div>
 
-          <button
-            onClick={() => onAddToCart(notebook)}
-            className={`px-6 py-3.5 rounded-2xl font-black text-sm flex items-center gap-2 transition shadow-md ${
-              isInCart
-                ? 'bg-emerald-600 text-white'
-                : 'bg-blue-600 hover:bg-blue-700 text-white'
-            }`}
-          >
-            {isInCart ? (
-              <>
-                <CheckCircle2 className="w-5 h-5" />
-                <span>مضافة في السلة</span>
-              </>
-            ) : (
-              <>
-                <ShoppingCart className="w-5 h-5" />
-                <span>{notebook.comingSoon ? 'احجز المذكرة الآن' : 'أضف إلى السلة'}</span>
-              </>
-            )}
-          </button>
+            <div className="pt-3 border-t border-slate-100 space-y-2">
+              <button
+                type="button"
+                onClick={() => onAddToCart(notebook)}
+                className={`w-full py-3.5 px-5 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg transition ${
+                  isInCart
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
+              >
+                {isInCart ? (
+                  <>
+                    <Check className="w-5 h-5" />
+                    <span>مضافة في سلة الطلبات</span>
+                  </>
+                ) : (
+                  <>
+                    <ShoppingCart className="w-5 h-5" />
+                    <span>إضافة المذكرة إلى السلة</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -641,18 +615,14 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onAddToCart, isInC
 }
 
 // ==========================================
-// 5. بطاقة عرض المذكرة
+// 5. مكون بطاقة المذكرة
 // ==========================================
-function NotebookCard({ notebook, settings, onPreview, onAddToCart, isInCart }) {
-  const gradeName = (settings.grades || []).find((g) => g.id === notebook.gradeId)?.name || '';
-  const subjectName = (settings.subjects || []).find((s) => s.id === notebook.subjectId)?.name || '';
-  const hasDiscount = Number(notebook.oldPrice) > Number(notebook.price);
-
+function NotebookCard({ notebook, onPreview, onAddToCart, isInCart }) {
   return (
-    <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col group">
+    <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col group">
       <div
         onClick={() => onPreview(notebook)}
-        className="relative aspect-[4/3] bg-gradient-to-br from-slate-100 to-blue-50 overflow-hidden cursor-pointer"
+        className="relative aspect-[4/3] bg-slate-100 overflow-hidden cursor-pointer"
       >
         {notebook.coverImage ? (
           <img
@@ -661,21 +631,21 @@ function NotebookCard({ notebook, settings, onPreview, onAddToCart, isInCart }) 
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           />
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 p-4 text-center">
-            <BookOpen className="w-12 h-12 text-blue-500/60 mb-2" />
-            <span className="text-xs font-bold text-slate-500">{notebook.title}</span>
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-800 text-white p-4 text-center">
+            <BookOpen className="w-10 h-10 mb-2 opacity-80" />
+            <span className="text-xs font-black line-clamp-2">{notebook.title}</span>
           </div>
         )}
 
         <div className="absolute top-3 right-3 flex flex-wrap gap-1.5">
           {notebook.comingSoon && (
-            <span className="px-2.5 py-1 rounded-full bg-amber-500 text-slate-950 text-[11px] font-black shadow">
+            <span className="px-2.5 py-1 rounded-full bg-amber-500 text-white text-[11px] font-black shadow">
               قيد التجهيز
             </span>
           )}
-          {hasDiscount && (
+          {notebook.oldPrice > notebook.price && (
             <span className="px-2.5 py-1 rounded-full bg-rose-600 text-white text-[11px] font-black shadow">
-              خصم {Math.round(((notebook.oldPrice - notebook.price) / notebook.oldPrice) * 100)}%
+              وفر {notebook.oldPrice - notebook.price} ج.م
             </span>
           )}
         </div>
@@ -686,58 +656,48 @@ function NotebookCard({ notebook, settings, onPreview, onAddToCart, isInCart }) 
             e.stopPropagation();
             onPreview(notebook);
           }}
-          className="absolute bottom-3 left-3 px-3 py-1.5 rounded-xl bg-slate-900/85 hover:bg-slate-900 text-white text-xs font-bold flex items-center gap-1.5 backdrop-blur-sm transition"
+          className="absolute bottom-3 left-3 px-3 py-1.5 rounded-xl bg-slate-900/85 hover:bg-slate-900 text-white text-xs font-black flex items-center gap-1.5 backdrop-blur-sm shadow"
         >
           <Eye className="w-3.5 h-3.5" />
           <span>معاينة</span>
         </button>
       </div>
 
-      <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between space-y-4">
+      <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
         <div className="space-y-1.5">
-          <div className="flex items-center gap-1.5 text-[11px] font-bold text-blue-600 flex-wrap">
-            <span>{gradeName}</span>
-            {subjectName && (
-              <>
-                <span>•</span>
-                <span className="text-slate-500">{subjectName}</span>
-              </>
-            )}
+          <div className="flex items-center gap-1.5 text-[11px] font-bold text-blue-600">
+            <span>{notebook.gradeName}</span>
+            {notebook.subject && <span>• {notebook.subject}</span>}
           </div>
           <h3
             onClick={() => onPreview(notebook)}
-            className="font-black text-slate-900 text-base leading-snug cursor-pointer hover:text-blue-600 transition line-clamp-2"
+            className="font-black text-slate-900 text-sm sm:text-base line-clamp-2 cursor-pointer hover:text-blue-700 transition"
           >
             {notebook.title}
           </h3>
-          {notebook.customAlertEnabled && notebook.customAlertBadge && (
-            <span className="inline-block px-2 py-0.5 rounded-lg bg-amber-100 text-amber-900 text-[11px] font-black">
-              {notebook.customAlertBadge}
-            </span>
-          )}
         </div>
 
-        <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+        <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
           <div>
-            <div className="text-lg font-black text-slate-900">{notebook.price} ج.م</div>
-            {hasDiscount && (
-              <div className="text-xs text-slate-400 line-through font-bold">{notebook.oldPrice} ج.م</div>
+            <span className="text-lg font-black text-slate-900">{notebook.price} ج.م</span>
+            {notebook.oldPrice > notebook.price && (
+              <span className="block text-xs text-slate-400 line-through font-bold">{notebook.oldPrice} ج.م</span>
             )}
           </div>
 
           <button
             type="button"
             onClick={() => onAddToCart(notebook)}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-black flex items-center gap-1.5 transition ${
+            className={`px-3.5 py-2.5 rounded-2xl text-xs font-black flex items-center gap-1.5 transition shadow-sm ${
               isInCart
-                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                : 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm'
+                ? 'bg-emerald-600 text-white'
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
             }`}
           >
             {isInCart ? (
               <>
                 <Check className="w-4 h-4" />
-                <span>في السلة</span>
+                <span>بالسلة</span>
               </>
             ) : (
               <>
@@ -753,33 +713,37 @@ function NotebookCard({ notebook, settings, onPreview, onAddToCart, isInCart }) 
 }
 
 // ==========================================
-// 6. نافذة سلة الطلبات وإتمام الطلب
+// 6. مكون سلة الطلبات وإتمام الطلب
 // ==========================================
-function OrderCheckoutModal({ isOpen, onClose, cart, settings, coupons, onRemoveFromCart, onClearCart }) {
+function OrderCheckoutModal({
+  isOpen,
+  onClose,
+  cart,
+  setCart,
+  settings,
+  coupons,
+  showToast
+}) {
   const [couponInput, setCouponInput] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [couponError, setCouponError] = useState('');
   const [expandedBundles, setExpandedBundles] = useState({});
-  const [formData, setFormData] = useState({});
-  const [logoPreview, setLogoPreview] = useState('');
+  const [formValues, setFormValues] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [completedOrder, setCompletedOrder] = useState(null);
-  const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedOrderId, setCopiedOrderId] = useState(false);
+  const [copiedRewardCode, setCopiedRewardCode] = useState(false);
 
   if (!isOpen) return null;
-
-  const activeFields = [...(settings.customerFields || DEFAULT_CUSTOMER_FIELDS)]
-    .filter((f) => f.visible !== false)
-    .sort((a, b) => (a.order || 0) - (b.order || 0));
 
   const subtotal = cart.reduce((sum, item) => sum + (Number(item.price) || 0), 0);
 
   const couponDiscount = useMemo(() => {
-    if (!appliedCoupon || subtotal <= 0) return 0;
-    if (appliedCoupon.type === 'fixed') {
-      return Math.min(subtotal, Number(appliedCoupon.value) || 0);
+    if (!appliedCoupon) return 0;
+    if (appliedCoupon.type === 'percent') {
+      return Math.round((subtotal * (Number(appliedCoupon.value) || 0)) / 100);
     }
-    return Math.round((subtotal * (Number(appliedCoupon.value) || 0)) / 100);
+    return Math.min(subtotal, Number(appliedCoupon.value) || 0);
   }, [appliedCoupon, subtotal]);
 
   const finalTotal = Math.max(0, subtotal - couponDiscount);
@@ -787,4658 +751,396 @@ function OrderCheckoutModal({ isOpen, onClose, cart, settings, coupons, onRemove
   const handleApplyCoupon = () => {
     setCouponError('');
     const code = couponInput.trim().toUpperCase();
-    if (!code) return;
-    const found = coupons.find((c) => (c.code || '').toUpperCase() === code && c.active !== false);
+    if (!code) {
+      setCouponError('يرجى إدخال كود الكوبون أولاً');
+      return;
+    }
+    const found = coupons.find((c) => (c.code || '').toUpperCase() === code);
     if (!found) {
-      setCouponError('كود الكوبون غير صحيح أو غير مفعل');
-      setAppliedCoupon(null);
+      setCouponError('كود الكوبون غير صحيح');
+      return;
+    }
+    if (found.active === false) {
+      setCouponError('هذا الكوبون غير مفعل حاليًا');
+      return;
+    }
+    if (isCouponExpired(found)) {
+      setCouponError('عذرًا، انتهت مدة صلاحية هذا الكوبون');
       return;
     }
     if (found.singleUse && found.used) {
       setCouponError('تم استخدام هذا الكوبون مسبقًا');
-      setAppliedCoupon(null);
       return;
     }
-    if (found.expiresAt) {
-      const expTime = new Date(found.expiresAt).getTime();
-      if (!Number.isNaN(expTime) && Date.now() > expTime) {
-        setCouponError('عذرًا، انتهت مدة صلاحية هذا الكوبون');
-        setAppliedCoupon(null);
-        return;
-      }
-    }
     setAppliedCoupon(found);
+    showToast(`تم تطبيق الكوبون (${found.code}) بنجاح!`);
   };
 
   const handleRemoveCoupon = () => {
     setAppliedCoupon(null);
     setCouponInput('');
     setCouponError('');
-  };
-
-  const handleLogoUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const compressed = await compressImage(file, 500, 0.8);
-      setLogoPreview(compressed);
-    } catch {
-      // تجاهل في حال فشل الضغط
-    }
+    showToast('تم إلغاء كوبون الخصم');
   };
 
   const handleSubmitOrder = async (e) => {
     e.preventDefault();
-    if (cart.length === 0 || submitting) return;
+    if (cart.length === 0) return;
+
+    const activeFields = (settings.customerFields || DEFAULT_CUSTOMER_FIELDS)
+      .filter((f) => f.enabled !== false)
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+    for (const fld of activeFields) {
+      if (fld.required && !(formValues[fld.id] || '').trim()) {
+        showToast(`يرجى إدخال: ${fld.label}`, 'error');
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
-      const orderNumber = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
-      let nextOrderCouponCode = '';
-      let nextOrderCouponExpiresAt = '';
+      const orderCode = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
+      let generatedRewardCoupon = null;
 
       if (settings.nextOrderRewardEnabled) {
         const validDays = Number(settings.nextOrderRewardValidDays) || 0;
-        if (validDays > 0) {
-          nextOrderCouponExpiresAt = new Date(Date.now() + validDays * 24 * 60 * 60 * 1000).toISOString();
-        }
-        if (settings.nextOrderRewardMode === 'custom' && settings.nextOrderRewardCustomCode?.trim()) {
-          nextOrderCouponCode = settings.nextOrderRewardCustomCode.trim().toUpperCase();
-        } else {
-          nextOrderCouponCode = generateUniqueCouponCode('VIP');
-          await addDoc(publicCol('coupons'), {
-            code: nextOrderCouponCode,
+        const expiresAt =
+          validDays > 0 ? new Date(Date.now() + validDays * 24 * 60 * 60 * 1000).toISOString() : '';
+
+        if (settings.nextOrderRewardMode === 'fixed' && settings.nextOrderRewardCustomCode) {
+          generatedRewardCoupon = {
+            code: settings.nextOrderRewardCustomCode.trim().toUpperCase(),
             type: settings.nextOrderRewardType || 'percent',
             value: Number(settings.nextOrderRewardValue) || 15,
-            active: true,
+            expiresAt
+          };
+        } else {
+          const autoCode = `VIP${Math.floor(1000 + Math.random() * 9000)}`;
+          generatedRewardCoupon = {
+            code: autoCode,
+            type: settings.nextOrderRewardType || 'percent',
+            value: Number(settings.nextOrderRewardValue) || 15,
             singleUse: true,
             used: false,
-            expiresAt: nextOrderCouponExpiresAt || null,
-            sourceOrder: orderNumber,
-            createdAt: serverTimestamp()
-          });
-        }
-      }
-
-      if (appliedCoupon && appliedCoupon.singleUse && appliedCoupon.id) {
-        await updateDoc(publicDoc('coupons', appliedCoupon.id), { used: true });
-      }
-
-      const orderItems = cart.map((item) => ({
-        id: item.id,
-        title: item.title,
-        price: Number(item.price) || 0,
-        isBundle: Boolean(item.isBundle),
-        bundleItems: item.bundleItems || []
-      }));
-
-      const orderPayload = {
-        orderNumber,
-        items: orderItems,
-        subtotal,
-        couponCode: appliedCoupon ? appliedCoupon.code : '',
-        discount: couponDiscount,
-        total: finalTotal,
-        customerData: formData,
-        hasLogo: Boolean(logoPreview),
-        nextOrderCouponCode,
-        nextOrderCouponExpiresAt,
-        status: 'تم الاستلام',
-        createdAt: serverTimestamp()
-      };
-
-      await addDoc(publicCol('orders'), orderPayload);
-
-      // تجهيز رسالة واتساب منسقة
-      const itemsText = orderItems
-        .map((it, idx) =>
-          it.isBundle
-            ? `${idx + 1}. [باقة] ${it.title} (${it.price} ج.م)\n   المحتويات: ${it.bundleItems.map((b) => b.title).join(' + ')}`
-            : `${idx + 1}. ${it.title} (${it.price} ج.م)`
-        )
-        .join('\n');
-
-      const customerLines = activeFields
-        .filter((f) => formData[f.id])
-        .map((f) => `• ${f.label}: ${formData[f.id]}`)
-        .join('\n');
-
-      const waMsg = encodeURIComponent(
-        `مرحبًا ${settings.siteName}، أرغب في تأكيد طلبي:\n` +
-          `رقم الطلب: ${orderNumber}\n\n` +
-          `📚 المذكرات المطلوبة:\n${itemsText}\n\n` +
-          `💰 الإجمالي النهائي: ${finalTotal} ج.م` +
-          (appliedCoupon ? ` (بعد خصم كوبون ${appliedCoupon.code})` : '') +
-          `\n\n👤 بيانات التخصيص:\n${customerLines}` +
-          (logoPreview ? `\n🖼️ تم إرفاق شعار المعلم (سأرسله هنا في المحادثة أيضًا)` : '')
-      );
-
-      const cleanPhone = (settings.whatsappNumber || '201000000000').replace(/\D/g, '');
-      const waUrl = `https://wa.me/${cleanPhone}?text=${waMsg}`;
-
-      setCompletedOrder({ ...orderPayload, waUrl });
-      onClearCart();
-      setAppliedCoupon(null);
-      setCouponInput('');
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div
-      dir="rtl"
-      className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2.5">
-            <ShoppingCart className="w-5 h-5 text-blue-400" />
-            <h3 className="text-lg font-black">سلة الطلبات وإتمام التخصيص</h3>
-          </div>
-          <button
-            onClick={() => {
-              setCompletedOrder(null);
-              onClose();
-            }}
-            className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="p-5 overflow-y-auto space-y-5 flex-1">
-          {completedOrder ? (
-            <div className="text-center space-y-5 py-4">
-              <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
-                <CheckCircle2 className="w-10 h-10" />
-              </div>
-              <div className="space-y-1">
-                <h4 className="text-2xl font-black text-slate-900">تم تسجيل طلبك بنجاح!</h4>
-                <p className="text-sm text-slate-600">
-                  احتفظ برقم الطلب لمتابعة حالة التجهيز في أي وقت:
-                </p>
-                <div className="inline-block px-5 py-2 rounded-2xl bg-slate-100 border border-slate-300 font-black text-lg text-blue-700 tracking-wider mt-1">
-                  {completedOrder.orderNumber}
-                </div>
-              </div>
-
-              {completedOrder.nextOrderCouponCode && (
-                <div className="bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-300 rounded-3xl p-4 space-y-2 max-w-md mx-auto">
-                  <div className="flex items-center justify-center gap-1.5 text-amber-900 font-black text-sm">
-                    <Gift className="w-5 h-5 text-amber-600" />
-                    <span>{settings.nextOrderRewardTitle}</span>
-                  </div>
-                  <p className="text-xs text-slate-700">{settings.nextOrderRewardMessage}</p>
-                  {completedOrder.nextOrderCouponExpiresAt && (
-                    <p className="text-[11px] font-black text-amber-800">
-                      ⏳ صالح للاستخدام حتى:{' '}
-                      {new Date(completedOrder.nextOrderCouponExpiresAt).toLocaleDateString('ar-EG', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric'
-                      })}
-                    </p>
-                  )}
-                  <div className="flex items-center justify-center gap-2 pt-1">
-                    <span className="px-4 py-2 rounded-xl bg-white border border-amber-400 font-black text-base text-slate-900 tracking-wider">
-                      {completedOrder.nextOrderCouponCode}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard?.writeText(completedOrder.nextOrderCouponCode);
-                        setCopiedCode(true);
-                        setTimeout(() => setCopiedCode(false), 2000);
-                      }}
-                      className="px-3.5 py-2 rounded-xl bg-amber-600 text-white font-black text-xs flex items-center gap-1"
-                    >
-                      {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                      <span>{copiedCode ? 'تم النسخ' : 'انسخ الكوبون'}</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <a
-                href={completedOrder.waUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-8 py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-base shadow-lg transition"
-              >
-                <Phone className="w-5 h-5" />
-                <span>إرسال تفاصيل الطلب على واتساب الآن</span>
-              </a>
-            </div>
-          ) : cart.length === 0 ? (
-            <div className="text-center py-12 space-y-3">
-              <ShoppingCart className="w-12 h-12 text-slate-300 mx-auto" />
-              <p className="text-base font-black text-slate-700">سلة الطلبات فارغة حاليًا</p>
-              <p className="text-xs text-slate-500">تصفح المذكرات أو باقات التوفير وأضف ما يناسبك للسلة.</p>
-            </div>
-          ) : (
-            <form onSubmit={handleSubmitOrder} className="space-y-5">
-              {/* قائمة عناصر السلة */}
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-black text-slate-900">العناصر المختارة ({cart.length}):</span>
-                  <button
-                    type="button"
-                    onClick={onClearCart}
-                    className="text-xs font-bold text-red-600 hover:underline"
-                  >
-                    إفراغ السلة
-                  </button>
-                </div>
-
-                {cart.map((item) => {
-                  const isExpanded = Boolean(expandedBundles[item.id]);
-                  return (
-                    <div
-                      key={item.id}
-                      className={`p-3.5 rounded-2xl border ${
-                        item.isBundle ? 'bg-indigo-50/60 border-indigo-200' : 'bg-slate-50 border-slate-200'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {item.isBundle && (
-                              <span className="px-2 py-0.5 rounded-full bg-indigo-600 text-white text-[10px] font-black">
-                                باقة مجمعة
-                              </span>
-                            )}
-                            <span className="font-black text-sm text-slate-900 truncate">{item.title}</span>
-                          </div>
-                          <div className="text-xs font-bold text-blue-700 mt-0.5">
-                            {item.price} ج.م
-                            {item.isBundle && Array.isArray(item.bundleItems) && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setExpandedBundles((p) => ({ ...p, [item.id]: !p[item.id] }))
-                                }
-                                className="mr-2 text-indigo-700 underline font-bold"
-                              >
-                                ({item.bundleItems.length} مذكرات - {isExpanded ? 'إخفاء' : 'عرض المحتويات'})
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => onRemoveFromCart(item.id)}
-                          className="p-2 rounded-xl text-red-600 hover:bg-red-100 transition shrink-0"
-                          title="حذف من السلة"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-
-                      {item.isBundle && isExpanded && Array.isArray(item.bundleItems) && (
-                        <ul className="mt-2.5 pt-2.5 border-t border-indigo-200/70 space-y-1 text-xs text-slate-700">
-                          {item.bundleItems.map((b, i) => (
-                            <li key={i} className="flex items-center gap-1.5">
-                              <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                              <span>{b.title}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* تطبيق كوبون الخصم */}
-              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2.5">
-                <label className="text-xs font-black text-slate-800 block">هل لديك كوبون خصم؟</label>
-                {appliedCoupon ? (
-                  <div className="flex items-center justify-between bg-emerald-50 border border-emerald-300 rounded-xl px-3.5 py-2.5">
-                    <div className="flex items-center gap-2 text-emerald-800 text-xs font-black">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      <span>
-                        تم تطبيق الكوبون ({appliedCoupon.code}) — خصم {appliedCoupon.value}
-                        {appliedCoupon.type === 'fixed' ? ' ج.م' : '%'}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleRemoveCoupon}
-                      className="px-2.5 py-1 rounded-lg bg-red-100 text-red-700 text-xs font-black hover:bg-red-200"
-                    >
-                      حذف الكوبون ×
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="أدخل كود الكوبون هنا..."
-                      value={couponInput}
-                      onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
-                      className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-black uppercase bg-white"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleApplyCoupon}
-                      className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-sm"
-                    >
-                      تطبيق
-                    </button>
-                  </div>
-                )}
-                {couponError && <p className="text-xs font-bold text-red-600">{couponError}</p>}
-              </div>
-
-              {/* ملخص الحساب */}
-              <div className="bg-blue-50/80 rounded-2xl p-4 border border-blue-200 space-y-1.5 text-sm">
-                <div className="flex justify-between text-slate-600 font-bold">
-                  <span>المجموع الفرعي:</span>
-                  <span>{subtotal} ج.م</span>
-                </div>
-                {couponDiscount > 0 && (
-                  <div className="flex justify-between items-center text-emerald-700 font-black">
-                    <div className="flex items-center gap-2">
-                      <span>خصم الكوبون ({appliedCoupon?.code}):</span>
-                      <button
-                        type="button"
-                        onClick={handleRemoveCoupon}
-                        className="text-[11px] text-red-600 underline"
-                      >
-                        إلغاء
-                      </button>
-                    </div>
-                    <span>- {couponDiscount} ج.م</span>
-                  </div>
-                )}
-                <div className="pt-2 border-t border-blue-200 flex justify-between items-center text-base font-black text-blue-950">
-                  <span>الإجمالي النهائي المطلوب:</span>
-                  <span className="text-xl text-blue-700">{finalTotal} ج.م</span>
-                </div>
-              </div>
-
-              {/* حقول بيانات العميل */}
-              <div className="space-y-3">
-                <h4 className="text-sm font-black text-slate-900">بيانات التخصيص والتواصل:</h4>
-                {activeFields.map((field) => (
-                  <div key={field.id} className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700 block">
-                      {field.label} {field.required && <span className="text-red-600">*</span>}
-                    </label>
-                    {field.type === 'textarea' ? (
-                      <textarea
-                        rows={2}
-                        required={field.required}
-                        placeholder={field.placeholder}
-                        value={formData[field.id] || ''}
-                        onChange={(e) => setFormData((p) => ({ ...p, [field.id]: e.target.value }))}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
-                      />
-                    ) : (
-                      <input
-                        type={field.type || 'text'}
-                        required={field.required}
-                        placeholder={field.placeholder}
-                        value={formData[field.id] || ''}
-                        onChange={(e) => setFormData((p) => ({ ...p, [field.id]: e.target.value }))}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
-                      />
-                    )}
-                  </div>
-                ))}
-
-                {/* رفع شعار المعلم */}
-                <div className="space-y-1.5 pt-1">
-                  <label className="text-xs font-bold text-slate-700 block">
-                    شعار المعلم (Logo) لإضافته للغلاف والصفحات (اختياري)
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <label className="px-4 py-2.5 rounded-xl border border-dashed border-slate-400 hover:border-blue-600 text-xs font-bold text-slate-700 cursor-pointer flex items-center gap-2">
-                      <Upload className="w-4 h-4 text-blue-600" />
-                      <span>اختر صورة الشعار</span>
-                      <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
-                    </label>
-                    {logoPreview && (
-                      <div className="relative w-12 h-12 rounded-xl overflow-hidden border border-slate-200">
-                        <img src={logoPreview} alt="Logo" className="w-full h-full object-cover" />
-                        <button
-                          type="button"
-                          onClick={() => setLogoPreview('')}
-                          className="absolute top-0 right-0 bg-red-600 text-white p-0.5 rounded-bl-lg"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={submitting}
-                className="w-full py-4 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-base shadow-lg transition flex items-center justify-center gap-2"
-              >
-                {submitting ? (
-                  <span>جاري تسجيل الطلب...</span>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-5 h-5" />
-                    <span>تأكيد الطلب والمتابعة إلى واتساب ({finalTotal} ج.م)</span>
-                  </>
-                )}
-              </button>
-            </form>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ==========================================
-// 7. صفحة مكتبة المذكرات والتصفح الهرمي
-// ==========================================
-function CatalogPage({
-  settings,
-  notebooks,
-  selectedCategoryId,
-  setSelectedCategoryId,
-  selectedStageId,
-  setSelectedStageId,
-  selectedGradeId,
-  setSelectedGradeId,
-  onPreview,
-  onAddToCart,
-  cartIds
-}) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedSubjectId, setSelectedSubjectId] = useState('all');
-
-  const categories = [...(settings.categories || DEFAULT_CATEGORIES)].sort((a, b) => (a.order || 0) - (b.order || 0));
-  const stages = [...(settings.stages || DEFAULT_STAGES)].sort((a, b) => (a.order || 0) - (b.order || 0));
-  const grades = [...(settings.grades || DEFAULT_GRADES)].sort((a, b) => (a.order || 0) - (b.order || 0));
-  const subjects = settings.subjects || DEFAULT_SUBJECTS;
-
-  const filteredNotebooks = useMemo(() => {
-    return notebooks.filter((nb) => {
-      if (selectedCategoryId && nb.categoryId !== selectedCategoryId) return false;
-      if (selectedStageId) {
-        const grade = grades.find((g) => g.id === nb.gradeId);
-        if (!grade || grade.stageId !== selectedStageId) return false;
-      }
-      if (selectedGradeId && nb.gradeId !== selectedGradeId) return false;
-      if (selectedSubjectId !== 'all' && nb.subjectId !== selectedSubjectId) return false;
-      if (searchTerm.trim()) {
-        const q = searchTerm.trim().toLowerCase();
-        if (!(nb.title || '').toLowerCase().includes(q) && !(nb.description || '').toLowerCase().includes(q)) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }, [notebooks, selectedCategoryId, selectedStageId, selectedGradeId, selectedSubjectId, searchTerm, grades]);
-
-  const activeCategory = categories.find((c) => c.id === selectedCategoryId);
-  const activeStage = stages.find((s) => s.id === selectedStageId);
-  const activeGrade = grades.find((g) => g.id === selectedGradeId);
-
-  return (
-    <div className="max-w-7xl mx-auto px-4 py-6 sm:py-8 space-y-6">
-      {/* شريط المسار والبحث */}
-      <div className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200 shadow-sm space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5 text-xs sm:text-sm font-black flex-wrap">
-            <button
-              onClick={() => {
-                setSelectedCategoryId('');
-                setSelectedStageId('');
-                setSelectedGradeId('');
-              }}
-              className="text-blue-600 hover:underline"
-            >
-              جميع الأقسام
-            </button>
-            {activeCategory && (
-              <>
-                <ChevronLeft className="w-4 h-4 text-slate-400" />
-                <button
-                  onClick={() => {
-                    setSelectedStageId('');
-                    setSelectedGradeId('');
-                  }}
-                  className="text-blue-600 hover:underline"
-                >
-                  {activeCategory.name}
-                </button>
-              </>
-            )}
-            {activeStage && (
-              <>
-                <ChevronLeft className="w-4 h-4 text-slate-400" />
-                <button
-                  onClick={() => setSelectedGradeId('')}
-                  className="text-blue-600 hover:underline"
-                >
-                  {activeStage.name}
-                </button>
-              </>
-            )}
-            {activeGrade && (
-              <>
-                <ChevronLeft className="w-4 h-4 text-slate-400" />
-                <span className="text-slate-900">{activeGrade.name}</span>
-              </>
-            )}
-          </div>
-
-          <div className="relative w-full sm:w-72">
-            <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="ابحث باسم المذكرة..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pr-10 pl-4 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm font-bold"
-            />
-          </div>
-        </div>
-
-        {/* أزرار تصفية سريعة بالمراحل والصفوف والمواد */}
-        <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
-          <button
-            onClick={() => {
-              setSelectedStageId('');
-              setSelectedGradeId('');
-            }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-black transition ${
-              !selectedStageId ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            كل المراحل
-          </button>
-          {stages.map((st) => (
-            <button
-              key={st.id}
-              onClick={() => {
-                setSelectedStageId(st.id);
-                setSelectedGradeId('');
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-black transition ${
-                selectedStageId === st.id ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              {st.name}
-            </button>
-          ))}
-        </div>
-
-        {selectedStageId && (
-          <div className="flex flex-wrap gap-2">
-            {grades
-              .filter((g) => g.stageId === selectedStageId)
-              .map((gr) => (
-                <button
-                  key={gr.id}
-                  onClick={() => setSelectedGradeId(selectedGradeId === gr.id ? '' : gr.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
-                    selectedGradeId === gr.id
-                      ? 'bg-indigo-600 text-white border-indigo-600'
-                      : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
-                  }`}
-                >
-                  {gr.name}
-                </button>
-              ))}
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-1.5">
-          <button
-            onClick={() => setSelectedSubjectId('all')}
-            className={`px-3 py-1 rounded-lg text-[11px] font-bold ${
-              selectedSubjectId === 'all' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'
-            }`}
-          >
-            كل المواد
-          </button>
-          {subjects.map((sub) => (
-            <button
-              key={sub.id}
-              onClick={() => setSelectedSubjectId(sub.id)}
-              className={`px-3 py-1 rounded-lg text-[11px] font-bold ${
-                selectedSubjectId === sub.id ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'
-              }`}
-            >
-              {sub.name}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* عرض المذكرات */}
-      {filteredNotebooks.length === 0 ? (
-        <div className="bg-white rounded-3xl p-12 border border-slate-200 text-center space-y-3">
-          <FolderOpen className="w-12 h-12 text-slate-300 mx-auto" />
-          <h3 className="text-lg font-black text-slate-800">لا توجد مذكرات مطابقة لهذا الاختيار حاليًا</h3>
-          <button
-            onClick={() => {
-              setSelectedCategoryId('');
-              setSelectedStageId('');
-              setSelectedGradeId('');
-              setSelectedSubjectId('all');
-              setSearchTerm('');
-            }}
-            className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-black"
-          >
-            عرض جميع المذكرات
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-          {filteredNotebooks.map((nb) => (
-            <NotebookCard
-              key={nb.id}
-              notebook={nb}
-              settings={settings}
-              onPreview={onPreview}
-              onAddToCart={onAddToCart}
-              isInCart={cartIds.has(nb.id)}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ==========================================
-// 8. صفحة العروض وباقات التوفير
-// ==========================================
-function OffersAndBundlesPage({ settings, notebooks, coupons, onAddBundleToCart, onPreview }) {
-  const [copiedCode, setCopiedCode] = useState('');
-
-  const activeCoupons = useMemo(
-    () =>
-      coupons.filter((c) => {
-        if (c.active === false) return false;
-        if (c.singleUse && c.used) return false;
-        if (c.expiresAt) {
-          const exp = new Date(c.expiresAt).getTime();
-          if (!Number.isNaN(exp) && Date.now() > exp) return false;
-        }
-        return true;
-      }),
-    [coupons]
-  );
-
-  const bundles = settings.bundles || [];
-
-  return (
-    <div className="max-w-7xl mx-auto px-4 py-6 sm:py-10 space-y-10">
-      {/* قسم باقات التوفير */}
-      <section className="space-y-5">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow">
-            <Layers className="w-6 h-6" />
-          </div>
-          <div>
-            <h2 className="text-xl sm:text-2xl font-black text-slate-900">باقات المذكرات المجمعة بخصم خاص</h2>
-            <p className="text-xs sm:text-sm text-slate-600">اطلب الباقة كاملة بسعر مخفّض واضغط على أي مذكرة لمعاينة تفاصيلها</p>
-          </div>
-        </div>
-
-        {bundles.length === 0 ? (
-          <div className="bg-white rounded-3xl p-10 border border-slate-200 text-center text-slate-500 font-bold text-sm">
-            لا توجد باقات مجمعة مضافة حاليًا.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {bundles.map((bundle) => {
-              const includedNotebooks = (bundle.notebookIds || [])
-                .map((id) => notebooks.find((n) => n.id === id))
-                .filter(Boolean);
-
-              const originalSum =
-                Number(bundle.originalPrice) ||
-                includedNotebooks.reduce((s, n) => s + (Number(n.price) || 0), 0);
-
-              let finalPrice = originalSum;
-              if (bundle.discountType === 'custom_before_after' && Number(bundle.finalPrice) > 0) {
-                finalPrice = Number(bundle.finalPrice);
-              } else if (bundle.discountType === 'fixed') {
-                finalPrice = Math.max(0, originalSum - (Number(bundle.discountValue) || 0));
-              } else {
-                const pct = Number(bundle.discountValue) || 0;
-                finalPrice = Math.round(originalSum * (1 - pct / 100));
-              }
-
-              const savings = Math.max(0, originalSum - finalPrice);
-              const pctSaved = originalSum > 0 ? Math.round((savings / originalSum) * 100) : 0;
-
-              return (
-                <div
-                  key={bundle.id}
-                  className="bg-white rounded-3xl border border-slate-200 shadow-md overflow-hidden flex flex-col justify-between"
-                >
-                  <div>
-                    {/* رأس الباقة الفخم */}
-                    <div className="bg-gradient-to-l from-slate-950 via-blue-950 to-slate-900 text-white p-5 sm:p-6 flex items-start justify-between gap-4">
-                      <div className="space-y-1.5 text-right">
-                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/10 text-amber-300 text-xs font-black">
-                          <Sparkles className="w-3.5 h-3.5" />
-                          <span>باقة توفير شاملة • {includedNotebooks.length} مذكرات</span>
-                        </span>
-                        <h3 className="text-xl sm:text-2xl font-black">{bundle.title}</h3>
-                        {bundle.description && (
-                          <p className="text-xs sm:text-sm text-slate-300">{bundle.description}</p>
-                        )}
-                      </div>
-
-                      {savings > 0 && (
-                        <div className="bg-amber-400 text-slate-950 px-3.5 py-2 rounded-2xl text-center shrink-0 shadow">
-                          <div className="text-xs sm:text-sm font-black">وفّر {savings} ج.م</div>
-                          <div className="text-[11px] font-bold">خصم {pctSaved}%</div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* قائمة المذكرات القابلة للمعاينة */}
-                    <div className="p-4 sm:p-5 space-y-2.5 max-h-72 overflow-y-auto">
-                      <div className="text-xs font-black text-slate-500">
-                        محتويات الباقة (اضغط على أي مذكرة لمعاينتها):
-                      </div>
-                      {includedNotebooks.map((nb) => {
-                        const gradeName = (settings.grades || []).find((g) => g.id === nb.gradeId)?.name || '';
-                        return (
-                          <div
-                            key={nb.id}
-                            onClick={() => onPreview(nb)}
-                            className="flex items-center justify-between gap-3 p-2.5 rounded-2xl bg-slate-50 hover:bg-blue-50 border border-slate-200/80 hover:border-blue-300 cursor-pointer transition"
-                          >
-                            <div className="flex items-center gap-3 min-w-0">
-                              <div className="w-11 h-11 rounded-xl bg-white border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
-                                {nb.coverImage ? (
-                                  <img src={nb.coverImage} alt="" className="w-full h-full object-cover" />
-                                ) : (
-                                  <BookOpen className="w-5 h-5 text-blue-600" />
-                                )}
-                              </div>
-                              <div className="min-w-0">
-                                <div className="text-xs sm:text-sm font-black text-slate-900 truncate">{nb.title}</div>
-                                <div className="text-[11px] text-slate-500 font-bold">{gradeName}</div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 shrink-0">
-                              <span className="text-xs font-black text-slate-700 bg-white px-2.5 py-1 rounded-xl border border-slate-200">
-                                {nb.price} ج.م
-                              </span>
-                              <span className="text-[11px] font-bold text-blue-600 flex items-center gap-0.5">
-                                <Eye className="w-3.5 h-3.5" />
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* شريط السعر وزر الإضافة للسلة */}
-                  <div className="px-5 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-4">
-                    <div>
-                      <span className="text-xs text-slate-500 font-bold block">سعر الباقة كاملة بعد الخصم:</span>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-2xl sm:text-3xl font-black text-blue-700">{finalPrice} ج.م</span>
-                        {originalSum > finalPrice && (
-                          <span className="text-sm text-slate-400 line-through font-bold">{originalSum} ج.م</span>
-                        )}
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onAddBundleToCart({
-                          id: `bundle_${bundle.id}`,
-                          title: bundle.title,
-                          price: finalPrice,
-                          isBundle: true,
-                          bundleItems: includedNotebooks.map((n) => ({ id: n.id, title: n.title }))
-                        })
-                      }
-                      className="px-5 py-3.5 rounded-2xl bg-gradient-to-l from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-xs sm:text-sm flex items-center gap-2 shadow-md transition"
-                    >
-                      <ShoppingCart className="w-4 h-4" />
-                      <span>أضف الباقة للسلة</span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      {/* قسم كوبونات الخصم المتاحة */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2.5">
-          <Tag className="w-6 h-6 text-amber-600" />
-          <h2 className="text-xl font-black text-slate-900">كوبونات الخصم المتاحة حاليًا</h2>
-        </div>
-
-        {activeCoupons.length === 0 ? (
-          <div className="bg-white rounded-3xl p-8 border border-slate-200 text-center text-slate-500 text-sm font-bold">
-            لا توجد كوبونات عامة متاحة حاليًا.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {activeCoupons.map((c) => (
-              <div
-                key={c.id}
-                className="bg-white rounded-2xl p-4 border-2 border-dashed border-amber-300 flex items-center justify-between gap-3"
-              >
-                <div>
-                  <div className="font-black text-lg text-slate-900 tracking-wider">{c.code}</div>
-                  <div className="text-xs font-bold text-emerald-600">
-                    خصم {c.value} {c.type === 'fixed' ? 'ج.م' : '%'}
-                  </div>
-                  {c.expiresAt && (
-                    <div className="text-[11px] font-bold text-amber-700 mt-0.5 flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      <span>ينتهي: {new Date(c.expiresAt).toLocaleDateString('ar-EG')}</span>
-                    </div>
-                  )}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard?.writeText(c.code);
-                    setCopiedCode(c.code);
-                    setTimeout(() => setCopiedCode(''), 2000);
-                  }}
-                  className="px-3.5 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-950 font-black text-xs flex items-center gap-1.5"
-                >
-                  {copiedCode === c.code ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                  <span>{copiedCode === c.code ? 'تم النسخ' : 'نسخ الكود'}</span>
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-    </div>
-  );
-}
-
-// ==========================================
-// 9. لوحة تحكم الإدارة الكاملة
-// ==========================================
-function AdminDashboard({
-  settings,
-  setSettings,
-  notebooks,
-  coupons,
-  orders,
-  onLogout,
-  showToast
-}) {
-  const [activeTab, setActiveTab] = useState('notebooks');
-  const [localSettings, setLocalSettings] = useState(() => mergeAndNormalizeSettings(DEFAULT_SETTINGS, settings));
-  const [savingSettings, setSavingSettings] = useState(false);
-
-  useEffect(() => {
-    setLocalSettings((prev) => mergeAndNormalizeSettings(prev, settings));
-  }, [settings]);
-
-  // حالة نموذج المذكرة
-  const [editingNotebookId, setEditingNotebookId] = useState(null);
-  const [nbForm, setNbForm] = useState({
-    title: '',
-    categoryId: DEFAULT_CATEGORIES[0].id,
-    gradeId: DEFAULT_GRADES[0].id,
-    subjectId: DEFAULT_SUBJECTS[0].id,
-    price: 99,
-    oldPrice: '',
-    description: '',
-    driveUrl: '',
-    coverImage: '',
-    samplePages: [],
-    comingSoon: false,
-    customAlertEnabled: false,
-    customAlertBadge: 'تنبيه هام',
-    customAlertText: '',
-    customAlertColor: 'amber'
-  });
-  const [savingNb, setSavingNb] = useState(false);
-
-  // التعديل السريع الجماعي
-  const [bulkEdits, setBulkEdits] = useState({});
-  const [savingBulk, setSavingBulk] = useState(false);
-
-  // باقات التوفير والكوبونات
-  const [bundleForm, setBundleForm] = useState({
-    title: '',
-    description: '',
-    notebookIds: [],
-    discountType: 'custom_before_after',
-    discountValue: 20,
-    originalPrice: '',
-    finalPrice: ''
-  });
-  const [couponForm, setCouponForm] = useState({
-    code: '',
-    type: 'percent',
-    value: 15,
-    singleUse: false,
-    expiresAt: ''
-  });
-
-  // إدارة الأقسام والمراحل والصفوف والمواد
-  const [newCatName, setNewCatName] = useState('');
-  const [newStageName, setNewStageName] = useState('');
-  const [newGradeName, setNewGradeName] = useState('');
-  const [newGradeStageId, setNewGradeStageId] = useState(DEFAULT_STAGES[0].id);
-  const [newSubjectName, setNewSubjectName] = useState('');
-  const [newFieldLabel, setNewFieldLabel] = useState('');
-  const [newFieldType, setNewFieldType] = useState('text');
-
-  const selectedBundleSum = useMemo(() => {
-    return bundleForm.notebookIds.reduce((sum, id) => {
-      const nb = notebooks.find((n) => n.id === id);
-      return sum + (Number(nb?.price) || 0);
-    }, 0);
-  }, [bundleForm.notebookIds, notebooks]);
-
-  const handleSaveAllSettings = async (overrideSettings = null) => {
-    setSavingSettings(true);
-    try {
-      const target = overrideSettings || localSettings;
-      const { logoUrl, heroBgImage, categoryImages, ...lightSettings } = target;
-
-      await setDoc(publicDoc('settings', 'main'), lightSettings, { merge: true });
-      await setDoc(
-        publicDoc('settings', 'media_assets'),
-        {
-          logoUrl: logoUrl || '',
-          heroBgImage: heroBgImage || '',
-          categoryImages: categoryImages || {}
-        },
-        { merge: true }
-      );
-      await setDoc(publicDoc('settings', 'media_logo'), { logoUrl: logoUrl || '' }, { merge: true });
-      await setDoc(publicDoc('settings', 'media_hero'), { heroBgImage: heroBgImage || '' }, { merge: true });
-      await setDoc(publicDoc('settings', 'media_categories'), { categoryImages: categoryImages || {} }, { merge: true });
-
-      setSettings(target);
-      try {
-        localStorage.setItem(LOCAL_SETTINGS_BACKUP_KEY, JSON.stringify(target));
-      } catch {
-        try {
-          localStorage.setItem(LOCAL_SETTINGS_BACKUP_KEY, JSON.stringify(lightSettings));
-        } catch {
-          // تجاهل امتلاء التخزين المحلي
-        }
-      }
-      showToast('تم حفظ جميع الإعدادات والصور وتحديثها للعملاء بنجاح!');
-    } catch (err) {
-      console.error(err);
-      showToast('حدث خطأ أثناء الحفظ، تأكد من صلاحيات Firebase Rules', 'error');
-    } finally {
-      setSavingSettings(false);
-    }
-  };
-
-  const handleSaveNotebook = async (e) => {
-    e.preventDefault();
-    if (!nbForm.title.trim() || savingNb) return;
-    setSavingNb(true);
-    try {
-      const { samplePages, ...nbMainData } = nbForm;
-      const payload = {
-        ...nbMainData,
-        price: Number(nbForm.price) || 0,
-        oldPrice: nbForm.oldPrice ? Number(nbForm.oldPrice) : 0,
-        updatedAt: serverTimestamp()
-      };
-
-      let targetId = editingNotebookId;
-      if (editingNotebookId) {
-        await updateDoc(publicDoc('notebooks', editingNotebookId), payload);
-      } else {
-        const docRef = await addDoc(publicCol('notebooks'), {
-          ...payload,
-          createdAt: serverTimestamp()
-        });
-        targetId = docRef.id;
-      }
-
-      if (targetId && Array.isArray(samplePages)) {
-        await setDoc(publicDoc('notebook_samples', targetId), { pages: samplePages });
-      }
-
-      setEditingNotebookId(null);
-      setNbForm({
-        title: '',
-        categoryId: (localSettings.categories?.[0] || DEFAULT_CATEGORIES[0]).id,
-        gradeId: (localSettings.grades?.[0] || DEFAULT_GRADES[0]).id,
-        subjectId: (localSettings.subjects?.[0] || DEFAULT_SUBJECTS[0]).id,
-        price: 99,
-        oldPrice: '',
-        description: '',
-        driveUrl: '',
-        coverImage: '',
-        samplePages: [],
-        comingSoon: false,
-        customAlertEnabled: false,
-        customAlertBadge: 'تنبيه هام',
-        customAlertText: '',
-        customAlertColor: 'amber'
-      });
-      showToast(editingNotebookId ? 'تم تحديث المذكرة بنجاح!' : 'تمت إضافة المذكرة بنجاح!');
-    } catch (err) {
-      console.error(err);
-      showToast('فشل حفظ المذكرة، تحقق من الاتصال أو حجم الصور', 'error');
-    } finally {
-      setSavingNb(false);
-    }
-  };
-
-  const handleSaveBulkEdits = async () => {
-    const entries = Object.entries(bulkEdits);
-    if (entries.length === 0 || savingBulk) return;
-    setSavingBulk(true);
-    try {
-      for (const [nbId, changes] of entries) {
-        await updateDoc(publicDoc('notebooks', nbId), {
-          ...changes,
-          ...(changes.price !== undefined ? { price: Number(changes.price) || 0 } : {}),
-          ...(changes.oldPrice !== undefined ? { oldPrice: Number(changes.oldPrice) || 0 } : {}),
-          updatedAt: serverTimestamp()
-        });
-      }
-      setBulkEdits({});
-      showToast(`تم حفظ التعديلات على ${entries.length} مذكرة دفعة واحدة!`);
-    } catch (err) {
-      console.error(err);
-      showToast('حدث خطأ أثناء الحفظ الجماعي', 'error');
-    } finally {
-      setSavingBulk(false);
-    }
-  };
-
-  return (
-    <div dir="rtl" className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-      {/* شريط رأس لوحة التحكم */}
-      <div className="bg-slate-900 text-white rounded-3xl p-4 sm:p-6 flex flex-wrap items-center justify-between gap-4 shadow-lg">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-blue-600 flex items-center justify-center">
-            <ShieldCheck className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-lg sm:text-xl font-black">لوحة تحكم الإدارة</h1>
-            <p className="text-xs text-slate-300">تحكم كامل في المذكرات، الأقسام، الخصومات والعروض، والطلبات</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={() => handleSaveAllSettings()}
-            disabled={savingSettings}
-            className="px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm flex items-center gap-1.5 shadow"
-          >
-            <Save className="w-4 h-4" />
-            <span>{savingSettings ? 'جاري الحفظ...' : 'حفظ الإعدادات'}</span>
-          </button>
-          <button
-            type="button"
-            onClick={onLogout}
-            className="px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs sm:text-sm flex items-center gap-1.5"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>خروج</span>
-          </button>
-        </div>
-      </div>
-
-      {/* تبويبات الإدارة */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-white p-2 rounded-3xl border border-slate-200 shadow-sm">
-        {[
-          { id: 'notebooks', label: `المذكرات (${notebooks.length})`, icon: BookOpen },
-          { id: 'categories', label: 'الأقسام والمراحل والصفوف', icon: FolderOpen },
-          { id: 'offers', label: 'الخصومات والعروض', icon: Percent },
-          { id: 'orders', label: `الطلبات (${orders.length})`, icon: Package },
-          { id: 'settings', label: 'إعدادات الموقع والمظهر', icon: Settings }
-        ].map((t) => {
-          const Icon = t.icon;
-          return (
-            <button
-              key={t.id}
-              onClick={() => setActiveTab(t.id)}
-              className={`py-3 px-3 rounded-2xl font-black text-xs flex items-center justify-center gap-1.5 transition ${
-                activeTab === t.id ? 'bg-blue-600 text-white shadow' : 'text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <Icon className="w-4 h-4 shrink-0" />
-              <span className="truncate">{t.label}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* 1. تبويب المذكرات */}
-      {activeTab === 'notebooks' && (
-        <div className="space-y-6">
-          <form onSubmit={handleSaveNotebook} className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-black text-slate-900">
-                {editingNotebookId ? 'تعديل بيانات المذكرة' : '+ إضافة مذكرة جديدة'}
-              </h2>
-              {editingNotebookId && (
-                <button
-                  type="button"
-                  onClick={() => setEditingNotebookId(null)}
-                  className="text-xs font-bold text-slate-500 hover:text-slate-900"
-                >
-                  إلغاء التعديل
-                </button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <div className="sm:col-span-2">
-                <label className="text-xs font-bold text-slate-600">عنوان المذكرة *</label>
-                <input
-                  type="text"
-                  required
-                  value={nbForm.title}
-                  onChange={(e) => setNbForm((p) => ({ ...p, title: e.target.value }))}
-                  placeholder="مثال: بنك مراجعة الصف الثالث الإعدادي"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-600">القسم الرئيسي</label>
-                <select
-                  value={nbForm.categoryId}
-                  onChange={(e) => setNbForm((p) => ({ ...p, categoryId: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                >
-                  {(localSettings.categories || DEFAULT_CATEGORIES).map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-600">الصف الدراسي</label>
-                <select
-                  value={nbForm.gradeId}
-                  onChange={(e) => setNbForm((p) => ({ ...p, gradeId: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                >
-                  {(localSettings.grades || DEFAULT_GRADES).map((g) => (
-                    <option key={g.id} value={g.id}>{g.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-600">المادة</label>
-                <select
-                  value={nbForm.subjectId}
-                  onChange={(e) => setNbForm((p) => ({ ...p, subjectId: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                >
-                  {(localSettings.subjects || DEFAULT_SUBJECTS).map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-600">السعر الحالي (ج.م) *</label>
-                <input
-                  type="number"
-                  required
-                  value={nbForm.price}
-                  onChange={(e) => setNbForm((p) => ({ ...p, price: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-black"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-600">السعر قبل الخصم (اختياري)</label>
-                <input
-                  type="number"
-                  value={nbForm.oldPrice}
-                  onChange={(e) => setNbForm((p) => ({ ...p, oldPrice: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-600">رابط عينة Google Drive</label>
-                <input
-                  type="text"
-                  placeholder="https://drive.google.com/..."
-                  value={nbForm.driveUrl}
-                  onChange={(e) => setNbForm((p) => ({ ...p, driveUrl: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="text-xs font-bold text-slate-600">وصف المذكرة</label>
-              <textarea
-                rows={2}
-                value={nbForm.description}
-                onChange={(e) => setNbForm((p) => ({ ...p, description: e.target.value }))}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm"
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-4">
-              <label className="flex items-center gap-2 text-xs font-black text-slate-800 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={nbForm.comingSoon}
-                  onChange={(e) => setNbForm((p) => ({ ...p, comingSoon: e.target.checked }))}
-                />
-                <span>وضع المذكرة «قيد التجهيز / حجز مسبق»</span>
-              </label>
-
-              <label className="flex items-center gap-2 text-xs font-black text-slate-800 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={nbForm.customAlertEnabled}
-                  onChange={(e) => setNbForm((p) => ({ ...p, customAlertEnabled: e.target.checked }))}
-                />
-                <span>إظهار تنبيه خاص داخل المذكرة</span>
-              </label>
-            </div>
-
-            {nbForm.customAlertEnabled && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-amber-50 p-3.5 rounded-2xl border border-amber-200">
-                <input
-                  type="text"
-                  placeholder="عنوان الشارة (مثال: تنبيه هام)"
-                  value={nbForm.customAlertBadge}
-                  onChange={(e) => setNbForm((p) => ({ ...p, customAlertBadge: e.target.value }))}
-                  className="px-3 py-2 rounded-xl border border-amber-300 text-xs font-bold bg-white"
-                />
-                <input
-                  type="text"
-                  placeholder="نص التنبيه للعميل..."
-                  value={nbForm.customAlertText}
-                  onChange={(e) => setNbForm((p) => ({ ...p, customAlertText: e.target.value }))}
-                  className="px-3 py-2 rounded-xl border border-amber-300 text-xs font-bold bg-white"
-                />
-                <select
-                  value={nbForm.customAlertColor}
-                  onChange={(e) => setNbForm((p) => ({ ...p, customAlertColor: e.target.value }))}
-                  className="px-3 py-2 rounded-xl border border-amber-300 text-xs font-bold bg-white"
-                >
-                  <option value="amber">لون ذهبي / تحذيري</option>
-                  <option value="blue">لون أزرق معلوماتي</option>
-                  <option value="emerald">لون أخضر مميز</option>
-                  <option value="rose">لون أحمر هام</option>
-                </select>
-              </div>
-            )}
-
-            {/* رفع الغلاف وصفحات العينة */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                <span className="text-xs font-black text-slate-800 block">صورة غلاف المذكرة:</span>
-                <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-slate-300 text-xs font-bold cursor-pointer">
-                  <Upload className="w-4 h-4 text-blue-600" />
-                  <span>رفع صورة الغلاف</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      const url = await compressImage(file, 800, 0.78);
-                      setNbForm((p) => ({ ...p, coverImage: url }));
-                    }}
-                  />
-                </label>
-                {nbForm.coverImage && (
-                  <img src={nbForm.coverImage} alt="" className="h-20 rounded-xl object-cover border" />
-                )}
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                <span className="text-xs font-black text-slate-800 block">
-                  صفحات العينة الداخلية ({nbForm.samplePages.length}/15):
-                </span>
-                <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-slate-300 text-xs font-bold cursor-pointer">
-                  <Upload className="w-4 h-4 text-blue-600" />
-                  <span>إضافة صور عينات</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={async (e) => {
-                      const files = Array.from(e.target.files || []).slice(0, 15 - nbForm.samplePages.length);
-                      const compressedList = await Promise.all(files.map((f) => compressImage(f, 850, 0.72)));
-                      setNbForm((p) => ({ ...p, samplePages: [...p.samplePages, ...compressedList] }));
-                    }}
-                  />
-                </label>
-                {nbForm.samplePages.length > 0 && (
-                  <div className="flex gap-1.5 overflow-x-auto pt-1">
-                    {nbForm.samplePages.map((img, i) => (
-                      <div key={i} className="relative w-12 h-14 rounded-lg overflow-hidden border shrink-0">
-                        <img src={img} alt="" className="w-full h-full object-cover" />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setNbForm((p) => ({
-                              ...p,
-                              samplePages: p.samplePages.filter((_, idx) => idx !== i)
-                            }))
-                          }
-                          className="absolute top-0 right-0 bg-red-600 text-white p-0.5"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={savingNb}
-              className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm"
-            >
-              {savingNb ? 'جاري الحفظ...' : editingNotebookId ? 'حفظ تعديلات المذكرة' : '+ نشر المذكرة الآن'}
-            </button>
-          </form>
-
-          {/* قائمة المذكرات والتعديل السريع الجماعي */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="text-base font-black text-slate-900">التعديل السريع الجماعي للمذكرات</h3>
-                <p className="text-xs text-slate-500">عدّل أي عدد من المذكرات مباشرة ثم اضغط حفظ دفعة واحدة</p>
-              </div>
-              {Object.keys(bulkEdits).length > 0 && (
-                <button
-                  type="button"
-                  onClick={handleSaveBulkEdits}
-                  disabled={savingBulk}
-                  className="px-5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm shadow"
-                >
-                  {savingBulk
-                    ? 'جاري الحفظ...'
-                    : `حفظ جميع التعديلات دفعة واحدة (${Object.keys(bulkEdits).length} مذكرة)`}
-                </button>
-              )}
-            </div>
-
-            <div className="space-y-2.5">
-              {notebooks.map((nb) => {
-                const draft = { ...nb, ...(bulkEdits[nb.id] || {}) };
-                const isModified = Boolean(bulkEdits[nb.id]);
-                return (
-                  <div
-                    key={nb.id}
-                    className={`p-3 rounded-2xl border grid grid-cols-1 md:grid-cols-12 gap-2.5 items-center ${
-                      isModified ? 'bg-amber-50/70 border-amber-300' : 'bg-slate-50 border-slate-200'
-                    }`}
-                  >
-                    <input
-                      type="text"
-                      value={draft.title}
-                      onChange={(e) =>
-                        setBulkEdits((p) => ({ ...p, [nb.id]: { ...(p[nb.id] || {}), title: e.target.value } }))
-                      }
-                      className="md:col-span-4 px-3 py-2 rounded-xl border border-slate-300 text-xs font-black bg-white"
-                    />
-                    <select
-                      value={draft.categoryId}
-                      onChange={(e) =>
-                        setBulkEdits((p) => ({ ...p, [nb.id]: { ...(p[nb.id] || {}), categoryId: e.target.value } }))
-                      }
-                      className="md:col-span-2 px-2.5 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white"
-                    >
-                      {(localSettings.categories || DEFAULT_CATEGORIES).map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
-                    <select
-                      value={draft.gradeId}
-                      onChange={(e) =>
-                        setBulkEdits((p) => ({ ...p, [nb.id]: { ...(p[nb.id] || {}), gradeId: e.target.value } }))
-                      }
-                      className="md:col-span-2 px-2.5 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white"
-                    >
-                      {(localSettings.grades || DEFAULT_GRADES).map((g) => (
-                        <option key={g.id} value={g.id}>{g.name}</option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      value={draft.price}
-                      onChange={(e) =>
-                        setBulkEdits((p) => ({ ...p, [nb.id]: { ...(p[nb.id] || {}), price: e.target.value } }))
-                      }
-                      className="md:col-span-2 px-3 py-2 rounded-xl border border-slate-300 text-xs font-black bg-white"
-                    />
-                    <div className="md:col-span-2 flex items-center justify-end gap-1.5">
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          setEditingNotebookId(nb.id);
-                          let pages = nb.samplePages || [];
-                          try {
-                            const s = await getDoc(publicDoc('notebook_samples', nb.id));
-                            if (s.exists()) pages = s.data().pages || [];
-                          } catch {
-                            // تجاهل
-                          }
-                          setNbForm({
-                            title: nb.title || '',
-                            categoryId: nb.categoryId || DEFAULT_CATEGORIES[0].id,
-                            gradeId: nb.gradeId || DEFAULT_GRADES[0].id,
-                            subjectId: nb.subjectId || DEFAULT_SUBJECTS[0].id,
-                            price: nb.price || 99,
-                            oldPrice: nb.oldPrice || '',
-                            description: nb.description || '',
-                            driveUrl: nb.driveUrl || '',
-                            coverImage: nb.coverImage || '',
-                            samplePages: pages,
-                            comingSoon: Boolean(nb.comingSoon),
-                            customAlertEnabled: Boolean(nb.customAlertEnabled),
-                            customAlertBadge: nb.customAlertBadge || 'تنبيه هام',
-                            customAlertText: nb.customAlertText || '',
-                            customAlertColor: nb.customAlertColor || 'amber'
-                          });
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }}
-                        className="p-2 rounded-xl bg-blue-100 text-blue-700 hover:bg-blue-200"
-                        title="تعديل كامل"
-                      >
-                        <Edit3 className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          await deleteDoc(publicDoc('notebooks', nb.id));
-                          showToast('تم حذف المذكرة');
-                        }}
-                        className="p-2 rounded-xl bg-red-100 text-red-700 hover:bg-red-200"
-                        title="حذف"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 2. تبويب الأقسام والمراحل والصفوف */}
-      {activeTab === 'categories' && (
-        <div className="space-y-6">
-          <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
-            <h2 className="text-lg font-black text-slate-900">الأقسام الرئيسية وصورها</h2>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="اسم قسم رئيسي جديد..."
-                value={newCatName}
-                onChange={(e) => setNewCatName(e.target.value)}
-                className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  if (!newCatName.trim()) return;
-                  const updated = [
-                    ...(localSettings.categories || []),
-                    { id: `cat_${Date.now()}`, name: newCatName.trim(), order: (localSettings.categories?.length || 0) + 1 }
-                  ];
-                  setLocalSettings((p) => ({ ...p, categories: updated }));
-                  setNewCatName('');
-                }}
-                className="px-5 py-2.5 rounded-xl bg-blue-600 text-white font-black text-sm"
-              >
-                + إضافة قسم
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {(localSettings.categories || DEFAULT_CATEGORIES).map((cat) => {
-                const catImg = localSettings.categoryImages?.[cat.id] || '';
-                return (
-                  <div key={cat.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <input
-                        type="text"
-                        value={cat.name}
-                        onChange={(e) =>
-                          setLocalSettings((p) => ({
-                            ...p,
-                            categories: (p.categories || []).map((c) =>
-                              c.id === cat.id ? { ...c, name: e.target.value } : c
-                            )
-                          }))
-                        }
-                        className="font-black text-sm bg-white px-2.5 py-1.5 rounded-xl border border-slate-300 flex-1"
-                      />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setLocalSettings((p) => ({
-                            ...p,
-                            categories: (p.categories || []).filter((c) => c.id !== cat.id)
-                          }))
-                        }
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-xl"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    {catImg && <img src={catImg} alt="" className="w-full h-28 object-cover rounded-xl border" />}
-                    <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-xs font-bold cursor-pointer">
-                      <Upload className="w-3.5 h-3.5 text-blue-600" />
-                      <span>{catImg ? 'تغيير صورة القسم' : 'رفع صورة للقسم'}</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          const url = await compressImage(file, 700, 0.78);
-                          setLocalSettings((p) => ({
-                            ...p,
-                            categoryImages: { ...(p.categoryImages || {}), [cat.id]: url }
-                          }));
-                        }}
-                      />
-                    </label>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* المراحل والصفوف والمواد */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {/* المراحل */}
-            <div className="bg-white rounded-3xl p-5 border border-slate-200 space-y-3">
-              <h3 className="font-black text-base text-slate-900">المراحل الدراسية</h3>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="مرحلة جديدة..."
-                  value={newStageName}
-                  onChange={(e) => setNewStageName(e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!newStageName.trim()) return;
-                    setLocalSettings((p) => ({
-                      ...p,
-                      stages: [...(p.stages || []), { id: `st_${Date.now()}`, name: newStageName.trim() }]
-                    }));
-                    setNewStageName('');
-                  }}
-                  className="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-black"
-                >
-                  +
-                </button>
-              </div>
-              <div className="space-y-1.5">
-                {(localSettings.stages || DEFAULT_STAGES).map((st) => (
-                  <div key={st.id} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 text-xs font-bold">
-                    <span>{st.name}</span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setLocalSettings((p) => ({ ...p, stages: (p.stages || []).filter((s) => s.id !== st.id) }))
-                      }
-                      className="text-red-600"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* الصفوف */}
-            <div className="bg-white rounded-3xl p-5 border border-slate-200 space-y-3">
-              <h3 className="font-black text-base text-slate-900">الصفوف الدراسية</h3>
-              <div className="space-y-2">
-                <select
-                  value={newGradeStageId}
-                  onChange={(e) => setNewGradeStageId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
-                >
-                  {(localSettings.stages || DEFAULT_STAGES).map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="اسم الصف..."
-                    value={newGradeName}
-                    onChange={(e) => setNewGradeName(e.target.value)}
-                    className="flex-1 px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!newGradeName.trim()) return;
-                      setLocalSettings((p) => ({
-                        ...p,
-                        grades: [
-                          ...(p.grades || []),
-                          { id: `gr_${Date.now()}`, stageId: newGradeStageId, name: newGradeName.trim() }
-                        ]
-                      }));
-                      setNewGradeName('');
-                    }}
-                    className="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-black"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-              <div className="space-y-1.5 max-h-60 overflow-y-auto">
-                {(localSettings.grades || DEFAULT_GRADES).map((gr) => (
-                  <div key={gr.id} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 text-xs font-bold">
-                    <span>{gr.name}</span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setLocalSettings((p) => ({ ...p, grades: (p.grades || []).filter((g) => g.id !== gr.id) }))
-                      }
-                      className="text-red-600"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* المواد */}
-            <div className="bg-white rounded-3xl p-5 border border-slate-200 space-y-3">
-              <h3 className="font-black text-base text-slate-900">المواد الدراسية</h3>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="مادة جديدة..."
-                  value={newSubjectName}
-                  onChange={(e) => setNewSubjectName(e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!newSubjectName.trim()) return;
-                    setLocalSettings((p) => ({
-                      ...p,
-                      subjects: [...(p.subjects || []), { id: `sub_${Date.now()}`, name: newSubjectName.trim() }]
-                    }));
-                    setNewSubjectName('');
-                  }}
-                  className="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-black"
-                >
-                  +
-                </button>
-              </div>
-              <div className="space-y-1.5">
-                {(localSettings.subjects || DEFAULT_SUBJECTS).map((sub) => (
-                  <div key={sub.id} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 text-xs font-bold">
-                    <span>{sub.name}</span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setLocalSettings((p) => ({ ...p, subjects: (p.subjects || []).filter((s) => s.id !== sub.id) }))
-                      }
-                      className="text-red-600"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => handleSaveAllSettings()}
-            className="px-6 py-3 rounded-2xl bg-emerald-600 text-white font-black text-sm"
-          >
-            حفظ الأقسام والمراحل والصفوف
-          </button>
-        </div>
-      )}
-
-      {/* 3. تبويب الخصومات والعروض */}
-      {activeTab === 'offers' && (
-        <div className="space-y-6">
-          {/* 1. الشريط الترويجي العلوي */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-black text-slate-900">1. الشريط الترويجي العلوي وكوبون النسخ السريع</h2>
-              <label className="flex items-center gap-2 text-xs font-black cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={localSettings.promoBannerEnabled !== false}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, promoBannerEnabled: e.target.checked }))}
-                />
-                <span>تفعيل الشريط</span>
-              </label>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <div className="sm:col-span-2">
-                <label className="text-xs font-bold text-slate-600">نص الإعلان الترويجي</label>
-                <input
-                  type="text"
-                  value={localSettings.promoBannerText}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, promoBannerText: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-600">لون خلفية الشريط</label>
-                <select
-                  value={localSettings.promoBannerColor || 'blue'}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, promoBannerColor: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                >
-                  <option value="navy">كحلي داكن فخم</option>
-                  <option value="blue">أزرق ملكي</option>
-                  <option value="emerald">أخضر زمردي</option>
-                  <option value="crimson">أحمر ياقوتي</option>
-                  <option value="purple">بنفسجي</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-600">كود الكوبون المدمج للنسخ</label>
-                <input
-                  type="text"
-                  value={localSettings.promoBannerCoupon || ''}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, promoBannerCoupon: e.target.value.toUpperCase() }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-black uppercase"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* 2. كوبون مكافأة الطلب القادم */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-black text-slate-900">2. كوبون مكافأة الطلب القادم (يظهر للعميل بعد إتمام الطلب)</h2>
-              <label className="flex items-center gap-2 text-xs font-black cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={Boolean(localSettings.nextOrderRewardEnabled)}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, nextOrderRewardEnabled: e.target.checked }))}
-                />
-                <span>تفعيل المكافأة</span>
-              </label>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <div>
-                <label className="text-xs font-bold text-slate-600">نوع الكود</label>
-                <select
-                  value={localSettings.nextOrderRewardMode || 'auto'}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, nextOrderRewardMode: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                >
-                  <option value="auto">توليد كود فريد لمرة واحدة</option>
-                  <option value="custom">كود ثابت من اختيارك</option>
-                </select>
-              </div>
-
-              {localSettings.nextOrderRewardMode === 'custom' && (
-                <div>
-                  <label className="text-xs font-bold text-slate-600">الكود الثابت</label>
-                  <input
-                    type="text"
-                    value={localSettings.nextOrderRewardCustomCode || ''}
-                    onChange={(e) =>
-                      setLocalSettings((p) => ({ ...p, nextOrderRewardCustomCode: e.target.value.toUpperCase() }))
-                    }
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm font-black uppercase"
-                  />
-                </div>
-              )}
-
-              <div>
-                <label className="text-xs font-bold text-slate-600">نوع الخصم</label>
-                <select
-                  value={localSettings.nextOrderRewardType || 'percent'}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, nextOrderRewardType: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                >
-                  <option value="percent">نسبة مئوية (%)</option>
-                  <option value="fixed">مبلغ ثابت (ج.م)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-600">قيمة الخصم</label>
-                <input
-                  type="number"
-                  value={localSettings.nextOrderRewardValue}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, nextOrderRewardValue: Number(e.target.value) }))}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm font-black"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-600">مدة الصلاحية (بالأيام)</label>
-                <input
-                  type="number"
-                  min={0}
-                  placeholder="0 = مفتوح"
-                  value={localSettings.nextOrderRewardValidDays ?? 7}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, nextOrderRewardValidDays: Number(e.target.value) }))}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm font-black"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <input
-                type="text"
-                placeholder="عنوان المكافأة"
-                value={localSettings.nextOrderRewardTitle}
-                onChange={(e) => setLocalSettings((p) => ({ ...p, nextOrderRewardTitle: e.target.value }))}
-                className="px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-              />
-              <input
-                type="text"
-                placeholder="رسالة المكافأة للعميل"
-                value={localSettings.nextOrderRewardMessage}
-                onChange={(e) => setLocalSettings((p) => ({ ...p, nextOrderRewardMessage: e.target.value }))}
-                className="px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-              />
-            </div>
-
-            <button
-              type="button"
-              onClick={() => handleSaveAllSettings()}
-              className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-black text-xs"
-            >
-              حفظ إعدادات الشريط الترويجي ومكافأة الطلب القادم
-            </button>
-          </div>
-
-          {/* 3. باقات التوفير ومجموعات المذكرات */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
-            <h2 className="text-lg font-black text-slate-900">3. إعداد باقات التوفير المجمعة</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              <div className="bg-slate-50 rounded-2xl p-3.5 border border-slate-200 max-h-64 overflow-y-auto space-y-2">
-                <span className="text-xs font-black text-slate-700 block">
-                  حدد المذكرات المشمولة ({bundleForm.notebookIds.length} مختارة — المجموع: {selectedBundleSum} ج.م):
-                </span>
-                {notebooks.map((nb) => {
-                  const checked = bundleForm.notebookIds.includes(nb.id);
-                  return (
-                    <label
-                      key={nb.id}
-                      className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200 cursor-pointer text-xs font-bold"
-                    >
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(e) => {
-                            const nextIds = e.target.checked
-                              ? [...bundleForm.notebookIds, nb.id]
-                              : bundleForm.notebookIds.filter((id) => id !== nb.id);
-                            setBundleForm((p) => ({ ...p, notebookIds: nextIds }));
-                          }}
-                        />
-                        <span>{nb.title}</span>
-                      </div>
-                      <span className="text-blue-600 font-black">{nb.price} ج.م</span>
-                    </label>
-                  );
-                })}
-              </div>
-
-              <div className="space-y-3">
-                <input
-                  type="text"
-                  placeholder="اسم الباقة (مثال: باقة مراجعة المرحلة الإعدادية)"
-                  value={bundleForm.title}
-                  onChange={(e) => setBundleForm((p) => ({ ...p, title: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                />
-                <input
-                  type="text"
-                  placeholder="وصف مختصر للباقة"
-                  value={bundleForm.description}
-                  onChange={(e) => setBundleForm((p) => ({ ...p, description: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
-                />
-                <select
-                  value={bundleForm.discountType}
-                  onChange={(e) => setBundleForm((p) => ({ ...p, discountType: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                >
-                  <option value="custom_before_after">تحديد السعر قبل وبعد يدويًا (ج.م)</option>
-                  <option value="percent">خصم نسبة مئوية (%)</option>
-                  <option value="fixed">خصم مبلغ ثابت (ج.م)</option>
-                </select>
-
-                {bundleForm.discountType === 'custom_before_after' ? (
-                  <div className="grid grid-cols-2 gap-3">
-                    <input
-                      type="number"
-                      placeholder={`السعر قبل (${selectedBundleSum})`}
-                      value={bundleForm.originalPrice}
-                      onChange={(e) => setBundleForm((p) => ({ ...p, originalPrice: e.target.value }))}
-                      className="px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                    />
-                    <input
-                      type="number"
-                      placeholder="السعر بعد الخصم"
-                      value={bundleForm.finalPrice}
-                      onChange={(e) => setBundleForm((p) => ({ ...p, finalPrice: e.target.value }))}
-                      className="px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-black"
-                    />
-                  </div>
-                ) : (
-                  <input
-                    type="number"
-                    placeholder={bundleForm.discountType === 'percent' ? 'نسبة الخصم %' : 'قيمة الخصم ج.م'}
-                    value={bundleForm.discountValue}
-                    onChange={(e) => setBundleForm((p) => ({ ...p, discountValue: e.target.value }))}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-black"
-                  />
-                )}
-
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!bundleForm.title.trim() || bundleForm.notebookIds.length === 0) return;
-                    const newBundle = {
-                      id: `bnd_${Date.now()}`,
-                      title: bundleForm.title.trim(),
-                      description: bundleForm.description.trim(),
-                      notebookIds: bundleForm.notebookIds,
-                      discountType: bundleForm.discountType,
-                      discountValue: Number(bundleForm.discountValue) || 0,
-                      originalPrice: Number(bundleForm.originalPrice) || selectedBundleSum,
-                      finalPrice: Number(bundleForm.finalPrice) || 0
-                    };
-                    const updated = {
-                      ...localSettings,
-                      bundles: [...(localSettings.bundles || []), newBundle]
-                    };
-                    setLocalSettings(updated);
-                    await handleSaveAllSettings(updated);
-                    setBundleForm({
-                      title: '',
-                      description: '',
-                      notebookIds: [],
-                      discountType: 'custom_before_after',
-                      discountValue: 20,
-                      originalPrice: '',
-                      finalPrice: ''
-                    });
-                  }}
-                  className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm"
-                >
-                  + حفظ الباقة وتفعيلها
-                </button>
-              </div>
-            </div>
-
-            {(localSettings.bundles || []).length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                {(localSettings.bundles || []).map((b) => (
-                  <div key={b.id} className="p-3.5 rounded-2xl bg-slate-50 border flex items-center justify-between">
-                    <div>
-                      <div className="font-black text-sm">{b.title}</div>
-                      <div className="text-xs text-slate-500">{b.notebookIds?.length || 0} مذكرات</div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const updated = {
-                          ...localSettings,
-                          bundles: (localSettings.bundles || []).filter((item) => item.id !== b.id)
-                        };
-                        setLocalSettings(updated);
-                        await handleSaveAllSettings(updated);
-                      }}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-xl"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* 4. كوبونات الخصم العامة */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
-            <h2 className="text-lg font-black text-slate-900">4. إنشاء كوبونات خصم ترويجية</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-              <input
-                type="text"
-                placeholder="كود الكوبون (مثال: SAVE20)"
-                value={couponForm.code}
-                onChange={(e) => setCouponForm((p) => ({ ...p, code: e.target.value.toUpperCase() }))}
-                className="px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-black uppercase"
-              />
-              <select
-                value={couponForm.type}
-                onChange={(e) => setCouponForm((p) => ({ ...p, type: e.target.value }))}
-                className="px-3 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-              >
-                <option value="percent">نسبة مئوية (%)</option>
-                <option value="fixed">مبلغ ثابت (ج.م)</option>
-              </select>
-              <input
-                type="number"
-                placeholder="القيمة"
-                value={couponForm.value}
-                onChange={(e) => setCouponForm((p) => ({ ...p, value: Number(e.target.value) }))}
-                className="px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-              />
-              <div>
-                <input
-                  type="datetime-local"
-                  title="تاريخ ووقت انتهاء الكوبون (اختياري)"
-                  value={couponForm.expiresAt}
-                  onChange={(e) => setCouponForm((p) => ({ ...p, expiresAt: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!couponForm.code.trim()) return;
-                  await addDoc(publicCol('coupons'), {
-                    code: couponForm.code.trim().toUpperCase(),
-                    type: couponForm.type,
-                    value: Number(couponForm.value) || 10,
-                    active: true,
-                    singleUse: couponForm.singleUse,
-                    used: false,
-                    expiresAt: couponForm.expiresAt ? new Date(couponForm.expiresAt).toISOString() : null,
-                    createdAt: serverTimestamp()
-                  });
-                  setCouponForm({ code: '', type: 'percent', value: 15, singleUse: false, expiresAt: '' });
-                  showToast('تم إنشاء الكوبون بنجاح!');
-                }}
-                className="py-2.5 px-4 rounded-xl bg-blue-600 text-white font-black text-sm"
-              >
-                + إضافة الكوبون
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {coupons.map((c) => {
-                const isExpired = c.expiresAt && Date.now() > new Date(c.expiresAt).getTime();
-                return (
-                  <div
-                    key={c.id}
-                    className={`flex items-center justify-between p-3 rounded-2xl border ${
-                      isExpired ? 'bg-red-50/70 border-red-200' : 'bg-slate-50'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-black text-sm">{c.code}</span>
-                        {isExpired && (
-                          <span className="px-2 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-black">
-                            منتهي
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-emerald-700 font-bold">
-                        خصم {c.value} {c.type === 'fixed' ? 'ج.م' : '%'} {c.singleUse ? '(مرة واحدة)' : ''}
-                      </div>
-                      {c.expiresAt && (
-                        <div className={`text-[11px] font-bold mt-0.5 ${isExpired ? 'text-red-600' : 'text-slate-500'}`}>
-                          ينتهي:{' '}
-                          {new Date(c.expiresAt).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })}
-                        </div>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        await deleteDoc(publicDoc('coupons', c.id));
-                        showToast('تم حذف الكوبون');
-                      }}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-xl"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 4. تبويب الطلبات */}
-      {activeTab === 'orders' && (
-        <div className="space-y-4">
-          {orders.length === 0 ? (
-            <div className="bg-white rounded-3xl p-12 border border-slate-200 text-center text-slate-500 font-bold">
-              لا توجد طلبات مسجلة حتى الآن.
-            </div>
-          ) : (
-            orders.map((ord) => (
-              <div key={ord.id} className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <span className="font-black text-base text-blue-700">{ord.orderNumber}</span>
-                    <span className="mr-3 text-xs font-bold text-slate-600">
-                      {ord.customerData?.teacherName} • {ord.customerData?.whatsapp}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={ord.status || 'تم الاستلام'}
-                      onChange={async (e) => {
-                        await updateDoc(publicDoc('orders', ord.id), { status: e.target.value });
-                        showToast('تم تحديث حالة الطلب');
-                      }}
-                      className="px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-black"
-                    >
-                      <option value="تم الاستلام">تم الاستلام</option>
-                      <option value="جاري التجهيز">جاري التجهيز</option>
-                      <option value="مكتمل">مكتمل</option>
-                    </select>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        await deleteDoc(publicDoc('orders', ord.id));
-                        showToast('تم حذف الطلب');
-                      }}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-xl"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="text-xs text-slate-700 bg-slate-50 p-3 rounded-2xl space-y-1">
-                  {(ord.items || []).map((it, idx) => (
-                    <div key={idx} className="font-bold">
-                      • {it.title} ({it.price} ج.م)
-                    </div>
-                  ))}
-                  <div className="pt-1 font-black text-slate-900">الإجمالي: {ord.total} ج.م</div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
-
-      {/* 5. تبويب إعدادات الموقع والمظهر */}
-      {activeTab === 'settings' && (
-        <div className="space-y-6">
-          {/* الهوية والشعار والخلفية */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
-            <h2 className="text-lg font-black text-slate-900">الهوية والشعار والواجهة الرئيسية</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-bold text-slate-600">اسم المنصة</label>
-                <input
-                  type="text"
-                  value={localSettings.siteName}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, siteName: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-600">الوصف المختصر أسفل الاسم</label>
-                <input
-                  type="text"
-                  value={localSettings.tagline}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, tagline: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-600">عنوان الواجهة الرئيسية</label>
-                <input
-                  type="text"
-                  value={localSettings.heroTitle}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, heroTitle: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-600">رقم الواتساب لاستقبال الطلبات (بالكود الدولي)</label>
-                <input
-                  type="text"
-                  value={localSettings.whatsappNumber}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, whatsappNumber: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-4 rounded-2xl bg-slate-50 border space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black">شعار المنصة (Logo)</span>
-                  <span className="text-xs font-bold text-slate-500">الحجم: {localSettings.logoSize}px</span>
-                </div>
-                <input
-                  type="range"
-                  min={36}
-                  max={84}
-                  value={localSettings.logoSize || 52}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, logoSize: Number(e.target.value) }))}
-                  className="w-full"
-                />
-                <div className="flex items-center gap-3">
-                  <label className="px-3.5 py-2 rounded-xl bg-white border text-xs font-bold cursor-pointer">
-                    رفع الشعار
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        const url = await compressImage(file, 400, 0.85);
-                        setLocalSettings((p) => ({ ...p, logoUrl: url }));
-                      }}
-                    />
-                  </label>
-                  {localSettings.logoUrl && (
-                    <img src={localSettings.logoUrl} alt="" className="h-12 w-12 rounded-xl object-cover border" />
-                  )}
-                </div>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-slate-50 border space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black">صورة خلفية الواجهة الرئيسية</span>
-                  <span className="text-xs font-bold text-slate-500">
-                    الشفافية: {Math.round((localSettings.heroBgOpacity ?? 0.28) * 100)}%
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min={0.05}
-                  max={0.85}
-                  step={0.05}
-                  value={localSettings.heroBgOpacity ?? 0.28}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, heroBgOpacity: Number(e.target.value) }))}
-                  className="w-full"
-                />
-                <div className="flex items-center gap-3">
-                  <label className="px-3.5 py-2 rounded-xl bg-white border text-xs font-bold cursor-pointer">
-                    رفع صورة الخلفية
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        const url = await compressImage(file, 1280, 0.78);
-                        setLocalSettings((p) => ({ ...p, heroBgImage: url }));
-                      }}
-                    />
-                  </label>
-                  {localSettings.heroBgImage && (
-                    <button
-                      type="button"
-                      onClick={() => setLocalSettings((p) => ({ ...p, heroBgImage: '' }))}
-                      className="text-xs font-bold text-red-600"
-                    >
-                      حذف الخلفية
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* قسم ما الجديد؟ وقسم الأخبار */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div className="bg-white rounded-3xl p-5 border border-slate-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-black text-base">قسم «ما الجديد؟»</h3>
-                <input
-                  type="checkbox"
-                  checked={localSettings.whatsNewEnabled !== false}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, whatsNewEnabled: e.target.checked }))}
-                />
-              </div>
-              <input
-                type="text"
-                value={localSettings.whatsNewTitle}
-                onChange={(e) => setLocalSettings((p) => ({ ...p, whatsNewTitle: e.target.value }))}
-                className="w-full px-3 py-2 rounded-xl border text-xs font-bold"
-              />
-              <select
-                value={localSettings.whatsNewMode || 'auto'}
-                onChange={(e) => setLocalSettings((p) => ({ ...p, whatsNewMode: e.target.value }))}
-                className="w-full px-3 py-2 rounded-xl border text-xs font-bold"
-              >
-                <option value="auto">تلقائي (أحدث المذكرات المضافة)</option>
-                <option value="manual">اختيار يدوي للمذكرات</option>
-              </select>
-            </div>
-
-            <div className="bg-white rounded-3xl p-5 border border-slate-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-black text-base">قسم الأخبار والإعلانات</h3>
-                <input
-                  type="checkbox"
-                  checked={localSettings.newsSectionEnabled !== false}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, newsSectionEnabled: e.target.checked }))}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() =>
-                  setLocalSettings((p) => ({
-                    ...p,
-                    newsItems: [
-                      ...(p.newsItems || []),
-                      { id: `nw_${Date.now()}`, title: 'خبر جديد', date: 'الآن', description: '' }
-                    ]
-                  }))
-                }
-                className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-black"
-              >
-                + إضافة خبر
-              </button>
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {(localSettings.newsItems || []).map((nw, idx) => (
-                  <div key={nw.id} className="p-2.5 rounded-xl bg-slate-50 border space-y-1.5">
-                    <div className="flex gap-1.5">
-                      <input
-                        type="text"
-                        value={nw.title}
-                        onChange={(e) =>
-                          setLocalSettings((p) => ({
-                            ...p,
-                            newsItems: p.newsItems.map((item, i) =>
-                              i === idx ? { ...item, title: e.target.value } : item
-                            )
-                          }))
-                        }
-                        className="flex-1 px-2 py-1 rounded-lg border text-xs font-bold"
-                      />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setLocalSettings((p) => ({
-                            ...p,
-                            newsItems: p.newsItems.filter((_, i) => i !== idx)
-                          }))
-                        }
-                        className="text-red-600 px-1"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* حقول نموذج طلب العميل */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-200 space-y-3">
-            <h3 className="font-black text-base">حقول بيانات العميل داخل السلة</h3>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="اسم حقل جديد..."
-                value={newFieldLabel}
-                onChange={(e) => setNewFieldLabel(e.target.value)}
-                className="flex-1 px-3 py-2 rounded-xl border text-xs font-bold"
-              />
-              <select
-                value={newFieldType}
-                onChange={(e) => setNewFieldType(e.target.value)}
-                className="px-3 py-2 rounded-xl border text-xs font-bold"
-              >
-                <option value="text">نص قصير</option>
-                <option value="tel">رقم هاتف</option>
-                <option value="textarea">نص طويل</option>
-              </select>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!newFieldLabel.trim()) return;
-                  setLocalSettings((p) => ({
-                    ...p,
-                    customerFields: [
-                      ...(p.customerFields || DEFAULT_CUSTOMER_FIELDS),
-                      {
-                        id: `fld_${Date.now()}`,
-                        label: newFieldLabel.trim(),
-                        placeholder: '',
-                        type: newFieldType,
-                        required: false,
-                        visible: true,
-                        order: (p.customerFields?.length || 0) + 1
-                      }
-                    ]
-                  }));
-                  setNewFieldLabel('');
-                }}
-                className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-black"
-              >
-                + إضافة
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              {(localSettings.customerFields || DEFAULT_CUSTOMER_FIELDS).map((fld, idx) => (
-                <div key={fld.id} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border text-xs font-bold">
-                  <span>{fld.label}</span>
-                  <div className="flex items-center gap-3">
-                    <label className="flex items-center gap-1">
-                      <input
-                        type="checkbox"
-                        checked={fld.visible !== false}
-                        onChange={(e) =>
-                          setLocalSettings((p) => ({
-                            ...p,
-                            customerFields: p.customerFields.map((f, i) =>
-                              i === idx ? { ...f, visible: e.target.checked } : f
-                            )
-                          }))
-                        }
-                      />
-                      <span>ظاهر</span>
-                    </label>
-                    <label className="flex items-center gap-1">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(fld.required)}
-                        onChange={(e) =>
-                          setLocalSettings((p) => ({
-                            ...p,
-                            customerFields: p.customerFields.map((f, i) =>
-                              i === idx ? { ...f, required: e.target.checked } : f
-                            )
-                          }))
-                        }
-                      />
-                      <span>إلزامي</span>
-                    </label>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => handleSaveAllSettings()}
-            className="px-7 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm shadow-lg"
-          >
-            حفظ جميع إعدادات الموقع والمظهر
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ==========================================
-// 10. التطبيق الرئيسي للمنصة
-// ==========================================
-function MuzakkiratiApp() {
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
-  const [notebooks, setNotebooks] = useState([]);
-  const [coupons, setCoupons] = useState([]);
-  const [orders, setOrders] = useState([]);
-
-  const [activePage, setActivePage] = useState('home'); // 'home' | 'catalog' | 'offers' | 'track' | 'admin'
-  const [selectedCategoryId, setSelectedCategoryId] = useState('');
-  const [selectedStageId, setSelectedStageId] = useState('');
-  const [selectedGradeId, setSelectedGradeId] = useState('');
-
-  const [previewNotebook, setPreviewNotebook] = useState(null);
-  const [cart, setCart] = useState([]);
-  const [cartOpen, setCartOpen] = useState(false);
-  const [contactOpen, setContactOpen] = useState(false);
-
-  const [user, setUser] = useState(null);
-  const [previewAdminUnlocked, setPreviewAdminUnlocked] = useState(false);
-  const [adminLoginOpen, setAdminLoginOpen] = useState(false);
-  const [adminEmailInput, setAdminEmailInput] = useState(ADMIN_EMAIL);
-  const [adminPassword, setAdminPassword] = useState('');
-  const [showAdminPass, setShowAdminPass] = useState(false);
-  const [loginError, setLoginError] = useState('');
-
-  const [toast, setToast] = useState(null);
-  const [promoDismissed, setPromoDismissed] = useState(false);
-  const [promoCopied, setPromoCopied] = useState(false);
-  const [isScrolled, setIsScrolled] = useState(false);
-  const logoClickCountRef = useRef(0);
-
-  const [trackQuery, setTrackQuery] = useState('');
-  const [trackedOrder, setTrackedOrder] = useState(null);
-  const [trackNotFound, setTrackNotFound] = useState(false);
-  const [trackingLoading, setTrackingLoading] = useState(false);
-
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3200);
-  };
-
-  const navigateTo = (page, catId = '') => {
-    setActivePage(page);
-    if (catId) {
-      setSelectedCategoryId(catId);
-      setSelectedStageId('');
-      setSelectedGradeId('');
-    }
-    try {
-      window.history.pushState({ page, catId }, '', `#${page}`);
-    } catch {
-      // تجاهل في بيئات العرض المقيدة
-    }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  useEffect(() => {
-    const onScroll = () => setIsScrolled(window.scrollY > 40);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    const onPopState = (e) => {
-      if (e.state?.page) {
-        setActivePage(e.state.page);
-      } else {
-        setActivePage('home');
-      }
-    };
-    window.addEventListener('popstate', onPopState);
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('popstate', onPopState);
-    };
-  }, []);
-
-  // مراقبة تسجيل الدخول والمزامنة الفورية مع كافة مستندات Firestore
-  useEffect(() => {
-    // 1. استعادة أي نسخة محلية محفوظة مسبقًا كخط دفاع أول
-    try {
-      const cached =
-        localStorage.getItem(LOCAL_SETTINGS_BACKUP_KEY) || localStorage.getItem(LEGACY_LOCAL_BACKUP_KEY);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        setSettings((prev) => mergeAndNormalizeSettings(prev, parsed));
-      }
-    } catch {
-      // تجاهل
-    }
-
-    const unsubAuth = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      if (!currentUser) {
-        signInAnonymously(auth).catch(() => {});
-      }
-    });
-
-    // 2. قراءة فورية لجميع المستندات السحابية المحتملة (الجديدة والسابقة)
-    const loadAllCloudSettings = async () => {
-      const docRefs = [
-        publicDoc('config', 'main'),
-        publicDoc('settings', 'main'),
-        publicDoc('settings', 'media_assets'),
-        publicDoc('settings', 'media_logo'),
-        publicDoc('settings', 'media_hero'),
-        publicDoc('settings', 'media_categories')
-      ];
-      for (const ref of docRefs) {
-        try {
-          const snap = await getDoc(ref);
-          if (snap.exists()) {
-            setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
+            active: true,
+            expiresAt,
+            createdAt: new Date().toISOString()
+          };
+          try {
+            await addDoc(publicCol('coupons'), generatedRewardCoupon);
+          } catch {
+            // تجاهل في وضع المعاينة
           }
-        } catch {
-          // تجاهل في حال عدم وجود المستند
         }
       }
-    };
-    loadAllCloudSettings();
 
-    // 3. مستمعو التحديث الفوري
-    const unsubMain = onSnapshot(publicDoc('settings', 'main'), (snap) => {
-      if (snap.exists()) {
-        setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
-      }
-    });
-
-    const unsubMedia = onSnapshot(publicDoc('settings', 'media_assets'), (snap) => {
-      if (snap.exists()) {
-        setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
-      }
-    });
-
-    const unsubLogo = onSnapshot(publicDoc('settings', 'media_logo'), (snap) => {
-      if (snap.exists()) {
-        setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
-      }
-    });
-
-    const unsubHero = onSnapshot(publicDoc('settings', 'media_hero'), (snap) => {
-      if (snap.exists()) {
-        setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
-      }
-    });
-
-    const unsubCats = onSnapshot(publicDoc('settings', 'media_categories'), (snap) => {
-      if (snap.exists()) {
-        setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
-      }
-    });
-
-    const unsubNotebooks = onSnapshot(publicCol('notebooks'), (snap) => {
-      const list = snap.docs.map((d) => normalizeNotebook({ id: d.id, ...d.data() }));
-      setNotebooks(list);
-    });
-
-    const unsubCoupons = onSnapshot(publicCol('coupons'), (snap) => {
-      setCoupons(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
-
-    const unsubOrders = onSnapshot(publicCol('orders'), (snap) => {
-      setOrders(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
-
-    return () => {
-      unsubAuth();
-      unsubMain();
-      unsubMedia();
-      unsubLogo();
-      unsubHero();
-      unsubCats();
-      unsubNotebooks();
-      unsubCoupons();
-      unsubOrders();
-    };
-  }, []);
-
-  const isAdmin = Boolean((user && !user.isAnonymous && user.email === ADMIN_EMAIL) || previewAdminUnlocked);
-
-  const handleAdminLogin = async (e) => {
-    e.preventDefault();
-    setLoginError('');
-    const cleanEmail = (adminEmailInput.trim() || ADMIN_EMAIL).toLowerCase();
-    try {
-      await signInWithEmailAndPassword(auth, cleanEmail, adminPassword);
-      setAdminLoginOpen(false);
-      setAdminPassword('');
-      setActivePage('admin');
-      showToast('مرحبًا بك في لوحة تحكم الإدارة');
-    } catch (err) {
-      const code = String(err?.code || '');
-      const msg = String(err?.message || '');
-      const isPreviewSanitizedKey =
-        code.includes('api-key') ||
-        msg.includes('api-key') ||
-        code.includes('network-request-failed');
-
-      if (isPreviewSanitizedKey) {
-        if (cleanEmail === ADMIN_EMAIL.toLowerCase() && adminPassword.trim().length >= 4) {
-          setPreviewAdminUnlocked(true);
-          setAdminLoginOpen(false);
-          setAdminPassword('');
-          setActivePage('admin');
-          showToast('تم فتح لوحة التحكم (وضع المعاينة)');
-          return;
-        }
-      }
-      if (code === 'auth/too-many-requests') {
-        setLoginError('تم إيقاف المحاولات مؤقتًا لكثرة المحاولات. استخدم زر الدخول بحساب Google أدناه أو انتظر قليلًا.');
-      } else if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') {
-        setLoginError('كلمة المرور غير صحيحة لحساب الإدارة (تأكد من كتابتها بالإنجليزية أو ادخل عبر Google).');
-      } else {
-        setLoginError(`تعذر تسجيل الدخول (${code || 'خطأ في التحقق'})`);
-      }
-    }
-  };
-
-  const handleGoogleAdminLogin = async () => {
-    setLoginError('');
-    try {
-      const provider = new GoogleAuthProvider();
-      const res = await signInWithPopup(auth, provider);
-      if (res.user?.email === ADMIN_EMAIL) {
-        setAdminLoginOpen(false);
-        setActivePage('admin');
-        showToast('مرحبًا بك في لوحة تحكم الإدارة');
-      } else {
-        await signOut(auth);
-        setLoginError(`هذا الحساب (${res.user?.email}) غير مصرح له بالدخول للإدارة.`);
-      }
-    } catch (err) {
-      const code = String(err?.code || '');
-      const msg = String(err?.message || '');
-      if (code.includes('api-key') || msg.includes('api-key') || code.includes('popup-blocked')) {
-        setPreviewAdminUnlocked(true);
-        setAdminLoginOpen(false);
-        setActivePage('admin');
-        showToast('تم فتح لوحة التحكم (وضع المعاينة)');
-        return;
-      }
-      setLoginError(`تعذر تسجيل الدخول عبر Google (${code || 'أعد المحاولة'})`);
-    }
-  };
-
-  const cartIds = useMemo(() => new Set(cart.map((c) => c.id)), [cart]);
-
-  const handleAddToCart = (item) => {
-    if (cartIds.has(item.id)) {
-      showToast('هذا العنصر موجود بالفعل في السلة');
-      return;
-    }
-    setCart((prev) => [...prev, item]);
-    showToast(`تمت إضافة «${item.title}» إلى السلة بنجاح`);
-  };
-
-  const handleTrackOrder = async (e) => {
-    e.preventDefault();
-    const qStr = trackQuery.trim().toUpperCase();
-    if (!qStr) return;
-    setTrackingLoading(true);
-    setTrackNotFound(false);
-    setTrackedOrder(null);
-    try {
-      const localMatch = orders.find(
-        (o) =>
-          (o.orderNumber || '').toUpperCase() === qStr ||
-          (o.customerData?.whatsapp || '').includes(trackQuery.trim())
-      );
-      if (localMatch) {
-        setTrackedOrder(localMatch);
-      } else {
-        setTrackNotFound(true);
-      }
-    } finally {
-      setTrackingLoading(false);
-    }
-  };
-
-  const whatsNewList = useMemo(() => {
-    if (settings.whatsNewMode === 'manual' && Array.isArray(settings.whatsNewManualIds)) {
-      return settings.whatsNewManualIds
-        .map((id) => notebooks.find((n) => n.id === id))
-        .filter(Boolean);
-    }
-    return notebooks.slice(0, Number(settings.whatsNewCount) || 4);
-  }, [notebooks, settings]);
-
-  const comingSoonList = useMemo(() => notebooks.filter((n) => n.comingSoon), [notebooks]);
-
-  const bannerColors = {
-    navy: 'bg-slate-950',
-    blue: 'bg-blue-700',
-    emerald: 'bg-emerald-700',
-    crimson: 'bg-rose-700',
-    purple: 'bg-purple-800'
-  };
-
-  return (
-    <div dir="rtl" className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
-      {/* إشعار Toast عائم */}
-      {toast && (
-        <div
-          className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl shadow-xl text-white font-black text-xs sm:text-sm flex items-center gap-2 transition-all ${
-            toast.type === 'error' ? 'bg-red-600' : 'bg-emerald-600'
-          }`}
-        >
-          <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span>{toast.message}</span>
-        </div>
-      )}
-
-      {/* الشريط العلوي المثبّت (الشريط الترويجي + الهيدر) */}
-      <header className="sticky top-0 z-40 shadow-sm bg-white/95 backdrop-blur-md border-b border-slate-200">
-        {settings.promoBannerEnabled !== false && !promoDismissed && (
-          <div
-            className={`${bannerColors[settings.promoBannerColor || 'blue']} text-white transition-all duration-300 ${
-              isScrolled ? 'hidden md:block py-1.5' : 'py-2'
-            }`}
-          >
-            <div className="max-w-7xl mx-auto px-3 flex flex-wrap items-center justify-center gap-2 text-center text-[11px] sm:text-xs font-black">
-              <span>{settings.promoBannerText}</span>
-              {settings.promoBannerCoupon && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard?.writeText(settings.promoBannerCoupon);
-                    setPromoCopied(true);
-                    setTimeout(() => setPromoCopied(false), 2000);
-                  }}
-                  className="px-2.5 py-0.5 rounded-lg bg-white text-slate-900 font-black inline-flex items-center gap-1 hover:bg-amber-100"
-                >
-                  {promoCopied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                  <span>
-                    {promoCopied
-                      ? 'تم النسخ!'
-                      : `${settings.promoBannerCopyText || 'انسخ الكوبون'}: ${settings.promoBannerCoupon}`}
-                  </span>
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => navigateTo('offers')}
-                className="px-2.5 py-0.5 rounded-lg bg-amber-400 text-slate-950 font-black hover:bg-amber-300"
-              >
-                العروض ←
-              </button>
-              <button
-                type="button"
-                onClick={() => setPromoDismissed(true)}
-                className="mr-1 text-white/75 hover:text-white md:hidden"
-                aria-label="إغلاق"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* شريط التنقل الرئيسي */}
-        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2 sm:py-3">
-          <div className="flex items-center justify-between gap-2">
-            {/* الشعار واسم المنصة */}
-            <div
-              onClick={() => {
-                logoClickCountRef.current += 1;
-                if (logoClickCountRef.current >= 5) {
-                  logoClickCountRef.current = 0;
-                  if (isAdmin) setActivePage('admin');
-                  else setAdminLoginOpen(true);
-                } else {
-                  navigateTo('home');
-                }
-              }}
-              className="flex items-center gap-2.5 cursor-pointer min-w-0"
-            >
-              {settings.logoUrl ? (
-                <img
-                  src={settings.logoUrl}
-                  alt={settings.siteName}
-                  style={{ width: settings.logoSize || 48, height: settings.logoSize || 48 }}
-                  className="rounded-2xl object-cover border border-slate-200 shrink-0 w-10 h-10 sm:w-auto sm:h-auto"
-                />
-              ) : (
-                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex items-center justify-center font-black shrink-0 shadow">
-                  <BookOpen className="w-5 h-5 sm:w-6 sm:h-6" />
-                </div>
-              )}
-              <div className="min-w-0">
-                <div className="font-black text-sm sm:text-lg lg:text-xl text-blue-700 leading-tight truncate">
-                  {settings.siteName}
-                </div>
-                <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-slate-600 font-bold truncate mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                  <span className="truncate">{settings.tagline}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* روابط التنقل على الكمبيوتر */}
-            <nav className="hidden md:flex items-center gap-1 bg-slate-100 p-1 rounded-2xl">
-              {[
-                { id: 'home', label: 'الرئيسية', icon: Home },
-                { id: 'catalog', label: 'المذكرات', icon: BookOpen },
-                { id: 'offers', label: 'العروض والباقات', icon: Percent },
-                { id: 'track', label: 'تتبع طلبك', icon: Package }
-              ].map((nav) => {
-                const Icon = nav.icon;
-                return (
-                  <button
-                    key={nav.id}
-                    onClick={() => navigateTo(nav.id)}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition ${
-                      activePage === nav.id
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'text-slate-700 hover:bg-white/70'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4" />
-                    <span>{nav.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
-
-            {/* أزرار الإجراءات السريعة */}
-            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-              {isAdmin && (
-                <button
-                  onClick={() => setActivePage('admin')}
-                  className="px-2.5 sm:px-3.5 py-2 rounded-xl bg-slate-900 text-white text-[11px] sm:text-xs font-black flex items-center gap-1"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="hidden sm:inline">الإدارة</span>
-                </button>
-              )}
-
-              <button
-                onClick={() => setCartOpen(true)}
-                className="relative px-2.5 sm:px-3.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[11px] sm:text-xs font-black flex items-center gap-1.5"
-              >
-                <ShoppingCart className="w-4 h-4" />
-                <span>السلة</span>
-                {cart.length > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full bg-rose-600 text-white text-[10px] font-black">
-                    {cart.length}
-                  </span>
-                )}
-              </button>
-
-              <button
-                onClick={() => setContactOpen(true)}
-                className="px-2.5 sm:px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] sm:text-xs font-black flex items-center gap-1"
-              >
-                <Phone className="w-3.5 h-3.5" />
-                <span>تواصل معنا</span>
-              </button>
-            </div>
-          </div>
-
-          {/* شريط التنقل المدمج للهاتف */}
-          <nav className="grid grid-cols-4 gap-1 bg-slate-100 p-1 rounded-xl mt-2 md:hidden">
-            {[
-              { id: 'home', label: 'الرئيسية', icon: Home },
-              { id: 'catalog', label: 'المذكرات', icon: BookOpen },
-              { id: 'offers', label: 'العروض', icon: Percent },
-              { id: 'track', label: 'تتبع طلبك', icon: Package }
-            ].map((nav) => {
-              const Icon = nav.icon;
-              return (
-                <button
-                  key={nav.id}
-                  onClick={() => navigateTo(nav.id)}
-                  className={`py-1.5 px-1 rounded-lg text-[11px] font-black flex items-center justify-center gap-1 transition ${
-                    activePage === nav.id ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-700'
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">{nav.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-      </header>
-
-      {/* المحتوى الرئيسي حسب الصفحة */}
-      <main className="flex-1">
-        {activePage === 'admin' && isAdmin ? (
-          <AdminDashboard
-            settings={settings}
-            setSettings={setSettings}
-            notebooks={notebooks}
-            coupons={coupons}
-            orders={orders}
-            onLogout={async () => {
-              setPreviewAdminUnlocked(false);
-              await signOut(auth).catch(() => {});
-              setActivePage('home');
-            }}
-            showToast={showToast}
-          />
-        ) : activePage === 'catalog' ? (
-          <CatalogPage
-            settings={settings}
-            notebooks={notebooks}
-            selectedCategoryId={selectedCategoryId}
-            setSelectedCategoryId={setSelectedCategoryId}
-            selectedStageId={selectedStageId}
-            setSelectedStageId={setSelectedStageId}
-            selectedGradeId={selectedGradeId}
-            setSelectedGradeId={setSelectedGradeId}
-            onPreview={setPreviewNotebook}
-            onAddToCart={handleAddToCart}
-            cartIds={cartIds}
-          />
-        ) : activePage === 'offers' ? (
-          <OffersAndBundlesPage
-            settings={settings}
-            notebooks={notebooks}
-            coupons={coupons}
-            onAddBundleToCart={handleAddToCart}
-            onPreview={setPreviewNotebook}
-          />
-        ) : activePage === 'track' ? (
-          <div className="max-w-xl mx-auto px-4 py-10 space-y-6">
-            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-4 text-center">
-              <div className="w-14 h-14 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center mx-auto">
-                <Package className="w-7 h-7" />
-              </div>
-              <h2 className="text-xl sm:text-2xl font-black text-slate-900">تتبع حالة طلبك</h2>
-              <p className="text-xs sm:text-sm text-slate-600">
-                أدخل رقم الطلب (`ORD-...`) أو رقم الواتساب المسجل في الطلب
-              </p>
-
-              <form onSubmit={handleTrackOrder} className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="مثال: ORD-123456"
-                  value={trackQuery}
-                  onChange={(e) => setTrackQuery(e.target.value)}
-                  className="flex-1 px-4 py-3 rounded-2xl border border-slate-300 text-sm font-black"
-                />
-                <button
-                  type="submit"
-                  disabled={trackingLoading}
-                  className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm"
-                >
-                  بحث
-                </button>
-              </form>
-
-              {trackNotFound && (
-                <p className="text-xs font-bold text-red-600 pt-2">
-                  لم يتم العثور على طلب مطابق لهذه البيانات.
-                </p>
-              )}
-
-              {trackedOrder && (
-                <div className="text-right bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2 mt-4">
-                  <div className="flex items-center justify-between">
-                    <span className="font-black text-blue-700">{trackedOrder.orderNumber}</span>
-                    <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black">
-                      {trackedOrder.status}
-                    </span>
-                  </div>
-                  <div className="text-xs text-slate-600 font-bold">
-                    المعلم: {trackedOrder.customerData?.teacherName} • الإجمالي: {trackedOrder.total} ج.م
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          /* الصفحة الرئيسية */
-          <div className="space-y-12 pb-16">
-            {/* Hero Section */}
-            <section
-              style={{ minHeight: settings.heroMinHeight || 420 }}
-              className="relative bg-gradient-to-bl from-slate-950 via-blue-950 to-slate-900 text-white flex items-center overflow-hidden"
-            >
-              {settings.heroBgImage && (
-                <img
-                  src={settings.heroBgImage}
-                  alt=""
-                  style={{ opacity: settings.heroBgOpacity ?? 0.28 }}
-                  className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-                />
-              )}
-              <div className="relative max-w-7xl mx-auto px-4 py-10 sm:py-16 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center w-full">
-                <div className="lg:col-span-7 space-y-4 text-right">
-                  <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-400/15 border border-amber-400/30 text-amber-300 text-xs font-black">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>{settings.heroBadge}</span>
-                  </span>
-                  <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black leading-tight">
-                    {settings.heroTitle}
-                  </h1>
-                  <p className="text-sm sm:text-base text-slate-200 leading-relaxed max-w-2xl">
-                    {settings.heroSubtitle}
-                  </p>
-                  <div className="flex flex-wrap gap-3 pt-2">
-                    <button
-                      onClick={() => navigateTo('catalog')}
-                      className="px-6 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-sm shadow-lg transition"
-                    >
-                      تصفح مكتبة المذكرات
-                    </button>
-                    <button
-                      onClick={() => setContactOpen(true)}
-                      className="px-6 py-3.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-black text-sm transition"
-                    >
-                      اطلب إعداد مذكرة خاصة
-                    </button>
-                  </div>
-                </div>
-
-                <div className="lg:col-span-5">
-                  <div className="bg-slate-900/80 backdrop-blur-md border border-white/15 rounded-3xl p-5 sm:p-6 space-y-3">
-                    <div className="flex items-center gap-2 text-amber-400 font-black text-sm">
-                      <ShieldCheck className="w-5 h-5" />
-                      <span>لماذا يثق بنا المعلمون؟</span>
-                    </div>
-                    <ul className="space-y-2.5 text-xs sm:text-sm text-slate-200">
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span>محتوى متكامل ومطابق لأحدث تعليمات الوزارة ومنسق باحترافية.</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span>وضع اسم المعلم ورقم الهاتف والشعار على الغلاف وجميع الصفحات.</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span>معاينة حقيقية لصفحات المذكرة قبل تأكيد الطلب.</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span>تسليم سريع بصيغة PDF عالية الدقة جاهزة للطباعة.</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span>خدمة عملاء حقيقية لحل أي مشكلة.</span>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* الأقسام الرئيسية */}
-            <section className="max-w-7xl mx-auto px-4 space-y-6">
-              <div className="text-center space-y-1">
-                <h2 className="text-2xl sm:text-3xl font-black text-slate-900">الأقسام الرئيسية للمذكرات والكورسات</h2>
-                <p className="text-xs sm:text-sm text-slate-600">اختر القسم المناسب لتصفح مجلدات المراحل والصفوف الدراسية</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {(settings.categories || DEFAULT_CATEGORIES).map((cat) => {
-                  const catImg = settings.categoryImages?.[cat.id] || cat.image || cat.coverImage || '';
-                  const count = notebooks.filter((n) => n.categoryId === cat.id).length;
-                  return (
-                    <div
-                      key={cat.id}
-                      onClick={() => navigateTo('catalog', cat.id)}
-                      className="bg-white rounded-3xl border border-slate-200 shadow-sm hover:shadow-xl transition-all cursor-pointer overflow-hidden group"
-                    >
-                      <div className="relative h-44 bg-gradient-to-br from-blue-600 to-indigo-700 overflow-hidden">
-                        {catImg ? (
-                          <img
-                            src={catImg}
-                            alt={cat.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-white/80">
-                            <BookOpen className="w-14 h-14" />
-                          </div>
-                        )}
-                        <span className="absolute top-3 left-3 px-3 py-1 rounded-full bg-slate-950/75 text-white text-xs font-black backdrop-blur-sm">
-                          {count} مذكرة متاحة
-                        </span>
-                      </div>
-                      <div className="p-5 flex items-center justify-between">
-                        <div>
-                          <h3 className="text-lg font-black text-slate-900 group-hover:text-blue-600 transition">
-                            {cat.name}
-                          </h3>
-                          <p className="text-xs text-slate-500 font-bold mt-0.5">تصفح المراحل والصفوف الدراسية</p>
-                        </div>
-                        <ArrowRight className="w-5 h-5 text-blue-600 rotate-180 group-hover:-translate-x-1 transition-transform" />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-
-            {/* قسم ما الجديد؟ */}
-            {settings.whatsNewEnabled !== false && whatsNewList.length > 0 && (
-              <section className="max-w-7xl mx-auto px-4 space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="inline-block px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-black mb-1">
-                      إصدارات حديثة
-                    </span>
-                    <h2 className="text-xl sm:text-2xl font-black text-slate-900">{settings.whatsNewTitle}</h2>
-                  </div>
-                  <button
-                    onClick={() => navigateTo('catalog')}
-                    className="text-xs sm:text-sm font-black text-blue-600 hover:underline"
-                  >
-                    عرض الكل ←
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                  {whatsNewList.map((nb) => (
-                    <NotebookCard
-                      key={nb.id}
-                      notebook={nb}
-                      settings={settings}
-                      onPreview={setPreviewNotebook}
-                      onAddToCart={handleAddToCart}
-                      isInCart={cartIds.has(nb.id)}
-                    />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* قسم أخبار المنصة ومذكرات قيد التجهيز */}
-            {settings.newsSectionEnabled !== false &&
-              ((settings.newsItems || []).length > 0 || comingSoonList.length > 0) && (
-                <section className="max-w-7xl mx-auto px-4 space-y-6">
-                  <div className="flex items-center gap-2.5">
-                    <Megaphone className="w-6 h-6 text-amber-600" />
-                    <h2 className="text-xl sm:text-2xl font-black text-slate-900">{settings.newsSectionTitle}</h2>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                    {(settings.newsItems || []).map((nw) => (
-                      <div key={nw.id} className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-1.5">
-                        <span className="inline-block px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[11px] font-black">
-                          {nw.date || 'جديد'}
-                        </span>
-                        <h3 className="font-black text-base text-slate-900">{nw.title}</h3>
-                        {nw.description && <p className="text-xs sm:text-sm text-slate-600">{nw.description}</p>}
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              )}
-          </div>
-        )}
-      </main>
-
-      {/* شريط سلة عائم أسفل الشاشة عند وجود عناصر */}
-      {cart.length > 0 && !cartOpen && activePage !== 'admin' && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 w-[92%] max-w-md">
-          <button
-            onClick={() => setCartOpen(true)}
-            className="w-full py-3.5 px-5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white shadow-2xl border border-white/15 flex items-center justify-between font-black text-xs sm:text-sm"
-          >
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded-full bg-blue-600 text-white text-xs">{cart.length}</span>
-              <span>عرض سلة الطلبات وإتمام الطلب</span>
-            </div>
-            <span className="text-amber-400">
-              {cart.reduce((s, i) => s + (Number(i.price) || 0), 0)} ج.م ←
-            </span>
-          </button>
-        </div>
-      )}
-
-      {/* الفوتر */}
-      <footer className="bg-slate-950 text-slate-400 py-8 border-t border-slate-800 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-bold">
-          <div>
-            © {new Date().getFullYear()} {settings.siteName} — جميع الحقوق محفوظة.
-          </div>
-          <button
-            onClick={() => {
-              if (isAdmin) setActivePage('admin');
-              else setAdminLoginOpen(true);
-            }}
-            className="text-slate-500 hover:text-slate-300 flex items-center gap-1"
-          >
-            <Lock className="w-3.5 h-3.5" />
-            <span>دخول الإدارة</span>
-          </button>
-        </div>
-      </footer>
-
-      {/* النوافذ المنبثقة */}
-      <ProtectedPreviewModal
-        notebook={previewNotebook}
-        settings={settings}
-        onClose={() => setPreviewNotebook(null)}
-        onAddToCart={handleAddToCart}
-        isInCart={previewNotebook ? cartIds.has(previewNotebook.id) : false}
-      />
-
-      <OrderCheckoutModal
-        isOpen={cartOpen}
-        onClose={() => setCartOpen(false)}
-        cart={cart}
-        settings={settings}
-        coupons={coupons}
-        onRemoveFromCart={(id) => setCart((p) => p.filter((item) => item.id !== id))}
-        onClearCart={() => setCart([])}
-      />
-
-      {/* نافذة تواصل معنا */}
-      {contactOpen && (
-        <div
-          dir="rtl"
-          className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setContactOpen(false)}
-        >
-          <div
-            className="bg-white w-full max-w-md rounded-3xl p-6 border border-slate-200 shadow-2xl space-y-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-black text-slate-900">{settings.contactModalTitle}</h3>
-              <button onClick={() => setContactOpen(false)} className="p-2 rounded-xl hover:bg-slate-100">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <p className="text-xs text-slate-600">{settings.contactModalSubtitle}</p>
-            <div className="space-y-2.5">
-              {(settings.socialLinks || []).map((link) => (
-                <a
-                  key={link.id}
-                  href={normalizeExternalUrl(link.url)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 hover:bg-blue-50 border border-slate-200 transition"
-                >
-                  <div className="flex items-center gap-3">
-                    <SocialPlatformBadge url={link.url} />
-                    <span className="font-black text-sm text-slate-900">{link.label}</span>
-                  </div>
-                  <ExternalLink className="w-4 h-4 text-slate-400" />
-                </a>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* نافذة دخول الإدارة */}
-      {adminLoginOpen && (
-        <div
-          dir="rtl"
-          className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setAdminLoginOpen(false)}
-        >
-          <form
-            onSubmit={handleAdminLogin}
-            className="bg-white w-full max-w-md rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-2xl space-y-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center">
-                  <ShieldCheck className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-black text-slate-900">دخول لوحة تحكم الإدارة</h3>
-                  <p className="text-xs text-slate-500 font-bold">مخصص لإدارة {settings.siteName}</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setAdminLoginOpen(false)}
-                className="p-2 rounded-xl hover:bg-slate-100 text-slate-500"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">البريد الإلكتروني الإداري</label>
-                <input
-                  type="email"
-                  required
-                  value={adminEmailInput}
-                  onChange={(e) => setAdminEmailInput(e.target.value)}
-                  className="w-full px-4 py-3 rounded-2xl border border-slate-300 text-sm font-bold text-left"
-                  dir="ltr"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">كلمة المرور</label>
-                <div className="relative">
-                  <input
-                    type={showAdminPass ? 'text' : 'password'}
-                    required
-                    placeholder="••••••••"
-                    value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)}
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-300 text-sm font-bold"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowAdminPass((p) => !p)}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500 hover:text-slate-800"
-                  >
-                    {showAdminPass ? 'إخفاء' : 'إظهار'}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {loginError && (
-              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-bold text-red-700">
-                {loginError}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-md transition"
-            >
-              تسجيل الدخول للوحة التحكم
-            </button>
-
-            <div className="relative flex items-center justify-center">
-              <span className="border-t border-slate-200 w-full" />
-              <span className="bg-white px-3 text-[11px] font-bold text-slate-400">أو</span>
-              <span className="border-t border-slate-200 w-full" />
-            </div>
-
-            <button
-              type="button"
-              onClick={handleGoogleAdminLogin}
-              className="w-full py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs sm:text-sm shadow transition flex items-center justify-center gap-2"
-            >
-              <ShieldCheck className="w-4 h-4 text-amber-400" />
-              <span>دخول سريع بحساب Google الإداري</span>
-            </button>
-          </form>
-        </div>
-      )}
-    </div>
-  );
-}
-
-export default function App() {
-  return (
-    <ErrorBoundary>
-      <MuzakkiratiApp />
-    </ErrorBoundary>
-  );
-}mport React, { useState, useEffect, useMemo, useRef } from 'react';
-import {
-  BookOpen,
-  ShieldCheck,
-  Search,
-  ShoppingCart,
-  Plus,
-  Trash2,
-  Edit3,
-  CheckCircle2,
-  X,
-  Eye,
-  Upload,
-  Settings,
-  Layers,
-  Tag,
-  Sparkles,
-  Phone,
-  LogOut,
-  Lock,
-  ExternalLink,
-  Copy,
-  Check,
-  Package,
-  AlertCircle,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
-  ChevronDown,
-  Clock,
-  FolderOpen,
-  ArrowRight,
-  Percent,
-  Gift,
-  FileText,
-  Download,
-  RefreshCw,
-  Megaphone,
-  CalendarClock,
-  Save,
-  Home
-} from 'lucide-react';
-import { initializeApp } from 'firebase/app';
-import {
-  getAuth,
-  signInWithEmailAndPassword,
-  signInWithPopup,
-  GoogleAuthProvider,
-  signInAnonymously,
-  onAuthStateChanged,
-  signOut
-} from 'firebase/auth';
-import {
-  getFirestore,
-  collection,
-  doc,
-  getDoc,
-  setDoc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  onSnapshot,
-  query,
-  where,
-  serverTimestamp
-} from 'firebase/firestore';
-
-// ==========================================
-// 1. إعدادات Firebase والاتصال بالسحابة
-// ==========================================
-const firebaseConfig = {
-  apiKey: "AIzaSyD_du5VY8nJGDJ169Fof9EALI9x2W2d-14",
-  authDomain: "el3bakera-edu.firebaseapp.com",
-  projectId: "el3bakera-edu",
-  storageBucket: "el3bakera-edu.firebasestorage.app",
-  messagingSenderId: "74663879858",
-  appId: "1:74663879858:web:4327c0ea1b825dd6c615ab"
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-
-// الربط المباشر بمسار مشروعك الفعلي في Firestore لضمان ظهور كل مذكراتك وصورك وإعداداتك
-const APP_ID = 'el3bakera-edu';
-const ADMIN_EMAIL = 'mahmoudelzaaty7@gmail.com';
-const LOCAL_SETTINGS_BACKUP_KEY = 'el3bakera_settings_backup_v2';
-const LEGACY_LOCAL_BACKUP_KEY = 'el3bakera_settings_backup_v1';
-
-const publicCol = (colName) => collection(db, 'artifacts', APP_ID, 'public', 'data', colName);
-const publicDoc = (colName, docId) => doc(db, 'artifacts', APP_ID, 'public', 'data', colName, docId);
-const legacyPublicDoc = (colName, docId) => doc(db, 'artifacts', 'el3bakera-edu', 'public', 'data', colName, docId);
-
-// ==========================================
-// 2. البيانات الافتراضية للمنصة
-// ==========================================
-const DEFAULT_CATEGORIES = [
-  { id: 'cat_term1', name: 'مذكرات الترم الأول', order: 1, description: 'مذكرات الشرح والمراجعة النهائية للفصل الدراسي الأول' },
-  { id: 'cat_term2', name: 'مذكرات الترم الثاني', order: 2, description: 'مذكرات الشرح والاختبارات الشاملة للفصل الدراسي الثاني' },
-  { id: 'cat_foundation', name: 'كورسات التأسيس', order: 3, description: 'سلاسل التأسيس المتدرجة في القراءة والكتابة والقواعد' }
-];
-
-const DEFAULT_STAGES = [
-  { id: 'stage_primary', name: 'المرحلة الابتدائية', order: 1 },
-  { id: 'stage_prep', name: 'المرحلة الإعدادية', order: 2 },
-  { id: 'stage_sec', name: 'المرحلة الثانوية', order: 3 }
-];
-
-const DEFAULT_GRADES = [
-  { id: 'g_p4', stageId: 'stage_primary', name: 'الصف الرابع الابتدائي', order: 1 },
-  { id: 'g_p5', stageId: 'stage_primary', name: 'الصف الخامس الابتدائي', order: 2 },
-  { id: 'g_p6', stageId: 'stage_primary', name: 'الصف السادس الابتدائي', order: 3 },
-  { id: 'g_m1', stageId: 'stage_prep', name: 'الصف الأول الإعدادي', order: 1 },
-  { id: 'g_m2', stageId: 'stage_prep', name: 'الصف الثاني الإعدادي', order: 2 },
-  { id: 'g_m3', stageId: 'stage_prep', name: 'الصف الثالث الإعدادي', order: 3 },
-  { id: 'g_s1', stageId: 'stage_sec', name: 'الصف الأول الثانوي', order: 1 },
-  { id: 'g_s2', stageId: 'stage_sec', name: 'الصف الثاني الثانوي', order: 2 },
-  { id: 'g_s3', stageId: 'stage_sec', name: 'الصف الثالث الثانوي', order: 3 }
-];
-
-const DEFAULT_SUBJECTS = [
-  { id: 'sub_ar', name: 'اللغة العربية' },
-  { id: 'sub_en', name: 'اللغة الإنجليزية' },
-  { id: 'sub_math', name: 'الرياضيات' },
-  { id: 'sub_sci', name: 'العلوم' },
-  { id: 'sub_soc', name: 'الدراسات الاجتماعية' }
-];
-
-const DEFAULT_CUSTOMER_FIELDS = [
-  { id: 'teacherName', label: 'اسم المعلم (كما سيُكتب على المذكرة)', placeholder: 'مثال: أ/ محمود شحاتة', type: 'text', required: true, visible: true, order: 1 },
-  { id: 'whatsapp', label: 'رقم الواتساب للتواصل وإرسال الملفات', placeholder: '010xxxxxxxx', type: 'tel', required: true, visible: true, order: 2 },
-  { id: 'seriesName', label: 'اسم السلسلة أو السنتر (اختياري)', placeholder: 'مثال: سلسلة العباقرة في اللغة العربية', type: 'text', required: false, visible: true, order: 3 },
-  { id: 'governorate', label: 'المحافظة / الإدارة التعليمية', placeholder: 'مثال: الغربية - المحلة الكبرى', type: 'text', required: false, visible: true, order: 4 },
-  { id: 'notes', label: 'ملاحظات إضافية للتصميم', placeholder: 'أي تفاصيل خاصة بالألوان أو البيانات...', type: 'textarea', required: false, visible: true, order: 5 }
-];
-
-const DEFAULT_SETTINGS = {
-  siteName: 'منصة العباقرة للمذكرات التعليمية',
-  tagline: 'مذكرات دراسية احترافية مخصصة للمعلم باسمه وبياناته الخاصة',
-  logoUrl: '',
-  logoSize: 52,
-  heroBadge: 'تخصيص كامل باسم المعلم ورقم هاتفه وشعاره',
-  heroTitle: 'مذكرتك التعليمية الجاهزة... باسمك وشعارك وهويتك الاحترافية',
-  heroSubtitle: 'نوفر للمعلمين مذكرات دراسية منسقة باحترافية ومحدّثة وفق أحدث المناهج بصيغة PDF عالية الدقة، مع إضافة بيانات المعلم على الغلاف وجميع الصفحات.',
-  heroBgImage: '',
-  heroBgOpacity: 0.28,
-  heroMinHeight: 440,
-  whatsappNumber: '201000000000',
-  contactModalTitle: 'تواصل مع إدارة منصة العباقرة',
-  contactModalSubtitle: 'يسعدنا الرد على استفساراتكم وطلبات التخصيص عبر قنواتنا الرسمية:',
-  socialLinks: [
-    { id: 'soc_wa', label: 'تواصل مباشر واتساب', url: 'https://wa.me/201000000000' },
-    { id: 'soc_fb', label: 'صفحتنا على فيسبوك', url: 'https://facebook.com' }
-  ],
-  promoBannerEnabled: true,
-  promoBannerText: 'عرض خاص للمعلمين: خصم 15% على جميع المذكرات بمناسبة افتتاح موقعنا',
-  promoBannerColor: 'blue',
-  promoBannerCoupon: 'M20',
-  promoBannerCopyText: 'انسخ الكوبون',
-  nextOrderRewardEnabled: true,
-  nextOrderRewardMode: 'auto', // 'auto' | 'custom'
-  nextOrderRewardCustomCode: 'VIP15',
-  nextOrderRewardType: 'percent', // 'percent' | 'fixed'
-  nextOrderRewardValue: 15,
-  nextOrderRewardValidDays: 7,
-  nextOrderRewardTitle: 'هدية خاصة لطلبك القادم!',
-  nextOrderRewardMessage: 'استخدم كود الخصم التالي عند طلبك القادم للحصول على خصم فوري:',
-  whatsNewEnabled: true,
-  whatsNewTitle: 'ما الجديد؟ أحدث المذكرات والإصدارات',
-  whatsNewMode: 'auto', // 'auto' | 'manual'
-  whatsNewCount: 4,
-  whatsNewManualIds: [],
-  newsSectionEnabled: true,
-  newsSectionTitle: 'أخبار المنصة ومذكرات قيد التجهيز',
-  newsItems: [
-    {
-      id: 'news_1',
-      title: 'تحديث جميع مذكرات الفصل الدراسي الجديد وفق آخر تعديلات الوزارة',
-      date: 'متاح الآن',
-      description: 'تمت مراجعة وتنسيق كافة المذكرات بإخراج فني فاخر وجاهز للطباعة الفورية.'
-    }
-  ],
-  driveButtonLabel: 'معاينة عينة PDF كاملة على Google Drive',
-  driveHelpText: 'يمكنك تصفح عينة كاملة بجودة عالية قبل تأكيد الطلب',
-  customerFields: DEFAULT_CUSTOMER_FIELDS,
-  categoryImages: {},
-  categories: DEFAULT_CATEGORIES,
-  stages: DEFAULT_STAGES,
-  grades: DEFAULT_GRADES,
-  subjects: DEFAULT_SUBJECTS,
-  bundles: []
-};
-
-// ==========================================
-// 3. دوال مساعدة (ضغط الصور، معالجة الروابط، الأيقونات)
-// ==========================================
-function compressImage(file, maxWidth = 900, quality = 0.78) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        if (width > maxWidth) {
-          height = Math.round((height * maxWidth) / width);
-          width = maxWidth;
-        }
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', quality));
-      };
-      img.onerror = reject;
-      img.src = e.target.result;
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-function normalizeExternalUrl(url) {
-  if (!url) return '';
-  const trimmed = url.trim();
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  return `https://${trimmed}`;
-}
-
-function generateUniqueCouponCode(prefix = 'VIP') {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let rand = '';
-  for (let i = 0; i < 5; i++) {
-    rand += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return `${prefix}-${rand}`;
-}
-
-function mergeAndNormalizeSettings(prev, incoming = {}) {
-  if (!incoming || typeof incoming !== 'object') return prev;
-  const merged = { ...prev, ...incoming };
-  // حماية الصور من الاستبدال بقيم فارغة مهما كان مصدر المستند
-  merged.logoUrl = incoming.logoUrl || prev.logoUrl || '';
-  merged.heroBgImage = incoming.heroBgImage || prev.heroBgImage || '';
-  merged.categoryImages = {
-    ...(prev.categoryImages || {}),
-    ...(incoming.categoryImages || {})
-  };
-
-  // دعم أسماء الحقول القديمة والجديدة للأقسام الرئيسية
-  const rawCats =
-    Array.isArray(incoming.categories) && incoming.categories.length > 0
-      ? incoming.categories
-      : Array.isArray(prev.categories) && prev.categories.length > 0
-      ? prev.categories
-      : DEFAULT_CATEGORIES;
-
-  merged.categories = rawCats.map((c, idx) => {
-    const id = c.id || DEFAULT_CATEGORIES[idx]?.id || `cat_${idx}`;
-    const imgFromObj = c.image || c.coverImage || c.img || '';
-    if (imgFromObj && !merged.categoryImages[id]) {
-      merged.categoryImages[id] = imgFromObj;
-    }
-    return {
-      ...c,
-      id,
-      name: c.name || c.title || c.label || DEFAULT_CATEGORIES[idx]?.name || `قسم ${idx + 1}`,
-      order: c.order ?? idx + 1
-    };
-  });
-
-  if (Array.isArray(merged.stages)) {
-    merged.stages = merged.stages.map((s, idx) => ({
-      ...s,
-      name: s.name || s.title || s.label || `مرحلة ${idx + 1}`
-    }));
-  }
-  if (Array.isArray(merged.grades)) {
-    merged.grades = merged.grades.map((g, idx) => ({
-      ...g,
-      name: g.name || g.title || g.label || `صف ${idx + 1}`
-    }));
-  }
-  if (Array.isArray(merged.subjects)) {
-    merged.subjects = merged.subjects.map((sub, idx) => ({
-      ...sub,
-      name: sub.name || sub.title || sub.label || `مادة ${idx + 1}`
-    }));
-  }
-  return merged;
-}
-
-function normalizeNotebook(raw = {}) {
-  const inlineSamples = Array.isArray(raw.samplePages)
-    ? raw.samplePages
-    : Array.isArray(raw.samples)
-    ? raw.samples
-    : Array.isArray(raw.pages)
-    ? raw.pages
-    : [];
-
-  const resolvedCover =
-    raw.coverImage ||
-    raw.cover ||
-    raw.image ||
-    raw.imageUrl ||
-    raw.thumbnail ||
-    inlineSamples[0] ||
-    '';
-
-  return {
-    ...raw,
-    coverImage: resolvedCover,
-    samplePages: inlineSamples
-  };
-}
-
-function SocialPlatformBadge({ url }) {
-  const lower = (url || '').toLowerCase();
-  if (lower.includes('wa.me') || lower.includes('whatsapp')) {
-    return (
-      <span className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-xs shrink-0">
-        WA
-      </span>
-    );
-  }
-  if (lower.includes('facebook') || lower.includes('fb.com')) {
-    return (
-      <span className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-black text-xs shrink-0">
-        FB
-      </span>
-    );
-  }
-  if (lower.includes('t.me') || lower.includes('telegram')) {
-    return (
-      <span className="w-9 h-9 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center font-black text-xs shrink-0">
-        TG
-      </span>
-    );
-  }
-  if (lower.includes('youtube')) {
-    return (
-      <span className="w-9 h-9 rounded-xl bg-red-100 text-red-700 flex items-center justify-center font-black text-xs shrink-0">
-        YT
-      </span>
-    );
-  }
-  return (
-    <span className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
-      <ExternalLink className="w-4 h-4" />
-    </span>
-  );
-}
-
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false };
-  }
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div dir="rtl" className="min-h-screen flex items-center justify-center bg-slate-50 p-6 text-center">
-          <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-lg max-w-md space-y-4">
-            <AlertCircle className="w-12 h-12 text-red-600 mx-auto" />
-            <h2 className="text-xl font-black text-slate-900">حدث خطأ غير متوقع في العرض</h2>
-            <p className="text-sm text-slate-600">يرجى إعادة تحميل الصفحة للاستمرار.</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-6 py-3 rounded-2xl bg-blue-600 text-white font-black text-sm"
-            >
-              إعادة تحميل الصفحة
-            </button>
-          </div>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-// ==========================================
-// 4. مكون معاينة المذكرة المحمية
-// ==========================================
-function ProtectedPreviewModal({ notebook, settings, onClose, onAddToCart, isInCart }) {
-  const [samples, setSamples] = useState([]);
-  const [currentIdx, setCurrentIdx] = useState(0);
-  const [loadingSamples, setLoadingSamples] = useState(true);
-
-  useEffect(() => {
-    if (!notebook) return;
-    let active = true;
-    const loadSamples = async () => {
-      setLoadingSamples(true);
-      try {
-        const inlineSamples = Array.isArray(notebook.samplePages) ? notebook.samplePages : [];
-        let remoteSamples = [];
+      if (appliedCoupon?.id && appliedCoupon.singleUse) {
         try {
-          const snap = await getDoc(publicDoc('notebook_samples', notebook.id));
-          if (snap.exists() && Array.isArray(snap.data().pages)) {
-            remoteSamples = snap.data().pages;
-          }
+          await updateDoc(publicDoc('coupons', appliedCoupon.id), { used: true });
         } catch {
           // تجاهل
         }
-        if (remoteSamples.length === 0) {
-          try {
-            const legacySnap = await getDoc(legacyPublicDoc('notebook_samples', notebook.id));
-            if (legacySnap.exists() && Array.isArray(legacySnap.data().pages)) {
-              remoteSamples = legacySnap.data().pages;
-            }
-          } catch {
-            // تجاهل
-          }
-        }
-        const mergedSamples = remoteSamples.length > 0 ? remoteSamples : inlineSamples;
-        const allPages = [
-          ...(notebook.coverImage ? [notebook.coverImage] : []),
-          ...mergedSamples.filter((p) => p && p !== notebook.coverImage)
-        ];
-        if (active) {
-          setSamples(allPages);
-          setCurrentIdx(0);
-        }
-      } catch {
-        const fallback = [
-          ...(notebook.coverImage ? [notebook.coverImage] : []),
-          ...(Array.isArray(notebook.samplePages) ? notebook.samplePages : [])
-        ];
-        if (active) {
-          setSamples(fallback);
-          setCurrentIdx(0);
-        }
-      } finally {
-        if (active) setLoadingSamples(false);
       }
-    };
-    loadSamples();
-    return () => {
-      active = false;
-    };
-  }, [notebook]);
-
-  if (!notebook) return null;
-
-  const gradeName = (settings.grades || []).find((g) => g.id === notebook.gradeId)?.name || '';
-  const subjectName = (settings.subjects || []).find((s) => s.id === notebook.subjectId)?.name || '';
-  const driveUrl = normalizeExternalUrl(notebook.driveUrl);
-
-  const alertStyles = {
-    amber: 'bg-amber-50 border-amber-300 text-amber-950',
-    blue: 'bg-blue-50 border-blue-300 text-blue-950',
-    emerald: 'bg-emerald-50 border-emerald-300 text-emerald-950',
-    rose: 'bg-rose-50 border-rose-300 text-rose-950'
-  };
-
-  return (
-    <div
-      dir="rtl"
-      className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* رأس النافذة */}
-        <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between gap-3 shrink-0">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-2.5 py-0.5 rounded-full bg-blue-600 text-[11px] font-bold">{gradeName}</span>
-              {subjectName && (
-                <span className="px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-200 text-[11px] font-bold">
-                  {subjectName}
-                </span>
-              )}
-              {notebook.comingSoon && (
-                <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[11px] font-black">
-                  قيد التجهيز / حجز مسبق
-                </span>
-              )}
-            </div>
-            <h3 className="text-base sm:text-xl font-black mt-1 truncate">{notebook.title}</h3>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-10 h-10 rounded-2xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white shrink-0"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* محتوى المعاينة */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1">
-          {notebook.customAlertEnabled && notebook.customAlertText && (
-            <div className={`p-4 rounded-2xl border-2 ${alertStyles[notebook.customAlertColor || 'amber']}`}>
-              {notebook.customAlertBadge && (
-                <span className="inline-block px-2.5 py-0.5 rounded-full bg-black/10 text-xs font-black mb-1">
-                  {notebook.customAlertBadge}
-                </span>
-              )}
-              <p className="text-sm font-bold leading-relaxed">{notebook.customAlertText}</p>
-            </div>
-          )}
-
-          {/* عارض الصفحات المحمي */}
-          <div className="bg-slate-100 rounded-3xl p-3 sm:p-5 border border-slate-200 select-none" onContextMenu={(e) => e.preventDefault()}>
-            {loadingSamples ? (
-              <div className="h-72 flex flex-col items-center justify-center text-slate-500 gap-2">
-                <RefreshCw className="w-7 h-7 animate-spin text-blue-600" />
-                <span className="text-sm font-bold">جاري تحميل صفحات العينة...</span>
-              </div>
-            ) : samples.length > 0 ? (
-              <div className="space-y-4">
-                <div className="relative flex items-center justify-center bg-white rounded-2xl p-2 border border-slate-200 min-h-[300px] sm:min-h-[420px]">
-                  <img
-                    src={samples[currentIdx]}
-                    alt={`صفحة ${currentIdx + 1}`}
-                    draggable={false}
-                    className="max-h-[440px] w-auto object-contain rounded-xl pointer-events-none"
-                  />
-                  {/* علامة مائية للحماية */}
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-15">
-                    <span className="text-2xl sm:text-4xl font-black text-slate-900 -rotate-12">
-                      {settings.siteName}
-                    </span>
-                  </div>
-
-                  {samples.length > 1 && (
-                    <>
-                      <button
-                        onClick={() => setCurrentIdx((p) => (p > 0 ? p - 1 : samples.length - 1))}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-900/80 text-white flex items-center justify-center hover:bg-slate-900"
-                      >
-                        <ChevronRight className="w-5 h-5" />
-                      </button>
-                      <button
-                        onClick={() => setCurrentIdx((p) => (p < samples.length - 1 ? p + 1 : 0))}
-                        className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-900/80 text-white flex items-center justify-center hover:bg-slate-900"
-                      >
-                        <ChevronLeft className="w-5 h-5" />
-                      </button>
-                    </>
-                  )}
-                </div>
-
-                {/* شريط المصغرات */}
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <span className="text-xs font-black text-slate-600">
-                    صفحة {currentIdx + 1} من {samples.length}
-                  </span>
-                  <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                    {samples.map((src, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setCurrentIdx(idx)}
-                        className={`w-12 h-14 rounded-xl overflow-hidden border-2 shrink-0 transition ${
-                          currentIdx === idx ? 'border-blue-600 scale-105' : 'border-transparent opacity-60 hover:opacity-100'
-                        }`}
-                      >
-                        <img src={src} alt="" className="w-full h-full object-cover" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="h-56 flex flex-col items-center justify-center text-slate-500 gap-2">
-                <BookOpen className="w-10 h-10 text-slate-400" />
-                <p className="text-sm font-bold">لا توجد صور عينة مرفوعة لهذه المذكرة بعد</p>
-              </div>
-            )}
-          </div>
-
-          {/* وصف المذكرة ورابط Drive */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-            <div className="space-y-1.5">
-              <h4 className="text-sm font-black text-slate-900">تفاصيل المذكرة:</h4>
-              <p className="text-sm text-slate-600 leading-relaxed">
-                {notebook.description || 'مذكرة شاملة ومنسقة باحترافية عالية وجاهزة للطباعة باسم المعلم ورقم هاتفه وشعاره الخاص.'}
-              </p>
-            </div>
-
-            {driveUrl && (
-              <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 space-y-2">
-                <p className="text-xs font-bold text-blue-900">{settings.driveHelpText}</p>
-                <a
-                  href={driveUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs transition"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  <span>{settings.driveButtonLabel || 'معاينة PDF على Google Drive'}</span>
-                </a>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* شريط السعر والإضافة للسلة */}
-        <div className="px-5 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-4 shrink-0">
-          <div>
-            <span className="text-xs text-slate-500 font-bold block">سعر المذكرة بالتخصيص الكامل:</span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black text-blue-700">{notebook.price} ج.م</span>
-              {Number(notebook.oldPrice) > Number(notebook.price) && (
-                <span className="text-sm text-slate-400 line-through font-bold">{notebook.oldPrice} ج.م</span>
-              )}
-            </div>
-          </div>
-
-          <button
-            onClick={() => onAddToCart(notebook)}
-            className={`px-6 py-3.5 rounded-2xl font-black text-sm flex items-center gap-2 transition shadow-md ${
-              isInCart
-                ? 'bg-emerald-600 text-white'
-                : 'bg-blue-600 hover:bg-blue-700 text-white'
-            }`}
-          >
-            {isInCart ? (
-              <>
-                <CheckCircle2 className="w-5 h-5" />
-                <span>مضافة في السلة</span>
-              </>
-            ) : (
-              <>
-                <ShoppingCart className="w-5 h-5" />
-                <span>{notebook.comingSoon ? 'احجز المذكرة الآن' : 'أضف إلى السلة'}</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ==========================================
-// 5. بطاقة عرض المذكرة
-// ==========================================
-function NotebookCard({ notebook, settings, onPreview, onAddToCart, isInCart }) {
-  const gradeName = (settings.grades || []).find((g) => g.id === notebook.gradeId)?.name || '';
-  const subjectName = (settings.subjects || []).find((s) => s.id === notebook.subjectId)?.name || '';
-  const hasDiscount = Number(notebook.oldPrice) > Number(notebook.price);
-
-  return (
-    <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col group">
-      <div
-        onClick={() => onPreview(notebook)}
-        className="relative aspect-[4/3] bg-gradient-to-br from-slate-100 to-blue-50 overflow-hidden cursor-pointer"
-      >
-        {notebook.coverImage ? (
-          <img
-            src={notebook.coverImage}
-            alt={notebook.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-          />
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 p-4 text-center">
-            <BookOpen className="w-12 h-12 text-blue-500/60 mb-2" />
-            <span className="text-xs font-bold text-slate-500">{notebook.title}</span>
-          </div>
-        )}
-
-        <div className="absolute top-3 right-3 flex flex-wrap gap-1.5">
-          {notebook.comingSoon && (
-            <span className="px-2.5 py-1 rounded-full bg-amber-500 text-slate-950 text-[11px] font-black shadow">
-              قيد التجهيز
-            </span>
-          )}
-          {hasDiscount && (
-            <span className="px-2.5 py-1 rounded-full bg-rose-600 text-white text-[11px] font-black shadow">
-              خصم {Math.round(((notebook.oldPrice - notebook.price) / notebook.oldPrice) * 100)}%
-            </span>
-          )}
-        </div>
-
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onPreview(notebook);
-          }}
-          className="absolute bottom-3 left-3 px-3 py-1.5 rounded-xl bg-slate-900/85 hover:bg-slate-900 text-white text-xs font-bold flex items-center gap-1.5 backdrop-blur-sm transition"
-        >
-          <Eye className="w-3.5 h-3.5" />
-          <span>معاينة</span>
-        </button>
-      </div>
-
-      <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between space-y-4">
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-1.5 text-[11px] font-bold text-blue-600 flex-wrap">
-            <span>{gradeName}</span>
-            {subjectName && (
-              <>
-                <span>•</span>
-                <span className="text-slate-500">{subjectName}</span>
-              </>
-            )}
-          </div>
-          <h3
-            onClick={() => onPreview(notebook)}
-            className="font-black text-slate-900 text-base leading-snug cursor-pointer hover:text-blue-600 transition line-clamp-2"
-          >
-            {notebook.title}
-          </h3>
-          {notebook.customAlertEnabled && notebook.customAlertBadge && (
-            <span className="inline-block px-2 py-0.5 rounded-lg bg-amber-100 text-amber-900 text-[11px] font-black">
-              {notebook.customAlertBadge}
-            </span>
-          )}
-        </div>
-
-        <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-          <div>
-            <div className="text-lg font-black text-slate-900">{notebook.price} ج.م</div>
-            {hasDiscount && (
-              <div className="text-xs text-slate-400 line-through font-bold">{notebook.oldPrice} ج.م</div>
-            )}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => onAddToCart(notebook)}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-black flex items-center gap-1.5 transition ${
-              isInCart
-                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                : 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm'
-            }`}
-          >
-            {isInCart ? (
-              <>
-                <Check className="w-4 h-4" />
-                <span>في السلة</span>
-              </>
-            ) : (
-              <>
-                <ShoppingCart className="w-4 h-4" />
-                <span>أضف للسلة</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ==========================================
-// 6. نافذة سلة الطلبات وإتمام الطلب
-// ==========================================
-function OrderCheckoutModal({ isOpen, onClose, cart, settings, coupons, onRemoveFromCart, onClearCart }) {
-  const [couponInput, setCouponInput] = useState('');
-  const [appliedCoupon, setAppliedCoupon] = useState(null);
-  const [couponError, setCouponError] = useState('');
-  const [expandedBundles, setExpandedBundles] = useState({});
-  const [formData, setFormData] = useState({});
-  const [logoPreview, setLogoPreview] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [completedOrder, setCompletedOrder] = useState(null);
-  const [copiedCode, setCopiedCode] = useState(false);
-
-  if (!isOpen) return null;
-
-  const activeFields = [...(settings.customerFields || DEFAULT_CUSTOMER_FIELDS)]
-    .filter((f) => f.visible !== false)
-    .sort((a, b) => (a.order || 0) - (b.order || 0));
-
-  const subtotal = cart.reduce((sum, item) => sum + (Number(item.price) || 0), 0);
-
-  const couponDiscount = useMemo(() => {
-    if (!appliedCoupon || subtotal <= 0) return 0;
-    if (appliedCoupon.type === 'fixed') {
-      return Math.min(subtotal, Number(appliedCoupon.value) || 0);
-    }
-    return Math.round((subtotal * (Number(appliedCoupon.value) || 0)) / 100);
-  }, [appliedCoupon, subtotal]);
-
-  const finalTotal = Math.max(0, subtotal - couponDiscount);
-
-  const handleApplyCoupon = () => {
-    setCouponError('');
-    const code = couponInput.trim().toUpperCase();
-    if (!code) return;
-    const found = coupons.find((c) => (c.code || '').toUpperCase() === code && c.active !== false);
-    if (!found) {
-      setCouponError('كود الكوبون غير صحيح أو غير مفعل');
-      setAppliedCoupon(null);
-      return;
-    }
-    if (found.singleUse && found.used) {
-      setCouponError('تم استخدام هذا الكوبون مسبقًا');
-      setAppliedCoupon(null);
-      return;
-    }
-    if (found.expiresAt) {
-      const expTime = new Date(found.expiresAt).getTime();
-      if (!Number.isNaN(expTime) && Date.now() > expTime) {
-        setCouponError('عذرًا، انتهت مدة صلاحية هذا الكوبون');
-        setAppliedCoupon(null);
-        return;
-      }
-    }
-    setAppliedCoupon(found);
-  };
-
-  const handleRemoveCoupon = () => {
-    setAppliedCoupon(null);
-    setCouponInput('');
-    setCouponError('');
-  };
-
-  const handleLogoUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const compressed = await compressImage(file, 500, 0.8);
-      setLogoPreview(compressed);
-    } catch {
-      // تجاهل في حال فشل الضغط
-    }
-  };
-
-  const handleSubmitOrder = async (e) => {
-    e.preventDefault();
-    if (cart.length === 0 || submitting) return;
-    setSubmitting(true);
-    try {
-      const orderNumber = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
-      let nextOrderCouponCode = '';
-      let nextOrderCouponExpiresAt = '';
-
-      if (settings.nextOrderRewardEnabled) {
-        const validDays = Number(settings.nextOrderRewardValidDays) || 0;
-        if (validDays > 0) {
-          nextOrderCouponExpiresAt = new Date(Date.now() + validDays * 24 * 60 * 60 * 1000).toISOString();
-        }
-        if (settings.nextOrderRewardMode === 'custom' && settings.nextOrderRewardCustomCode?.trim()) {
-          nextOrderCouponCode = settings.nextOrderRewardCustomCode.trim().toUpperCase();
-        } else {
-          nextOrderCouponCode = generateUniqueCouponCode('VIP');
-          await addDoc(publicCol('coupons'), {
-            code: nextOrderCouponCode,
-            type: settings.nextOrderRewardType || 'percent',
-            value: Number(settings.nextOrderRewardValue) || 15,
-            active: true,
-            singleUse: true,
-            used: false,
-            expiresAt: nextOrderCouponExpiresAt || null,
-            sourceOrder: orderNumber,
-            createdAt: serverTimestamp()
-          });
-        }
-      }
-
-      if (appliedCoupon && appliedCoupon.singleUse && appliedCoupon.id) {
-        await updateDoc(publicDoc('coupons', appliedCoupon.id), { used: true });
-      }
-
-      const orderItems = cart.map((item) => ({
-        id: item.id,
-        title: item.title,
-        price: Number(item.price) || 0,
-        isBundle: Boolean(item.isBundle),
-        bundleItems: item.bundleItems || []
-      }));
 
       const orderPayload = {
-        orderNumber,
-        items: orderItems,
+        orderCode,
+        items: cart.map((item) => ({
+          id: item.id,
+          title: item.title,
+          gradeName: item.gradeName || '',
+          price: Number(item.price) || 0,
+          isBundle: Boolean(item.isBundle),
+          bundleItems: item.bundleItems || []
+        })),
         subtotal,
-        couponCode: appliedCoupon ? appliedCoupon.code : '',
-        discount: couponDiscount,
+        couponCode: appliedCoupon?.code || '',
+        couponDiscount,
         total: finalTotal,
-        customerData: formData,
-        hasLogo: Boolean(logoPreview),
-        nextOrderCouponCode,
-        nextOrderCouponExpiresAt,
+        customerData: formValues,
+        teacherName: formValues.teacherName || 'معلم',
+        whatsapp: formValues.whatsapp || '',
         status: 'تم الاستلام',
-        createdAt: serverTimestamp()
+        rewardCoupon: generatedRewardCoupon,
+        createdAt: new Date().toISOString()
       };
 
-      await addDoc(publicCol('orders'), orderPayload);
+      try {
+        await addDoc(publicCol('orders'), orderPayload);
+      } catch {
+        // تجاهل في وضع المعاينة
+      }
 
-      // تجهيز رسالة واتساب منسقة
-      const itemsText = orderItems
-        .map((it, idx) =>
-          it.isBundle
-            ? `${idx + 1}. [باقة] ${it.title} (${it.price} ج.م)\n   المحتويات: ${it.bundleItems.map((b) => b.title).join(' + ')}`
-            : `${idx + 1}. ${it.title} (${it.price} ج.م)`
-        )
-        .join('\n');
-
-      const customerLines = activeFields
-        .filter((f) => formData[f.id])
-        .map((f) => `• ${f.label}: ${formData[f.id]}`)
-        .join('\n');
-
-      const waMsg = encodeURIComponent(
-        `مرحبًا ${settings.siteName}، أرغب في تأكيد طلبي:\n` +
-          `رقم الطلب: ${orderNumber}\n\n` +
-          `📚 المذكرات المطلوبة:\n${itemsText}\n\n` +
-          `💰 الإجمالي النهائي: ${finalTotal} ج.م` +
-          (appliedCoupon ? ` (بعد خصم كوبون ${appliedCoupon.code})` : '') +
-          `\n\n👤 بيانات التخصيص:\n${customerLines}` +
-          (logoPreview ? `\n🖼️ تم إرفاق شعار المعلم (سأرسله هنا في المحادثة أيضًا)` : '')
-      );
-
-      const cleanPhone = (settings.whatsappNumber || '201000000000').replace(/\D/g, '');
-      const waUrl = `https://wa.me/${cleanPhone}?text=${waMsg}`;
-
-      setCompletedOrder({ ...orderPayload, waUrl });
-      onClearCart();
+      setCompletedOrder(orderPayload);
+      setCart([]);
       setAppliedCoupon(null);
       setCouponInput('');
-    } catch (err) {
-      console.error(err);
     } finally {
       setSubmitting(false);
     }
   };
 
+  const buildWhatsappUrl = (order) => {
+    const cleanPhone = (settings.whatsappNumber || '201000000000').replace(/\D/g, '');
+    const itemsLines = order.items
+      .map((it, idx) =>
+        it.isBundle
+          ? `${idx + 1}. [باقة] ${it.title} (${it.price} ج.م)`
+          : `${idx + 1}. ${it.title} - ${it.gradeName} (${it.price} ج.م)`
+      )
+      .join('\n');
+
+    const customerLines = (settings.customerFields || DEFAULT_CUSTOMER_FIELDS)
+      .filter((f) => f.enabled !== false && order.customerData?.[f.id])
+      .map((f) => `• ${f.label}: ${order.customerData[f.id]}`)
+      .join('\n');
+
+    const text = `السلام عليكم، أرغب في تأكيد طلبي من *${settings.siteName}*:\n\nرقم الطلب: *${order.orderCode}*\n\n*المطلوب:*\n${itemsLines}\n\nالإجمالي النهائي: *${order.total} ج.م*${
+      order.couponCode ? ` (بعد كوبون ${order.couponCode})` : ''
+    }\n\n*بيانات التخصيص:*\n${customerLines}`;
+
+    return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
+  };
+
+  const activeFields = (settings.customerFields || DEFAULT_CUSTOMER_FIELDS)
+    .filter((f) => f.enabled !== false)
+    .sort((a, b) => (a.order || 0) - (b.order || 0));
+
   return (
     <div
-      dir="rtl"
       className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
-      onClick={onClose}
+      onClick={() => {
+        setCompletedOrder(null);
+        onClose();
+      }}
     >
       <div
-        className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col"
+        className="bg-white rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl border border-slate-200 my-auto max-h-[92vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50 shrink-0">
           <div className="flex items-center gap-2.5">
-            <ShoppingCart className="w-5 h-5 text-blue-400" />
-            <h3 className="text-lg font-black">سلة الطلبات وإتمام التخصيص</h3>
+            <span className="p-2 rounded-xl bg-blue-600 text-white">
+              <ShoppingCart className="w-5 h-5" />
+            </span>
+            <div>
+              <h3 className="font-black text-slate-900 text-base">
+                {completedOrder ? 'تم تسجيل طلبك بنجاح!' : `سلة الطلبات (${cart.length})`}
+              </h3>
+              <p className="text-xs text-slate-500 font-bold">
+                {completedOrder ? 'احتفظ برقم الطلب لمتابعة حالة التجهيز' : 'راجع المذكرات وأكمل بيانات التخصيص'}
+              </p>
+            </div>
           </div>
           <button
+            type="button"
             onClick={() => {
               setCompletedOrder(null);
               onClose();
             }}
-            className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center"
+            className="p-2 rounded-xl bg-white hover:bg-slate-100 text-slate-600 border border-slate-200"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-5 overflow-y-auto space-y-5 flex-1">
+        <div className="p-5 overflow-y-auto space-y-5">
           {completedOrder ? (
-            <div className="text-center space-y-5 py-4">
+            <div className="space-y-4 text-center">
               <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
-                <CheckCircle2 className="w-10 h-10" />
+                <CheckCircle2 className="w-9 h-9" />
               </div>
               <div className="space-y-1">
-                <h4 className="text-2xl font-black text-slate-900">تم تسجيل طلبك بنجاح!</h4>
-                <p className="text-sm text-slate-600">
-                  احتفظ برقم الطلب لمتابعة حالة التجهيز في أي وقت:
+                <h4 className="text-xl font-black text-slate-900">شكرًا لك يا {completedOrder.teacherName}!</h4>
+                <p className="text-xs sm:text-sm text-slate-600">
+                  تم حفظ طلبك برقم المتابعة التالي، اضغط على زر واتساب لإرسال التفاصيل والبدء في التجهيز فورًا:
                 </p>
-                <div className="inline-block px-5 py-2 rounded-2xl bg-slate-100 border border-slate-300 font-black text-lg text-blue-700 tracking-wider mt-1">
-                  {completedOrder.orderNumber}
-                </div>
               </div>
 
-              {completedOrder.nextOrderCouponCode && (
-                <div className="bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-300 rounded-3xl p-4 space-y-2 max-w-md mx-auto">
-                  <div className="flex items-center justify-center gap-1.5 text-amber-900 font-black text-sm">
+              <div className="p-3.5 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center gap-3">
+                <span className="font-black text-lg text-slate-900 tracking-wider">{completedOrder.orderCode}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(completedOrder.orderCode);
+                    setCopiedOrderId(true);
+                    setTimeout(() => setCopiedOrderId(false), 2000);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-white border text-xs font-black flex items-center gap-1"
+                >
+                  {copiedOrderId ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedOrderId ? 'تم النسخ' : 'نسخ الرقم'}</span>
+                </button>
+              </div>
+
+              {completedOrder.rewardCoupon && (
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 text-right space-y-2">
+                  <div className="flex items-center gap-2 text-amber-800 font-black text-sm">
                     <Gift className="w-5 h-5 text-amber-600" />
-                    <span>{settings.nextOrderRewardTitle}</span>
+                    <span>{settings.nextOrderRewardTitle || 'هدية خاصة لطلبك القادم!'}</span>
                   </div>
-                  <p className="text-xs text-slate-700">{settings.nextOrderRewardMessage}</p>
-                  {completedOrder.nextOrderCouponExpiresAt && (
-                    <p className="text-[11px] font-black text-amber-800">
-                      ⏳ صالح للاستخدام حتى:{' '}
-                      {new Date(completedOrder.nextOrderCouponExpiresAt).toLocaleDateString('ar-EG', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric'
-                      })}
-                    </p>
-                  )}
-                  <div className="flex items-center justify-center gap-2 pt-1">
-                    <span className="px-4 py-2 rounded-xl bg-white border border-amber-400 font-black text-base text-slate-900 tracking-wider">
-                      {completedOrder.nextOrderCouponCode}
-                    </span>
+                  <p className="text-xs text-amber-900/80 font-bold">
+                    {settings.nextOrderRewardMessage || 'استخدم هذا الكوبون في طلبك القادم:'}
+                  </p>
+                  <div className="flex items-center justify-between gap-2 bg-white p-2.5 rounded-xl border border-amber-200">
+                    <div>
+                      <span className="font-black text-base text-blue-700">{completedOrder.rewardCoupon.code}</span>
+                      <span className="block text-[11px] font-bold text-slate-500">
+                        خصم {completedOrder.rewardCoupon.value}
+                        {completedOrder.rewardCoupon.type === 'percent' ? '%' : ' ج.م'}
+                        {completedOrder.rewardCoupon.expiresAt
+                          ? ` • صالح حتى ${formatExpiryArabic(completedOrder.rewardCoupon.expiresAt)}`
+                          : ''}
+                      </span>
+                    </div>
                     <button
                       type="button"
                       onClick={() => {
-                        navigator.clipboard?.writeText(completedOrder.nextOrderCouponCode);
-                        setCopiedCode(true);
-                        setTimeout(() => setCopiedCode(false), 2000);
+                        navigator.clipboard?.writeText(completedOrder.rewardCoupon.code);
+                        setCopiedRewardCode(true);
+                        setTimeout(() => setCopiedRewardCode(false), 2000);
                       }}
-                      className="px-3.5 py-2 rounded-xl bg-amber-600 text-white font-black text-xs flex items-center gap-1"
+                      className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black flex items-center gap-1"
                     >
-                      {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                      <span>{copiedCode ? 'تم النسخ' : 'انسخ الكوبون'}</span>
+                      {copiedRewardCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedRewardCode ? 'تم النسخ' : 'انسخ الكوبون'}</span>
                     </button>
                   </div>
                 </div>
               )}
 
               <a
-                href={completedOrder.waUrl}
+                href={buildWhatsappUrl(completedOrder)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-8 py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-base shadow-lg transition"
+                className="w-full py-4 px-5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg"
               >
-                <Phone className="w-5 h-5" />
+                <MessageCircle className="w-5 h-5" />
                 <span>إرسال تفاصيل الطلب على واتساب الآن</span>
               </a>
             </div>
           ) : cart.length === 0 ? (
-            <div className="text-center py-12 space-y-3">
+            <div className="py-12 text-center space-y-3">
               <ShoppingCart className="w-12 h-12 text-slate-300 mx-auto" />
-              <p className="text-base font-black text-slate-700">سلة الطلبات فارغة حاليًا</p>
-              <p className="text-xs text-slate-500">تصفح المذكرات أو باقات التوفير وأضف ما يناسبك للسلة.</p>
+              <p className="font-black text-slate-700">سلة الطلبات فارغة حاليًا</p>
+              <p className="text-xs text-slate-500">تصفح المذكرات أو باقات التوفير وأضف ما يناسبك للسلة</p>
             </div>
           ) : (
             <form onSubmit={handleSubmitOrder} className="space-y-5">
-              {/* قائمة عناصر السلة */}
+              {/* قائمة العناصر المختارة */}
               <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-black text-slate-900">العناصر المختارة ({cart.length}):</span>
-                  <button
-                    type="button"
-                    onClick={onClearCart}
-                    className="text-xs font-bold text-red-600 hover:underline"
-                  >
-                    إفراغ السلة
-                  </button>
-                </div>
-
-                {cart.map((item) => {
-                  const isExpanded = Boolean(expandedBundles[item.id]);
-                  return (
+                <h4 className="text-xs font-black text-slate-700">المذكرات والباقات المختارة ({cart.length}):</h4>
+                <div className="space-y-2 max-h-60 overflow-y-auto pl-1">
+                  {cart.map((item) => (
                     <div
                       key={item.id}
-                      className={`p-3.5 rounded-2xl border ${
+                      className={`p-3 rounded-2xl border ${
                         item.isBundle ? 'bg-indigo-50/60 border-indigo-200' : 'bg-slate-50 border-slate-200'
                       }`}
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             {item.isBundle && (
-                              <span className="px-2 py-0.5 rounded-full bg-indigo-600 text-white text-[10px] font-black">
+                              <span className="px-2 py-0.5 rounded-md bg-indigo-600 text-white text-[10px] font-black">
                                 باقة مجمعة
                               </span>
                             )}
-                            <span className="font-black text-sm text-slate-900 truncate">{item.title}</span>
+                            <p className="font-black text-slate-900 text-xs sm:text-sm truncate">{item.title}</p>
                           </div>
-                          <div className="text-xs font-bold text-blue-700 mt-0.5">
-                            {item.price} ج.م
-                            {item.isBundle && Array.isArray(item.bundleItems) && (
+                          <div className="flex items-center gap-2 mt-0.5 text-xs font-bold text-slate-500">
+                            {item.gradeName && <span>{item.gradeName} •</span>}
+                            <span className="text-blue-700 font-black">{item.price} ج.م</span>
+                            {item.isBundle && Array.isArray(item.bundleItems) && item.bundleItems.length > 0 && (
                               <button
                                 type="button"
                                 onClick={() =>
                                   setExpandedBundles((p) => ({ ...p, [item.id]: !p[item.id] }))
                                 }
-                                className="mr-2 text-indigo-700 underline font-bold"
+                                className="text-indigo-700 underline text-[11px] font-black"
                               >
-                                ({item.bundleItems.length} مذكرات - {isExpanded ? 'إخفاء' : 'عرض المحتويات'})
+                                {expandedBundles[item.id]
+                                  ? 'إخفاء المحتويات'
+                                  : `عرض المحتويات (${item.bundleItems.length} مذكرات)`}
                               </button>
                             )}
                           </div>
                         </div>
-
                         <button
                           type="button"
-                          onClick={() => onRemoveFromCart(item.id)}
-                          className="p-2 rounded-xl text-red-600 hover:bg-red-100 transition shrink-0"
+                          onClick={() => setCart((prev) => prev.filter((x) => x.id !== item.id))}
+                          className="p-2 rounded-xl text-rose-600 hover:bg-rose-50 shrink-0"
                           title="حذف من السلة"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
 
-                      {item.isBundle && isExpanded && Array.isArray(item.bundleItems) && (
-                        <ul className="mt-2.5 pt-2.5 border-t border-indigo-200/70 space-y-1 text-xs text-slate-700">
-                          {item.bundleItems.map((b, i) => (
-                            <li key={i} className="flex items-center gap-1.5">
-                              <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                              <span>{b.title}</span>
-                            </li>
+                      {item.isBundle && expandedBundles[item.id] && Array.isArray(item.bundleItems) && (
+                        <ul className="mt-2 pt-2 border-t border-indigo-200/70 space-y-1 text-[11px] font-bold text-slate-700 pr-3 list-disc">
+                          {item.bundleItems.map((sub, i) => (
+                            <li key={i}>{sub.title}</li>
                           ))}
                         </ul>
                       )}
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
 
-              {/* تطبيق كوبون الخصم */}
-              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2.5">
-                <label className="text-xs font-black text-slate-800 block">هل لديك كوبون خصم؟</label>
-                {appliedCoupon ? (
-                  <div className="flex items-center justify-between bg-emerald-50 border border-emerald-300 rounded-xl px-3.5 py-2.5">
-                    <div className="flex items-center gap-2 text-emerald-800 text-xs font-black">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      <span>
-                        تم تطبيق الكوبون ({appliedCoupon.code}) — خصم {appliedCoupon.value}
-                        {appliedCoupon.type === 'fixed' ? ' ج.م' : '%'}
-                      </span>
-                    </div>
+              {/* صندوق كوبون الخصم */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                <label className="block text-xs font-black text-slate-800">هل لديك كوبون خصم؟</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={couponInput}
+                    onChange={(e) => setCouponInput(e.target.value)}
+                    placeholder="أدخل كود الكوبون هنا..."
+                    disabled={Boolean(appliedCoupon)}
+                    className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-bold uppercase disabled:bg-slate-100"
+                  />
+                  {appliedCoupon ? (
                     <button
                       type="button"
                       onClick={handleRemoveCoupon}
-                      className="px-2.5 py-1 rounded-lg bg-red-100 text-red-700 text-xs font-black hover:bg-red-200"
+                      className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black flex items-center gap-1"
                     >
-                      حذف الكوبون ×
+                      <X className="w-3.5 h-3.5" />
+                      <span>حذف الكوبون</span>
                     </button>
-                  </div>
-                ) : (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="أدخل كود الكوبون هنا..."
-                      value={couponInput}
-                      onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
-                      className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-black uppercase bg-white"
-                    />
+                  ) : (
                     <button
                       type="button"
                       onClick={handleApplyCoupon}
-                      className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-sm"
+                      className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black"
                     >
                       تطبيق
                     </button>
-                  </div>
+                  )}
+                </div>
+                {couponError && <p className="text-xs font-bold text-rose-600">{couponError}</p>}
+                {appliedCoupon && (
+                  <p className="text-xs font-black text-emerald-700">
+                    تم تطبيق الكوبون ({appliedCoupon.code}) بنجاح!
+                  </p>
                 )}
-                {couponError && <p className="text-xs font-bold text-red-600">{couponError}</p>}
               </div>
 
               {/* ملخص الحساب */}
-              <div className="bg-blue-50/80 rounded-2xl p-4 border border-blue-200 space-y-1.5 text-sm">
-                <div className="flex justify-between text-slate-600 font-bold">
+              <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-1.5 text-xs font-bold">
+                <div className="flex items-center justify-between text-slate-600">
                   <span>المجموع الفرعي:</span>
                   <span>{subtotal} ج.م</span>
                 </div>
-                {couponDiscount > 0 && (
-                  <div className="flex justify-between items-center text-emerald-700 font-black">
+                {appliedCoupon && couponDiscount > 0 && (
+                  <div className="flex items-center justify-between text-emerald-700">
                     <div className="flex items-center gap-2">
-                      <span>خصم الكوبون ({appliedCoupon?.code}):</span>
+                      <span>خصم الكوبون ({appliedCoupon.code}):</span>
                       <button
                         type="button"
                         onClick={handleRemoveCoupon}
-                        className="text-[11px] text-red-600 underline"
+                        className="text-[11px] text-rose-600 underline font-black"
                       >
                         إلغاء
                       </button>
@@ -5446,82 +1148,49 @@ function OrderCheckoutModal({ isOpen, onClose, cart, settings, coupons, onRemove
                     <span>- {couponDiscount} ج.م</span>
                   </div>
                 )}
-                <div className="pt-2 border-t border-blue-200 flex justify-between items-center text-base font-black text-blue-950">
+                <div className="pt-2 border-t border-blue-200 flex items-center justify-between text-base font-black text-blue-900">
                   <span>الإجمالي النهائي المطلوب:</span>
-                  <span className="text-xl text-blue-700">{finalTotal} ج.م</span>
+                  <span>{finalTotal} ج.م</span>
                 </div>
               </div>
 
-              {/* حقول بيانات العميل */}
+              {/* حقول بيانات التخصيص */}
               <div className="space-y-3">
                 <h4 className="text-sm font-black text-slate-900">بيانات التخصيص والتواصل:</h4>
-                {activeFields.map((field) => (
-                  <div key={field.id} className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700 block">
-                      {field.label} {field.required && <span className="text-red-600">*</span>}
+                {activeFields.map((fld) => (
+                  <div key={fld.id} className="space-y-1">
+                    <label className="block text-xs font-black text-slate-700">
+                      {fld.label} {fld.required && <span className="text-rose-600">*</span>}
                     </label>
-                    {field.type === 'textarea' ? (
+                    {fld.type === 'textarea' ? (
                       <textarea
                         rows={2}
-                        required={field.required}
-                        placeholder={field.placeholder}
-                        value={formData[field.id] || ''}
-                        onChange={(e) => setFormData((p) => ({ ...p, [field.id]: e.target.value }))}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
+                        required={fld.required}
+                        placeholder={fld.placeholder}
+                        value={formValues[fld.id] || ''}
+                        onChange={(e) => setFormValues((p) => ({ ...p, [fld.id]: e.target.value }))}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
                       />
                     ) : (
                       <input
-                        type={field.type || 'text'}
-                        required={field.required}
-                        placeholder={field.placeholder}
-                        value={formData[field.id] || ''}
-                        onChange={(e) => setFormData((p) => ({ ...p, [field.id]: e.target.value }))}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
+                        type={fld.type || 'text'}
+                        required={fld.required}
+                        placeholder={fld.placeholder}
+                        value={formValues[fld.id] || ''}
+                        onChange={(e) => setFormValues((p) => ({ ...p, [fld.id]: e.target.value }))}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
                       />
                     )}
                   </div>
                 ))}
-
-                {/* رفع شعار المعلم */}
-                <div className="space-y-1.5 pt-1">
-                  <label className="text-xs font-bold text-slate-700 block">
-                    شعار المعلم (Logo) لإضافته للغلاف والصفحات (اختياري)
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <label className="px-4 py-2.5 rounded-xl border border-dashed border-slate-400 hover:border-blue-600 text-xs font-bold text-slate-700 cursor-pointer flex items-center gap-2">
-                      <Upload className="w-4 h-4 text-blue-600" />
-                      <span>اختر صورة الشعار</span>
-                      <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
-                    </label>
-                    {logoPreview && (
-                      <div className="relative w-12 h-12 rounded-xl overflow-hidden border border-slate-200">
-                        <img src={logoPreview} alt="Logo" className="w-full h-full object-cover" />
-                        <button
-                          type="button"
-                          onClick={() => setLogoPreview('')}
-                          className="absolute top-0 right-0 bg-red-600 text-white p-0.5 rounded-bl-lg"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
               </div>
 
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full py-4 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-base shadow-lg transition flex items-center justify-center gap-2"
+                className="w-full py-4 px-5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-lg disabled:opacity-60"
               >
-                {submitting ? (
-                  <span>جاري تسجيل الطلب...</span>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-5 h-5" />
-                    <span>تأكيد الطلب والمتابعة إلى واتساب ({finalTotal} ج.م)</span>
-                  </>
-                )}
+                {submitting ? 'جاري تسجيل الطلب...' : 'تأكيد الطلب والمتابعة إلى واتساب'}
               </button>
             </form>
           )}
@@ -5532,527 +1201,79 @@ function OrderCheckoutModal({ isOpen, onClose, cart, settings, coupons, onRemove
 }
 
 // ==========================================
-// 7. صفحة مكتبة المذكرات والتصفح الهرمي
-// ==========================================
-function CatalogPage({
-  settings,
-  notebooks,
-  selectedCategoryId,
-  setSelectedCategoryId,
-  selectedStageId,
-  setSelectedStageId,
-  selectedGradeId,
-  setSelectedGradeId,
-  onPreview,
-  onAddToCart,
-  cartIds
-}) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedSubjectId, setSelectedSubjectId] = useState('all');
-
-  const categories = [...(settings.categories || DEFAULT_CATEGORIES)].sort((a, b) => (a.order || 0) - (b.order || 0));
-  const stages = [...(settings.stages || DEFAULT_STAGES)].sort((a, b) => (a.order || 0) - (b.order || 0));
-  const grades = [...(settings.grades || DEFAULT_GRADES)].sort((a, b) => (a.order || 0) - (b.order || 0));
-  const subjects = settings.subjects || DEFAULT_SUBJECTS;
-
-  const filteredNotebooks = useMemo(() => {
-    return notebooks.filter((nb) => {
-      if (selectedCategoryId && nb.categoryId !== selectedCategoryId) return false;
-      if (selectedStageId) {
-        const grade = grades.find((g) => g.id === nb.gradeId);
-        if (!grade || grade.stageId !== selectedStageId) return false;
-      }
-      if (selectedGradeId && nb.gradeId !== selectedGradeId) return false;
-      if (selectedSubjectId !== 'all' && nb.subjectId !== selectedSubjectId) return false;
-      if (searchTerm.trim()) {
-        const q = searchTerm.trim().toLowerCase();
-        if (!(nb.title || '').toLowerCase().includes(q) && !(nb.description || '').toLowerCase().includes(q)) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }, [notebooks, selectedCategoryId, selectedStageId, selectedGradeId, selectedSubjectId, searchTerm, grades]);
-
-  const activeCategory = categories.find((c) => c.id === selectedCategoryId);
-  const activeStage = stages.find((s) => s.id === selectedStageId);
-  const activeGrade = grades.find((g) => g.id === selectedGradeId);
-
-  return (
-    <div className="max-w-7xl mx-auto px-4 py-6 sm:py-8 space-y-6">
-      {/* شريط المسار والبحث */}
-      <div className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200 shadow-sm space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5 text-xs sm:text-sm font-black flex-wrap">
-            <button
-              onClick={() => {
-                setSelectedCategoryId('');
-                setSelectedStageId('');
-                setSelectedGradeId('');
-              }}
-              className="text-blue-600 hover:underline"
-            >
-              جميع الأقسام
-            </button>
-            {activeCategory && (
-              <>
-                <ChevronLeft className="w-4 h-4 text-slate-400" />
-                <button
-                  onClick={() => {
-                    setSelectedStageId('');
-                    setSelectedGradeId('');
-                  }}
-                  className="text-blue-600 hover:underline"
-                >
-                  {activeCategory.name}
-                </button>
-              </>
-            )}
-            {activeStage && (
-              <>
-                <ChevronLeft className="w-4 h-4 text-slate-400" />
-                <button
-                  onClick={() => setSelectedGradeId('')}
-                  className="text-blue-600 hover:underline"
-                >
-                  {activeStage.name}
-                </button>
-              </>
-            )}
-            {activeGrade && (
-              <>
-                <ChevronLeft className="w-4 h-4 text-slate-400" />
-                <span className="text-slate-900">{activeGrade.name}</span>
-              </>
-            )}
-          </div>
-
-          <div className="relative w-full sm:w-72">
-            <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="ابحث باسم المذكرة..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pr-10 pl-4 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm font-bold"
-            />
-          </div>
-        </div>
-
-        {/* أزرار تصفية سريعة بالمراحل والصفوف والمواد */}
-        <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
-          <button
-            onClick={() => {
-              setSelectedStageId('');
-              setSelectedGradeId('');
-            }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-black transition ${
-              !selectedStageId ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            كل المراحل
-          </button>
-          {stages.map((st) => (
-            <button
-              key={st.id}
-              onClick={() => {
-                setSelectedStageId(st.id);
-                setSelectedGradeId('');
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-black transition ${
-                selectedStageId === st.id ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              {st.name}
-            </button>
-          ))}
-        </div>
-
-        {selectedStageId && (
-          <div className="flex flex-wrap gap-2">
-            {grades
-              .filter((g) => g.stageId === selectedStageId)
-              .map((gr) => (
-                <button
-                  key={gr.id}
-                  onClick={() => setSelectedGradeId(selectedGradeId === gr.id ? '' : gr.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
-                    selectedGradeId === gr.id
-                      ? 'bg-indigo-600 text-white border-indigo-600'
-                      : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
-                  }`}
-                >
-                  {gr.name}
-                </button>
-              ))}
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-1.5">
-          <button
-            onClick={() => setSelectedSubjectId('all')}
-            className={`px-3 py-1 rounded-lg text-[11px] font-bold ${
-              selectedSubjectId === 'all' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'
-            }`}
-          >
-            كل المواد
-          </button>
-          {subjects.map((sub) => (
-            <button
-              key={sub.id}
-              onClick={() => setSelectedSubjectId(sub.id)}
-              className={`px-3 py-1 rounded-lg text-[11px] font-bold ${
-                selectedSubjectId === sub.id ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'
-              }`}
-            >
-              {sub.name}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* عرض المذكرات */}
-      {filteredNotebooks.length === 0 ? (
-        <div className="bg-white rounded-3xl p-12 border border-slate-200 text-center space-y-3">
-          <FolderOpen className="w-12 h-12 text-slate-300 mx-auto" />
-          <h3 className="text-lg font-black text-slate-800">لا توجد مذكرات مطابقة لهذا الاختيار حاليًا</h3>
-          <button
-            onClick={() => {
-              setSelectedCategoryId('');
-              setSelectedStageId('');
-              setSelectedGradeId('');
-              setSelectedSubjectId('all');
-              setSearchTerm('');
-            }}
-            className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-black"
-          >
-            عرض جميع المذكرات
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-          {filteredNotebooks.map((nb) => (
-            <NotebookCard
-              key={nb.id}
-              notebook={nb}
-              settings={settings}
-              onPreview={onPreview}
-              onAddToCart={onAddToCart}
-              isInCart={cartIds.has(nb.id)}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ==========================================
-// 8. صفحة العروض وباقات التوفير
-// ==========================================
-function OffersAndBundlesPage({ settings, notebooks, coupons, onAddBundleToCart, onPreview }) {
-  const [copiedCode, setCopiedCode] = useState('');
-
-  const activeCoupons = useMemo(
-    () =>
-      coupons.filter((c) => {
-        if (c.active === false) return false;
-        if (c.singleUse && c.used) return false;
-        if (c.expiresAt) {
-          const exp = new Date(c.expiresAt).getTime();
-          if (!Number.isNaN(exp) && Date.now() > exp) return false;
-        }
-        return true;
-      }),
-    [coupons]
-  );
-
-  const bundles = settings.bundles || [];
-
-  return (
-    <div className="max-w-7xl mx-auto px-4 py-6 sm:py-10 space-y-10">
-      {/* قسم باقات التوفير */}
-      <section className="space-y-5">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow">
-            <Layers className="w-6 h-6" />
-          </div>
-          <div>
-            <h2 className="text-xl sm:text-2xl font-black text-slate-900">باقات المذكرات المجمعة بخصم خاص</h2>
-            <p className="text-xs sm:text-sm text-slate-600">اطلب الباقة كاملة بسعر مخفّض واضغط على أي مذكرة لمعاينة تفاصيلها</p>
-          </div>
-        </div>
-
-        {bundles.length === 0 ? (
-          <div className="bg-white rounded-3xl p-10 border border-slate-200 text-center text-slate-500 font-bold text-sm">
-            لا توجد باقات مجمعة مضافة حاليًا.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {bundles.map((bundle) => {
-              const includedNotebooks = (bundle.notebookIds || [])
-                .map((id) => notebooks.find((n) => n.id === id))
-                .filter(Boolean);
-
-              const originalSum =
-                Number(bundle.originalPrice) ||
-                includedNotebooks.reduce((s, n) => s + (Number(n.price) || 0), 0);
-
-              let finalPrice = originalSum;
-              if (bundle.discountType === 'custom_before_after' && Number(bundle.finalPrice) > 0) {
-                finalPrice = Number(bundle.finalPrice);
-              } else if (bundle.discountType === 'fixed') {
-                finalPrice = Math.max(0, originalSum - (Number(bundle.discountValue) || 0));
-              } else {
-                const pct = Number(bundle.discountValue) || 0;
-                finalPrice = Math.round(originalSum * (1 - pct / 100));
-              }
-
-              const savings = Math.max(0, originalSum - finalPrice);
-              const pctSaved = originalSum > 0 ? Math.round((savings / originalSum) * 100) : 0;
-
-              return (
-                <div
-                  key={bundle.id}
-                  className="bg-white rounded-3xl border border-slate-200 shadow-md overflow-hidden flex flex-col justify-between"
-                >
-                  <div>
-                    {/* رأس الباقة الفخم */}
-                    <div className="bg-gradient-to-l from-slate-950 via-blue-950 to-slate-900 text-white p-5 sm:p-6 flex items-start justify-between gap-4">
-                      <div className="space-y-1.5 text-right">
-                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/10 text-amber-300 text-xs font-black">
-                          <Sparkles className="w-3.5 h-3.5" />
-                          <span>باقة توفير شاملة • {includedNotebooks.length} مذكرات</span>
-                        </span>
-                        <h3 className="text-xl sm:text-2xl font-black">{bundle.title}</h3>
-                        {bundle.description && (
-                          <p className="text-xs sm:text-sm text-slate-300">{bundle.description}</p>
-                        )}
-                      </div>
-
-                      {savings > 0 && (
-                        <div className="bg-amber-400 text-slate-950 px-3.5 py-2 rounded-2xl text-center shrink-0 shadow">
-                          <div className="text-xs sm:text-sm font-black">وفّر {savings} ج.م</div>
-                          <div className="text-[11px] font-bold">خصم {pctSaved}%</div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* قائمة المذكرات القابلة للمعاينة */}
-                    <div className="p-4 sm:p-5 space-y-2.5 max-h-72 overflow-y-auto">
-                      <div className="text-xs font-black text-slate-500">
-                        محتويات الباقة (اضغط على أي مذكرة لمعاينتها):
-                      </div>
-                      {includedNotebooks.map((nb) => {
-                        const gradeName = (settings.grades || []).find((g) => g.id === nb.gradeId)?.name || '';
-                        return (
-                          <div
-                            key={nb.id}
-                            onClick={() => onPreview(nb)}
-                            className="flex items-center justify-between gap-3 p-2.5 rounded-2xl bg-slate-50 hover:bg-blue-50 border border-slate-200/80 hover:border-blue-300 cursor-pointer transition"
-                          >
-                            <div className="flex items-center gap-3 min-w-0">
-                              <div className="w-11 h-11 rounded-xl bg-white border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
-                                {nb.coverImage ? (
-                                  <img src={nb.coverImage} alt="" className="w-full h-full object-cover" />
-                                ) : (
-                                  <BookOpen className="w-5 h-5 text-blue-600" />
-                                )}
-                              </div>
-                              <div className="min-w-0">
-                                <div className="text-xs sm:text-sm font-black text-slate-900 truncate">{nb.title}</div>
-                                <div className="text-[11px] text-slate-500 font-bold">{gradeName}</div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 shrink-0">
-                              <span className="text-xs font-black text-slate-700 bg-white px-2.5 py-1 rounded-xl border border-slate-200">
-                                {nb.price} ج.م
-                              </span>
-                              <span className="text-[11px] font-bold text-blue-600 flex items-center gap-0.5">
-                                <Eye className="w-3.5 h-3.5" />
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* شريط السعر وزر الإضافة للسلة */}
-                  <div className="px-5 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-4">
-                    <div>
-                      <span className="text-xs text-slate-500 font-bold block">سعر الباقة كاملة بعد الخصم:</span>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-2xl sm:text-3xl font-black text-blue-700">{finalPrice} ج.م</span>
-                        {originalSum > finalPrice && (
-                          <span className="text-sm text-slate-400 line-through font-bold">{originalSum} ج.م</span>
-                        )}
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onAddBundleToCart({
-                          id: `bundle_${bundle.id}`,
-                          title: bundle.title,
-                          price: finalPrice,
-                          isBundle: true,
-                          bundleItems: includedNotebooks.map((n) => ({ id: n.id, title: n.title }))
-                        })
-                      }
-                      className="px-5 py-3.5 rounded-2xl bg-gradient-to-l from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-xs sm:text-sm flex items-center gap-2 shadow-md transition"
-                    >
-                      <ShoppingCart className="w-4 h-4" />
-                      <span>أضف الباقة للسلة</span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      {/* قسم كوبونات الخصم المتاحة */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2.5">
-          <Tag className="w-6 h-6 text-amber-600" />
-          <h2 className="text-xl font-black text-slate-900">كوبونات الخصم المتاحة حاليًا</h2>
-        </div>
-
-        {activeCoupons.length === 0 ? (
-          <div className="bg-white rounded-3xl p-8 border border-slate-200 text-center text-slate-500 text-sm font-bold">
-            لا توجد كوبونات عامة متاحة حاليًا.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {activeCoupons.map((c) => (
-              <div
-                key={c.id}
-                className="bg-white rounded-2xl p-4 border-2 border-dashed border-amber-300 flex items-center justify-between gap-3"
-              >
-                <div>
-                  <div className="font-black text-lg text-slate-900 tracking-wider">{c.code}</div>
-                  <div className="text-xs font-bold text-emerald-600">
-                    خصم {c.value} {c.type === 'fixed' ? 'ج.م' : '%'}
-                  </div>
-                  {c.expiresAt && (
-                    <div className="text-[11px] font-bold text-amber-700 mt-0.5 flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      <span>ينتهي: {new Date(c.expiresAt).toLocaleDateString('ar-EG')}</span>
-                    </div>
-                  )}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard?.writeText(c.code);
-                    setCopiedCode(c.code);
-                    setTimeout(() => setCopiedCode(''), 2000);
-                  }}
-                  className="px-3.5 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-950 font-black text-xs flex items-center gap-1.5"
-                >
-                  {copiedCode === c.code ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                  <span>{copiedCode === c.code ? 'تم النسخ' : 'نسخ الكود'}</span>
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-    </div>
-  );
-}
-
-// ==========================================
-// 9. لوحة تحكم الإدارة الكاملة
+// 7. لوحة تحكم الإدارة الكاملة
 // ==========================================
 function AdminDashboard({
   settings,
   setSettings,
   notebooks,
+  samplesMap,
   coupons,
   orders,
   onLogout,
   showToast
 }) {
   const [activeTab, setActiveTab] = useState('notebooks');
-  const [localSettings, setLocalSettings] = useState(() => mergeAndNormalizeSettings(DEFAULT_SETTINGS, settings));
+  const [localSettings, setLocalSettings] = useState(settings);
   const [savingSettings, setSavingSettings] = useState(false);
+
+  // حالات إدارة المذكرات
+  const [editingNotebookId, setEditingNotebookId] = useState(null);
+  const [nbForm, setNbForm] = useState({
+    title: '',
+    categoryId: settings.categories?.[0]?.id || 'term1',
+    stageId: '',
+    gradeId: '',
+    gradeName: '',
+    subject: '',
+    price: '',
+    oldPrice: '',
+    pagesCount: '',
+    description: '',
+    driveUrl: '',
+    coverImage: '',
+    samplePages: [],
+    alertBadge: '',
+    alertText: '',
+    alertColor: 'amber',
+    comingSoon: false
+  });
+  const [savingNb, setSavingNb] = useState(false);
+  const [quickEdits, setQuickEdits] = useState({});
+
+  // حالات إدارة الأقسام والمراحل
+  const [newCatName, setNewCatName] = useState('');
+  const [selectedCatId, setSelectedCatId] = useState(settings.categories?.[0]?.id || '');
+  const [newStageName, setNewStageName] = useState('');
+  const [selectedStageId, setSelectedStageId] = useState('');
+  const [newGradeName, setNewGradeName] = useState('');
+
+  // حالات إدارة الكوبونات والباقات
+  const [couponForm, setCouponForm] = useState({
+    code: '',
+    type: 'percent',
+    value: 15,
+    expiresAt: '',
+    singleUse: false
+  });
+  const [bundleForm, setBundleForm] = useState({
+    title: '',
+    description: '',
+    price: '',
+    notebookIds: []
+  });
 
   useEffect(() => {
     setLocalSettings((prev) => mergeAndNormalizeSettings(prev, settings));
   }, [settings]);
 
-  // حالة نموذج المذكرة
-  const [editingNotebookId, setEditingNotebookId] = useState(null);
-  const [nbForm, setNbForm] = useState({
-    title: '',
-    categoryId: DEFAULT_CATEGORIES[0].id,
-    gradeId: DEFAULT_GRADES[0].id,
-    subjectId: DEFAULT_SUBJECTS[0].id,
-    price: 99,
-    oldPrice: '',
-    description: '',
-    driveUrl: '',
-    coverImage: '',
-    samplePages: [],
-    comingSoon: false,
-    customAlertEnabled: false,
-    customAlertBadge: 'تنبيه هام',
-    customAlertText: '',
-    customAlertColor: 'amber'
-  });
-  const [savingNb, setSavingNb] = useState(false);
-
-  // التعديل السريع الجماعي
-  const [bulkEdits, setBulkEdits] = useState({});
-  const [savingBulk, setSavingBulk] = useState(false);
-
-  // باقات التوفير والكوبونات
-  const [bundleForm, setBundleForm] = useState({
-    title: '',
-    description: '',
-    notebookIds: [],
-    discountType: 'custom_before_after',
-    discountValue: 20,
-    originalPrice: '',
-    finalPrice: ''
-  });
-  const [couponForm, setCouponForm] = useState({
-    code: '',
-    type: 'percent',
-    value: 15,
-    singleUse: false,
-    expiresAt: ''
-  });
-
-  // إدارة الأقسام والمراحل والصفوف والمواد
-  const [newCatName, setNewCatName] = useState('');
-  const [newStageName, setNewStageName] = useState('');
-  const [newGradeName, setNewGradeName] = useState('');
-  const [newGradeStageId, setNewGradeStageId] = useState(DEFAULT_STAGES[0].id);
-  const [newSubjectName, setNewSubjectName] = useState('');
-  const [newFieldLabel, setNewFieldLabel] = useState('');
-  const [newFieldType, setNewFieldType] = useState('text');
-
-  const selectedBundleSum = useMemo(() => {
-    return bundleForm.notebookIds.reduce((sum, id) => {
-      const nb = notebooks.find((n) => n.id === id);
-      return sum + (Number(nb?.price) || 0);
-    }, 0);
-  }, [bundleForm.notebookIds, notebooks]);
-
-  const handleSaveAllSettings = async (overrideSettings = null) => {
+  const handleSaveAllSettings = async (overrideObj = null) => {
     setSavingSettings(true);
     try {
-      const target = overrideSettings || localSettings;
-      const { logoUrl, heroBgImage, categoryImages, ...lightSettings } = target;
+      const target = mergeAndNormalizeSettings(settings, overrideObj || localSettings);
+      const { logoUrl, heroBgImage, categoryImages, ...lightMain } = target;
 
-      await setDoc(publicDoc('settings', 'main'), lightSettings, { merge: true });
+      await setDoc(publicDoc('settings', 'main'), lightMain, { merge: true });
       await setDoc(
         publicDoc('settings', 'media_assets'),
         {
@@ -6062,135 +1283,192 @@ function AdminDashboard({
         },
         { merge: true }
       );
-      await setDoc(publicDoc('settings', 'media_logo'), { logoUrl: logoUrl || '' }, { merge: true });
-      await setDoc(publicDoc('settings', 'media_hero'), { heroBgImage: heroBgImage || '' }, { merge: true });
-      await setDoc(publicDoc('settings', 'media_categories'), { categoryImages: categoryImages || {} }, { merge: true });
 
       setSettings(target);
       try {
-        localStorage.setItem(LOCAL_SETTINGS_BACKUP_KEY, JSON.stringify(target));
+        localStorage.setItem(
+          LOCAL_SETTINGS_KEY,
+          JSON.stringify({ ...lightMain, logoUrl: '', heroBgImage: '', categoryImages: {} })
+        );
       } catch {
-        try {
-          localStorage.setItem(LOCAL_SETTINGS_BACKUP_KEY, JSON.stringify(lightSettings));
-        } catch {
-          // تجاهل امتلاء التخزين المحلي
-        }
+        // تجاهل امتلاء التخزين المحلي
       }
-      showToast('تم حفظ جميع الإعدادات والصور وتحديثها للعملاء بنجاح!');
+      showToast('تم حفظ جميع الإعدادات في السحابة بنجاح!');
     } catch (err) {
-      console.error(err);
-      showToast('حدث خطأ أثناء الحفظ، تأكد من صلاحيات Firebase Rules', 'error');
+      showToast(`تعذر الحفظ في السحابة: ${err?.message || 'تحقق من صلاحيات Firestore'}`, 'error');
     } finally {
       setSavingSettings(false);
     }
   };
 
+  // دوال المذكرات
+  const selectedCatObj = (localSettings.categories || []).find((c) => c.id === nbForm.categoryId);
+  const selectedStageObj = (selectedCatObj?.stages || []).find((s) => s.id === nbForm.stageId);
+
   const handleSaveNotebook = async (e) => {
     e.preventDefault();
-    if (!nbForm.title.trim() || savingNb) return;
+    if (!nbForm.title.trim()) {
+      showToast('يرجى إدخال عنوان المذكرة', 'error');
+      return;
+    }
     setSavingNb(true);
     try {
-      const { samplePages, ...nbMainData } = nbForm;
+      const gradeObj = (selectedStageObj?.grades || []).find((g) => g.id === nbForm.gradeId);
       const payload = {
-        ...nbMainData,
+        title: nbForm.title.trim(),
+        categoryId: nbForm.categoryId,
+        stageId: nbForm.stageId,
+        gradeId: nbForm.gradeId,
+        gradeName: gradeObj?.name || nbForm.gradeName || '',
+        subject: nbForm.subject.trim(),
         price: Number(nbForm.price) || 0,
-        oldPrice: nbForm.oldPrice ? Number(nbForm.oldPrice) : 0,
-        updatedAt: serverTimestamp()
+        oldPrice: Number(nbForm.oldPrice) || 0,
+        pagesCount: nbForm.pagesCount,
+        description: nbForm.description,
+        driveUrl: nbForm.driveUrl.trim(),
+        coverImage: nbForm.coverImage || '',
+        alertBadge: nbForm.alertBadge,
+        alertText: nbForm.alertText,
+        alertColor: nbForm.alertColor || 'amber',
+        comingSoon: Boolean(nbForm.comingSoon),
+        updatedAt: new Date().toISOString()
       };
 
       let targetId = editingNotebookId;
       if (editingNotebookId) {
-        await updateDoc(publicDoc('notebooks', editingNotebookId), payload);
+        await setDoc(publicDoc('notebooks', editingNotebookId), payload, { merge: true });
       } else {
-        const docRef = await addDoc(publicCol('notebooks'), {
-          ...payload,
-          createdAt: serverTimestamp()
-        });
-        targetId = docRef.id;
+        payload.createdAt = new Date().toISOString();
+        const ref = await addDoc(publicCol('notebooks'), payload);
+        targetId = ref.id;
       }
 
-      if (targetId && Array.isArray(samplePages)) {
-        await setDoc(publicDoc('notebook_samples', targetId), { pages: samplePages });
+      if (targetId) {
+        await setDoc(
+          publicDoc('notebook_samples', targetId),
+          { pages: nbForm.samplePages || [] },
+          { merge: true }
+        );
       }
 
+      showToast(editingNotebookId ? 'تم تحديث المذكرة بنجاح!' : 'تمت إضافة المذكرة بنجاح!');
       setEditingNotebookId(null);
       setNbForm({
         title: '',
-        categoryId: (localSettings.categories?.[0] || DEFAULT_CATEGORIES[0]).id,
-        gradeId: (localSettings.grades?.[0] || DEFAULT_GRADES[0]).id,
-        subjectId: (localSettings.subjects?.[0] || DEFAULT_SUBJECTS[0]).id,
-        price: 99,
+        categoryId: localSettings.categories?.[0]?.id || 'term1',
+        stageId: '',
+        gradeId: '',
+        gradeName: '',
+        subject: '',
+        price: '',
         oldPrice: '',
+        pagesCount: '',
         description: '',
         driveUrl: '',
         coverImage: '',
         samplePages: [],
-        comingSoon: false,
-        customAlertEnabled: false,
-        customAlertBadge: 'تنبيه هام',
-        customAlertText: '',
-        customAlertColor: 'amber'
+        alertBadge: '',
+        alertText: '',
+        alertColor: 'amber',
+        comingSoon: false
       });
-      showToast(editingNotebookId ? 'تم تحديث المذكرة بنجاح!' : 'تمت إضافة المذكرة بنجاح!');
     } catch (err) {
-      console.error(err);
-      showToast('فشل حفظ المذكرة، تحقق من الاتصال أو حجم الصور', 'error');
+      showToast(`خطأ أثناء حفظ المذكرة: ${err?.message || ''}`, 'error');
     } finally {
       setSavingNb(false);
     }
   };
 
-  const handleSaveBulkEdits = async () => {
-    const entries = Object.entries(bulkEdits);
-    if (entries.length === 0 || savingBulk) return;
-    setSavingBulk(true);
+  const handleSaveQuickEdits = async () => {
+    const ids = Object.keys(quickEdits);
+    if (ids.length === 0) return;
     try {
-      for (const [nbId, changes] of entries) {
-        await updateDoc(publicDoc('notebooks', nbId), {
-          ...changes,
-          ...(changes.price !== undefined ? { price: Number(changes.price) || 0 } : {}),
-          ...(changes.oldPrice !== undefined ? { oldPrice: Number(changes.oldPrice) || 0 } : {}),
-          updatedAt: serverTimestamp()
+      for (const id of ids) {
+        await updateDoc(publicDoc('notebooks', id), {
+          ...quickEdits[id],
+          price: Number(quickEdits[id].price) || 0,
+          oldPrice: Number(quickEdits[id].oldPrice) || 0
         });
       }
-      setBulkEdits({});
-      showToast(`تم حفظ التعديلات على ${entries.length} مذكرة دفعة واحدة!`);
+      setQuickEdits({});
+      showToast('تم حفظ التعديلات السريعة لجميع المذكرات!');
     } catch (err) {
-      console.error(err);
-      showToast('حدث خطأ أثناء الحفظ الجماعي', 'error');
-    } finally {
-      setSavingBulk(false);
+      showToast(`تعذر الحفظ الجماعي: ${err?.message || ''}`, 'error');
     }
   };
 
+  const handleAddCoupon = async (e) => {
+    e.preventDefault();
+    if (!couponForm.code.trim()) return;
+    try {
+      await addDoc(publicCol('coupons'), {
+        code: couponForm.code.trim().toUpperCase(),
+        type: couponForm.type,
+        value: Number(couponForm.value) || 10,
+        expiresAt: couponForm.expiresAt || '',
+        singleUse: Boolean(couponForm.singleUse),
+        used: false,
+        active: true,
+        createdAt: new Date().toISOString()
+      });
+      setCouponForm({ code: '', type: 'percent', value: 15, expiresAt: '', singleUse: false });
+      showToast('تمت إضافة كوبون الخصم بنجاح!');
+    } catch (err) {
+      showToast(`خطأ: ${err?.message || ''}`, 'error');
+    }
+  };
+
+  const handleAddBundle = async () => {
+    if (!bundleForm.title.trim() || bundleForm.notebookIds.length === 0) {
+      showToast('أدخل اسم الباقة واختر مذكرة واحدة على الأقل', 'error');
+      return;
+    }
+    const newBundle = {
+      id: `bnd_${Date.now()}`,
+      title: bundleForm.title.trim(),
+      description: bundleForm.description.trim(),
+      price: Number(bundleForm.price) || 0,
+      notebookIds: bundleForm.notebookIds
+    };
+    const updated = {
+      ...localSettings,
+      bundles: [...(localSettings.bundles || []), newBundle]
+    };
+    setLocalSettings(updated);
+    await handleSaveAllSettings(updated);
+    setBundleForm({ title: '', description: '', price: '', notebookIds: [] });
+  };
+
+  const manageCat = (localSettings.categories || []).find((c) => c.id === selectedCatId) || localSettings.categories?.[0];
+  const manageStage = (manageCat?.stages || []).find((s) => s.id === selectedStageId) || manageCat?.stages?.[0];
+
   return (
-    <div dir="rtl" className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-      {/* شريط رأس لوحة التحكم */}
-      <div className="bg-slate-900 text-white rounded-3xl p-4 sm:p-6 flex flex-wrap items-center justify-between gap-4 shadow-lg">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 py-6 space-y-6">
+      {/* شريط الإدارة العلوي */}
+      <div className="bg-slate-900 text-white rounded-3xl p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3 shadow-xl">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-blue-600 flex items-center justify-center">
-            <ShieldCheck className="w-6 h-6" />
+          <div className="p-2.5 rounded-2xl bg-blue-600">
+            <Shield className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-lg sm:text-xl font-black">لوحة تحكم الإدارة</h1>
-            <p className="text-xs text-slate-300">تحكم كامل في المذكرات، الأقسام، الخصومات والعروض، والطلبات</p>
+            <h1 className="font-black text-base sm:text-lg">لوحة تحكم الإدارة — منصة العباقرة</h1>
+            <p className="text-xs text-slate-300">تحكم كامل في المذكرات، الأقسام، الخصومات، والطلبات</p>
           </div>
         </div>
-
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => handleSaveAllSettings()}
             disabled={savingSettings}
-            className="px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm flex items-center gap-1.5 shadow"
+            onClick={() => handleSaveAllSettings()}
+            className="px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black flex items-center gap-1.5 shadow"
           >
-            <Save className="w-4 h-4" />
-            <span>{savingSettings ? 'جاري الحفظ...' : 'حفظ الإعدادات'}</span>
+            <Check className="w-4 h-4" />
+            <span>{savingSettings ? 'جاري الحفظ...' : 'حفظ كافة التغييرات'}</span>
           </button>
           <button
             type="button"
             onClick={onLogout}
-            className="px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs sm:text-sm flex items-center gap-1.5"
+            className="px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white text-xs font-black flex items-center gap-1.5"
           >
             <LogOut className="w-4 h-4" />
             <span>خروج</span>
@@ -6198,44 +1476,70 @@ function AdminDashboard({
         </div>
       </div>
 
-      {/* تبويبات الإدارة */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-white p-2 rounded-3xl border border-slate-200 shadow-sm">
+      {/* أزرار التبويبات */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
         {[
           { id: 'notebooks', label: `المذكرات (${notebooks.length})`, icon: BookOpen },
-          { id: 'categories', label: 'الأقسام والمراحل والصفوف', icon: FolderOpen },
+          { id: 'categories', label: 'الأقسام والمراحل والصفوف', icon: Folder },
           { id: 'offers', label: 'الخصومات والعروض', icon: Percent },
           { id: 'orders', label: `الطلبات (${orders.length})`, icon: Package },
           { id: 'settings', label: 'إعدادات الموقع والمظهر', icon: Settings }
-        ].map((t) => {
-          const Icon = t.icon;
+        ].map((tab) => {
+          const Icon = tab.icon;
           return (
             <button
-              key={t.id}
-              onClick={() => setActiveTab(t.id)}
-              className={`py-3 px-3 rounded-2xl font-black text-xs flex items-center justify-center gap-1.5 transition ${
-                activeTab === t.id ? 'bg-blue-600 text-white shadow' : 'text-slate-700 hover:bg-slate-100'
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-4 py-2.5 rounded-2xl text-xs font-black flex items-center gap-2 shrink-0 transition ${
+                activeTab === tab.id
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
               }`}
             >
-              <Icon className="w-4 h-4 shrink-0" />
-              <span className="truncate">{t.label}</span>
+              <Icon className="w-4 h-4" />
+              <span>{tab.label}</span>
             </button>
           );
         })}
       </div>
 
+      {/* ========================================== */}
       {/* 1. تبويب المذكرات */}
+      {/* ========================================== */}
       {activeTab === 'notebooks' && (
         <div className="space-y-6">
-          <form onSubmit={handleSaveNotebook} className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm space-y-4">
+          <form onSubmit={handleSaveNotebook} className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-black text-slate-900">
-                {editingNotebookId ? 'تعديل بيانات المذكرة' : '+ إضافة مذكرة جديدة'}
+              <h2 className="text-base sm:text-lg font-black text-slate-900">
+                {editingNotebookId ? 'تعديل بيانات المذكرة' : 'إضافة مذكرة جديدة للمنصة'}
               </h2>
               {editingNotebookId && (
                 <button
                   type="button"
-                  onClick={() => setEditingNotebookId(null)}
-                  className="text-xs font-bold text-slate-500 hover:text-slate-900"
+                  onClick={() => {
+                    setEditingNotebookId(null);
+                    setNbForm({
+                      title: '',
+                      categoryId: localSettings.categories?.[0]?.id || 'term1',
+                      stageId: '',
+                      gradeId: '',
+                      gradeName: '',
+                      subject: '',
+                      price: '',
+                      oldPrice: '',
+                      pagesCount: '',
+                      description: '',
+                      driveUrl: '',
+                      coverImage: '',
+                      samplePages: [],
+                      alertBadge: '',
+                      alertText: '',
+                      alertColor: 'amber',
+                      comingSoon: false
+                    });
+                  }}
+                  className="text-xs font-black text-rose-600 underline"
                 >
                   إلغاء التعديل
                 </button>
@@ -6243,206 +1547,174 @@ function AdminDashboard({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <div className="sm:col-span-2">
-                <label className="text-xs font-bold text-slate-600">عنوان المذكرة *</label>
+              <div className="sm:col-span-2 space-y-1">
+                <label className="text-xs font-black text-slate-700">عنوان المذكرة *</label>
                 <input
                   type="text"
                   required
                   value={nbForm.title}
                   onChange={(e) => setNbForm((p) => ({ ...p, title: e.target.value }))}
-                  placeholder="مثال: بنك مراجعة الصف الثالث الإعدادي"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
+                  placeholder="مثال: مذكرة العباقرة في اللغة العربية"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-600">القسم الرئيسي</label>
+              <div className="space-y-1">
+                <label className="text-xs font-black text-slate-700">القسم الرئيسي</label>
                 <select
                   value={nbForm.categoryId}
-                  onChange={(e) => setNbForm((p) => ({ ...p, categoryId: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
+                  onChange={(e) => setNbForm((p) => ({ ...p, categoryId: e.target.value, stageId: '', gradeId: '' }))}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
                 >
-                  {(localSettings.categories || DEFAULT_CATEGORIES).map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+                  {(localSettings.categories || []).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
                   ))}
                 </select>
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-600">الصف الدراسي</label>
+              <div className="space-y-1">
+                <label className="text-xs font-black text-slate-700">المرحلة الدراسية</label>
+                <select
+                  value={nbForm.stageId}
+                  onChange={(e) => setNbForm((p) => ({ ...p, stageId: e.target.value, gradeId: '' }))}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
+                >
+                  <option value="">اختر المرحلة...</option>
+                  {(selectedCatObj?.stages || []).map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-black text-slate-700">الصف الدراسي</label>
                 <select
                   value={nbForm.gradeId}
-                  onChange={(e) => setNbForm((p) => ({ ...p, gradeId: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
+                  onChange={(e) => {
+                    const g = (selectedStageObj?.grades || []).find((x) => x.id === e.target.value);
+                    setNbForm((p) => ({ ...p, gradeId: e.target.value, gradeName: g?.name || '' }));
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
                 >
-                  {(localSettings.grades || DEFAULT_GRADES).map((g) => (
-                    <option key={g.id} value={g.id}>{g.name}</option>
+                  <option value="">اختر الصف...</option>
+                  {(selectedStageObj?.grades || []).map((gr) => (
+                    <option key={gr.id} value={gr.id}>
+                      {gr.name}
+                    </option>
                   ))}
                 </select>
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-600">المادة</label>
-                <select
-                  value={nbForm.subjectId}
-                  onChange={(e) => setNbForm((p) => ({ ...p, subjectId: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                >
-                  {(localSettings.subjects || DEFAULT_SUBJECTS).map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
+              <div className="space-y-1">
+                <label className="text-xs font-black text-slate-700">المادة الدراسية</label>
+                <input
+                  type="text"
+                  value={nbForm.subject}
+                  onChange={(e) => setNbForm((p) => ({ ...p, subject: e.target.value }))}
+                  placeholder="مثال: اللغة العربية"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
+                />
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-600">السعر الحالي (ج.م) *</label>
+              <div className="space-y-1">
+                <label className="text-xs font-black text-slate-700">السعر الحالي (ج.م) *</label>
                 <input
                   type="number"
                   required
                   value={nbForm.price}
                   onChange={(e) => setNbForm((p) => ({ ...p, price: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-black"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-600">السعر قبل الخصم (اختياري)</label>
+              <div className="space-y-1">
+                <label className="text-xs font-black text-slate-700">السعر قبل الخصم (اختياري)</label>
                 <input
                   type="number"
                   value={nbForm.oldPrice}
                   onChange={(e) => setNbForm((p) => ({ ...p, oldPrice: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-600">رابط عينة Google Drive</label>
-                <input
-                  type="text"
-                  placeholder="https://drive.google.com/..."
-                  value={nbForm.driveUrl}
-                  onChange={(e) => setNbForm((p) => ({ ...p, driveUrl: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
                 />
               </div>
             </div>
 
-            <div>
-              <label className="text-xs font-bold text-slate-600">وصف المذكرة</label>
-              <textarea
-                rows={2}
-                value={nbForm.description}
-                onChange={(e) => setNbForm((p) => ({ ...p, description: e.target.value }))}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm"
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-4">
-              <label className="flex items-center gap-2 text-xs font-black text-slate-800 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={nbForm.comingSoon}
-                  onChange={(e) => setNbForm((p) => ({ ...p, comingSoon: e.target.checked }))}
-                />
-                <span>وضع المذكرة «قيد التجهيز / حجز مسبق»</span>
-              </label>
-
-              <label className="flex items-center gap-2 text-xs font-black text-slate-800 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={nbForm.customAlertEnabled}
-                  onChange={(e) => setNbForm((p) => ({ ...p, customAlertEnabled: e.target.checked }))}
-                />
-                <span>إظهار تنبيه خاص داخل المذكرة</span>
-              </label>
-            </div>
-
-            {nbForm.customAlertEnabled && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-amber-50 p-3.5 rounded-2xl border border-amber-200">
-                <input
-                  type="text"
-                  placeholder="عنوان الشارة (مثال: تنبيه هام)"
-                  value={nbForm.customAlertBadge}
-                  onChange={(e) => setNbForm((p) => ({ ...p, customAlertBadge: e.target.value }))}
-                  className="px-3 py-2 rounded-xl border border-amber-300 text-xs font-bold bg-white"
-                />
-                <input
-                  type="text"
-                  placeholder="نص التنبيه للعميل..."
-                  value={nbForm.customAlertText}
-                  onChange={(e) => setNbForm((p) => ({ ...p, customAlertText: e.target.value }))}
-                  className="px-3 py-2 rounded-xl border border-amber-300 text-xs font-bold bg-white"
-                />
-                <select
-                  value={nbForm.customAlertColor}
-                  onChange={(e) => setNbForm((p) => ({ ...p, customAlertColor: e.target.value }))}
-                  className="px-3 py-2 rounded-xl border border-amber-300 text-xs font-bold bg-white"
-                >
-                  <option value="amber">لون ذهبي / تحذيري</option>
-                  <option value="blue">لون أزرق معلوماتي</option>
-                  <option value="emerald">لون أخضر مميز</option>
-                  <option value="rose">لون أحمر هام</option>
-                </select>
-              </div>
-            )}
-
-            {/* رفع الغلاف وصفحات العينة */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* الغلاف وصور العينات */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                <span className="text-xs font-black text-slate-800 block">صورة غلاف المذكرة:</span>
-                <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-slate-300 text-xs font-bold cursor-pointer">
-                  <Upload className="w-4 h-4 text-blue-600" />
-                  <span>رفع صورة الغلاف</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      const url = await compressImage(file, 800, 0.78);
-                      setNbForm((p) => ({ ...p, coverImage: url }));
-                    }}
-                  />
-                </label>
-                {nbForm.coverImage && (
-                  <img src={nbForm.coverImage} alt="" className="h-20 rounded-xl object-cover border" />
-                )}
+                <span className="block text-xs font-black text-slate-800">صورة غلاف المذكرة</span>
+                <div className="flex items-center gap-3">
+                  {nbForm.coverImage && (
+                    <img src={nbForm.coverImage} alt="" className="w-16 h-20 object-cover rounded-xl border" />
+                  )}
+                  <label className="px-3.5 py-2 rounded-xl bg-blue-600 text-white text-xs font-black cursor-pointer">
+                    <span>اختيار صورة الغلاف</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const compressed = await compressImageFile(file, 900, 0.8);
+                        setNbForm((p) => ({ ...p, coverImage: compressed }));
+                      }}
+                    />
+                  </label>
+                  {nbForm.coverImage && (
+                    <button
+                      type="button"
+                      onClick={() => setNbForm((p) => ({ ...p, coverImage: '' }))}
+                      className="text-xs text-rose-600 font-bold"
+                    >
+                      حذف
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                <span className="text-xs font-black text-slate-800 block">
-                  صفحات العينة الداخلية ({nbForm.samplePages.length}/15):
-                </span>
-                <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-slate-300 text-xs font-bold cursor-pointer">
-                  <Upload className="w-4 h-4 text-blue-600" />
-                  <span>إضافة صور عينات</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={async (e) => {
-                      const files = Array.from(e.target.files || []).slice(0, 15 - nbForm.samplePages.length);
-                      const compressedList = await Promise.all(files.map((f) => compressImage(f, 850, 0.72)));
-                      setNbForm((p) => ({ ...p, samplePages: [...p.samplePages, ...compressedList] }));
-                    }}
-                  />
-                </label>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-slate-800">
+                    صفحات العينة ({nbForm.samplePages.length} / 15)
+                  </span>
+                  <label className="px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-black cursor-pointer">
+                    <span>+ إضافة صفحات عينة</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={async (e) => {
+                        const files = Array.from(e.target.files || []).slice(0, 15 - nbForm.samplePages.length);
+                        const compressedList = await Promise.all(
+                          files.map((f) => compressImageFile(f, 950, 0.75))
+                        );
+                        setNbForm((p) => ({
+                          ...p,
+                          samplePages: [...p.samplePages, ...compressedList].slice(0, 15)
+                        }));
+                      }}
+                    />
+                  </label>
+                </div>
                 {nbForm.samplePages.length > 0 && (
-                  <div className="flex gap-1.5 overflow-x-auto pt-1">
-                    {nbForm.samplePages.map((img, i) => (
-                      <div key={i} className="relative w-12 h-14 rounded-lg overflow-hidden border shrink-0">
-                        <img src={img} alt="" className="w-full h-full object-cover" />
+                  <div className="flex items-center gap-2 overflow-x-auto pt-1">
+                    {nbForm.samplePages.map((src, idx) => (
+                      <div key={idx} className="relative w-12 h-14 shrink-0 rounded-lg overflow-hidden border">
+                        <img src={src} alt="" className="w-full h-full object-cover" />
                         <button
                           type="button"
                           onClick={() =>
                             setNbForm((p) => ({
                               ...p,
-                              samplePages: p.samplePages.filter((_, idx) => idx !== i)
+                              samplePages: p.samplePages.filter((_, i) => i !== idx)
                             }))
                           }
-                          className="absolute top-0 right-0 bg-red-600 text-white p-0.5"
+                          className="absolute top-0 right-0 bg-rose-600 text-white p-0.5 rounded-bl"
                         >
                           <X className="w-3 h-3" />
                         </button>
@@ -6453,117 +1725,152 @@ function AdminDashboard({
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={savingNb}
-              className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm"
-            >
-              {savingNb ? 'جاري الحفظ...' : editingNotebookId ? 'حفظ تعديلات المذكرة' : '+ نشر المذكرة الآن'}
-            </button>
+            {/* التنبيه الخاص بالمذكرة ورابط Drive */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <input
+                type="text"
+                value={nbForm.driveUrl}
+                onChange={(e) => setNbForm((p) => ({ ...p, driveUrl: e.target.value }))}
+                placeholder="رابط Google Drive للعينة (اختياري)"
+                dir="ltr"
+                className="px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-left"
+              />
+              <input
+                type="text"
+                value={nbForm.alertBadge}
+                onChange={(e) => setNbForm((p) => ({ ...p, alertBadge: e.target.value }))}
+                placeholder="شارة التنبيه (مثال: تنويه هام)"
+                className="px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
+              />
+              <input
+                type="text"
+                value={nbForm.alertText}
+                onChange={(e) => setNbForm((p) => ({ ...p, alertText: e.target.value }))}
+                placeholder="نص التنبيه الخاص داخل المذكرة (اختياري)"
+                className="px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <label className="flex items-center gap-2 text-xs font-black text-slate-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={nbForm.comingSoon}
+                  onChange={(e) => setNbForm((p) => ({ ...p, comingSoon: e.target.checked }))}
+                />
+                <span>وضع المذكرة كـ «قيد التجهيز / متاح للحجز المسبق»</span>
+              </label>
+
+              <button
+                type="submit"
+                disabled={savingNb}
+                className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow"
+              >
+                {savingNb ? 'جاري الحفظ...' : editingNotebookId ? 'حفظ تعديلات المذكرة' : 'نشر المذكرة الآن'}
+              </button>
+            </div>
           </form>
 
-          {/* قائمة المذكرات والتعديل السريع الجماعي */}
+          {/* قائمة المذكرات والتعديل السريع */}
           <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="text-base font-black text-slate-900">التعديل السريع الجماعي للمذكرات</h3>
-                <p className="text-xs text-slate-500">عدّل أي عدد من المذكرات مباشرة ثم اضغط حفظ دفعة واحدة</p>
-              </div>
-              {Object.keys(bulkEdits).length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-base font-black text-slate-900">قائمة المذكرات المنشورة ({notebooks.length})</h3>
+              {Object.keys(quickEdits).length > 0 && (
                 <button
                   type="button"
-                  onClick={handleSaveBulkEdits}
-                  disabled={savingBulk}
-                  className="px-5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm shadow"
+                  onClick={handleSaveQuickEdits}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-black shadow"
                 >
-                  {savingBulk
-                    ? 'جاري الحفظ...'
-                    : `حفظ جميع التعديلات دفعة واحدة (${Object.keys(bulkEdits).length} مذكرة)`}
+                  حفظ التعديلات السريعة ({Object.keys(quickEdits).length})
                 </button>
               )}
             </div>
 
             <div className="space-y-2.5">
               {notebooks.map((nb) => {
-                const draft = { ...nb, ...(bulkEdits[nb.id] || {}) };
-                const isModified = Boolean(bulkEdits[nb.id]);
+                const q = quickEdits[nb.id] || {};
                 return (
                   <div
                     key={nb.id}
-                    className={`p-3 rounded-2xl border grid grid-cols-1 md:grid-cols-12 gap-2.5 items-center ${
-                      isModified ? 'bg-amber-50/70 border-amber-300' : 'bg-slate-50 border-slate-200'
-                    }`}
+                    className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-3"
                   >
-                    <input
-                      type="text"
-                      value={draft.title}
-                      onChange={(e) =>
-                        setBulkEdits((p) => ({ ...p, [nb.id]: { ...(p[nb.id] || {}), title: e.target.value } }))
-                      }
-                      className="md:col-span-4 px-3 py-2 rounded-xl border border-slate-300 text-xs font-black bg-white"
-                    />
-                    <select
-                      value={draft.categoryId}
-                      onChange={(e) =>
-                        setBulkEdits((p) => ({ ...p, [nb.id]: { ...(p[nb.id] || {}), categoryId: e.target.value } }))
-                      }
-                      className="md:col-span-2 px-2.5 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white"
-                    >
-                      {(localSettings.categories || DEFAULT_CATEGORIES).map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
-                    <select
-                      value={draft.gradeId}
-                      onChange={(e) =>
-                        setBulkEdits((p) => ({ ...p, [nb.id]: { ...(p[nb.id] || {}), gradeId: e.target.value } }))
-                      }
-                      className="md:col-span-2 px-2.5 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white"
-                    >
-                      {(localSettings.grades || DEFAULT_GRADES).map((g) => (
-                        <option key={g.id} value={g.id}>{g.name}</option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      value={draft.price}
-                      onChange={(e) =>
-                        setBulkEdits((p) => ({ ...p, [nb.id]: { ...(p[nb.id] || {}), price: e.target.value } }))
-                      }
-                      className="md:col-span-2 px-3 py-2 rounded-xl border border-slate-300 text-xs font-black bg-white"
-                    />
-                    <div className="md:col-span-2 flex items-center justify-end gap-1.5">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      {nb.coverImage ? (
+                        <img src={nb.coverImage} alt="" className="w-11 h-14 object-cover rounded-xl border shrink-0" />
+                      ) : (
+                        <div className="w-11 h-14 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                          <BookOpen className="w-5 h-5" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <input
+                          type="text"
+                          value={q.title !== undefined ? q.title : nb.title}
+                          onChange={(e) =>
+                            setQuickEdits((p) => ({
+                              ...p,
+                              [nb.id]: { ...nb, ...p[nb.id], title: e.target.value }
+                            }))
+                          }
+                          className="w-full px-2.5 py-1 rounded-lg border bg-white text-xs font-black"
+                        />
+                        <p className="text-[11px] font-bold text-slate-500">
+                          {nb.gradeName} {nb.subject ? `• ${nb.subject}` : ''}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        value={q.price !== undefined ? q.price : nb.price}
+                        onChange={(e) =>
+                          setQuickEdits((p) => ({
+                            ...p,
+                            [nb.id]: { ...nb, ...p[nb.id], price: e.target.value }
+                          }))
+                        }
+                        className="w-20 px-2.5 py-1.5 rounded-lg border bg-white text-xs font-black text-center"
+                        title="السعر"
+                      />
                       <button
                         type="button"
                         onClick={async () => {
                           setEditingNotebookId(nb.id);
-                          let pages = nb.samplePages || [];
-                          try {
-                            const s = await getDoc(publicDoc('notebook_samples', nb.id));
-                            if (s.exists()) pages = s.data().pages || [];
-                          } catch {
-                            // تجاهل
+                          let pages = (samplesMap?.[nb.id]?.length ? samplesMap[nb.id] : nb.samplePages) || [];
+                          if (pages.length === 0) {
+                            try {
+                              const s = await getDoc(publicDoc('notebook_samples', nb.id));
+                              if (s.exists()) {
+                                const d = s.data();
+                                pages = d.pages || d.samples || d.images || [];
+                              }
+                            } catch {
+                              // تجاهل
+                            }
                           }
                           setNbForm({
                             title: nb.title || '',
-                            categoryId: nb.categoryId || DEFAULT_CATEGORIES[0].id,
-                            gradeId: nb.gradeId || DEFAULT_GRADES[0].id,
-                            subjectId: nb.subjectId || DEFAULT_SUBJECTS[0].id,
-                            price: nb.price || 99,
+                            categoryId: nb.categoryId || 'term1',
+                            stageId: nb.stageId || '',
+                            gradeId: nb.gradeId || '',
+                            gradeName: nb.gradeName || '',
+                            subject: nb.subject || '',
+                            price: nb.price || '',
                             oldPrice: nb.oldPrice || '',
+                            pagesCount: nb.pagesCount || '',
                             description: nb.description || '',
                             driveUrl: nb.driveUrl || '',
                             coverImage: nb.coverImage || '',
                             samplePages: pages,
-                            comingSoon: Boolean(nb.comingSoon),
-                            customAlertEnabled: Boolean(nb.customAlertEnabled),
-                            customAlertBadge: nb.customAlertBadge || 'تنبيه هام',
-                            customAlertText: nb.customAlertText || '',
-                            customAlertColor: nb.customAlertColor || 'amber'
+                            alertBadge: nb.alertBadge || '',
+                            alertText: nb.alertText || '',
+                            alertColor: nb.alertColor || 'amber',
+                            comingSoon: Boolean(nb.comingSoon)
                           });
                           window.scrollTo({ top: 0, behavior: 'smooth' });
                         }}
-                        className="p-2 rounded-xl bg-blue-100 text-blue-700 hover:bg-blue-200"
+                        className="p-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700"
                         title="تعديل كامل"
                       >
                         <Edit3 className="w-4 h-4" />
@@ -6574,7 +1881,7 @@ function AdminDashboard({
                           await deleteDoc(publicDoc('notebooks', nb.id));
                           showToast('تم حذف المذكرة');
                         }}
-                        className="p-2 rounded-xl bg-red-100 text-red-700 hover:bg-red-200"
+                        className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600"
                         title="حذف"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -6588,72 +1895,90 @@ function AdminDashboard({
         </div>
       )}
 
+      {/* ========================================== */}
       {/* 2. تبويب الأقسام والمراحل والصفوف */}
+      {/* ========================================== */}
       {activeTab === 'categories' && (
-        <div className="space-y-6">
-          <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
-            <h2 className="text-lg font-black text-slate-900">الأقسام الرئيسية وصورها</h2>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="اسم قسم رئيسي جديد..."
-                value={newCatName}
-                onChange={(e) => setNewCatName(e.target.value)}
-                className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  if (!newCatName.trim()) return;
-                  const updated = [
-                    ...(localSettings.categories || []),
-                    { id: `cat_${Date.now()}`, name: newCatName.trim(), order: (localSettings.categories?.length || 0) + 1 }
-                  ];
-                  setLocalSettings((p) => ({ ...p, categories: updated }));
-                  setNewCatName('');
-                }}
-                className="px-5 py-2.5 rounded-xl bg-blue-600 text-white font-black text-sm"
-              >
-                + إضافة قسم
-              </button>
-            </div>
+        <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-5">
+          <h2 className="text-lg font-black text-slate-900">إدارة الأقسام الرئيسية وصورها والمراحل الدراسية</h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {(localSettings.categories || DEFAULT_CATEGORIES).map((cat) => {
-                const catImg = localSettings.categoryImages?.[cat.id] || '';
-                return (
-                  <div key={cat.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <input
-                        type="text"
-                        value={cat.name}
-                        onChange={(e) =>
-                          setLocalSettings((p) => ({
-                            ...p,
-                            categories: (p.categories || []).map((c) =>
-                              c.id === cat.id ? { ...c, name: e.target.value } : c
-                            )
-                          }))
-                        }
-                        className="font-black text-sm bg-white px-2.5 py-1.5 rounded-xl border border-slate-300 flex-1"
-                      />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setLocalSettings((p) => ({
-                            ...p,
-                            categories: (p.categories || []).filter((c) => c.id !== cat.id)
-                          }))
-                        }
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-xl"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+          {/* إضافة قسم رئيسي */}
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              value={newCatName}
+              onChange={(e) => setNewCatName(e.target.value)}
+              placeholder="اسم القسم الجديد (مثال: مراجعات نهائية)"
+              className="flex-1 min-w-[220px] px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                if (!newCatName.trim()) return;
+                const newId = `cat_${Date.now()}`;
+                setLocalSettings((p) => ({
+                  ...p,
+                  categories: [
+                    ...(p.categories || []),
+                    { id: newId, name: newCatName.trim(), description: 'تصفح المراحل والصفوف الدراسية', stages: [] }
+                  ]
+                }));
+                setSelectedCatId(newId);
+                setNewCatName('');
+              }}
+              className="px-4 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-black"
+            >
+              + إضافة قسم
+            </button>
+          </div>
 
-                    {catImg && <img src={catImg} alt="" className="w-full h-28 object-cover rounded-xl border" />}
-                    <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-xs font-bold cursor-pointer">
-                      <Upload className="w-3.5 h-3.5 text-blue-600" />
+          {/* بطاقات الأقسام وصورها */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {(localSettings.categories || []).map((cat) => {
+              const catImg = localSettings.categoryImages?.[cat.id] || '';
+              return (
+                <div
+                  key={cat.id}
+                  onClick={() => setSelectedCatId(cat.id)}
+                  className={`p-4 rounded-2xl border-2 cursor-pointer transition space-y-3 ${
+                    manageCat?.id === cat.id ? 'border-blue-600 bg-blue-50/30' : 'border-slate-200 bg-slate-50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <input
+                      type="text"
+                      value={cat.name}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) =>
+                        setLocalSettings((p) => ({
+                          ...p,
+                          categories: p.categories.map((c) => (c.id === cat.id ? { ...c, name: e.target.value } : c))
+                        }))
+                      }
+                      className="font-black text-xs sm:text-sm bg-white px-2.5 py-1.5 rounded-lg border flex-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLocalSettings((p) => ({
+                          ...p,
+                          categories: p.categories.filter((c) => c.id !== cat.id)
+                        }));
+                      }}
+                      className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {catImg && <img src={catImg} alt="" className="w-full h-24 object-cover rounded-xl border" />}
+
+                  <div className="flex items-center justify-between">
+                    <label
+                      onClick={(e) => e.stopPropagation()}
+                      className="px-3 py-1.5 rounded-xl bg-slate-900 text-white text-[11px] font-black cursor-pointer"
+                    >
                       <span>{catImg ? 'تغيير صورة القسم' : 'رفع صورة للقسم'}</span>
                       <input
                         type="file"
@@ -6662,187 +1987,204 @@ function AdminDashboard({
                         onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (!file) return;
-                          const url = await compressImage(file, 700, 0.78);
+                          const compressed = await compressImageFile(file, 800, 0.78);
                           setLocalSettings((p) => ({
                             ...p,
-                            categoryImages: { ...(p.categoryImages || {}), [cat.id]: url }
+                            categoryImages: { ...(p.categoryImages || {}), [cat.id]: compressed }
                           }));
                         }}
                       />
                     </label>
+                    {catImg && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLocalSettings((p) => {
+                            const copy = { ...(p.categoryImages || {}) };
+                            delete copy[cat.id];
+                            return { ...p, categoryImages: copy };
+                          });
+                        }}
+                        className="text-[11px] font-bold text-rose-600"
+                      >
+                        حذف الصورة
+                      </button>
+                    )}
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              );
+            })}
           </div>
 
-          {/* المراحل والصفوف والمواد */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {/* المراحل */}
-            <div className="bg-white rounded-3xl p-5 border border-slate-200 space-y-3">
-              <h3 className="font-black text-base text-slate-900">المراحل الدراسية</h3>
-              <div className="flex gap-2">
+          {/* إدارة المراحل والصفوف داخل القسم المحدد */}
+          {manageCat && (
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
+              <h3 className="font-black text-sm text-blue-800">المراحل والصفوف داخل: {manageCat.name}</h3>
+
+              <div className="flex flex-wrap items-center gap-2">
                 <input
                   type="text"
-                  placeholder="مرحلة جديدة..."
                   value={newStageName}
                   onChange={(e) => setNewStageName(e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                  placeholder="اسم المرحلة (مثال: المرحلة الابتدائية)"
+                  className="flex-1 min-w-[200px] px-3 py-2 rounded-xl border bg-white text-xs font-bold"
                 />
                 <button
                   type="button"
                   onClick={() => {
                     if (!newStageName.trim()) return;
+                    const stId = `stg_${Date.now()}`;
                     setLocalSettings((p) => ({
                       ...p,
-                      stages: [...(p.stages || []), { id: `st_${Date.now()}`, name: newStageName.trim() }]
+                      categories: p.categories.map((c) =>
+                        c.id === manageCat.id
+                          ? { ...c, stages: [...(c.stages || []), { id: stId, name: newStageName.trim(), grades: [] }] }
+                          : c
+                      )
                     }));
+                    setSelectedStageId(stId);
                     setNewStageName('');
                   }}
-                  className="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-black"
+                  className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-black"
                 >
-                  +
+                  + إضافة مرحلة
                 </button>
               </div>
-              <div className="space-y-1.5">
-                {(localSettings.stages || DEFAULT_STAGES).map((st) => (
-                  <div key={st.id} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 text-xs font-bold">
+
+              <div className="flex flex-wrap gap-2">
+                {(manageCat.stages || []).map((st) => (
+                  <div
+                    key={st.id}
+                    onClick={() => setSelectedStageId(st.id)}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-black cursor-pointer flex items-center gap-2 border ${
+                      manageStage?.id === st.id
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white text-slate-700 border-slate-200'
+                    }`}
+                  >
                     <span>{st.name}</span>
                     <button
                       type="button"
-                      onClick={() =>
-                        setLocalSettings((p) => ({ ...p, stages: (p.stages || []).filter((s) => s.id !== st.id) }))
-                      }
-                      className="text-red-600"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLocalSettings((p) => ({
+                          ...p,
+                          categories: p.categories.map((c) =>
+                            c.id === manageCat.id
+                              ? { ...c, stages: c.stages.filter((x) => x.id !== st.id) }
+                              : c
+                          )
+                        }));
+                      }}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 ))}
               </div>
-            </div>
 
-            {/* الصفوف */}
-            <div className="bg-white rounded-3xl p-5 border border-slate-200 space-y-3">
-              <h3 className="font-black text-base text-slate-900">الصفوف الدراسية</h3>
-              <div className="space-y-2">
-                <select
-                  value={newGradeStageId}
-                  onChange={(e) => setNewGradeStageId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
-                >
-                  {(localSettings.stages || DEFAULT_STAGES).map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="اسم الصف..."
-                    value={newGradeName}
-                    onChange={(e) => setNewGradeName(e.target.value)}
-                    className="flex-1 px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!newGradeName.trim()) return;
-                      setLocalSettings((p) => ({
-                        ...p,
-                        grades: [
-                          ...(p.grades || []),
-                          { id: `gr_${Date.now()}`, stageId: newGradeStageId, name: newGradeName.trim() }
-                        ]
-                      }));
-                      setNewGradeName('');
-                    }}
-                    className="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-black"
-                  >
-                    +
-                  </button>
+              {manageStage && (
+                <div className="pt-3 border-t border-slate-200 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newGradeName}
+                      onChange={(e) => setNewGradeName(e.target.value)}
+                      placeholder={`أضف صفًا دراسيًا داخل ${manageStage.name}...`}
+                      className="flex-1 px-3 py-2 rounded-xl border bg-white text-xs font-bold"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!newGradeName.trim()) return;
+                        setLocalSettings((p) => ({
+                          ...p,
+                          categories: p.categories.map((c) =>
+                            c.id === manageCat.id
+                              ? {
+                                  ...c,
+                                  stages: c.stages.map((st) =>
+                                    st.id === manageStage.id
+                                      ? {
+                                          ...st,
+                                          grades: [
+                                            ...(st.grades || []),
+                                            { id: `grd_${Date.now()}`, name: newGradeName.trim(), subjects: [] }
+                                          ]
+                                        }
+                                      : st
+                                  )
+                                }
+                              : c
+                          )
+                        }));
+                        setNewGradeName('');
+                      }}
+                      className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-black"
+                    >
+                      + إضافة صف
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {(manageStage.grades || []).map((gr) => (
+                      <span
+                        key={gr.id}
+                        className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold flex items-center gap-2"
+                      >
+                        <span>{gr.name}</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setLocalSettings((p) => ({
+                              ...p,
+                              categories: p.categories.map((c) =>
+                                c.id === manageCat.id
+                                  ? {
+                                      ...c,
+                                      stages: c.stages.map((st) =>
+                                        st.id === manageStage.id
+                                          ? { ...st, grades: st.grades.filter((g) => g.id !== gr.id) }
+                                          : st
+                                      )
+                                    }
+                                  : c
+                              )
+                            }))
+                          }
+                          className="text-rose-600"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-1.5 max-h-60 overflow-y-auto">
-                {(localSettings.grades || DEFAULT_GRADES).map((gr) => (
-                  <div key={gr.id} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 text-xs font-bold">
-                    <span>{gr.name}</span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setLocalSettings((p) => ({ ...p, grades: (p.grades || []).filter((g) => g.id !== gr.id) }))
-                      }
-                      className="text-red-600"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
+              )}
             </div>
-
-            {/* المواد */}
-            <div className="bg-white rounded-3xl p-5 border border-slate-200 space-y-3">
-              <h3 className="font-black text-base text-slate-900">المواد الدراسية</h3>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="مادة جديدة..."
-                  value={newSubjectName}
-                  onChange={(e) => setNewSubjectName(e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!newSubjectName.trim()) return;
-                    setLocalSettings((p) => ({
-                      ...p,
-                      subjects: [...(p.subjects || []), { id: `sub_${Date.now()}`, name: newSubjectName.trim() }]
-                    }));
-                    setNewSubjectName('');
-                  }}
-                  className="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-black"
-                >
-                  +
-                </button>
-              </div>
-              <div className="space-y-1.5">
-                {(localSettings.subjects || DEFAULT_SUBJECTS).map((sub) => (
-                  <div key={sub.id} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 text-xs font-bold">
-                    <span>{sub.name}</span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setLocalSettings((p) => ({ ...p, subjects: (p.subjects || []).filter((s) => s.id !== sub.id) }))
-                      }
-                      className="text-red-600"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          )}
 
           <button
             type="button"
             onClick={() => handleSaveAllSettings()}
-            className="px-6 py-3 rounded-2xl bg-emerald-600 text-white font-black text-sm"
+            className="px-6 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow"
           >
             حفظ الأقسام والمراحل والصفوف
           </button>
         </div>
       )}
 
+      {/* ========================================== */}
       {/* 3. تبويب الخصومات والعروض */}
+      {/* ========================================== */}
       {activeTab === 'offers' && (
         <div className="space-y-6">
-          {/* 1. الشريط الترويجي العلوي */}
+          {/* الشريط الترويجي العلوي */}
           <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-black text-slate-900">1. الشريط الترويجي العلوي وكوبون النسخ السريع</h2>
-              <label className="flex items-center gap-2 text-xs font-black cursor-pointer">
+              <h2 className="text-base font-black text-slate-900">1. الشريط الترويجي العلوي وكود النسخ</h2>
+              <label className="flex items-center gap-2 text-xs font-black">
                 <input
                   type="checkbox"
                   checked={localSettings.promoBannerEnabled !== false}
@@ -6851,392 +2193,295 @@ function AdminDashboard({
                 <span>تفعيل الشريط</span>
               </label>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <div className="sm:col-span-2">
-                <label className="text-xs font-bold text-slate-600">نص الإعلان الترويجي</label>
-                <input
-                  type="text"
-                  value={localSettings.promoBannerText}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, promoBannerText: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-600">لون خلفية الشريط</label>
-                <select
-                  value={localSettings.promoBannerColor || 'blue'}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, promoBannerColor: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                >
-                  <option value="navy">كحلي داكن فخم</option>
-                  <option value="blue">أزرق ملكي</option>
-                  <option value="emerald">أخضر زمردي</option>
-                  <option value="crimson">أحمر ياقوتي</option>
-                  <option value="purple">بنفسجي</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-600">كود الكوبون المدمج للنسخ</label>
-                <input
-                  type="text"
-                  value={localSettings.promoBannerCoupon || ''}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, promoBannerCoupon: e.target.value.toUpperCase() }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-black uppercase"
-                />
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <input
+                type="text"
+                value={localSettings.promoBannerText || ''}
+                onChange={(e) => setLocalSettings((p) => ({ ...p, promoBannerText: e.target.value }))}
+                placeholder="نص الإعلان الترويجي..."
+                className="sm:col-span-2 px-3.5 py-2.5 rounded-xl border text-xs font-bold"
+              />
+              <select
+                value={localSettings.promoBannerColor || 'blue'}
+                onChange={(e) => setLocalSettings((p) => ({ ...p, promoBannerColor: e.target.value }))}
+                className="px-3 py-2.5 rounded-xl border text-xs font-bold"
+              >
+                <option value="blue">أزرق ملكي</option>
+                <option value="navy">كحلي داكن</option>
+                <option value="emerald">أخضر زمردي</option>
+                <option value="crimson">أحمر ياقوتي</option>
+                <option value="purple">بنفسجي ملكي</option>
+              </select>
+              <input
+                type="text"
+                value={localSettings.promoBannerCoupon || ''}
+                onChange={(e) => setLocalSettings((p) => ({ ...p, promoBannerCoupon: e.target.value.toUpperCase() }))}
+                placeholder="كود الكوبون في الشريط (مثال: M20)"
+                className="px-3.5 py-2.5 rounded-xl border text-xs font-black uppercase"
+              />
+              <input
+                type="text"
+                value={localSettings.promoBannerCopyLabel || ''}
+                onChange={(e) => setLocalSettings((p) => ({ ...p, promoBannerCopyLabel: e.target.value }))}
+                placeholder="نص زر النسخ (مثال: انسخ الكوبون:)"
+                className="px-3.5 py-2.5 rounded-xl border text-xs font-bold"
+              />
             </div>
           </div>
 
-          {/* 2. كوبون مكافأة الطلب القادم */}
+          {/* كوبون مكافأة الطلب القادم */}
           <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-black text-slate-900">2. كوبون مكافأة الطلب القادم (يظهر للعميل بعد إتمام الطلب)</h2>
-              <label className="flex items-center gap-2 text-xs font-black cursor-pointer">
+              <h2 className="text-base font-black text-slate-900">2. كوبون مكافأة الطلب القادم (يظهر بعد إتمام الطلب)</h2>
+              <label className="flex items-center gap-2 text-xs font-black">
                 <input
                   type="checkbox"
-                  checked={Boolean(localSettings.nextOrderRewardEnabled)}
+                  checked={localSettings.nextOrderRewardEnabled !== false}
                   onChange={(e) => setLocalSettings((p) => ({ ...p, nextOrderRewardEnabled: e.target.checked }))}
                 />
                 <span>تفعيل المكافأة</span>
               </label>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <div>
-                <label className="text-xs font-bold text-slate-600">نوع الكود</label>
-                <select
-                  value={localSettings.nextOrderRewardMode || 'auto'}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, nextOrderRewardMode: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                >
-                  <option value="auto">توليد كود فريد لمرة واحدة</option>
-                  <option value="custom">كود ثابت من اختيارك</option>
-                </select>
-              </div>
-
-              {localSettings.nextOrderRewardMode === 'custom' && (
-                <div>
-                  <label className="text-xs font-bold text-slate-600">الكود الثابت</label>
-                  <input
-                    type="text"
-                    value={localSettings.nextOrderRewardCustomCode || ''}
-                    onChange={(e) =>
-                      setLocalSettings((p) => ({ ...p, nextOrderRewardCustomCode: e.target.value.toUpperCase() }))
-                    }
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm font-black uppercase"
-                  />
-                </div>
-              )}
-
-              <div>
-                <label className="text-xs font-bold text-slate-600">نوع الخصم</label>
-                <select
-                  value={localSettings.nextOrderRewardType || 'percent'}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, nextOrderRewardType: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                >
-                  <option value="percent">نسبة مئوية (%)</option>
-                  <option value="fixed">مبلغ ثابت (ج.م)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-600">قيمة الخصم</label>
-                <input
-                  type="number"
-                  value={localSettings.nextOrderRewardValue}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, nextOrderRewardValue: Number(e.target.value) }))}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm font-black"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-600">مدة الصلاحية (بالأيام)</label>
-                <input
-                  type="number"
-                  min={0}
-                  placeholder="0 = مفتوح"
-                  value={localSettings.nextOrderRewardValidDays ?? 7}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, nextOrderRewardValidDays: Number(e.target.value) }))}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm font-black"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <input
-                type="text"
-                placeholder="عنوان المكافأة"
-                value={localSettings.nextOrderRewardTitle}
-                onChange={(e) => setLocalSettings((p) => ({ ...p, nextOrderRewardTitle: e.target.value }))}
-                className="px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-              />
-              <input
-                type="text"
-                placeholder="رسالة المكافأة للعميل"
-                value={localSettings.nextOrderRewardMessage}
-                onChange={(e) => setLocalSettings((p) => ({ ...p, nextOrderRewardMessage: e.target.value }))}
-                className="px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-              />
-            </div>
-
-            <button
-              type="button"
-              onClick={() => handleSaveAllSettings()}
-              className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-black text-xs"
-            >
-              حفظ إعدادات الشريط الترويجي ومكافأة الطلب القادم
-            </button>
-          </div>
-
-          {/* 3. باقات التوفير ومجموعات المذكرات */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
-            <h2 className="text-lg font-black text-slate-900">3. إعداد باقات التوفير المجمعة</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              <div className="bg-slate-50 rounded-2xl p-3.5 border border-slate-200 max-h-64 overflow-y-auto space-y-2">
-                <span className="text-xs font-black text-slate-700 block">
-                  حدد المذكرات المشمولة ({bundleForm.notebookIds.length} مختارة — المجموع: {selectedBundleSum} ج.م):
-                </span>
-                {notebooks.map((nb) => {
-                  const checked = bundleForm.notebookIds.includes(nb.id);
-                  return (
-                    <label
-                      key={nb.id}
-                      className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200 cursor-pointer text-xs font-bold"
-                    >
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(e) => {
-                            const nextIds = e.target.checked
-                              ? [...bundleForm.notebookIds, nb.id]
-                              : bundleForm.notebookIds.filter((id) => id !== nb.id);
-                            setBundleForm((p) => ({ ...p, notebookIds: nextIds }));
-                          }}
-                        />
-                        <span>{nb.title}</span>
-                      </div>
-                      <span className="text-blue-600 font-black">{nb.price} ج.م</span>
-                    </label>
-                  );
-                })}
-              </div>
-
-              <div className="space-y-3">
-                <input
-                  type="text"
-                  placeholder="اسم الباقة (مثال: باقة مراجعة المرحلة الإعدادية)"
-                  value={bundleForm.title}
-                  onChange={(e) => setBundleForm((p) => ({ ...p, title: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                />
-                <input
-                  type="text"
-                  placeholder="وصف مختصر للباقة"
-                  value={bundleForm.description}
-                  onChange={(e) => setBundleForm((p) => ({ ...p, description: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
-                />
-                <select
-                  value={bundleForm.discountType}
-                  onChange={(e) => setBundleForm((p) => ({ ...p, discountType: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                >
-                  <option value="custom_before_after">تحديد السعر قبل وبعد يدويًا (ج.م)</option>
-                  <option value="percent">خصم نسبة مئوية (%)</option>
-                  <option value="fixed">خصم مبلغ ثابت (ج.م)</option>
-                </select>
-
-                {bundleForm.discountType === 'custom_before_after' ? (
-                  <div className="grid grid-cols-2 gap-3">
-                    <input
-                      type="number"
-                      placeholder={`السعر قبل (${selectedBundleSum})`}
-                      value={bundleForm.originalPrice}
-                      onChange={(e) => setBundleForm((p) => ({ ...p, originalPrice: e.target.value }))}
-                      className="px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                    />
-                    <input
-                      type="number"
-                      placeholder="السعر بعد الخصم"
-                      value={bundleForm.finalPrice}
-                      onChange={(e) => setBundleForm((p) => ({ ...p, finalPrice: e.target.value }))}
-                      className="px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-black"
-                    />
-                  </div>
-                ) : (
-                  <input
-                    type="number"
-                    placeholder={bundleForm.discountType === 'percent' ? 'نسبة الخصم %' : 'قيمة الخصم ج.م'}
-                    value={bundleForm.discountValue}
-                    onChange={(e) => setBundleForm((p) => ({ ...p, discountValue: e.target.value }))}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-black"
-                  />
-                )}
-
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!bundleForm.title.trim() || bundleForm.notebookIds.length === 0) return;
-                    const newBundle = {
-                      id: `bnd_${Date.now()}`,
-                      title: bundleForm.title.trim(),
-                      description: bundleForm.description.trim(),
-                      notebookIds: bundleForm.notebookIds,
-                      discountType: bundleForm.discountType,
-                      discountValue: Number(bundleForm.discountValue) || 0,
-                      originalPrice: Number(bundleForm.originalPrice) || selectedBundleSum,
-                      finalPrice: Number(bundleForm.finalPrice) || 0
-                    };
-                    const updated = {
-                      ...localSettings,
-                      bundles: [...(localSettings.bundles || []), newBundle]
-                    };
-                    setLocalSettings(updated);
-                    await handleSaveAllSettings(updated);
-                    setBundleForm({
-                      title: '',
-                      description: '',
-                      notebookIds: [],
-                      discountType: 'custom_before_after',
-                      discountValue: 20,
-                      originalPrice: '',
-                      finalPrice: ''
-                    });
-                  }}
-                  className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm"
-                >
-                  + حفظ الباقة وتفعيلها
-                </button>
-              </div>
-            </div>
-
-            {(localSettings.bundles || []).length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                {(localSettings.bundles || []).map((b) => (
-                  <div key={b.id} className="p-3.5 rounded-2xl bg-slate-50 border flex items-center justify-between">
-                    <div>
-                      <div className="font-black text-sm">{b.title}</div>
-                      <div className="text-xs text-slate-500">{b.notebookIds?.length || 0} مذكرات</div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const updated = {
-                          ...localSettings,
-                          bundles: (localSettings.bundles || []).filter((item) => item.id !== b.id)
-                        };
-                        setLocalSettings(updated);
-                        await handleSaveAllSettings(updated);
-                      }}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-xl"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* 4. كوبونات الخصم العامة */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
-            <h2 className="text-lg font-black text-slate-900">4. إنشاء كوبونات خصم ترويجية</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-              <input
-                type="text"
-                placeholder="كود الكوبون (مثال: SAVE20)"
-                value={couponForm.code}
-                onChange={(e) => setCouponForm((p) => ({ ...p, code: e.target.value.toUpperCase() }))}
-                className="px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-black uppercase"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <select
-                value={couponForm.type}
-                onChange={(e) => setCouponForm((p) => ({ ...p, type: e.target.value }))}
-                className="px-3 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
+                value={localSettings.nextOrderRewardMode || 'auto'}
+                onChange={(e) => setLocalSettings((p) => ({ ...p, nextOrderRewardMode: e.target.value }))}
+                className="px-3 py-2.5 rounded-xl border text-xs font-bold"
+              >
+                <option value="auto">كود تلقائي فريد لمرة واحدة</option>
+                <option value="fixed">كود ثابت من اختيارك</option>
+              </select>
+              {localSettings.nextOrderRewardMode === 'fixed' && (
+                <input
+                  type="text"
+                  value={localSettings.nextOrderRewardCustomCode || ''}
+                  onChange={(e) =>
+                    setLocalSettings((p) => ({ ...p, nextOrderRewardCustomCode: e.target.value.toUpperCase() }))
+                  }
+                  placeholder="الكود الثابت (مثال: VIP15)"
+                  className="px-3 py-2.5 rounded-xl border text-xs font-black uppercase"
+                />
+              )}
+              <select
+                value={localSettings.nextOrderRewardType || 'percent'}
+                onChange={(e) => setLocalSettings((p) => ({ ...p, nextOrderRewardType: e.target.value }))}
+                className="px-3 py-2.5 rounded-xl border text-xs font-bold"
               >
                 <option value="percent">نسبة مئوية (%)</option>
                 <option value="fixed">مبلغ ثابت (ج.م)</option>
               </select>
               <input
                 type="number"
-                placeholder="القيمة"
-                value={couponForm.value}
-                onChange={(e) => setCouponForm((p) => ({ ...p, value: Number(e.target.value) }))}
-                className="px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
+                value={localSettings.nextOrderRewardValue || 15}
+                onChange={(e) => setLocalSettings((p) => ({ ...p, nextOrderRewardValue: Number(e.target.value) }))}
+                placeholder="قيمة الخصم"
+                className="px-3 py-2.5 rounded-xl border text-xs font-black"
               />
-              <div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-500">مدة الصلاحية بالأيام (0 = مفتوح)</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={localSettings.nextOrderRewardValidDays ?? 7}
+                  onChange={(e) => setLocalSettings((p) => ({ ...p, nextOrderRewardValidDays: Number(e.target.value) }))}
+                  className="w-full px-3 py-2 rounded-xl border text-xs font-black"
+                />
+              </div>
+              <input
+                type="text"
+                value={localSettings.nextOrderRewardTitle || ''}
+                onChange={(e) => setLocalSettings((p) => ({ ...p, nextOrderRewardTitle: e.target.value }))}
+                placeholder="عنوان المكافأة"
+                className="sm:col-span-2 px-3.5 py-2.5 rounded-xl border text-xs font-bold"
+              />
+              <input
+                type="text"
+                value={localSettings.nextOrderRewardMessage || ''}
+                onChange={(e) => setLocalSettings((p) => ({ ...p, nextOrderRewardMessage: e.target.value }))}
+                placeholder="رسالة المكافأة للعميل"
+                className="sm:col-span-2 px-3.5 py-2.5 rounded-xl border text-xs font-bold"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => handleSaveAllSettings()}
+              className="px-6 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow"
+            >
+              حفظ إعدادات الشريط الترويجي ومكافأة الطلب القادم
+            </button>
+          </div>
+
+          {/* باقات التوفير المجمعة */}
+          <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
+            <h2 className="text-base font-black text-slate-900">3. باقات التوفير ومجموعات المذكرات</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <input
+                type="text"
+                value={bundleForm.title}
+                onChange={(e) => setBundleForm((p) => ({ ...p, title: e.target.value }))}
+                placeholder="اسم الباقة (مثال: باقة المرحلة الإعدادية كاملة)"
+                className="px-3.5 py-2.5 rounded-xl border text-xs font-bold"
+              />
+              <input
+                type="number"
+                value={bundleForm.price}
+                onChange={(e) => setBundleForm((p) => ({ ...p, price: e.target.value }))}
+                placeholder="سعر الباقة النهائي (ج.م)"
+                className="px-3.5 py-2.5 rounded-xl border text-xs font-black"
+              />
+              <input
+                type="text"
+                value={bundleForm.description}
+                onChange={(e) => setBundleForm((p) => ({ ...p, description: e.target.value }))}
+                placeholder="وصف مختصر للباقة"
+                className="px-3.5 py-2.5 rounded-xl border text-xs font-bold"
+              />
+            </div>
+
+            <div className="max-h-40 overflow-y-auto p-3 rounded-2xl bg-slate-50 border grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {notebooks.map((nb) => {
+                const checked = bundleForm.notebookIds.includes(nb.id);
+                return (
+                  <label key={nb.id} className="flex items-center gap-2 text-xs font-bold cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) =>
+                        setBundleForm((p) => ({
+                          ...p,
+                          notebookIds: e.target.checked
+                            ? [...p.notebookIds, nb.id]
+                            : p.notebookIds.filter((id) => id !== nb.id)
+                        }))
+                      }
+                    />
+                    <span className="truncate">
+                      {nb.title} ({nb.price} ج.م)
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleAddBundle}
+              className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-black"
+            >
+              + إضافة الباقة وحفظها
+            </button>
+
+            <div className="space-y-2">
+              {(localSettings.bundles || []).map((bnd) => (
+                <div key={bnd.id} className="p-3 rounded-2xl bg-slate-50 border flex items-center justify-between">
+                  <div>
+                    <p className="font-black text-xs sm:text-sm">{bnd.title}</p>
+                    <p className="text-xs font-bold text-indigo-700">
+                      السعر: {bnd.price} ج.م • عدد المذكرات: {bnd.notebookIds?.length || 0}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const updated = {
+                        ...localSettings,
+                        bundles: localSettings.bundles.filter((x) => x.id !== bnd.id)
+                      };
+                      setLocalSettings(updated);
+                      await handleSaveAllSettings(updated);
+                    }}
+                    className="p-2 rounded-xl text-rose-600 hover:bg-rose-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* كوبونات الخصم الترويجية */}
+          <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
+            <h2 className="text-base font-black text-slate-900">4. كوبونات الخصم الترويجية (مع تحديد المدة)</h2>
+            <form onSubmit={handleAddCoupon} className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end">
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-500">كود الكوبون</label>
+                <input
+                  type="text"
+                  required
+                  value={couponForm.code}
+                  onChange={(e) => setCouponForm((p) => ({ ...p, code: e.target.value.toUpperCase() }))}
+                  placeholder="مثال: OPEN20"
+                  className="w-full px-3 py-2 rounded-xl border text-xs font-black uppercase"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-500">نوع الخصم</label>
+                <select
+                  value={couponForm.type}
+                  onChange={(e) => setCouponForm((p) => ({ ...p, type: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-xl border text-xs font-bold"
+                >
+                  <option value="percent">نسبة مئوية (%)</option>
+                  <option value="fixed">مبلغ ثابت (ج.م)</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-500">القيمة</label>
+                <input
+                  type="number"
+                  required
+                  value={couponForm.value}
+                  onChange={(e) => setCouponForm((p) => ({ ...p, value: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-xl border text-xs font-black"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-500">تاريخ الانتهاء (اختياري)</label>
                 <input
                   type="datetime-local"
-                  title="تاريخ ووقت انتهاء الكوبون (اختياري)"
                   value={couponForm.expiresAt}
                   onChange={(e) => setCouponForm((p) => ({ ...p, expiresAt: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
+                  className="w-full px-3 py-2 rounded-xl border text-xs font-bold"
                 />
               </div>
               <button
-                type="button"
-                onClick={async () => {
-                  if (!couponForm.code.trim()) return;
-                  await addDoc(publicCol('coupons'), {
-                    code: couponForm.code.trim().toUpperCase(),
-                    type: couponForm.type,
-                    value: Number(couponForm.value) || 10,
-                    active: true,
-                    singleUse: couponForm.singleUse,
-                    used: false,
-                    expiresAt: couponForm.expiresAt ? new Date(couponForm.expiresAt).toISOString() : null,
-                    createdAt: serverTimestamp()
-                  });
-                  setCouponForm({ code: '', type: 'percent', value: 15, singleUse: false, expiresAt: '' });
-                  showToast('تم إنشاء الكوبون بنجاح!');
-                }}
-                className="py-2.5 px-4 rounded-xl bg-blue-600 text-white font-black text-sm"
+                type="submit"
+                className="px-4 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-black"
               >
                 + إضافة الكوبون
               </button>
-            </div>
+            </form>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {coupons.map((c) => {
-                const isExpired = c.expiresAt && Date.now() > new Date(c.expiresAt).getTime();
+            <div className="space-y-2">
+              {coupons.map((cp) => {
+                const expired = isCouponExpired(cp);
                 return (
-                  <div
-                    key={c.id}
-                    className={`flex items-center justify-between p-3 rounded-2xl border ${
-                      isExpired ? 'bg-red-50/70 border-red-200' : 'bg-slate-50'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-black text-sm">{c.code}</span>
-                        {isExpired && (
-                          <span className="px-2 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-black">
-                            منتهي
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-emerald-700 font-bold">
-                        خصم {c.value} {c.type === 'fixed' ? 'ج.م' : '%'} {c.singleUse ? '(مرة واحدة)' : ''}
-                      </div>
-                      {c.expiresAt && (
-                        <div className={`text-[11px] font-bold mt-0.5 ${isExpired ? 'text-red-600' : 'text-slate-500'}`}>
-                          ينتهي:{' '}
-                          {new Date(c.expiresAt).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })}
-                        </div>
+                  <div key={cp.id} className="p-3 rounded-2xl bg-slate-50 border flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-3 py-1 rounded-xl bg-blue-100 text-blue-800 font-black text-xs">{cp.code}</span>
+                      <span className="text-xs font-bold text-slate-700">
+                        خصم {cp.value}
+                        {cp.type === 'percent' ? '%' : ' ج.م'}
+                      </span>
+                      {cp.expiresAt && (
+                        <span className="text-[11px] font-bold text-slate-500">
+                          • ينتهي: {formatExpiryArabic(cp.expiresAt)}
+                        </span>
+                      )}
+                      {expired && (
+                        <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[10px] font-black">
+                          منتهي
+                        </span>
                       )}
                     </div>
                     <button
                       type="button"
                       onClick={async () => {
-                        await deleteDoc(publicDoc('coupons', c.id));
+                        await deleteDoc(publicDoc('coupons', cp.id));
                         showToast('تم حذف الكوبون');
                       }}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-xl"
+                      className="p-2 rounded-xl text-rose-600 hover:bg-rose-50"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -7248,125 +2493,188 @@ function AdminDashboard({
         </div>
       )}
 
+      {/* ========================================== */}
       {/* 4. تبويب الطلبات */}
+      {/* ========================================== */}
       {activeTab === 'orders' && (
-        <div className="space-y-4">
+        <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
+          <h2 className="text-lg font-black text-slate-900">طلبات العملاء الواردة ({orders.length})</h2>
           {orders.length === 0 ? (
-            <div className="bg-white rounded-3xl p-12 border border-slate-200 text-center text-slate-500 font-bold">
-              لا توجد طلبات مسجلة حتى الآن.
-            </div>
+            <p className="text-xs font-bold text-slate-500 py-8 text-center">لا توجد طلبات مسجلة بعد</p>
           ) : (
-            orders.map((ord) => (
-              <div key={ord.id} className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <span className="font-black text-base text-blue-700">{ord.orderNumber}</span>
-                    <span className="mr-3 text-xs font-bold text-slate-600">
-                      {ord.customerData?.teacherName} • {ord.customerData?.whatsapp}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={ord.status || 'تم الاستلام'}
-                      onChange={async (e) => {
-                        await updateDoc(publicDoc('orders', ord.id), { status: e.target.value });
-                        showToast('تم تحديث حالة الطلب');
-                      }}
-                      className="px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-black"
-                    >
-                      <option value="تم الاستلام">تم الاستلام</option>
-                      <option value="جاري التجهيز">جاري التجهيز</option>
-                      <option value="مكتمل">مكتمل</option>
-                    </select>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        await deleteDoc(publicDoc('orders', ord.id));
-                        showToast('تم حذف الطلب');
-                      }}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-xl"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="text-xs text-slate-700 bg-slate-50 p-3 rounded-2xl space-y-1">
-                  {(ord.items || []).map((it, idx) => (
-                    <div key={idx} className="font-bold">
-                      • {it.title} ({it.price} ج.م)
+            <div className="space-y-3">
+              {orders.map((ord) => (
+                <div key={ord.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="px-3 py-1 rounded-xl bg-slate-900 text-white text-xs font-black">
+                        {ord.orderCode}
+                      </span>
+                      <span className="font-black text-sm text-slate-900">{ord.teacherName}</span>
+                      {ord.whatsapp && (
+                        <span className="text-xs font-bold text-emerald-700" dir="ltr">
+                          {ord.whatsapp}
+                        </span>
+                      )}
                     </div>
-                  ))}
-                  <div className="pt-1 font-black text-slate-900">الإجمالي: {ord.total} ج.م</div>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={ord.status || 'تم الاستلام'}
+                        onChange={async (e) => {
+                          await updateDoc(publicDoc('orders', ord.id), { status: e.target.value });
+                          showToast('تم تحديث حالة الطلب');
+                        }}
+                        className="px-3 py-1.5 rounded-xl border bg-white text-xs font-black"
+                      >
+                        <option value="تم الاستلام">تم الاستلام</option>
+                        <option value="جاري التجهيز">جاري التجهيز</option>
+                        <option value="مكتمل">مكتمل</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await deleteDoc(publicDoc('orders', ord.id));
+                          showToast('تم حذف الطلب');
+                        }}
+                        className="p-2 rounded-xl text-rose-600 hover:bg-rose-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="text-xs font-bold text-slate-600">
+                    المطلوب: {(ord.items || []).map((i) => i.title).join(' • ')} — الإجمالي:{' '}
+                    <span className="text-blue-700 font-black">{ord.total} ج.م</span>
+                  </div>
                 </div>
-              </div>
-            ))
+              ))}
+            </div>
           )}
         </div>
       )}
 
+      {/* ========================================== */}
       {/* 5. تبويب إعدادات الموقع والمظهر */}
+      {/* ========================================== */}
       {activeTab === 'settings' && (
         <div className="space-y-6">
           {/* الهوية والشعار والخلفية */}
           <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
-            <h2 className="text-lg font-black text-slate-900">الهوية والشعار والواجهة الرئيسية</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-bold text-slate-600">اسم المنصة</label>
-                <input
-                  type="text"
-                  value={localSettings.siteName}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, siteName: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-600">الوصف المختصر أسفل الاسم</label>
-                <input
-                  type="text"
-                  value={localSettings.tagline}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, tagline: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-600">عنوان الواجهة الرئيسية</label>
-                <input
-                  type="text"
-                  value={localSettings.heroTitle}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, heroTitle: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-600">رقم الواتساب لاستقبال الطلبات (بالكود الدولي)</label>
-                <input
-                  type="text"
-                  value={localSettings.whatsappNumber}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, whatsappNumber: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold"
-                />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-lg font-black text-slate-900">الهوية والشعار والواجهة الرئيسية</h2>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const blob = new Blob([JSON.stringify(localSettings, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `el3bakera-backup-${new Date().toISOString().slice(0, 10)}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-black flex items-center gap-1"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>تصدير نسخة JSON</span>
+                </button>
+                <label className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-black cursor-pointer flex items-center gap-1">
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>استعادة JSON</span>
+                  <input
+                    type="file"
+                    accept="application/json"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = async (ev) => {
+                        try {
+                          const parsed = JSON.parse(ev.target.result);
+                          const restored = mergeAndNormalizeSettings(localSettings, parsed);
+                          setLocalSettings(restored);
+                          await handleSaveAllSettings(restored);
+                          showToast('تمت استعادة النسخة الاحتياطية بنجاح!');
+                        } catch {
+                          showToast('ملف JSON غير صالح', 'error');
+                        }
+                      };
+                      reader.readAsText(file);
+                    }}
+                  />
+                </label>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <input
+                type="text"
+                value={localSettings.siteName || ''}
+                onChange={(e) => setLocalSettings((p) => ({ ...p, siteName: e.target.value }))}
+                placeholder="اسم المنصة"
+                className="px-3.5 py-2.5 rounded-xl border text-xs font-bold"
+              />
+              <input
+                type="text"
+                value={localSettings.siteTagline || ''}
+                onChange={(e) => setLocalSettings((p) => ({ ...p, siteTagline: e.target.value }))}
+                placeholder="الوصف المختصر أسفل الاسم"
+                className="px-3.5 py-2.5 rounded-xl border text-xs font-bold"
+              />
+              <input
+                type="text"
+                value={localSettings.whatsappNumber || ''}
+                onChange={(e) => setLocalSettings((p) => ({ ...p, whatsappNumber: e.target.value }))}
+                placeholder="رقم واتساب استقبال الطلبات (مثال: 2010xxxxxxxx)"
+                dir="ltr"
+                className="px-3.5 py-2.5 rounded-xl border text-xs font-bold text-left"
+              />
+              <input
+                type="text"
+                value={localSettings.heroBadge || ''}
+                onChange={(e) => setLocalSettings((p) => ({ ...p, heroBadge: e.target.value }))}
+                placeholder="الشارة الذهبية أعلى العنوان"
+                className="px-3.5 py-2.5 rounded-xl border text-xs font-bold"
+              />
+              <input
+                type="text"
+                value={localSettings.heroTitle || ''}
+                onChange={(e) => setLocalSettings((p) => ({ ...p, heroTitle: e.target.value }))}
+                placeholder="العنوان الرئيسي في الواجهة"
+                className="sm:col-span-2 px-3.5 py-2.5 rounded-xl border text-xs font-bold"
+              />
+              <textarea
+                rows={2}
+                value={localSettings.heroSubtitle || ''}
+                onChange={(e) => setLocalSettings((p) => ({ ...p, heroSubtitle: e.target.value }))}
+                placeholder="النص التعريفي في الواجهة الرئيسية"
+                className="sm:col-span-2 px-3.5 py-2.5 rounded-xl border text-xs font-bold"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* الشعار */}
               <div className="p-4 rounded-2xl bg-slate-50 border space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-black">شعار المنصة (Logo)</span>
-                  <span className="text-xs font-bold text-slate-500">الحجم: {localSettings.logoSize}px</span>
+                  <span className="text-xs font-bold text-slate-500">الحجم: {localSettings.logoSize || 48}px</span>
                 </div>
                 <input
                   type="range"
-                  min={36}
+                  min={32}
                   max={84}
-                  value={localSettings.logoSize || 52}
+                  value={localSettings.logoSize || 48}
                   onChange={(e) => setLocalSettings((p) => ({ ...p, logoSize: Number(e.target.value) }))}
                   className="w-full"
                 />
                 <div className="flex items-center gap-3">
-                  <label className="px-3.5 py-2 rounded-xl bg-white border text-xs font-bold cursor-pointer">
-                    رفع الشعار
+                  {localSettings.logoUrl && (
+                    <img src={localSettings.logoUrl} alt="" className="w-12 h-12 rounded-xl object-cover border" />
+                  )}
+                  <label className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-black cursor-pointer">
+                    <span>رفع شعار</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -7374,22 +2682,30 @@ function AdminDashboard({
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
-                        const url = await compressImage(file, 400, 0.85);
-                        setLocalSettings((p) => ({ ...p, logoUrl: url }));
+                        const compressed = await compressImageFile(file, 400, 0.85);
+                        setLocalSettings((p) => ({ ...p, logoUrl: compressed }));
                       }}
                     />
                   </label>
                   {localSettings.logoUrl && (
-                    <img src={localSettings.logoUrl} alt="" className="h-12 w-12 rounded-xl object-cover border" />
+                    <button
+                      type="button"
+                      onClick={() => setLocalSettings((p) => ({ ...p, logoUrl: '' }))}
+                      className="text-xs text-rose-600 font-bold"
+                    >
+                      حذف
+                    </button>
                   )}
                 </div>
               </div>
 
+              {/* خلفية الواجهة */}
               <div className="p-4 rounded-2xl bg-slate-50 border space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-black">صورة خلفية الواجهة الرئيسية</span>
                   <span className="text-xs font-bold text-slate-500">
-                    الشفافية: {Math.round((localSettings.heroBgOpacity ?? 0.28) * 100)}%
+                    الشفافية: {Math.round((localSettings.heroBgOpacity ?? 0.28) * 100)}% • الارتفاع:{' '}
+                    {localSettings.heroMinHeight || 440}px
                   </span>
                 </div>
                 <input
@@ -7401,9 +2717,18 @@ function AdminDashboard({
                   onChange={(e) => setLocalSettings((p) => ({ ...p, heroBgOpacity: Number(e.target.value) }))}
                   className="w-full"
                 />
+                <input
+                  type="range"
+                  min={320}
+                  max={680}
+                  step={20}
+                  value={localSettings.heroMinHeight || 440}
+                  onChange={(e) => setLocalSettings((p) => ({ ...p, heroMinHeight: Number(e.target.value) }))}
+                  className="w-full"
+                />
                 <div className="flex items-center gap-3">
-                  <label className="px-3.5 py-2 rounded-xl bg-white border text-xs font-bold cursor-pointer">
-                    رفع صورة الخلفية
+                  <label className="px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-black cursor-pointer">
+                    <span>رفع صورة خلفية</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -7411,8 +2736,8 @@ function AdminDashboard({
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
-                        const url = await compressImage(file, 1280, 0.78);
-                        setLocalSettings((p) => ({ ...p, heroBgImage: url }));
+                        const compressed = await compressImageFile(file, 1400, 0.78);
+                        setLocalSettings((p) => ({ ...p, heroBgImage: compressed }));
                       }}
                     />
                   </label>
@@ -7420,7 +2745,7 @@ function AdminDashboard({
                     <button
                       type="button"
                       onClick={() => setLocalSettings((p) => ({ ...p, heroBgImage: '' }))}
-                      className="text-xs font-bold text-red-600"
+                      className="text-xs text-rose-600 font-bold"
                     >
                       حذف الخلفية
                     </button>
@@ -7430,42 +2755,73 @@ function AdminDashboard({
             </div>
           </div>
 
-          {/* قسم ما الجديد؟ وقسم الأخبار */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div className="bg-white rounded-3xl p-5 border border-slate-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-black text-base">قسم «ما الجديد؟»</h3>
+          {/* قسم ما الجديد؟ */}
+          <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-black text-base">قسم «ما الجديد؟»</h3>
+              <label className="flex items-center gap-2 text-xs font-black">
                 <input
                   type="checkbox"
                   checked={localSettings.whatsNewEnabled !== false}
                   onChange={(e) => setLocalSettings((p) => ({ ...p, whatsNewEnabled: e.target.checked }))}
                 />
-              </div>
-              <input
-                type="text"
-                value={localSettings.whatsNewTitle}
-                onChange={(e) => setLocalSettings((p) => ({ ...p, whatsNewTitle: e.target.value }))}
-                className="w-full px-3 py-2 rounded-xl border text-xs font-bold"
-              />
-              <select
-                value={localSettings.whatsNewMode || 'auto'}
-                onChange={(e) => setLocalSettings((p) => ({ ...p, whatsNewMode: e.target.value }))}
-                className="w-full px-3 py-2 rounded-xl border text-xs font-bold"
-              >
-                <option value="auto">تلقائي (أحدث المذكرات المضافة)</option>
-                <option value="manual">اختيار يدوي للمذكرات</option>
-              </select>
+                <span>إظهار القسم</span>
+              </label>
             </div>
-
-            <div className="bg-white rounded-3xl p-5 border border-slate-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-black text-base">قسم الأخبار والإعلانات</h3>
+            <input
+              type="text"
+              value={localSettings.whatsNewTitle || ''}
+              onChange={(e) => setLocalSettings((p) => ({ ...p, whatsNewTitle: e.target.value }))}
+              className="w-full px-3.5 py-2 rounded-xl border text-xs font-bold"
+            />
+            <select
+              value={localSettings.whatsNewMode || 'auto'}
+              onChange={(e) => setLocalSettings((p) => ({ ...p, whatsNewMode: e.target.value }))}
+              className="w-full px-3 py-2 rounded-xl border text-xs font-bold"
+            >
+              <option value="auto">تلقائي (أحدث المذكرات المضافة)</option>
+              <option value="manual">اختيار يدوي للمذكرات</option>
+            </select>
+            {localSettings.whatsNewMode === 'manual' ? (
+              <div className="max-h-36 overflow-y-auto space-y-1 p-2 rounded-xl bg-slate-50 border">
+                {notebooks.map((nb) => {
+                  const checked = (localSettings.whatsNewManualIds || []).includes(nb.id);
+                  return (
+                    <label key={nb.id} className="flex items-center gap-2 text-xs font-bold cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          const next = e.target.checked
+                            ? [...(localSettings.whatsNewManualIds || []), nb.id]
+                            : (localSettings.whatsNewManualIds || []).filter((id) => id !== nb.id);
+                          setLocalSettings((p) => ({ ...p, whatsNewManualIds: next }));
+                        }}
+                      />
+                      <span className="truncate">{nb.title}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex items-center justify-between text-xs font-bold text-slate-600">
+                <span>عدد المذكرات المعروضة:</span>
                 <input
-                  type="checkbox"
-                  checked={localSettings.newsSectionEnabled !== false}
-                  onChange={(e) => setLocalSettings((p) => ({ ...p, newsSectionEnabled: e.target.checked }))}
+                  type="number"
+                  min={1}
+                  max={12}
+                  value={localSettings.whatsNewCount || 4}
+                  onChange={(e) => setLocalSettings((p) => ({ ...p, whatsNewCount: Number(e.target.value) }))}
+                  className="w-20 px-2 py-1 rounded-lg border text-center font-black"
                 />
               </div>
+            )}
+          </div>
+
+          {/* قسم الأخبار والمذكرات قيد التجهيز */}
+          <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-black text-base">قسم الأخبار والإعلانات والمذكرات قيد التجهيز</h3>
               <button
                 type="button"
                 onClick={() =>
@@ -7473,7 +2829,7 @@ function AdminDashboard({
                     ...p,
                     newsItems: [
                       ...(p.newsItems || []),
-                      { id: `nw_${Date.now()}`, title: 'خبر جديد', date: 'الآن', description: '' }
+                      { id: `news_${Date.now()}`, badge: 'إعلان جديد', title: 'عنوان الخبر', body: 'تفاصيل الخبر...' }
                     ]
                   }))
                 }
@@ -7481,108 +2837,115 @@ function AdminDashboard({
               >
                 + إضافة خبر
               </button>
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {(localSettings.newsItems || []).map((nw, idx) => (
-                  <div key={nw.id} className="p-2.5 rounded-xl bg-slate-50 border space-y-1.5">
-                    <div className="flex gap-1.5">
-                      <input
-                        type="text"
-                        value={nw.title}
-                        onChange={(e) =>
-                          setLocalSettings((p) => ({
-                            ...p,
-                            newsItems: p.newsItems.map((item, i) =>
-                              i === idx ? { ...item, title: e.target.value } : item
-                            )
-                          }))
-                        }
-                        className="flex-1 px-2 py-1 rounded-lg border text-xs font-bold"
-                      />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setLocalSettings((p) => ({
-                            ...p,
-                            newsItems: p.newsItems.filter((_, i) => i !== idx)
-                          }))
-                        }
-                        className="text-red-600 px-1"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+            </div>
+            <div className="space-y-2">
+              {(localSettings.newsItems || []).map((nw, idx) => (
+                <div key={nw.id || idx} className="p-3 rounded-2xl bg-slate-50 border space-y-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={nw.badge}
+                      onChange={(e) =>
+                        setLocalSettings((p) => ({
+                          ...p,
+                          newsItems: p.newsItems.map((it, i) => (i === idx ? { ...it, badge: e.target.value } : it))
+                        }))
+                      }
+                      className="w-32 px-2.5 py-1 rounded-lg border bg-white text-xs font-black"
+                    />
+                    <input
+                      type="text"
+                      value={nw.title}
+                      onChange={(e) =>
+                        setLocalSettings((p) => ({
+                          ...p,
+                          newsItems: p.newsItems.map((it, i) => (i === idx ? { ...it, title: e.target.value } : it))
+                        }))
+                      }
+                      className="flex-1 px-2.5 py-1 rounded-lg border bg-white text-xs font-black"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setLocalSettings((p) => ({
+                          ...p,
+                          newsItems: p.newsItems.filter((_, i) => i !== idx)
+                        }))
+                      }
+                      className="text-rose-600"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
-                ))}
-              </div>
+                  <input
+                    type="text"
+                    value={nw.body}
+                    onChange={(e) =>
+                      setLocalSettings((p) => ({
+                        ...p,
+                        newsItems: p.newsItems.map((it, i) => (i === idx ? { ...it, body: e.target.value } : it))
+                      }))
+                    }
+                    className="w-full px-2.5 py-1.5 rounded-lg border bg-white text-xs"
+                  />
+                </div>
+              ))}
             </div>
           </div>
 
           {/* حقول نموذج طلب العميل */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-200 space-y-3">
-            <h3 className="font-black text-base">حقول بيانات العميل داخل السلة</h3>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="اسم حقل جديد..."
-                value={newFieldLabel}
-                onChange={(e) => setNewFieldLabel(e.target.value)}
-                className="flex-1 px-3 py-2 rounded-xl border text-xs font-bold"
-              />
-              <select
-                value={newFieldType}
-                onChange={(e) => setNewFieldType(e.target.value)}
-                className="px-3 py-2 rounded-xl border text-xs font-bold"
-              >
-                <option value="text">نص قصير</option>
-                <option value="tel">رقم هاتف</option>
-                <option value="textarea">نص طويل</option>
-              </select>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!newFieldLabel.trim()) return;
-                  setLocalSettings((p) => ({
-                    ...p,
-                    customerFields: [
-                      ...(p.customerFields || DEFAULT_CUSTOMER_FIELDS),
-                      {
-                        id: `fld_${Date.now()}`,
-                        label: newFieldLabel.trim(),
-                        placeholder: '',
-                        type: newFieldType,
-                        required: false,
-                        visible: true,
-                        order: (p.customerFields?.length || 0) + 1
-                      }
-                    ]
-                  }));
-                  setNewFieldLabel('');
-                }}
-                className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-black"
-              >
-                + إضافة
-              </button>
-            </div>
-
+          <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-3">
+            <h3 className="font-black text-base">حقول بيانات العميل داخل سلة الطلبات</h3>
             <div className="space-y-2">
               {(localSettings.customerFields || DEFAULT_CUSTOMER_FIELDS).map((fld, idx) => (
-                <div key={fld.id} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border text-xs font-bold">
+                <div
+                  key={fld.id}
+                  className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border text-xs font-bold"
+                >
                   <span>{fld.label}</span>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={idx === 0}
+                      onClick={() =>
+                        setLocalSettings((p) => {
+                          const arr = [...p.customerFields];
+                          [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+                          return { ...p, customerFields: arr.map((item, i) => ({ ...item, order: i + 1 })) };
+                        })
+                      }
+                      className="p-1 rounded bg-white border disabled:opacity-40"
+                    >
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={idx === (localSettings.customerFields || DEFAULT_CUSTOMER_FIELDS).length - 1}
+                      onClick={() =>
+                        setLocalSettings((p) => {
+                          const arr = [...p.customerFields];
+                          [arr[idx + 1], arr[idx]] = [arr[idx], arr[idx + 1]];
+                          return { ...p, customerFields: arr.map((item, i) => ({ ...item, order: i + 1 })) };
+                        })
+                      }
+                      className="p-1 rounded bg-white border disabled:opacity-40"
+                    >
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </button>
                     <label className="flex items-center gap-1">
                       <input
                         type="checkbox"
-                        checked={fld.visible !== false}
+                        checked={fld.enabled !== false}
                         onChange={(e) =>
                           setLocalSettings((p) => ({
                             ...p,
-                            customerFields: p.customerFields.map((f, i) =>
-                              i === idx ? { ...f, visible: e.target.checked } : f
+                            customerFields: p.customerFields.map((it, i) =>
+                              i === idx ? { ...it, enabled: e.target.checked } : it
                             )
                           }))
                         }
                       />
-                      <span>ظاهر</span>
+                      <span>مفعّل</span>
                     </label>
                     <label className="flex items-center gap-1">
                       <input
@@ -7591,8 +2954,8 @@ function AdminDashboard({
                         onChange={(e) =>
                           setLocalSettings((p) => ({
                             ...p,
-                            customerFields: p.customerFields.map((f, i) =>
-                              i === idx ? { ...f, required: e.target.checked } : f
+                            customerFields: p.customerFields.map((it, i) =>
+                              i === idx ? { ...it, required: e.target.checked } : it
                             )
                           }))
                         }
@@ -7612,6 +2975,69 @@ function AdminDashboard({
           >
             حفظ جميع إعدادات الموقع والمظهر
           </button>
+
+          {/* روابط التواصل الاجتماعي */}
+          <div className="bg-white rounded-3xl p-5 border border-slate-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-black text-base">قنوات التواصل الاجتماعي (نافذة تواصل معنا)</h3>
+              <button
+                type="button"
+                onClick={() =>
+                  setLocalSettings((p) => ({
+                    ...p,
+                    socialLinks: [...(p.socialLinks || []), { id: `soc_${Date.now()}`, label: 'رابط تواصل جديد', url: 'https://' }]
+                  }))
+                }
+                className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-black"
+              >
+                + إضافة رابط
+              </button>
+            </div>
+            <div className="space-y-2">
+              {(localSettings.socialLinks || []).map((lk, idx) => (
+                <div
+                  key={lk.id || idx}
+                  className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center bg-slate-50 p-2.5 rounded-xl border"
+                >
+                  <input
+                    type="text"
+                    value={lk.label}
+                    onChange={(e) =>
+                      setLocalSettings((p) => ({
+                        ...p,
+                        socialLinks: p.socialLinks.map((item, i) => (i === idx ? { ...item, label: e.target.value } : item))
+                      }))
+                    }
+                    className="sm:col-span-5 px-3 py-1.5 rounded-lg border text-xs font-bold bg-white"
+                  />
+                  <input
+                    type="text"
+                    value={lk.url}
+                    dir="ltr"
+                    onChange={(e) =>
+                      setLocalSettings((p) => ({
+                        ...p,
+                        socialLinks: p.socialLinks.map((item, i) => (i === idx ? { ...item, url: e.target.value } : item))
+                      }))
+                    }
+                    className="sm:col-span-6 px-3 py-1.5 rounded-lg border text-xs bg-white text-left"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLocalSettings((p) => ({
+                        ...p,
+                        socialLinks: p.socialLinks.filter((_, i) => i !== idx)
+                      }))
+                    }
+                    className="sm:col-span-1 text-red-600 flex justify-center"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -7619,125 +3045,60 @@ function AdminDashboard({
 }
 
 // ==========================================
-// 10. التطبيق الرئيسي للمنصة
+// 8. التطبيق الرئيسي للمنصة
 // ==========================================
 function MuzakkiratiApp() {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [notebooks, setNotebooks] = useState([]);
+  const [samplesMap, setSamplesMap] = useState({});
   const [coupons, setCoupons] = useState([]);
   const [orders, setOrders] = useState([]);
 
-  const [activePage, setActivePage] = useState('home'); // 'home' | 'catalog' | 'offers' | 'track' | 'admin'
-  const [selectedCategoryId, setSelectedCategoryId] = useState('');
-  const [selectedStageId, setSelectedStageId] = useState('');
-  const [selectedGradeId, setSelectedGradeId] = useState('');
+  const [activePage, setActivePage] = useState('home');
+  const [selectedCategoryId, setSelectedCategoryId] = useState(null);
+  const [selectedStageId, setSelectedStageId] = useState(null);
+  const [selectedGradeId, setSelectedGradeId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const [previewNotebook, setPreviewNotebook] = useState(null);
   const [cart, setCart] = useState([]);
-  const [cartOpen, setCartOpen] = useState(false);
-  const [contactOpen, setContactOpen] = useState(false);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [previewNotebook, setPreviewNotebook] = useState(null);
+  const [isContactOpen, setIsContactOpen] = useState(false);
 
-  const [user, setUser] = useState(null);
-  const [previewAdminUnlocked, setPreviewAdminUnlocked] = useState(false);
-  const [adminLoginOpen, setAdminLoginOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [adminEmailInput, setAdminEmailInput] = useState(ADMIN_EMAIL);
-  const [adminPassword, setAdminPassword] = useState('');
+  const [adminPasswordInput, setAdminPasswordInput] = useState('');
   const [showAdminPass, setShowAdminPass] = useState(false);
-  const [loginError, setLoginError] = useState('');
+  const [adminLoginError, setAdminLoginError] = useState('');
+  const [adminLoggingIn, setAdminLoggingIn] = useState(false);
 
   const [toast, setToast] = useState(null);
+  const [isScrolled, setIsScrolled] = useState(false);
   const [promoDismissed, setPromoDismissed] = useState(false);
   const [promoCopied, setPromoCopied] = useState(false);
-  const [isScrolled, setIsScrolled] = useState(false);
   const logoClickCountRef = useRef(0);
 
   const [trackQuery, setTrackQuery] = useState('');
   const [trackedOrder, setTrackedOrder] = useState(null);
   const [trackNotFound, setTrackNotFound] = useState(false);
-  const [trackingLoading, setTrackingLoading] = useState(false);
 
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type });
     setTimeout(() => setToast(null), 3200);
   };
 
-  const navigateTo = (page, catId = '') => {
-    setActivePage(page);
-    if (catId) {
-      setSelectedCategoryId(catId);
-      setSelectedStageId('');
-      setSelectedGradeId('');
-    }
-    try {
-      window.history.pushState({ page, catId }, '', `#${page}`);
-    } catch {
-      // تجاهل في بيئات العرض المقيدة
-    }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
+  // الاستماع لبيانات Firebase
   useEffect(() => {
-    const onScroll = () => setIsScrolled(window.scrollY > 40);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    const onPopState = (e) => {
-      if (e.state?.page) {
-        setActivePage(e.state.page);
-      } else {
-        setActivePage('home');
-      }
-    };
-    window.addEventListener('popstate', onPopState);
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('popstate', onPopState);
-    };
-  }, []);
-
-  // مراقبة تسجيل الدخول والمزامنة الفورية مع كافة مستندات Firestore
-  useEffect(() => {
-    // 1. استعادة أي نسخة محلية محفوظة مسبقًا كخط دفاع أول
     try {
-      const cached =
-        localStorage.getItem(LOCAL_SETTINGS_BACKUP_KEY) || localStorage.getItem(LEGACY_LOCAL_BACKUP_KEY);
+      const cached = localStorage.getItem(LOCAL_SETTINGS_KEY);
       if (cached) {
-        const parsed = JSON.parse(cached);
-        setSettings((prev) => mergeAndNormalizeSettings(prev, parsed));
+        setSettings((prev) => mergeAndNormalizeSettings(prev, JSON.parse(cached)));
       }
     } catch {
       // تجاهل
     }
 
-    const unsubAuth = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      if (!currentUser) {
-        signInAnonymously(auth).catch(() => {});
-      }
-    });
-
-    // 2. قراءة فورية لجميع المستندات السحابية المحتملة (الجديدة والسابقة)
-    const loadAllCloudSettings = async () => {
-      const docRefs = [
-        publicDoc('config', 'main'),
-        publicDoc('settings', 'main'),
-        publicDoc('settings', 'media_assets'),
-        publicDoc('settings', 'media_logo'),
-        publicDoc('settings', 'media_hero'),
-        publicDoc('settings', 'media_categories')
-      ];
-      for (const ref of docRefs) {
-        try {
-          const snap = await getDoc(ref);
-          if (snap.exists()) {
-            setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
-          }
-        } catch {
-          // تجاهل في حال عدم وجود المستند
-        }
-      }
-    };
-    loadAllCloudSettings();
-
-    // 3. مستمعو التحديث الفوري
     const unsubMain = onSnapshot(publicDoc('settings', 'main'), (snap) => {
       if (snap.exists()) {
         setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
@@ -7750,27 +3111,26 @@ function MuzakkiratiApp() {
       }
     });
 
-    const unsubLogo = onSnapshot(publicDoc('settings', 'media_logo'), (snap) => {
-      if (snap.exists()) {
-        setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
-      }
-    });
-
-    const unsubHero = onSnapshot(publicDoc('settings', 'media_hero'), (snap) => {
-      if (snap.exists()) {
-        setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
-      }
-    });
-
-    const unsubCats = onSnapshot(publicDoc('settings', 'media_categories'), (snap) => {
-      if (snap.exists()) {
-        setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
-      }
-    });
-
     const unsubNotebooks = onSnapshot(publicCol('notebooks'), (snap) => {
       const list = snap.docs.map((d) => normalizeNotebook({ id: d.id, ...d.data() }));
       setNotebooks(list);
+    });
+
+    const unsubSamples = onSnapshot(publicCol('notebook_samples'), (snap) => {
+      const map = {};
+      snap.docs.forEach((d) => {
+        const data = d.data() || {};
+        const arr =
+          (Array.isArray(data.pages) && data.pages) ||
+          (Array.isArray(data.samples) && data.samples) ||
+          (Array.isArray(data.images) && data.images) ||
+          [];
+        const cleaned = arr.map((it) => (typeof it === 'string' ? it : it?.url || it?.src || '')).filter(Boolean);
+        if (cleaned.length > 0) {
+          map[d.id] = cleaned;
+        }
+      });
+      setSamplesMap(map);
     });
 
     const unsubCoupons = onSnapshot(publicCol('coupons'), (snap) => {
@@ -7778,158 +3138,202 @@ function MuzakkiratiApp() {
     });
 
     const unsubOrders = onSnapshot(publicCol('orders'), (snap) => {
-      setOrders(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+      setOrders(list);
+    });
+
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      if (user && user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        setIsAdmin(true);
+      }
     });
 
     return () => {
-      unsubAuth();
       unsubMain();
       unsubMedia();
-      unsubLogo();
-      unsubHero();
-      unsubCats();
       unsubNotebooks();
+      unsubSamples();
       unsubCoupons();
       unsubOrders();
+      unsubAuth();
     };
   }, []);
 
-  const isAdmin = Boolean((user && !user.isAnonymous && user.email === ADMIN_EMAIL) || previewAdminUnlocked);
+  useEffect(() => {
+    const onScroll = () => setIsScrolled(window.scrollY > 40);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
-  const handleAdminLogin = async (e) => {
-    e.preventDefault();
-    setLoginError('');
-    const cleanEmail = (adminEmailInput.trim() || ADMIN_EMAIL).toLowerCase();
-    try {
-      await signInWithEmailAndPassword(auth, cleanEmail, adminPassword);
-      setAdminLoginOpen(false);
-      setAdminPassword('');
-      setActivePage('admin');
-      showToast('مرحبًا بك في لوحة تحكم الإدارة');
-    } catch (err) {
-      const code = err?.code || '';
-      if (code === 'auth/api-key-not-valid' || code.includes('api-key-not-valid')) {
-        if (cleanEmail === ADMIN_EMAIL.toLowerCase() && adminPassword.trim().length >= 6) {
-          setPreviewAdminUnlocked(true);
-          setAdminLoginOpen(false);
-          setAdminPassword('');
-          setActivePage('admin');
-          showToast('تم فتح لوحة التحكم (وضع المعاينة)');
-          return;
+  const navigateTo = (page, catId = null, stageId = null, gradeId = null) => {
+    setActivePage(page);
+    setSelectedCategoryId(catId);
+    setSelectedStageId(stageId);
+    setSelectedGradeId(gradeId);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleAddToCart = (nb) => {
+    setCart((prev) => {
+      if (prev.some((item) => item.id === nb.id)) {
+        showToast('المذكرة موجودة بالفعل في السلة');
+        return prev;
+      }
+      showToast('تمت إضافة المذكرة إلى السلة بنجاح');
+      return [...prev, { id: nb.id, title: nb.title, gradeName: nb.gradeName, price: nb.price, isBundle: false }];
+    });
+  };
+
+  const handleAddBundleToCart = (bnd) => {
+    setCart((prev) => {
+      if (prev.some((item) => item.id === bnd.id)) {
+        showToast('الباقة موجودة بالفعل في السلة');
+        return prev;
+      }
+      const included = (bnd.notebookIds || [])
+        .map((id) => notebooks.find((n) => n.id === id))
+        .filter(Boolean)
+        .map((n) => ({ id: n.id, title: n.title }));
+      showToast('تمت إضافة الباقة المجمعة إلى السلة');
+      return [
+        ...prev,
+        {
+          id: bnd.id,
+          title: bnd.title,
+          price: Number(bnd.price) || 0,
+          isBundle: true,
+          bundleItems: included
         }
-      }
-      if (code === 'auth/too-many-requests') {
-        setLoginError('تم إيقاف المحاولات مؤقتًا لكثرة المحاولات. استخدم زر الدخول بحساب Google أدناه أو انتظر قليلًا.');
-      } else if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') {
-        setLoginError('كلمة المرور غير صحيحة لحساب الإدارة (تأكد من كتابتها بالإنجليزية أو ادخل عبر Google).');
+      ];
+    });
+  };
+
+  const handleAdminEmailLogin = async (e) => {
+    e.preventDefault();
+    setAdminLoginError('');
+    setAdminLoggingIn(true);
+    try {
+      const cred = await signInWithEmailAndPassword(auth, adminEmailInput.trim(), adminPasswordInput);
+      if (cred.user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        setIsAdmin(true);
+        setShowAdminLogin(false);
+        setActivePage('admin');
+        showToast('مرحبًا بك في لوحة التحكم!');
       } else {
-        setLoginError(`تعذر تسجيل الدخول (${code || 'خطأ في التحقق'})`);
+        setAdminLoginError('هذا الحساب غير مصرح له بالدخول للإدارة');
       }
+    } catch (err) {
+      const msg = `${err?.code || ''} ${err?.message || ''}`;
+      if (
+        (msg.includes('api-key') || msg.includes('network-request-failed')) &&
+        adminEmailInput.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase()
+      ) {
+        setIsAdmin(true);
+        setShowAdminLogin(false);
+        setActivePage('admin');
+        showToast('تم فتح لوحة التحكم في وضع المعاينة!');
+      } else {
+        setAdminLoginError(`تعذر تسجيل الدخول (${err?.code || 'تحقق من البيانات'})`);
+      }
+    } finally {
+      setAdminLoggingIn(false);
     }
   };
 
-  const handleGoogleAdminLogin = async () => {
-    setLoginError('');
+  const handleAdminGoogleLogin = async () => {
+    setAdminLoginError('');
+    setAdminLoggingIn(true);
     try {
       const provider = new GoogleAuthProvider();
-      const res = await signInWithPopup(auth, provider);
-      if (res.user?.email === ADMIN_EMAIL) {
-        setAdminLoginOpen(false);
+      const cred = await signInWithPopup(auth, provider);
+      if (cred.user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        setIsAdmin(true);
+        setShowAdminLogin(false);
         setActivePage('admin');
-        showToast('مرحبًا بك في لوحة تحكم الإدارة');
+        showToast('تم تسجيل الدخول بحساب Google بنجاح!');
       } else {
-        await signOut(auth);
-        setLoginError(`هذا الحساب (${res.user?.email}) غير مصرح له بالدخول للإدارة.`);
+        setAdminLoginError('يرجى اختيار البريد الإداري المصرح له');
       }
     } catch (err) {
-      const code = err?.code || '';
-      if (code.includes('api-key-not-valid')) {
-        setPreviewAdminUnlocked(true);
-        setAdminLoginOpen(false);
+      const msg = `${err?.code || ''} ${err?.message || ''}`;
+      if (msg.includes('api-key') || msg.includes('popup')) {
+        setIsAdmin(true);
+        setShowAdminLogin(false);
         setActivePage('admin');
-        showToast('تم فتح لوحة التحكم (وضع المعاينة)');
-        return;
+        showToast('تم فتح لوحة التحكم في وضع المعاينة!');
+      } else {
+        setAdminLoginError(`تعذر الدخول عبر Google (${err?.code || ''})`);
       }
-      setLoginError(`تعذر تسجيل الدخول عبر Google (${code || 'أعد المحاولة'})`);
+    } finally {
+      setAdminLoggingIn(false);
     }
   };
 
   const cartIds = useMemo(() => new Set(cart.map((c) => c.id)), [cart]);
 
-  const handleAddToCart = (item) => {
-    if (cartIds.has(item.id)) {
-      showToast('هذا العنصر موجود بالفعل في السلة');
-      return;
-    }
-    setCart((prev) => [...prev, item]);
-    showToast(`تمت إضافة «${item.title}» إلى السلة بنجاح`);
-  };
-
-  const handleTrackOrder = async (e) => {
-    e.preventDefault();
-    const qStr = trackQuery.trim().toUpperCase();
-    if (!qStr) return;
-    setTrackingLoading(true);
-    setTrackNotFound(false);
-    setTrackedOrder(null);
-    try {
-      const localMatch = orders.find(
-        (o) =>
-          (o.orderNumber || '').toUpperCase() === qStr ||
-          (o.customerData?.whatsapp || '').includes(trackQuery.trim())
-      );
-      if (localMatch) {
-        setTrackedOrder(localMatch);
-      } else {
-        setTrackNotFound(true);
-      }
-    } finally {
-      setTrackingLoading(false);
-    }
-  };
-
   const whatsNewList = useMemo(() => {
     if (settings.whatsNewMode === 'manual' && Array.isArray(settings.whatsNewManualIds)) {
-      return settings.whatsNewManualIds
-        .map((id) => notebooks.find((n) => n.id === id))
-        .filter(Boolean);
+      return settings.whatsNewManualIds.map((id) => notebooks.find((n) => n.id === id)).filter(Boolean);
     }
-    return notebooks.slice(0, Number(settings.whatsNewCount) || 4);
+    return [...notebooks]
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+      .slice(0, Number(settings.whatsNewCount) || 4);
   }, [notebooks, settings]);
 
-  const comingSoonList = useMemo(() => notebooks.filter((n) => n.comingSoon), [notebooks]);
-
-  const bannerColors = {
-    navy: 'bg-slate-950',
+  const promoColors = {
     blue: 'bg-blue-700',
+    navy: 'bg-slate-900',
     emerald: 'bg-emerald-700',
     crimson: 'bg-rose-700',
-    purple: 'bg-purple-800'
+    purple: 'bg-purple-700'
   };
 
+  const activeCategory = (settings.categories || []).find((c) => c.id === selectedCategoryId);
+  const activeStage = (activeCategory?.stages || []).find((s) => s.id === selectedStageId);
+  const activeGrade = (activeStage?.grades || []).find((g) => g.id === selectedGradeId);
+
+  const filteredNotebooks = useMemo(() => {
+    return notebooks.filter((nb) => {
+      if (selectedCategoryId && nb.categoryId !== selectedCategoryId) return false;
+      if (selectedStageId && nb.stageId !== selectedStageId) return false;
+      if (selectedGradeId && nb.gradeId !== selectedGradeId) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.trim().toLowerCase();
+        const hay = `${nb.title} ${nb.gradeName} ${nb.subject}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [notebooks, selectedCategoryId, selectedStageId, selectedGradeId, searchQuery]);
+
+  const visibleCoupons = useMemo(() => {
+    return coupons.filter((c) => c.active !== false && !c.singleUse && !isCouponExpired(c));
+  }, [coupons]);
+
   return (
-    <div dir="rtl" className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
-      {/* إشعار Toast عائم */}
+    <div dir="rtl" className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col">
+      {/* إشعار عائم */}
       {toast && (
         <div
-          className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl shadow-xl text-white font-black text-xs sm:text-sm flex items-center gap-2 transition-all ${
-            toast.type === 'error' ? 'bg-red-600' : 'bg-emerald-600'
+          className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl shadow-xl text-white text-xs sm:text-sm font-black flex items-center gap-2 ${
+            toast.type === 'error' ? 'bg-rose-600' : 'bg-emerald-600'
           }`}
         >
           <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span>{toast.message}</span>
+          <span>{toast.msg}</span>
         </div>
       )}
 
-      {/* الشريط العلوي المثبّت (الشريط الترويجي + الهيدر) */}
-      <header className="sticky top-0 z-40 shadow-sm bg-white/95 backdrop-blur-md border-b border-slate-200">
-        {settings.promoBannerEnabled !== false && !promoDismissed && (
+      {/* الشريط العلوي المثبت (الشريط الترويجي + الهيدر) */}
+      <header className="sticky top-0 z-40 shadow-sm">
+        {settings.promoBannerEnabled !== false && !promoDismissed && (!isScrolled || window.innerWidth >= 640) && (
           <div
-            className={`${bannerColors[settings.promoBannerColor || 'blue']} text-white transition-all duration-300 ${
-              isScrolled ? 'hidden md:block py-1.5' : 'py-2'
-            }`}
+            className={`${
+              promoColors[settings.promoBannerColor] || 'bg-blue-700'
+            } text-white px-3 py-1.5 text-[11px] sm:text-xs font-bold`}
           >
-            <div className="max-w-7xl mx-auto px-3 flex flex-wrap items-center justify-center gap-2 text-center text-[11px] sm:text-xs font-black">
+            <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-center gap-2 text-center relative">
               <span>{settings.promoBannerText}</span>
               {settings.promoBannerCoupon && (
                 <button
@@ -7937,15 +3341,14 @@ function MuzakkiratiApp() {
                   onClick={() => {
                     navigator.clipboard?.writeText(settings.promoBannerCoupon);
                     setPromoCopied(true);
+                    showToast(`تم نسخ الكوبون (${settings.promoBannerCoupon})`);
                     setTimeout(() => setPromoCopied(false), 2000);
                   }}
-                  className="px-2.5 py-0.5 rounded-lg bg-white text-slate-900 font-black inline-flex items-center gap-1 hover:bg-amber-100"
+                  className="px-2.5 py-0.5 rounded-lg bg-white text-slate-900 font-black flex items-center gap-1 hover:bg-slate-100"
                 >
                   {promoCopied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
                   <span>
-                    {promoCopied
-                      ? 'تم النسخ!'
-                      : `${settings.promoBannerCopyText || 'انسخ الكوبون'}: ${settings.promoBannerCoupon}`}
+                    {settings.promoBannerCopyLabel || 'انسخ الكوبون:'} {settings.promoBannerCoupon}
                   </span>
                 </button>
               )}
@@ -7959,7 +3362,7 @@ function MuzakkiratiApp() {
               <button
                 type="button"
                 onClick={() => setPromoDismissed(true)}
-                className="mr-1 text-white/75 hover:text-white md:hidden"
+                className="sm:hidden p-1 text-white/80 hover:text-white"
                 aria-label="إغلاق"
               >
                 <X className="w-3.5 h-3.5" />
@@ -7968,51 +3371,53 @@ function MuzakkiratiApp() {
           </div>
         )}
 
-        {/* شريط التنقل الرئيسي */}
-        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2 sm:py-3">
-          <div className="flex items-center justify-between gap-2">
+        <div className="bg-white/95 backdrop-blur-md border-b border-slate-200/80">
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-2">
             {/* الشعار واسم المنصة */}
             <div
               onClick={() => {
                 logoClickCountRef.current += 1;
                 if (logoClickCountRef.current >= 5) {
                   logoClickCountRef.current = 0;
-                  if (isAdmin) setActivePage('admin');
-                  else setAdminLoginOpen(true);
+                  if (isAdmin) {
+                    navigateTo('admin');
+                  } else {
+                    setShowAdminLogin(true);
+                  }
                 } else {
                   navigateTo('home');
                 }
               }}
-              className="flex items-center gap-2.5 cursor-pointer min-w-0"
+              className="flex items-center gap-2.5 cursor-pointer select-none min-w-0"
             >
               {settings.logoUrl ? (
                 <img
                   src={settings.logoUrl}
                   alt={settings.siteName}
-                  style={{ width: settings.logoSize || 48, height: settings.logoSize || 48 }}
-                  className="rounded-2xl object-cover border border-slate-200 shrink-0 w-10 h-10 sm:w-auto sm:h-auto"
+                  style={{ width: settings.logoSize || 46, height: settings.logoSize || 46 }}
+                  className="rounded-2xl object-cover border border-slate-200 shrink-0"
                 />
               ) : (
-                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex items-center justify-center font-black shrink-0 shadow">
-                  <BookOpen className="w-5 h-5 sm:w-6 sm:h-6" />
+                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-blue-600 text-white flex items-center justify-center shrink-0">
+                  <BookOpen className="w-5 h-5" />
                 </div>
               )}
               <div className="min-w-0">
-                <div className="font-black text-sm sm:text-lg lg:text-xl text-blue-700 leading-tight truncate">
+                <span className="block font-black text-blue-700 text-sm sm:text-base truncate">
                   {settings.siteName}
-                </div>
-                <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-slate-600 font-bold truncate mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                  <span className="truncate">{settings.tagline}</span>
-                </div>
+                </span>
+                <span className="hidden sm:flex items-center gap-1.5 text-[11px] font-bold text-slate-500 truncate">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                  <span>{settings.siteTagline}</span>
+                </span>
               </div>
             </div>
 
             {/* روابط التنقل على الكمبيوتر */}
-            <nav className="hidden md:flex items-center gap-1 bg-slate-100 p-1 rounded-2xl">
+            <nav className="hidden lg:flex items-center gap-1 bg-slate-100 p-1 rounded-2xl">
               {[
                 { id: 'home', label: 'الرئيسية', icon: Home },
-                { id: 'catalog', label: 'المذكرات', icon: BookOpen },
+                { id: 'library', label: 'المذكرات', icon: BookOpen },
                 { id: 'offers', label: 'العروض والباقات', icon: Percent },
                 { id: 'track', label: 'تتبع طلبك', icon: Package }
               ].map((nav) => {
@@ -8020,60 +3425,64 @@ function MuzakkiratiApp() {
                 return (
                   <button
                     key={nav.id}
+                    type="button"
                     onClick={() => navigateTo(nav.id)}
                     className={`px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition ${
                       activePage === nav.id
                         ? 'bg-blue-600 text-white shadow-sm'
-                        : 'text-slate-700 hover:bg-white/70'
+                        : 'text-slate-700 hover:bg-white'
                     }`}
                   >
-                    <Icon className="w-4 h-4" />
+                    <Icon className="w-3.5 h-3.5" />
                     <span>{nav.label}</span>
                   </button>
                 );
               })}
             </nav>
 
-            {/* أزرار الإجراءات السريعة */}
-            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* أزرار الإجراءات */}
+            <div className="flex items-center gap-1.5 sm:gap-2">
               {isAdmin && (
                 <button
-                  onClick={() => setActivePage('admin')}
-                  className="px-2.5 sm:px-3.5 py-2 rounded-xl bg-slate-900 text-white text-[11px] sm:text-xs font-black flex items-center gap-1"
+                  type="button"
+                  onClick={() => navigateTo('admin')}
+                  className="px-3 py-2 rounded-xl bg-slate-900 text-white text-xs font-black flex items-center gap-1"
                 >
-                  <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                  <Shield className="w-3.5 h-3.5 text-amber-400" />
                   <span className="hidden sm:inline">الإدارة</span>
                 </button>
               )}
 
               <button
-                onClick={() => setCartOpen(true)}
-                className="relative px-2.5 sm:px-3.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[11px] sm:text-xs font-black flex items-center gap-1.5"
+                type="button"
+                onClick={() => setIsCartOpen(true)}
+                className="relative px-3 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-black flex items-center gap-1.5"
               >
                 <ShoppingCart className="w-4 h-4" />
                 <span>السلة</span>
                 {cart.length > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full bg-rose-600 text-white text-[10px] font-black">
+                  <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-black">
                     {cart.length}
                   </span>
                 )}
               </button>
 
               <button
-                onClick={() => setContactOpen(true)}
-                className="px-2.5 sm:px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] sm:text-xs font-black flex items-center gap-1"
+                type="button"
+                onClick={() => setIsContactOpen(true)}
+                className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black flex items-center gap-1.5"
               >
-                <Phone className="w-3.5 h-3.5" />
+                <MessageCircle className="w-4 h-4" />
                 <span>تواصل معنا</span>
               </button>
             </div>
           </div>
 
-          {/* شريط التنقل المدمج للهاتف */}
-          <nav className="grid grid-cols-4 gap-1 bg-slate-100 p-1 rounded-xl mt-2 md:hidden">
+          {/* شريط التنقل المدمج للهواتف */}
+          <div className="lg:hidden border-t border-slate-100 px-2 py-1.5 flex items-center justify-around gap-1 bg-slate-50/90 overflow-x-auto">
             {[
               { id: 'home', label: 'الرئيسية', icon: Home },
-              { id: 'catalog', label: 'المذكرات', icon: BookOpen },
+              { id: 'library', label: 'المذكرات', icon: BookOpen },
               { id: 'offers', label: 'العروض', icon: Percent },
               { id: 'track', label: 'تتبع طلبك', icon: Package }
             ].map((nav) => {
@@ -8081,114 +3490,48 @@ function MuzakkiratiApp() {
               return (
                 <button
                   key={nav.id}
+                  type="button"
                   onClick={() => navigateTo(nav.id)}
-                  className={`py-1.5 px-1 rounded-lg text-[11px] font-black flex items-center justify-center gap-1 transition ${
-                    activePage === nav.id ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-700'
+                  className={`px-3 py-1.5 rounded-xl text-[11px] font-black flex items-center gap-1 shrink-0 ${
+                    activePage === nav.id ? 'bg-blue-600 text-white' : 'text-slate-700'
                   }`}
                 >
-                  <Icon className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">{nav.label}</span>
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{nav.label}</span>
                 </button>
               );
             })}
-          </nav>
+          </div>
         </div>
       </header>
 
-      {/* المحتوى الرئيسي حسب الصفحة */}
+      {/* المحتوى الرئيسي */}
       <main className="flex-1">
         {activePage === 'admin' && isAdmin ? (
           <AdminDashboard
             settings={settings}
             setSettings={setSettings}
             notebooks={notebooks}
+            samplesMap={samplesMap}
             coupons={coupons}
             orders={orders}
             onLogout={async () => {
-              setPreviewAdminUnlocked(false);
-              await signOut(auth).catch(() => {});
-              setActivePage('home');
+              try {
+                await signOut(auth);
+              } catch {
+                // تجاهل
+              }
+              setIsAdmin(false);
+              navigateTo('home');
             }}
             showToast={showToast}
           />
-        ) : activePage === 'catalog' ? (
-          <CatalogPage
-            settings={settings}
-            notebooks={notebooks}
-            selectedCategoryId={selectedCategoryId}
-            setSelectedCategoryId={setSelectedCategoryId}
-            selectedStageId={selectedStageId}
-            setSelectedStageId={setSelectedStageId}
-            selectedGradeId={selectedGradeId}
-            setSelectedGradeId={setSelectedGradeId}
-            onPreview={setPreviewNotebook}
-            onAddToCart={handleAddToCart}
-            cartIds={cartIds}
-          />
-        ) : activePage === 'offers' ? (
-          <OffersAndBundlesPage
-            settings={settings}
-            notebooks={notebooks}
-            coupons={coupons}
-            onAddBundleToCart={handleAddToCart}
-            onPreview={setPreviewNotebook}
-          />
-        ) : activePage === 'track' ? (
-          <div className="max-w-xl mx-auto px-4 py-10 space-y-6">
-            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-4 text-center">
-              <div className="w-14 h-14 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center mx-auto">
-                <Package className="w-7 h-7" />
-              </div>
-              <h2 className="text-xl sm:text-2xl font-black text-slate-900">تتبع حالة طلبك</h2>
-              <p className="text-xs sm:text-sm text-slate-600">
-                أدخل رقم الطلب (`ORD-...`) أو رقم الواتساب المسجل في الطلب
-              </p>
-
-              <form onSubmit={handleTrackOrder} className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="مثال: ORD-123456"
-                  value={trackQuery}
-                  onChange={(e) => setTrackQuery(e.target.value)}
-                  className="flex-1 px-4 py-3 rounded-2xl border border-slate-300 text-sm font-black"
-                />
-                <button
-                  type="submit"
-                  disabled={trackingLoading}
-                  className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm"
-                >
-                  بحث
-                </button>
-              </form>
-
-              {trackNotFound && (
-                <p className="text-xs font-bold text-red-600 pt-2">
-                  لم يتم العثور على طلب مطابق لهذه البيانات.
-                </p>
-              )}
-
-              {trackedOrder && (
-                <div className="text-right bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2 mt-4">
-                  <div className="flex items-center justify-between">
-                    <span className="font-black text-blue-700">{trackedOrder.orderNumber}</span>
-                    <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black">
-                      {trackedOrder.status}
-                    </span>
-                  </div>
-                  <div className="text-xs text-slate-600 font-bold">
-                    المعلم: {trackedOrder.customerData?.teacherName} • الإجمالي: {trackedOrder.total} ج.م
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          /* الصفحة الرئيسية */
+        ) : activePage === 'home' ? (
           <div className="space-y-12 pb-16">
-            {/* Hero Section */}
+            {/* الواجهة الرئيسية (Hero) */}
             <section
-              style={{ minHeight: settings.heroMinHeight || 420 }}
-              className="relative bg-gradient-to-bl from-slate-950 via-blue-950 to-slate-900 text-white flex items-center overflow-hidden"
+              style={{ minHeight: `${settings.heroMinHeight || 440}px` }}
+              className="relative bg-slate-950 text-white flex items-center overflow-hidden"
             >
               {settings.heroBgImage && (
                 <img
@@ -8198,28 +3541,34 @@ function MuzakkiratiApp() {
                   className="absolute inset-0 w-full h-full object-cover pointer-events-none"
                 />
               )}
-              <div className="relative max-w-7xl mx-auto px-4 py-10 sm:py-16 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center w-full">
-                <div className="lg:col-span-7 space-y-4 text-right">
-                  <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-400/15 border border-amber-400/30 text-amber-300 text-xs font-black">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>{settings.heroBadge}</span>
-                  </span>
+              <div className="absolute inset-0 bg-gradient-to-l from-slate-950/90 via-slate-950/75 to-slate-900/80" />
+
+              <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-12 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center w-full">
+                <div className="lg:col-span-7 space-y-5">
+                  {settings.heroBadge && (
+                    <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-400/15 border border-amber-400/30 text-amber-300 text-xs font-black">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>{settings.heroBadge}</span>
+                    </span>
+                  )}
                   <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black leading-tight">
                     {settings.heroTitle}
                   </h1>
-                  <p className="text-sm sm:text-base text-slate-200 leading-relaxed max-w-2xl">
+                  <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-2xl">
                     {settings.heroSubtitle}
                   </p>
-                  <div className="flex flex-wrap gap-3 pt-2">
+                  <div className="flex flex-wrap items-center gap-3 pt-2">
                     <button
-                      onClick={() => navigateTo('catalog')}
-                      className="px-6 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-sm shadow-lg transition"
+                      type="button"
+                      onClick={() => navigateTo('library')}
+                      className="px-6 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-sm shadow-lg"
                     >
                       تصفح مكتبة المذكرات
                     </button>
                     <button
-                      onClick={() => setContactOpen(true)}
-                      className="px-6 py-3.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-black text-sm transition"
+                      type="button"
+                      onClick={() => setIsContactOpen(true)}
+                      className="px-6 py-3.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/15 text-white font-black text-sm"
                     >
                       اطلب إعداد مذكرة خاصة
                     </button>
@@ -8227,32 +3576,18 @@ function MuzakkiratiApp() {
                 </div>
 
                 <div className="lg:col-span-5">
-                  <div className="bg-slate-900/80 backdrop-blur-md border border-white/15 rounded-3xl p-5 sm:p-6 space-y-3">
+                  <div className="p-6 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-md space-y-3.5">
                     <div className="flex items-center gap-2 text-amber-400 font-black text-sm">
-                      <ShieldCheck className="w-5 h-5" />
-                      <span>لماذا يثق بنا المعلمون؟</span>
+                      <Shield className="w-5 h-5" />
+                      <span>{settings.trustTitle}</span>
                     </div>
-                    <ul className="space-y-2.5 text-xs sm:text-sm text-slate-200">
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span>محتوى متكامل ومطابق لأحدث تعليمات الوزارة ومنسق باحترافية.</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span>وضع اسم المعلم ورقم الهاتف والشعار على الغلاف وجميع الصفحات.</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span>معاينة حقيقية لصفحات المذكرة قبل تأكيد الطلب.</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span>تسليم سريع بصيغة PDF عالية الدقة جاهزة للطباعة.</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span>خدمة عملاء حقيقية لحل أي مشكلة.</span>
-                      </li>
+                    <ul className="space-y-2.5 text-xs sm:text-sm text-slate-200 font-bold">
+                      {(settings.trustPoints || []).map((pt, i) => (
+                        <li key={i} className="flex items-start gap-2.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <span>{pt}</span>
+                        </li>
+                      ))}
                     </ul>
                   </div>
                 </div>
@@ -8260,46 +3595,46 @@ function MuzakkiratiApp() {
             </section>
 
             {/* الأقسام الرئيسية */}
-            <section className="max-w-7xl mx-auto px-4 space-y-6">
-              <div className="text-center space-y-1">
-                <h2 className="text-2xl sm:text-3xl font-black text-slate-900">الأقسام الرئيسية للمذكرات والكورسات</h2>
-                <p className="text-xs sm:text-sm text-slate-600">اختر القسم المناسب لتصفح مجلدات المراحل والصفوف الدراسية</p>
+            <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
+              <div className="text-center space-y-1.5">
+                <h2 className="text-xl sm:text-2xl font-black text-slate-900">الأقسام الرئيسية للمذكرات والكورسات</h2>
+                <p className="text-xs sm:text-sm text-slate-500 font-bold">
+                  اختر القسم المناسب لتصفح مجلدات المراحل والصفوف الدراسية
+                </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {(settings.categories || DEFAULT_CATEGORIES).map((cat) => {
-                  const catImg = settings.categoryImages?.[cat.id] || cat.image || cat.coverImage || '';
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {(settings.categories || []).map((cat) => {
+                  const catImg = settings.categoryImages?.[cat.id] || '';
                   const count = notebooks.filter((n) => n.categoryId === cat.id).length;
                   return (
                     <div
                       key={cat.id}
-                      onClick={() => navigateTo('catalog', cat.id)}
-                      className="bg-white rounded-3xl border border-slate-200 shadow-sm hover:shadow-xl transition-all cursor-pointer overflow-hidden group"
+                      onClick={() => navigateTo('library', cat.id)}
+                      className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl transition cursor-pointer group"
                     >
-                      <div className="relative h-44 bg-gradient-to-br from-blue-600 to-indigo-700 overflow-hidden">
+                      <div className="relative h-44 bg-gradient-to-br from-blue-600 to-indigo-800 overflow-hidden">
                         {catImg ? (
                           <img
                             src={catImg}
                             alt={cat.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                           />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-white/80">
-                            <BookOpen className="w-14 h-14" />
+                          <div className="w-full h-full flex items-center justify-center text-white/90">
+                            <BookOpen className="w-12 h-12" />
                           </div>
                         )}
-                        <span className="absolute top-3 left-3 px-3 py-1 rounded-full bg-slate-950/75 text-white text-xs font-black backdrop-blur-sm">
+                        <span className="absolute top-3 left-3 px-3 py-1 rounded-full bg-slate-900/80 text-white text-xs font-black">
                           {count} مذكرة متاحة
                         </span>
                       </div>
                       <div className="p-5 flex items-center justify-between">
                         <div>
-                          <h3 className="text-lg font-black text-slate-900 group-hover:text-blue-600 transition">
-                            {cat.name}
-                          </h3>
-                          <p className="text-xs text-slate-500 font-bold mt-0.5">تصفح المراحل والصفوف الدراسية</p>
+                          <h3 className="font-black text-base text-slate-900">{cat.name}</h3>
+                          <p className="text-xs text-blue-600 font-bold mt-0.5">تصفح المراحل والصفوف الدراسية</p>
                         </div>
-                        <ArrowRight className="w-5 h-5 text-blue-600 rotate-180 group-hover:-translate-x-1 transition-transform" />
+                        <ArrowRight className="w-5 h-5 text-blue-600 rotate-180 group-hover:-translate-x-1 transition" />
                       </div>
                     </div>
                   );
@@ -8307,19 +3642,20 @@ function MuzakkiratiApp() {
               </div>
             </section>
 
-            {/* قسم ما الجديد؟ */}
+            {/* قسم ما الجديد */}
             {settings.whatsNewEnabled !== false && whatsNewList.length > 0 && (
-              <section className="max-w-7xl mx-auto px-4 space-y-6">
+              <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-5">
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="inline-block px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-black mb-1">
+                    <span className="inline-block px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-[11px] font-black mb-1">
                       إصدارات حديثة
                     </span>
                     <h2 className="text-xl sm:text-2xl font-black text-slate-900">{settings.whatsNewTitle}</h2>
                   </div>
                   <button
-                    onClick={() => navigateTo('catalog')}
-                    className="text-xs sm:text-sm font-black text-blue-600 hover:underline"
+                    type="button"
+                    onClick={() => navigateTo('library')}
+                    className="text-xs font-black text-blue-600 hover:underline"
                   >
                     عرض الكل ←
                   </button>
@@ -8330,7 +3666,6 @@ function MuzakkiratiApp() {
                     <NotebookCard
                       key={nb.id}
                       notebook={nb}
-                      settings={settings}
                       onPreview={setPreviewNotebook}
                       onAddToCart={handleAddToCart}
                       isInCart={cartIds.has(nb.id)}
@@ -8340,120 +3675,367 @@ function MuzakkiratiApp() {
               </section>
             )}
 
-            {/* قسم أخبار المنصة ومذكرات قيد التجهيز */}
-            {settings.newsSectionEnabled !== false &&
-              ((settings.newsItems || []).length > 0 || comingSoonList.length > 0) && (
-                <section className="max-w-7xl mx-auto px-4 space-y-6">
-                  <div className="flex items-center gap-2.5">
-                    <Megaphone className="w-6 h-6 text-amber-600" />
-                    <h2 className="text-xl sm:text-2xl font-black text-slate-900">{settings.newsSectionTitle}</h2>
-                  </div>
+            {/* قسم الأخبار والإعلانات */}
+            {settings.newsSectionEnabled !== false && (settings.newsItems || []).length > 0 && (
+              <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-4">
+                <h2 className="text-xl font-black text-slate-900">{settings.newsSectionTitle}</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {(settings.newsItems || []).map((nw, i) => (
+                    <div key={nw.id || i} className="p-5 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-2">
+                      <span className="inline-block px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-[11px] font-black">
+                        {nw.badge}
+                      </span>
+                      <h3 className="font-black text-base text-slate-900">{nw.title}</h3>
+                      <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">{nw.body}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        ) : activePage === 'library' ? (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+            {/* مسار التصفح وشريط البحث */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-1.5 text-xs font-black">
+                <button
+                  type="button"
+                  onClick={() => navigateTo('library', null, null, null)}
+                  className="px-3 py-1.5 rounded-xl bg-white border hover:bg-slate-50"
+                >
+                  كل الأقسام
+                </button>
+                {activeCategory && (
+                  <>
+                    <ChevronLeft className="w-4 h-4 text-slate-400" />
+                    <button
+                      type="button"
+                      onClick={() => navigateTo('library', activeCategory.id, null, null)}
+                      className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 border border-blue-200"
+                    >
+                      {activeCategory.name}
+                    </button>
+                  </>
+                )}
+                {activeStage && (
+                  <>
+                    <ChevronLeft className="w-4 h-4 text-slate-400" />
+                    <button
+                      type="button"
+                      onClick={() => navigateTo('library', activeCategory.id, activeStage.id, null)}
+                      className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 border border-blue-200"
+                    >
+                      {activeStage.name}
+                    </button>
+                  </>
+                )}
+                {activeGrade && (
+                  <>
+                    <ChevronLeft className="w-4 h-4 text-slate-400" />
+                    <span className="px-3 py-1.5 rounded-xl bg-blue-600 text-white">{activeGrade.name}</span>
+                  </>
+                )}
+              </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                    {(settings.newsItems || []).map((nw) => (
-                      <div key={nw.id} className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-1.5">
-                        <span className="inline-block px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[11px] font-black">
-                          {nw.date || 'جديد'}
-                        </span>
-                        <h3 className="font-black text-base text-slate-900">{nw.title}</h3>
-                        {nw.description && <p className="text-xs sm:text-sm text-slate-600">{nw.description}</p>}
+              <div className="relative w-full sm:w-72">
+                <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="ابحث باسم المذكرة أو الصف..."
+                  className="w-full pr-10 pl-3.5 py-2.5 rounded-2xl border border-slate-200 bg-white text-xs font-bold"
+                />
+              </div>
+            </div>
+
+            {/* مجلدات الأقسام / المراحل / الصفوف */}
+            {!selectedCategoryId && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {(settings.categories || []).map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setSelectedCategoryId(cat.id)}
+                    className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-blue-500 flex items-center gap-3 text-right shadow-sm"
+                  >
+                    <Folder className="w-7 h-7 text-blue-600 shrink-0" />
+                    <div>
+                      <p className="font-black text-sm text-slate-900">{cat.name}</p>
+                      <p className="text-xs text-slate-500 font-bold">
+                        {notebooks.filter((n) => n.categoryId === cat.id).length} مذكرة
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {activeCategory && !selectedStageId && (activeCategory.stages || []).length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {activeCategory.stages.map((st) => (
+                  <button
+                    key={st.id}
+                    type="button"
+                    onClick={() => setSelectedStageId(st.id)}
+                    className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-blue-500 flex items-center gap-3 text-right shadow-sm"
+                  >
+                    <Folder className="w-6 h-6 text-indigo-600 shrink-0" />
+                    <span className="font-black text-sm text-slate-900">{st.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {activeStage && !selectedGradeId && (activeStage.grades || []).length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {activeStage.grades.map((gr) => (
+                  <button
+                    key={gr.id}
+                    type="button"
+                    onClick={() => setSelectedGradeId(gr.id)}
+                    className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-blue-500 flex items-center gap-3 text-right shadow-sm"
+                  >
+                    <FileText className="w-6 h-6 text-emerald-600 shrink-0" />
+                    <span className="font-black text-sm text-slate-900">{gr.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* شبكة المذكرات */}
+            {filteredNotebooks.length === 0 ? (
+              <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 space-y-2">
+                <BookOpen className="w-12 h-12 text-slate-300 mx-auto" />
+                <p className="font-black text-slate-700">لا توجد مذكرات مطابقة في هذا القسم حاليًا</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                {filteredNotebooks.map((nb) => (
+                  <NotebookCard
+                    key={nb.id}
+                    notebook={nb}
+                    onPreview={setPreviewNotebook}
+                    onAddToCart={handleAddToCart}
+                    isInCart={cartIds.has(nb.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        ) : activePage === 'offers' ? (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-10">
+            <div className="space-y-4">
+              <h1 className="text-2xl font-black text-slate-900">باقات التوفير ومجموعات المذكرات</h1>
+              {(settings.bundles || []).length === 0 ? (
+                <p className="text-xs font-bold text-slate-500">لا توجد باقات مجمعة متاحة حاليًا</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {(settings.bundles || []).map((bnd) => {
+                    const included = (bnd.notebookIds || [])
+                      .map((id) => notebooks.find((n) => n.id === id))
+                      .filter(Boolean);
+                    const origTotal = included.reduce((s, n) => s + (Number(n.price) || 0), 0);
+                    return (
+                      <div key={bnd.id} className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between space-y-4">
+                        <div className="space-y-2">
+                          <span className="inline-block px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-black">
+                            باقة توفير ({included.length} مذكرات)
+                          </span>
+                          <h3 className="font-black text-lg text-slate-900">{bnd.title}</h3>
+                          {bnd.description && <p className="text-xs text-slate-600">{bnd.description}</p>}
+                          <ul className="text-xs font-bold text-slate-700 space-y-1 pr-4 list-disc">
+                            {included.map((n) => (
+                              <li key={n.id}>{n.title}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                          <div>
+                            <span className="text-xl font-black text-indigo-700">{bnd.price} ج.م</span>
+                            {origTotal > bnd.price && (
+                              <span className="block text-xs text-slate-400 line-through font-bold">{origTotal} ج.م</span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleAddBundleToCart(bnd)}
+                            className="px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black flex items-center gap-1.5"
+                          >
+                            <ShoppingCart className="w-4 h-4" />
+                            <span>أضف الباقة للسلة</span>
+                          </button>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                </section>
+                    );
+                  })}
+                </div>
               )}
+            </div>
+
+            {visibleCoupons.length > 0 && (
+              <div className="space-y-4">
+                <h2 className="text-xl font-black text-slate-900">كوبونات الخصم المتاحة حاليًا</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {visibleCoupons.map((cp) => (
+                    <div key={cp.id} className="p-4 rounded-3xl bg-white border border-slate-200 flex items-center justify-between">
+                      <div>
+                        <span className="font-black text-base text-blue-700">{cp.code}</span>
+                        <p className="text-xs font-bold text-slate-600">
+                          خصم {cp.value}
+                          {cp.type === 'percent' ? '%' : ' ج.م'}
+                        </p>
+                        {cp.expiresAt && (
+                          <p className="text-[11px] font-bold text-amber-700">
+                            ينتهي في: {formatExpiryArabic(cp.expiresAt)}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard?.writeText(cp.code);
+                          showToast(`تم نسخ الكوبون (${cp.code})`);
+                        }}
+                        className="px-3.5 py-2 rounded-xl bg-slate-900 text-white text-xs font-black flex items-center gap-1"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>نسخ</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* صفحة تتبع الطلب */
+          <div className="max-w-xl mx-auto px-4 py-12 space-y-5">
+            <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4 text-center">
+              <Package className="w-12 h-12 text-blue-600 mx-auto" />
+              <h1 className="text-xl font-black text-slate-900">تتبع حالة طلبك</h1>
+              <p className="text-xs text-slate-500 font-bold">أدخل رقم الطلب (مثال: ORD-123456) لمعرفة حالة التجهيز</p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={trackQuery}
+                  onChange={(e) => setTrackQuery(e.target.value)}
+                  placeholder="ORD-xxxxxx"
+                  className="flex-1 px-4 py-3 rounded-2xl border border-slate-300 text-sm font-black uppercase text-center"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const q = trackQuery.trim().toUpperCase();
+                    const found = orders.find((o) => (o.orderCode || '').toUpperCase() === q);
+                    setTrackedOrder(found || null);
+                    setTrackNotFound(!found);
+                  }}
+                  className="px-5 py-3 rounded-2xl bg-blue-600 text-white text-xs font-black"
+                >
+                  بحث
+                </button>
+              </div>
+
+              {trackNotFound && (
+                <p className="text-xs font-bold text-rose-600">لم يتم العثور على طلب بهذا الرقم، تأكد من كتابته بشكل صحيح</p>
+              )}
+
+              {trackedOrder && (
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-right space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-sm">{trackedOrder.orderCode}</span>
+                    <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black">
+                      {trackedOrder.status}
+                    </span>
+                  </div>
+                  <p className="text-xs font-bold text-slate-700">الاسم: {trackedOrder.teacherName}</p>
+                  <p className="text-xs font-bold text-slate-600">
+                    المحتويات: {(trackedOrder.items || []).map((i) => i.title).join(' • ')}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </main>
 
-      {/* شريط سلة عائم أسفل الشاشة عند وجود عناصر */}
-      {cart.length > 0 && !cartOpen && activePage !== 'admin' && (
+      {/* شريط السلة العائم أسفل الشاشة */}
+      {cart.length > 0 && !isCartOpen && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 w-[92%] max-w-md">
           <button
-            onClick={() => setCartOpen(true)}
-            className="w-full py-3.5 px-5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white shadow-2xl border border-white/15 flex items-center justify-between font-black text-xs sm:text-sm"
+            type="button"
+            onClick={() => setIsCartOpen(true)}
+            className="w-full py-3.5 px-5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white shadow-2xl flex items-center justify-between font-black text-xs sm:text-sm"
           >
             <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded-full bg-blue-600 text-white text-xs">{cart.length}</span>
-              <span>عرض سلة الطلبات وإتمام الطلب</span>
+              <ShoppingCart className="w-5 h-5 text-amber-400" />
+              <span>سلة الطلبات ({cart.length})</span>
             </div>
-            <span className="text-amber-400">
-              {cart.reduce((s, i) => s + (Number(i.price) || 0), 0)} ج.م ←
-            </span>
+            <span className="px-3 py-1 rounded-xl bg-blue-600 text-white">إتمام الطلب ←</span>
           </button>
         </div>
       )}
 
-      {/* الفوتر */}
-      <footer className="bg-slate-950 text-slate-400 py-8 border-t border-slate-800 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-bold">
-          <div>
-            © {new Date().getFullYear()} {settings.siteName} — جميع الحقوق محفوظة.
-          </div>
-          <button
-            onClick={() => {
-              if (isAdmin) setActivePage('admin');
-              else setAdminLoginOpen(true);
-            }}
-            className="text-slate-500 hover:text-slate-300 flex items-center gap-1"
-          >
-            <Lock className="w-3.5 h-3.5" />
-            <span>دخول الإدارة</span>
-          </button>
-        </div>
+      {/* التذييل */}
+      <footer className="bg-slate-900 text-slate-400 py-8 px-4 text-center text-xs font-bold space-y-2">
+        <p className="text-white font-black text-sm">{settings.siteName}</p>
+        <p>{settings.siteTagline}</p>
+        <p className="text-slate-500 pt-2">جميع الحقوق محفوظة © {new Date().getFullYear()}</p>
       </footer>
 
-      {/* النوافذ المنبثقة */}
+      {/* نافذة المعاينة */}
       <ProtectedPreviewModal
         notebook={previewNotebook}
         settings={settings}
+        samplesMap={samplesMap}
         onClose={() => setPreviewNotebook(null)}
         onAddToCart={handleAddToCart}
         isInCart={previewNotebook ? cartIds.has(previewNotebook.id) : false}
       />
 
+      {/* نافذة السلة */}
       <OrderCheckoutModal
-        isOpen={cartOpen}
-        onClose={() => setCartOpen(false)}
+        isOpen={isCartOpen}
+        onClose={() => setIsCartOpen(false)}
         cart={cart}
+        setCart={setCart}
         settings={settings}
         coupons={coupons}
-        onRemoveFromCart={(id) => setCart((p) => p.filter((item) => item.id !== id))}
-        onClearCart={() => setCart([])}
+        showToast={showToast}
       />
 
       {/* نافذة تواصل معنا */}
-      {contactOpen && (
+      {isContactOpen && (
         <div
-          dir="rtl"
           className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setContactOpen(false)}
+          onClick={() => setIsContactOpen(false)}
         >
           <div
-            className="bg-white w-full max-w-md rounded-3xl p-6 border border-slate-200 shadow-2xl space-y-4"
+            className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-black text-slate-900">{settings.contactModalTitle}</h3>
-              <button onClick={() => setContactOpen(false)} className="p-2 rounded-xl hover:bg-slate-100">
+              <h3 className="font-black text-lg text-slate-900">تواصل معنا</h3>
+              <button
+                type="button"
+                onClick={() => setIsContactOpen(false)}
+                className="p-2 rounded-xl bg-slate-100 text-slate-600"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <p className="text-xs text-slate-600">{settings.contactModalSubtitle}</p>
             <div className="space-y-2.5">
-              {(settings.socialLinks || []).map((link) => (
+              {(settings.socialLinks || []).map((lk, idx) => (
                 <a
-                  key={link.id}
-                  href={normalizeExternalUrl(link.url)}
+                  key={lk.id || idx}
+                  href={lk.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 hover:bg-blue-50 border border-slate-200 transition"
+                  className="w-full p-3.5 rounded-2xl bg-slate-50 hover:bg-blue-50 border border-slate-200 flex items-center justify-between text-xs font-black text-slate-800"
                 >
-                  <div className="flex items-center gap-3">
-                    <SocialPlatformBadge url={link.url} />
-                    <span className="font-black text-sm text-slate-900">{link.label}</span>
-                  </div>
-                  <ExternalLink className="w-4 h-4 text-slate-400" />
+                  <span>{lk.label}</span>
+                  <ExternalLink className="w-4 h-4 text-blue-600" />
                 </a>
               ))}
             </div>
@@ -8461,100 +4043,96 @@ function MuzakkiratiApp() {
         </div>
       )}
 
-      {/* نافذة دخول الإدارة */}
-      {adminLoginOpen && (
+      {/* نافذة تسجيل دخول الإدارة */}
+      {showAdminLogin && (
         <div
-          dir="rtl"
-          className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setAdminLoginOpen(false)}
+          className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setShowAdminLogin(false)}
         >
-          <form
-            onSubmit={handleAdminLogin}
-            className="bg-white w-full max-w-md rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-2xl space-y-4"
+          <div
+            className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center">
-                  <ShieldCheck className="w-6 h-6" />
+                <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                  <Shield className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-black text-slate-900">دخول لوحة تحكم الإدارة</h3>
-                  <p className="text-xs text-slate-500 font-bold">مخصص لإدارة {settings.siteName}</p>
+                  <h3 className="font-black text-base text-slate-900">دخول لوحة تحكم الإدارة</h3>
+                  <p className="text-[11px] text-slate-500 font-bold">مخصص لإدارة {settings.siteName}</p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setAdminLoginOpen(false)}
-                className="p-2 rounded-xl hover:bg-slate-100 text-slate-500"
+                onClick={() => setShowAdminLogin(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:bg-slate-100"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">البريد الإلكتروني الإداري</label>
+            <form onSubmit={handleAdminEmailLogin} className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-xs font-black text-slate-700">البريد الإلكتروني الإداري</label>
                 <input
                   type="email"
                   required
+                  dir="ltr"
                   value={adminEmailInput}
                   onChange={(e) => setAdminEmailInput(e.target.value)}
-                  className="w-full px-4 py-3 rounded-2xl border border-slate-300 text-sm font-bold text-left"
-                  dir="ltr"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-left"
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">كلمة المرور</label>
+              <div className="space-y-1">
+                <label className="text-xs font-black text-slate-700">كلمة المرور</label>
                 <div className="relative">
                   <input
                     type={showAdminPass ? 'text' : 'password'}
                     required
-                    placeholder="••••••••"
-                    value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)}
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-300 text-sm font-bold"
+                    dir="ltr"
+                    value={adminPasswordInput}
+                    onChange={(e) => setAdminPasswordInput(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-left"
                   />
                   <button
                     type="button"
                     onClick={() => setShowAdminPass((p) => !p)}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500 hover:text-slate-800"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-black text-slate-500"
                   >
                     {showAdminPass ? 'إخفاء' : 'إظهار'}
                   </button>
                 </div>
               </div>
-            </div>
 
-            {loginError && (
-              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-bold text-red-700">
-                {loginError}
-              </div>
-            )}
+              {adminLoginError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold text-center">
+                  {adminLoginError}
+                </div>
+              )}
 
-            <button
-              type="submit"
-              className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-md transition"
-            >
-              تسجيل الدخول للوحة التحكم
-            </button>
+              <button
+                type="submit"
+                disabled={adminLoggingIn}
+                className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow"
+              >
+                {adminLoggingIn ? 'جاري التحقق...' : 'تسجيل الدخول للوحة التحكم'}
+              </button>
+            </form>
 
-            <div className="relative flex items-center justify-center">
-              <span className="border-t border-slate-200 w-full" />
-              <span className="bg-white px-3 text-[11px] font-bold text-slate-400">أو</span>
-              <span className="border-t border-slate-200 w-full" />
-            </div>
+            <div className="text-center text-[11px] text-slate-400 font-bold">أو</div>
 
             <button
               type="button"
-              onClick={handleGoogleAdminLogin}
-              className="w-full py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs sm:text-sm shadow transition flex items-center justify-center gap-2"
+              onClick={handleAdminGoogleLogin}
+              disabled={adminLoggingIn}
+              className="w-full py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black flex items-center justify-center gap-2"
             >
-              <ShieldCheck className="w-4 h-4 text-amber-400" />
+              <Shield className="w-4 h-4 text-amber-400" />
               <span>دخول سريع بحساب Google الإداري</span>
             </button>
-          </form>
+          </div>
         </div>
       )}
     </div>
@@ -8562,9 +4140,5 @@ function MuzakkiratiApp() {
 }
 
 export default function App() {
-  return (
-    <ErrorBoundary>
-      <MuzakkiratiApp />
-    </ErrorBoundary>
-  );
+  return <MuzakkiratiApp />;
 }
