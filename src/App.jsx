@@ -96,9 +96,9 @@ const firebaseConfig = (() => {
     }
   } catch {}
 
-  // 2. قراءة مفاتيح مشروعك الحقيقية من متغيرات البيئة في Vercel / Vite
+  // 2. قراءة مفاتيح مشروعك الحقيقية من متغيرات البيئة في Vercel / Vite (تعمل تلقائيًا لكل الزوار والهواتف)
   const envApiKey = getEnvVar('VITE_FIREBASE_API_KEY') || getEnvVar('REACT_APP_FIREBASE_API_KEY');
-  if (envApiKey) {
+  if (envApiKey && envApiKey.startsWith('AIza')) {
     return {
       apiKey: envApiKey,
       authDomain: getEnvVar('VITE_FIREBASE_AUTH_DOMAIN') || getEnvVar('REACT_APP_FIREBASE_AUTH_DOMAIN') || 'el3bakera-edu.firebaseapp.com',
@@ -114,7 +114,7 @@ const firebaseConfig = (() => {
     const savedCfg = localStorage.getItem(LS_FIREBASE_CFG_KEY);
     if (savedCfg) {
       const parsed = JSON.parse(savedCfg);
-      if (parsed && parsed.apiKey) return parsed;
+      if (parsed && parsed.apiKey && parsed.apiKey.startsWith('AIza')) return parsed;
     }
   } catch {}
 
@@ -128,6 +128,9 @@ const firebaseConfig = (() => {
   };
 })();
 
+const isUsingEnvConfig = Boolean(
+  (getEnvVar('VITE_FIREBASE_API_KEY') || getEnvVar('REACT_APP_FIREBASE_API_KEY') || '').startsWith('AIza')
+);
 const hasValidFirebaseKey = Boolean(firebaseConfig.apiKey && firebaseConfig.apiKey.startsWith('AIza'));
 
 const appId = typeof __app_id !== 'undefined' && __app_id ? __app_id : 'el3bakera-edu';
@@ -1455,7 +1458,7 @@ function CatalogPage({
           )}
         </div>
       ) : !selectedCategory ? (
-        /* المستوى 1: مجلدات الأقسام الرئيسية */
+        /* المستوى 1: مجلدات الأقسام الرئيسية بتصميم واضح بدون تداخل للنصوص */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {settings.categories.map((cat) => {
             const count = visibleNotebooks.filter((n) => n.category === cat).length;
@@ -1464,26 +1467,35 @@ function CatalogPage({
               <button
                 key={cat}
                 onClick={() => onNavigateCatalog({ category: cat, stage: '', grade: '' })}
-                className="relative overflow-hidden bg-white rounded-3xl p-6 border border-slate-200 hover:border-blue-500 shadow-sm hover:shadow-xl transition text-right group flex flex-col justify-between min-h-[170px]"
+                className="overflow-hidden bg-white rounded-3xl border border-slate-200 hover:border-blue-500 shadow-sm hover:shadow-xl transition-all duration-300 text-right group flex flex-col"
               >
-                {bgImg && (
-                  <img
-                    src={bgImg}
-                    alt={cat}
-                    className="absolute inset-0 w-full h-full object-cover opacity-15 group-hover:opacity-25 transition"
-                  />
-                )}
-                <div className="relative z-10 flex items-center justify-between">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition">
-                    <Folder className="w-6 h-6" />
+                {bgImg ? (
+                  <div className="relative h-44 w-full bg-slate-100 overflow-hidden">
+                    <img
+                      src={bgImg}
+                      alt={cat}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                    <span className="absolute top-3 left-3 px-3.5 py-1.5 rounded-full bg-slate-950/85 backdrop-blur-md text-white text-xs font-black shadow-md">
+                      {count} مذكرة متاحة
+                    </span>
                   </div>
-                  <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-extrabold">
-                    {count} مذكرة
-                  </span>
-                </div>
-                <div className="relative z-10 mt-6">
-                  <h3 className="text-lg font-black text-slate-900 group-hover:text-blue-600 transition">{cat}</h3>
-                  <p className="text-xs text-slate-500 mt-1">اضغط لفتح مجلدات المراحل الدراسية</p>
+                ) : (
+                  <div className="relative h-36 w-full bg-gradient-to-br from-blue-600 to-indigo-700 p-6 flex items-center justify-between text-white">
+                    <div className="w-14 h-14 rounded-2xl bg-white/15 backdrop-blur-sm flex items-center justify-center">
+                      <Folder className="w-7 h-7" />
+                    </div>
+                    <span className="px-3.5 py-1.5 rounded-full bg-white/20 text-white text-xs font-black">
+                      {count} مذكرة
+                    </span>
+                  </div>
+                )}
+                <div className="p-5 flex-1 flex flex-col justify-between w-full bg-white">
+                  <h3 className="text-xl font-black text-slate-900 group-hover:text-blue-600 transition">{cat}</h3>
+                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 text-xs font-extrabold text-blue-600">
+                    <span>افتح مجلدات المراحل الدراسية</span>
+                    <span>←</span>
+                  </div>
                 </div>
               </button>
             );
@@ -2103,6 +2115,25 @@ function AdminPortal({
           </div>
         </div>
       </div>
+
+      {/* تنبيه مهم للمدير إذا كان الربط محفوظًا في المتصفح فقط وليس في متغيرات Vercel */}
+      {!isUsingEnvConfig && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-5">
+          <div className="bg-amber-50 border-2 border-amber-300 rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <h3 className="text-sm font-black text-amber-950 flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                تنبيه هام: لكي تظهر المذكرات والتغييرات لجميع العملاء على الهواتف تلقائيًا
+              </h3>
+              <p className="text-xs text-amber-900 leading-relaxed">
+                أنت حاليًا متصل عبر متصفحك فقط. افتح مشروعك في <strong>Vercel ← Settings ← Environment Variables</strong> وأضف المتغير{' '}
+                <code className="bg-white px-1.5 py-0.5 rounded font-mono font-bold">VITE_FIREBASE_API_KEY</code> بقيمة{' '}
+                <code className="bg-white px-1.5 py-0.5 rounded font-mono font-bold">{firebaseConfig.apiKey || 'AIzaSy...'}</code> ثم اضغط <strong>Redeploy</strong>.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-6 space-y-6">
         {/* أزرار التبويبات الرئيسية */}
@@ -3805,57 +3836,49 @@ function MuzakkiratiApp() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [showAdminLoginModal, setShowAdminLoginModal] = useState(false);
   const [showAdminPortal, setShowAdminPortal] = useState(false);
-
-  // حقول تسجيل دخول المدير
   const [loginEmail, setLoginEmail] = useState(ADMIN_EMAIL);
   const [loginPass, setLoginPass] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [customFirebaseInput, setCustomFirebaseInput] = useState('');
-  const [showKeySetup, setShowKeySetup] = useState(!hasValidFirebaseKey);
+  const [showKeySetup, setShowKeySetup] = useState(false);
+
+  // تتبع الطلبات
   const [trackQuery, setTrackQuery] = useState('');
   const [trackedOrders, setTrackedOrders] = useState([]);
   const [trackSearched, setTrackSearched] = useState(false);
 
-  // الإشعارات العائمة (Toast)
+  // التنبيهات (Toast)
   const [toast, setToast] = useState(null);
+  const notify = (msg, type = 'info') => {
+    setToast({ msg, type, id: Date.now() });
+    setTimeout(() => setToast(null), 4500);
+  };
+
   const logoClickCountRef = useRef(0);
   const logoClickTimerRef = useRef(null);
-
-  const notify = (msg, type = 'info') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 4000);
-  };
 
   // تهيئة المصادقة ومراقبة حالة المدير
   useEffect(() => {
     if (!hasValidFirebaseKey) return;
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else if (!auth.currentUser) {
-          await signInAnonymously(auth);
-        }
-      } catch (err) {
-        console.warn('Auth init notice:', err?.message);
-      }
-    };
-    initAuth();
 
-    const unsub = onAuthStateChanged(auth, (user) => {
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
-      const isAdmin = Boolean(user && !user.isAnonymous && user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase());
+      const isAdmin = Boolean(user && user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase());
       setIsAdminAuthenticated(isAdmin);
-      if (isAdmin && window.location.hash === '#admin') {
-        setShowAdminPortal(true);
-      }
     });
-    return () => unsub();
+
+    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+      signInWithCustomToken(auth, __initial_auth_token).catch(() => signInAnonymously(auth).catch(() => {}));
+    } else if (!auth.currentUser) {
+      signInAnonymously(auth).catch(() => {});
+    }
+
+    return () => unsubAuth();
   }, []);
 
-  // الاستماع المباشر للإعدادات والمذكرات والكوبونات من السحابة
+  // الاستماع المباشر للإعدادات والمذكرات والكوبونات من السحابة فور تحميل الموقع لجميع الزوار
   useEffect(() => {
-    if (!currentUser || !hasValidFirebaseKey) return;
+    if (!hasValidFirebaseKey) return;
 
     const unsubSettings = onSnapshot(
       publicDoc('config', 'main'),
@@ -3863,7 +3886,9 @@ function MuzakkiratiApp() {
         if (snap.exists()) {
           const norm = normalizeSettings(snap.data());
           setSettings(norm);
-          localStorage.setItem(LS_SETTINGS_KEY, JSON.stringify(norm));
+          try {
+            localStorage.setItem(LS_SETTINGS_KEY, JSON.stringify(norm));
+          } catch {}
         }
       },
       () => {}
@@ -3896,7 +3921,7 @@ function MuzakkiratiApp() {
       unsubNotebooks();
       unsubCoupons();
     };
-  }, [currentUser]);
+  }, []);
 
   // الاستماع للطلبات عند تسجيل دخول المدير فقط
   useEffect(() => {
@@ -4254,11 +4279,11 @@ function MuzakkiratiApp() {
                   <div className="bg-slate-900/85 backdrop-blur-md border border-white/10 rounded-3xl p-6 sm:p-8 space-y-4 shadow-2xl">
                     <h3 className="text-lg font-black text-amber-400 flex items-center gap-2">
                       <ShieldCheck className="w-5 h-5" />
-                      {settings.trustCardTitle}
+                      <span>{settings.trustCardTitle}</span>
                     </h3>
                     <ul className="space-y-3">
-                      {(settings.trustCardPoints || []).map((pt, i) => (
-                        <li key={i} className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-200">
+                      {(settings.trustCardPoints || []).map((pt, idx) => (
+                        <li key={idx} className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-200 leading-relaxed">
                           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                           <span>{pt}</span>
                         </li>
@@ -4269,7 +4294,7 @@ function MuzakkiratiApp() {
               </div>
             </section>
 
-            {/* 2. الأقسام الرئيسية للمذكرات والكورسات */}
+            {/* 2. الأقسام الرئيسية للمذكرات والكورسات بتصميم واضح ومشرق */}
             <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
               <div className="text-center max-w-xl mx-auto">
                 <h2 className="text-2xl sm:text-3xl font-black text-slate-900">الأقسام الرئيسية للمذكرات والكورسات</h2>
@@ -4286,26 +4311,41 @@ function MuzakkiratiApp() {
                     <button
                       key={cat}
                       onClick={() => navigateTo('catalog', { category: cat, stage: '', grade: '' })}
-                      className="relative overflow-hidden bg-white rounded-3xl p-7 border border-slate-200 hover:border-blue-600 shadow-sm hover:shadow-xl transition text-right group min-h-[190px] flex flex-col justify-between"
+                      className="overflow-hidden bg-white rounded-3xl border border-slate-200 hover:border-blue-600 shadow-sm hover:shadow-xl transition-all duration-300 text-right group flex flex-col"
                     >
-                      {bgImg && (
-                        <img
-                          src={bgImg}
-                          alt={cat}
-                          className="absolute inset-0 w-full h-full object-cover opacity-15 group-hover:opacity-25 transition"
-                        />
-                      )}
-                      <div className="relative z-10 flex items-center justify-between">
-                        <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition">
-                          <BookOpen className="w-6 h-6" />
+                      {bgImg ? (
+                        <div className="relative h-48 w-full bg-slate-100 overflow-hidden">
+                          <img
+                            src={bgImg}
+                            alt={cat}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          />
+                          <span className="absolute top-3.5 left-3.5 px-3.5 py-1.5 rounded-full bg-slate-950/85 backdrop-blur-md text-white text-xs font-black shadow-md">
+                            {count} مذكرة متاحة
+                          </span>
                         </div>
-                        <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-extrabold">
-                          {count} مذكرة متاحة
-                        </span>
-                      </div>
-                      <div className="relative z-10 mt-6">
-                        <h3 className="text-xl font-black text-slate-900 group-hover:text-blue-600 transition">{cat}</h3>
-                        <p className="text-xs text-slate-500 mt-1">تصفح المراحل والصفوف الدراسية ←</p>
+                      ) : (
+                        <div className="relative h-40 w-full bg-gradient-to-br from-blue-600 to-indigo-700 p-6 flex items-center justify-between text-white">
+                          <div className="w-14 h-14 rounded-2xl bg-white/15 backdrop-blur-sm flex items-center justify-center">
+                            <BookOpen className="w-7 h-7" />
+                          </div>
+                          <span className="px-3.5 py-1.5 rounded-full bg-white/20 text-white text-xs font-black">
+                            {count} مذكرة متاحة
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="p-6 flex-1 flex flex-col justify-between w-full bg-white">
+                        <div>
+                          <h3 className="text-xl font-black text-slate-900 group-hover:text-blue-600 transition">{cat}</h3>
+                          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                            تصفح المراحل والصفوف الدراسية والمذكرات المتاحة
+                          </p>
+                        </div>
+                        <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs sm:text-sm font-extrabold text-blue-600">
+                          <span>دخول القسم</span>
+                          <span className="group-hover:-translate-x-1 transition-transform">←</span>
+                        </div>
                       </div>
                     </button>
                   );
