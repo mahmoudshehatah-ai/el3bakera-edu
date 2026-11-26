@@ -3001,6 +3001,14 @@ function AdminDashboard({
       </div>
 
       {/* شريط تبويبات الإدارة المطور */}
+      <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-xs font-black text-emerald-900">
+        <span>
+          {auth?.currentUser
+            ? `متصل بالسحابة بالحساب الإداري المعتمد: ${auth.currentUser.email}`
+            : 'تنبيه: أنت في وضع المعاينة المحلي — يرجى تسجيل الدخول بحساب الإدارة على الموقع المنشور لحفظ التعديلات في السحابة'}
+        </span>
+      </div>
+
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
           { id: 'notebooks', label: 'المذكرات والعينات', count: notebooks.length, icon: BookOpen, desc: 'إضافة وتعديل ورفع العينات' },
@@ -3551,395 +3559,41 @@ function AdminDashboard({
       {/* 2. تبويب الأقسام والمراحل والصفوف */}
       {activeTab === 'categories' && (
         <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 space-y-5">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-black text-slate-900 text-base">إدارة الأقسام الرئيسية والمراحل والصفوف</h3>
-            <button
-              type="button"
-              onClick={() =>
-                setLocalSettings((prev) => ({
-                  ...prev,
-                  categories: [
-                    ...(prev.categories || []),
-                    { id: `cat_${Date.now()}`, name: 'قسم جديد', browseMode: 'hierarchy', image: '', stages: [] }
-                  ]
-                }))
-              }
-              className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-black flex items-center gap-1"
-            >
-              <Plus className="w-4 h-4" />
-              <span>إضافة قسم</span>
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            {(localSettings.categories || []).map((cat, cIdx) => (
-              <div key={cat.id} className="p-4 rounded-2xl border border-slate-200 bg-slate-50 space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex flex-col gap-0.5">
-                    <button
-                      type="button"
-                      disabled={cIdx === 0}
-                      onClick={() => {
-                        const arr = [...localSettings.categories];
-                        [arr[cIdx - 1], arr[cIdx]] = [arr[cIdx], arr[cIdx - 1]];
-                        setLocalSettings({ ...localSettings, categories: arr });
-                      }}
-                      className="p-1 rounded bg-white border disabled:opacity-30"
-                    >
-                      <ChevronUp className="w-3 h-3" />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={cIdx === (localSettings.categories || []).length - 1}
-                      onClick={() => {
-                        const arr = [...localSettings.categories];
-                        [arr[cIdx + 1], arr[cIdx]] = [arr[cIdx], arr[cIdx + 1]];
-                        setLocalSettings({ ...localSettings, categories: arr });
-                      }}
-                      className="p-1 rounded bg-white border disabled:opacity-30"
-                    >
-                      <ChevronDown className="w-3 h-3" />
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    value={cat.name}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setLocalSettings((prev) => ({
-                        ...prev,
-                        categories: prev.categories.map((c, i) => (i === cIdx ? { ...c, name: val } : c))
-                      }));
-                    }}
-                    className="flex-1 min-w-[160px] px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-black"
-                  />
-                  <select
-                    value={cat.browseMode || 'hierarchy'}
-                    onChange={(e) => {
-                      const mode = e.target.value;
-                      setLocalSettings((prev) => ({
-                        ...prev,
-                        categories: prev.categories.map((c, i) => (i === cIdx ? { ...c, browseMode: mode } : c))
-                      }));
-                    }}
-                    className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
-                  >
-                    <option value="hierarchy">تصفح هرمي (مراحل وصفوف)</option>
-                    <option value="direct">عرض المذكرات مباشرة</option>
-                  </select>
-                  <label className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-black cursor-pointer">
-                    <span>صورة القسم</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        const dataUrl = await compressImageFile(file, 900, 0.8);
-                        setLocalSettings((prev) => ({
-                          ...prev,
-                          categories: prev.categories.map((c, i) => (i === cIdx ? { ...c, image: dataUrl } : c))
-                        }));
-                      }}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setLocalSettings((prev) => ({
-                        ...prev,
-                        categories: prev.categories.map((c, i) =>
-                          i === cIdx
-                            ? {
-                                ...c,
-                                stages: [...(c.stages || []), { id: `stg_${Date.now()}`, name: 'مرحلة جديدة', grades: [] }]
-                              }
-                            : c
-                        )
-                      }))
-                    }
-                    className="px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-black"
-                  >
-                    + مرحلة
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setLocalSettings((prev) => ({
-                        ...prev,
-                        categories: prev.categories.filter((_, i) => i !== cIdx)
-                      }))
-                    }
-                    className="p-2 rounded-xl bg-rose-100 text-rose-700"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {cat.image && <img src={cat.image} alt="" className="h-20 rounded-xl object-cover border" />}
-
-                <div className="space-y-2 pr-4 border-r-2 border-blue-200">
-                  {(cat.stages || []).map((st, sIdx) => (
-                    <div key={st.id} className="p-3 rounded-xl bg-white border border-slate-200 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={st.name}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setLocalSettings((prev) => ({
-                              ...prev,
-                              categories: prev.categories.map((c, i) =>
-                                i === cIdx
-                                  ? {
-                                      ...c,
-                                      stages: c.stages.map((s, j) => (j === sIdx ? { ...s, name: val } : s))
-                                    }
-                                  : c
-                              )
-                            }));
-                          }}
-                          className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold"
-                        />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setLocalSettings((prev) => ({
-                              ...prev,
-                              categories: prev.categories.map((c, i) =>
-                                i === cIdx
-                                  ? {
-                                      ...c,
-                                      stages: c.stages.map((s, j) =>
-                                        j === sIdx
-                                          ? {
-                                              ...s,
-                                              grades: [
-                                                ...(s.grades || []),
-                                                { id: `grd_${Date.now()}`, name: 'صف جديد' }
-                                              ]
-                                            }
-                                          : s
-                                      )
-                                    }
-                                  : c
-                              )
-                            }))
-                          }
-                          className="px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-[11px] font-black"
-                        >
-                          + صف
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setLocalSettings((prev) => ({
-                              ...prev,
-                              categories: prev.categories.map((c, i) =>
-                                i === cIdx ? { ...c, stages: c.stages.filter((_, j) => j !== sIdx) } : c
-                              )
-                            }))
-                          }
-                          className="p-1.5 text-rose-600"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        {(st.grades || []).map((gr, gIdx) => (
-                          <div key={gr.id} className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg border">
-                            <input
-                              type="text"
-                              value={gr.name}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setLocalSettings((prev) => ({
-                                  ...prev,
-                                  categories: prev.categories.map((c, i) =>
-                                    i === cIdx
-                                      ? {
-                                          ...c,
-                                          stages: c.stages.map((s, j) =>
-                                            j === sIdx
-                                              ? {
-                                                  ...s,
-                                                  grades: s.grades.map((g, k) =>
-                                                    k === gIdx ? { ...g, name: val } : g
-                                                  )
-                                                }
-                                              : s
-                                          )
-                                        }
-                                      : c
-                                  )
-                                }));
-                              }}
-                              className="bg-transparent text-xs font-bold w-36 focus:outline-none"
-                            />
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setLocalSettings((prev) => ({
-                                  ...prev,
-                                  categories: prev.categories.map((c, i) =>
-                                    i === cIdx
-                                      ? {
-                                          ...c,
-                                          stages: c.stages.map((s, j) =>
-                                            j === sIdx
-                                              ? { ...s, grades: s.grades.filter((_, k) => k !== gIdx) }
-                                              : s
-                                          )
-                                        }
-                                      : c
-                                  )
-                                }))
-                              }
-                              className="text-rose-500 text-xs font-black"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <button
-            type="button"
-            onClick={handleSaveSettings}
-            disabled={savingSettings}
-            className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black"
-          >
-            {savingSettings ? 'جاري الحفظ...' : 'حفظ هيكل الأقسام والصور'}
-          </button>
-        </div>
-      )}
-
-      {/* 3. تبويب الكوبونات والباقات */}
-      {activeTab === 'offers' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4">
-            <h3 className="font-black text-slate-900 text-base">إنشاء كوبون خصم بمدة صلاحية</h3>
-            <form onSubmit={handleCreateCoupon} className="space-y-3">
-              <div className="grid grid-cols-2 gap-2.5">
-                <input
-                  type="text"
-                  required
-                  placeholder="كود الخصم (مثلاً M20)"
-                  value={couponForm.code}
-                  onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value })}
-                  className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-black uppercase"
-                />
-                <select
-                  value={couponForm.type}
-                  onChange={(e) => setCouponForm({ ...couponForm, type: e.target.value })}
-                  className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
-                >
-                  <option value="percent">نسبة مئوية (%)</option>
-                  <option value="fixed">مبلغ ثابت (ج.م)</option>
-                </select>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                <input
-                  type="number"
-                  required
-                  placeholder="قيمة الخصم"
-                  value={couponForm.value}
-                  onChange={(e) => setCouponForm({ ...couponForm, value: e.target.value })}
-                  className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
-                />
-                <input
-                  type="number"
-                  placeholder="الحد الأدنى للطلب (ج.م)"
-                  value={couponForm.minOrder}
-                  onChange={(e) => setCouponForm({ ...couponForm, minOrder: e.target.value })}
-                  className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
-                />
-                <input
-                  type="datetime-local"
-                  value={couponForm.expiresAt}
-                  onChange={(e) => setCouponForm({ ...couponForm, expiresAt: e.target.value })}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
-                />
-              </div>
-              <input
-                type="text"
-                placeholder="ملاحظة توضيحية للكوبون (اختياري)"
-                value={couponForm.note}
-                onChange={(e) => setCouponForm({ ...couponForm, note: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
-              />
+            <div className="flex flex-wrap items-center gap-2">
               <button
-                type="submit"
-                className="w-full py-2.5 rounded-xl bg-blue-600 text-white text-xs font-black"
+                type="button"
+                onClick={() =>
+                  setLocalSettings((prev) => ({
+                    ...prev,
+                    categories: DEFAULT_CATEGORIES.map((defCat, idx) => ({
+                      ...defCat,
+                      id: prev.categories?.[idx]?.id || defCat.id,
+                      image: prev.categories?.[idx]?.image || ''
+                    }))
+                  }))
+                }
+                className="px-3.5 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-black"
               >
-                إضافة الكوبون
+                استعادة الأسماء والمراحل الافتراضية مع الإبقاء على الصور
               </button>
-            </form>
-
-            <div className="space-y-2 pt-2">
-              {coupons.map((cp) => {
-                const expired = isCouponExpired(cp);
-                return (
-                  <div
-                    key={cp.id}
-                    className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-black text-xs text-slate-900">{cp.code}</span>
-                        <span className="text-[11px] font-bold text-blue-600">
-                          ({cp.value} {cp.type === 'fixed' ? 'ج.م' : '%'})
-                        </span>
-                        {cp.active === false && (
-                          <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-black">
-                            متوقف
-                          </span>
-                        )}
-                        {expired && (
-                          <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[10px] font-black">
-                            منتهي
-                          </span>
-                        )}
-                      </div>
-                      {cp.expiresAt && (
-                        <div className="text-[10px] text-slate-500 font-bold">
-                          ينتهي: {formatExpiryAr(cp.expiresAt)}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (db && auth?.currentUser) {
-                            await updateDoc(publicDoc('coupons', cp.id), { active: cp.active === false });
-                          }
-                        }}
-                        className="px-2.5 py-1 rounded-lg bg-white border text-[11px] font-black"
-                      >
-                        {cp.active === false ? 'تفعيل' : 'إيقاف'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (db && auth?.currentUser) await deleteDoc(publicDoc('coupons', cp.id));
-                        }}
-                        className="p-1.5 text-rose-600"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+              <button
+                type="button"
+                onClick={() =>
+                  setLocalSettings((prev) => ({
+                    ...prev,
+                    categories: [
+                      ...(prev.categories || []),
+                      { id: `cat_${Date.now()}`, name: 'قسم جديد', browseMode: 'hierarchy', image: '', stages: [] }
+                    ]
+                  }))
+                }
+                className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-black flex items-center gap-1"
+              >
+                <Plus className="w-4 h-4" />
+                <span>إضافة قسم</span>
+              </button>
             </div>
           </div>
 
