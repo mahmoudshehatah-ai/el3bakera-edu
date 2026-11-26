@@ -28,7 +28,6 @@ import {
   X,
   Plus,
   Trash2,
-  Edit3,
   Eye,
   Upload,
   Sparkles,
@@ -39,22 +38,16 @@ import {
   ChevronLeft,
   ChevronUp,
   ChevronDown,
-  Lock,
   LogOut,
   Package,
   AlertCircle,
   ExternalLink,
   Copy,
   Check,
-  Image as ImageIcon,
-  Calendar,
   Clock,
-  FileText,
   Download,
-  RefreshCw,
   FolderOpen,
   Sliders,
-  Users,
   Award,
   MessageCircle,
   ArrowLeft,
@@ -77,10 +70,10 @@ const APP_ID = 'el3bakera-edu';
 const LEGACY_APP_ID = 'muzakkirati-edu-app';
 const ADMIN_EMAIL = 'mahmoudelzaaty7@gmail.com';
 
-const LOCAL_SETTINGS_KEY = 'el3bakera_settings_backup_v3';
-const LOCAL_NOTEBOOKS_KEY = 'el3bakera_notebooks_backup_v3';
-const LOCAL_SAMPLES_KEY = 'el3bakera_samples_backup_v3';
-const LOCAL_CART_KEY = 'el3bakera_cart_v3';
+const LOCAL_SETTINGS_KEY = 'el3bakera_settings_backup_v4';
+const LOCAL_NOTEBOOKS_KEY = 'el3bakera_notebooks_backup_v4';
+const LOCAL_SAMPLES_KEY = 'el3bakera_samples_backup_v4';
+const LOCAL_CART_KEY = 'el3bakera_cart_v4';
 
 let app = null;
 let auth = null;
@@ -103,8 +96,47 @@ const publicDoc = (colName, docId) => doc(db, 'artifacts', APP_ID, 'public', 'da
 const legacyPublicCol = (colName) => collection(db, 'artifacts', LEGACY_APP_ID, 'public', 'data', colName);
 
 // ============================================================================
-// 2. دوال مساعدة لتطبيع البيانات والصور والتواريخ ومنع أي خطأ عرض
+// 2. ثيمات الألوان ودوال تطبيع البيانات والصور والتواريخ
 // ============================================================================
+const THEME_PALETTES = {
+  blue: {
+    label: 'الأزرق الملكي (الافتراضي)',
+    primaryBtn: 'bg-blue-600 hover:bg-blue-700 text-white',
+    primaryText: 'text-blue-700',
+    primarySoft: 'bg-blue-50 text-blue-700 border-blue-200',
+    heroGradient: 'from-slate-950 via-blue-950 to-slate-900',
+    cardGradient: 'from-blue-600 to-indigo-800',
+    accentBorder: 'hover:border-blue-400'
+  },
+  emerald: {
+    label: 'الأخضر الزمردي التعليمي',
+    primaryBtn: 'bg-emerald-600 hover:bg-emerald-700 text-white',
+    primaryText: 'text-emerald-700',
+    primarySoft: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    heroGradient: 'from-slate-950 via-emerald-950 to-slate-900',
+    cardGradient: 'from-emerald-600 to-teal-800',
+    accentBorder: 'hover:border-emerald-400'
+  },
+  indigo: {
+    label: 'البنفسجي النيلي الأكاديمي',
+    primaryBtn: 'bg-indigo-600 hover:bg-indigo-700 text-white',
+    primaryText: 'text-indigo-700',
+    primarySoft: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    heroGradient: 'from-slate-950 via-indigo-950 to-slate-900',
+    cardGradient: 'from-indigo-600 to-purple-800',
+    accentBorder: 'hover:border-indigo-400'
+  },
+  slate: {
+    label: 'الكحلي الداكن والذهبي',
+    primaryBtn: 'bg-slate-900 hover:bg-slate-800 text-amber-400',
+    primaryText: 'text-slate-900',
+    primarySoft: 'bg-amber-50 text-amber-900 border-amber-200',
+    heroGradient: 'from-slate-950 via-slate-900 to-zinc-900',
+    cardGradient: 'from-slate-800 to-slate-950',
+    accentBorder: 'hover:border-amber-400'
+  }
+};
+
 const safeText = (val, fallback = '') => {
   if (val === null || val === undefined) return fallback;
   if (typeof val === 'string') return val;
@@ -205,6 +237,7 @@ const normalizeNotebook = (raw, idFallback = '') => {
     badge: safeText(d.badge, ''),
     driveUrl: safeText(d.driveUrl || d.driveLink || d.sampleUrl, ''),
     noticeText: safeText(d.noticeText || d.note || d.alertText, ''),
+    noticePosition: safeText(d.noticePosition, 'top'), // top | bottom
     hidden: Boolean(d.hidden),
     sortOrder: Number(d.sortOrder ?? 9999),
     coverImage,
@@ -217,6 +250,7 @@ const DEFAULT_CATEGORIES = [
   {
     id: 'cat_term1',
     name: 'مذكرات الفصل الدراسي الأول',
+    browseMode: 'hierarchy',
     image: '',
     stages: [
       {
@@ -242,6 +276,7 @@ const DEFAULT_CATEGORIES = [
   {
     id: 'cat_term2',
     name: 'مذكرات الفصل الدراسي الثاني',
+    browseMode: 'hierarchy',
     image: '',
     stages: [
       {
@@ -258,17 +293,9 @@ const DEFAULT_CATEGORIES = [
   {
     id: 'cat_found',
     name: 'كورسات التأسيس والمراجعات النهائية',
+    browseMode: 'direct',
     image: '',
-    stages: [
-      {
-        id: 'stg_found_all',
-        name: 'جميع المراحل',
-        grades: [
-          { id: 'grd_found_1', name: 'تأسيس القراءة والكتابة واللغات' },
-          { id: 'grd_rev_1', name: 'مراجعات ليلة الامتحان' }
-        ]
-      }
-    ]
+    stages: []
   }
 ];
 
@@ -276,7 +303,7 @@ const DEFAULT_SETTINGS = {
   platformName: 'منصة العباقرة للمذكرات التعليمية',
   platformTagline: 'مذكرات دراسية احترافية مخصصة للمعلم باسمه وبياناته الخاصة',
   logoUrl: '',
-  primaryTheme: 'blue', // blue | emerald | indigo | slate
+  primaryTheme: 'blue',
   heroBadge: 'الإصدار المعتمد للمعلمين والسناتر التعليمية',
   heroTitle: 'مذكرتك التعليمية الجاهزة... باسمك وشعارك وهويتك الاحترافية',
   heroSubtitle:
@@ -329,10 +356,10 @@ const DEFAULT_SETTINGS = {
     { id: 'soc_tg', label: 'قناتنا على تليجرام', url: 'https://t.me' }
   ],
   checkoutFields: [
-    { id: 'teacherName', label: 'اسم المعلم (كما سيُطبع على المذكرة)', type: 'text', placeholder: 'أ/ محمود...', required: true, enabled: true },
-    { id: 'phone', label: 'رقم الواتساب للتواصل والتسليم', type: 'tel', placeholder: '010xxxxxxxx', required: true, enabled: true },
-    { id: 'subject', label: 'المادة الدراسية / المسمى الوظيفي', type: 'text', placeholder: 'معلم أول لغة عربية...', required: false, enabled: true },
-    { id: 'notes', label: 'ملاحظات إضافية للتصميم', type: 'textarea', placeholder: 'أي تفاصيل إضافية...', required: false, enabled: true }
+    { id: 'teacherName', label: 'اسم المعلم (كما سيُطبع على المذكرة)', type: 'text', placeholder: 'أ/ محمود...', options: '', required: true, enabled: true },
+    { id: 'phone', label: 'رقم الواتساب للتواصل والتسليم', type: 'tel', placeholder: '010xxxxxxxx', options: '', required: true, enabled: true },
+    { id: 'subject', label: 'المادة الدراسية / المسمى الوظيفي', type: 'text', placeholder: 'معلم أول لغة عربية...', options: '', required: false, enabled: true },
+    { id: 'notes', label: 'ملاحظات إضافية للتصميم', type: 'textarea', placeholder: 'أي تفاصيل إضافية...', options: '', required: false, enabled: true }
   ],
   nextOrderReward: {
     enabled: true,
@@ -432,6 +459,7 @@ const mergeAndNormalizeSettings = (base, incoming) => {
       return {
         id: cid,
         name: safeText(cat.name || cat.title || cat.label, `قسم ${idx + 1}`),
+        browseMode: safeText(cat.browseMode, 'hierarchy'),
         image: img,
         stages: Array.isArray(cat.stages)
           ? cat.stages.map((st, sIdx) => ({
@@ -549,6 +577,8 @@ function MuzakkiratiApp() {
       return DEFAULT_SETTINGS;
     }
   });
+
+  const theme = THEME_PALETTES[settings.primaryTheme] || THEME_PALETTES.blue;
 
   const [notebooks, setNotebooks] = useState(() => {
     try {
@@ -678,7 +708,6 @@ function MuzakkiratiApp() {
     };
 
     try {
-      // 1. الإعدادات والوسائط من كافة مستندات settings و config
       unsubscribers.push(
         onSnapshot(
           publicCol('settings'),
@@ -725,7 +754,6 @@ function MuzakkiratiApp() {
         )
       );
 
-      // 2. المذكرات
       unsubscribers.push(
         onSnapshot(
           publicCol('notebooks'),
@@ -744,7 +772,6 @@ function MuzakkiratiApp() {
         )
       );
 
-      // 3. صور العينات من المسار الأساسي
       unsubscribers.push(
         onSnapshot(
           publicCol('notebook_samples'),
@@ -755,7 +782,6 @@ function MuzakkiratiApp() {
         )
       );
 
-      // 3.5 جلب أي وسائط إضافية من مجموعات أخرى في المسار الأساسي أو القديم أو الجذر
       (async () => {
         const candidateCols = [
           'notebook_samples',
@@ -781,15 +807,7 @@ function MuzakkiratiApp() {
           } catch {
             // تجاهل
           }
-          try {
-            const rootSnap = await getDocs(collection(db, extraCol));
-            if (!rootSnap.empty) mapSampleDocsToState(rootSnap.docs);
-          } catch {
-            // تجاهل
-          }
         }
-
-        // 4. استرجاع من المسار القديم legacyPublicCol (muzakkirati-edu-app)
         try {
           for (const legacyColName of ['settings', 'config']) {
             const legacySettings = await getDocs(legacyPublicCol(legacyColName));
@@ -803,14 +821,11 @@ function MuzakkiratiApp() {
               });
             }
           }
-          const legacySamples = await getDocs(legacyPublicCol('notebook_samples'));
-          if (!legacySamples.empty) mapSampleDocsToState(legacySamples.docs);
         } catch {
           // تجاهل
         }
       })();
 
-      // 5. الباقات
       unsubscribers.push(
         onSnapshot(
           publicCol('bundles'),
@@ -821,7 +836,6 @@ function MuzakkiratiApp() {
         )
       );
 
-      // 6. الكوبونات
       unsubscribers.push(
         onSnapshot(
           publicCol('coupons'),
@@ -832,7 +846,6 @@ function MuzakkiratiApp() {
         )
       );
 
-      // 7. الطلبات
       unsubscribers.push(
         onSnapshot(
           publicCol('orders'),
@@ -854,7 +867,6 @@ function MuzakkiratiApp() {
     };
   }, []);
 
-  // حسابات المذكرات المعروضة
   const getNotebookSamples = (nb) => {
     if (!nb) return [];
     const direct = samplesMap[nb.id] || [];
@@ -866,7 +878,6 @@ function MuzakkiratiApp() {
     return filtered.length > 0 ? filtered : nb.coverImage ? [nb.coverImage] : [];
   };
 
-  // جلب العينات عند فتح نافذة المعاينة إن كانت مخزنة كمجموعة فرعية تحت المذكرة أو تحت notebook_samples
   useEffect(() => {
     if (!previewNotebook || !db) return;
     let cancelled = false;
@@ -874,8 +885,7 @@ function MuzakkiratiApp() {
       const subPaths = [
         collection(db, 'artifacts', APP_ID, 'public', 'data', 'notebooks', previewNotebook.id, 'samples'),
         collection(db, 'artifacts', APP_ID, 'public', 'data', 'notebooks', previewNotebook.id, 'pages'),
-        collection(db, 'artifacts', APP_ID, 'public', 'data', 'notebook_samples', previewNotebook.id, 'pages'),
-        collection(db, 'artifacts', LEGACY_APP_ID, 'public', 'data', 'notebooks', previewNotebook.id, 'samples')
+        collection(db, 'artifacts', APP_ID, 'public', 'data', 'notebook_samples', previewNotebook.id, 'pages')
       ];
       for (const subCol of subPaths) {
         try {
@@ -930,20 +940,23 @@ function MuzakkiratiApp() {
     return [...visibleNotebooks].sort((a, b) => toTimeMs(b.createdAt) - toTimeMs(a.createdAt)).slice(0, count);
   }, [visibleNotebooks, settings.whatsNewEnabled, settings.whatsNewMode, settings.whatsNewCount, settings.whatsNewIds]);
 
+  const selectedCategoryObj = useMemo(
+    () => (settings.categories || []).find((c) => c.id === selectedCategoryId) || null,
+    [settings.categories, selectedCategoryId]
+  );
+
   const filteredNotebooks = useMemo(() => {
     return visibleNotebooks.filter((nb) => {
       if (selectedCategoryId) {
-        const cat = (settings.categories || []).find((c) => c.id === selectedCategoryId);
-        const stageIds = new Set((cat?.stages || []).map((s) => s.id));
+        const stageIds = new Set((selectedCategoryObj?.stages || []).map((s) => s.id));
         const gradeIds = new Set();
-        (cat?.stages || []).forEach((s) => (s.grades || []).forEach((g) => gradeIds.add(g.id)));
+        (selectedCategoryObj?.stages || []).forEach((s) => (s.grades || []).forEach((g) => gradeIds.add(g.id)));
         if (nb.categoryId !== selectedCategoryId && !stageIds.has(nb.stageId) && !gradeIds.has(nb.gradeId)) {
           return false;
         }
       }
       if (selectedStageId) {
-        const cat = (settings.categories || []).find((c) => c.id === selectedCategoryId);
-        const stg = (cat?.stages || []).find((s) => s.id === selectedStageId);
+        const stg = (selectedCategoryObj?.stages || []).find((s) => s.id === selectedStageId);
         const gradeIds = new Set((stg?.grades || []).map((g) => g.id));
         if (nb.stageId !== selectedStageId && !gradeIds.has(nb.gradeId)) return false;
       }
@@ -955,7 +968,7 @@ function MuzakkiratiApp() {
       }
       return true;
     });
-  }, [visibleNotebooks, selectedCategoryId, selectedStageId, selectedGradeId, searchQuery, settings.categories]);
+  }, [visibleNotebooks, selectedCategoryId, selectedCategoryObj, selectedStageId, selectedGradeId, searchQuery]);
 
   // دوال السلة
   const addNotebookToCart = (nb) => {
@@ -1037,7 +1050,6 @@ function MuzakkiratiApp() {
     showToast(`تم تطبيق كود الخصم (${raw}) بنجاح!`);
   };
 
-  // إتمام الطلب وإرساله
   const handleSubmitOrder = async (e) => {
     e.preventDefault();
     if (cart.length === 0) return;
@@ -1115,7 +1127,6 @@ function MuzakkiratiApp() {
     }
   };
 
-  // تتبع الطلب
   const handleTrackOrder = (e) => {
     e.preventDefault();
     const q = trackQuery.trim().toUpperCase();
@@ -1123,7 +1134,7 @@ function MuzakkiratiApp() {
     const found = orders.find(
       (o) =>
         String(o.orderCode || '').toUpperCase() === q ||
-        String(o.customer?.phone || '').includes(trackQuery.trim())
+        JSON.stringify(o.customer || {}).includes(trackQuery.trim())
     );
     if (found) {
       setTrackedOrder(found);
@@ -1134,7 +1145,6 @@ function MuzakkiratiApp() {
     }
   };
 
-  // تسجيل دخول الإدارة
   const handleAdminEmailLogin = async (e) => {
     e.preventDefault();
     setLoginError('');
@@ -1288,12 +1298,12 @@ function MuzakkiratiApp() {
                 className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl object-cover border border-slate-200 shadow-sm"
               />
             ) : (
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-600/20">
+              <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-2xl ${theme.primaryBtn} flex items-center justify-center shadow-md`}>
                 <BookOpen className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
             )}
             <div>
-              <div className="text-sm sm:text-base font-black text-blue-700 leading-tight group-hover:text-blue-800">
+              <div className={`text-sm sm:text-base font-black ${theme.primaryText} leading-tight`}>
                 {settings.platformName}
               </div>
               <div className="hidden sm:flex items-center gap-1.5 text-[11px] font-bold text-slate-500 mt-0.5">
@@ -1319,7 +1329,7 @@ function MuzakkiratiApp() {
                   type="button"
                   onClick={() => setActiveView(tab.id)}
                   className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black transition ${
-                    active ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
+                    active ? `${theme.primaryBtn} shadow-sm` : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5" />
@@ -1336,10 +1346,10 @@ function MuzakkiratiApp() {
               onClick={() => setCartOpen(true)}
               className="relative flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white hover:border-blue-400 text-xs font-black text-slate-800 transition"
             >
-              <ShoppingCart className="w-4 h-4 text-blue-600" />
+              <ShoppingCart className={`w-4 h-4 ${theme.primaryText}`} />
               <span className="hidden sm:inline">السلة</span>
               {cart.length > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-black">
+                <span className={`px-1.5 py-0.5 rounded-full ${theme.primaryBtn} text-[10px] font-black`}>
                   {cart.length}
                 </span>
               )}
@@ -1383,7 +1393,7 @@ function MuzakkiratiApp() {
                 type="button"
                 onClick={() => setActiveView(tab.id)}
                 className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-black transition ${
-                  active ? 'bg-blue-600 text-white' : 'text-slate-600'
+                  active ? theme.primaryBtn : 'text-slate-600'
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" />
@@ -1415,7 +1425,7 @@ function MuzakkiratiApp() {
               )}
               <div
                 style={{ opacity: (settings.heroOverlayOpacity ?? 78) / 100 }}
-                className="absolute inset-0 bg-gradient-to-l from-slate-950 via-blue-950 to-slate-900"
+                className={`absolute inset-0 bg-gradient-to-l ${theme.heroGradient}`}
               />
 
               <div className="relative z-10 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
@@ -1437,7 +1447,7 @@ function MuzakkiratiApp() {
                         setSelectedGradeId('');
                         setActiveView('library');
                       }}
-                      className="px-6 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-black shadow-lg shadow-blue-600/30 transition"
+                      className={`px-6 py-3.5 rounded-2xl ${theme.primaryBtn} text-xs sm:text-sm font-black shadow-lg transition`}
                     >
                       {settings.heroPrimaryBtnText || 'تصفح مكتبة المذكرات'}
                     </button>
@@ -1502,9 +1512,9 @@ function MuzakkiratiApp() {
                         setSelectedGradeId('');
                         setActiveView('library');
                       }}
-                      className="group text-right bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl hover:border-blue-400 transition flex flex-col"
+                      className={`group text-right bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl ${theme.accentBorder} transition flex flex-col`}
                     >
-                      <div className="relative h-44 w-full bg-gradient-to-br from-blue-700 to-indigo-800 flex items-center justify-center overflow-hidden">
+                      <div className={`relative h-44 w-full bg-gradient-to-br ${theme.cardGradient} flex items-center justify-center overflow-hidden`}>
                         {cat.image ? (
                           <img
                             src={cat.image}
@@ -1520,12 +1530,14 @@ function MuzakkiratiApp() {
                       </div>
                       <div className="p-4 sm:p-5 flex items-center justify-between gap-2 w-full">
                         <div>
-                          <h3 className="font-black text-slate-900 text-sm sm:text-base group-hover:text-blue-700">
+                          <h3 className={`font-black text-slate-900 text-sm sm:text-base group-hover:${theme.primaryText}`}>
                             {cat.name}
                           </h3>
-                          <p className="text-xs text-blue-600 font-bold mt-0.5">تصفح المراحل والصفوف الدراسية</p>
+                          <p className={`text-xs ${theme.primaryText} font-bold mt-0.5`}>
+                            {cat.browseMode === 'direct' ? 'عرض جميع المذكرات مباشرة' : 'تصفح المراحل والصفوف الدراسية'}
+                          </p>
                         </div>
-                        <ArrowLeft className="w-5 h-5 text-blue-600 group-hover:-translate-x-1 transition shrink-0" />
+                        <ArrowLeft className={`w-5 h-5 ${theme.primaryText} group-hover:-translate-x-1 transition shrink-0`} />
                       </div>
                     </button>
                   );
@@ -1538,7 +1550,7 @@ function MuzakkiratiApp() {
               <section className="max-w-7xl mx-auto px-4 sm:px-6 pb-12 space-y-6">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div>
-                    <span className="inline-block px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-[11px] font-black mb-1">
+                    <span className={`inline-block px-3 py-1 rounded-full border text-[11px] font-black mb-1 ${theme.primarySoft}`}>
                       إصدارات حديثة
                     </span>
                     <h2 className="text-xl sm:text-2xl font-black text-slate-900">{settings.whatsNewTitle}</h2>
@@ -1546,7 +1558,7 @@ function MuzakkiratiApp() {
                   <button
                     type="button"
                     onClick={() => setActiveView('library')}
-                    className="text-xs font-black text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                    className={`text-xs font-black ${theme.primaryText} flex items-center gap-1`}
                   >
                     <span>عرض الكل</span>
                     <ArrowLeft className="w-4 h-4" />
@@ -1558,6 +1570,7 @@ function MuzakkiratiApp() {
                     <NotebookCard
                       key={nb.id}
                       nb={nb}
+                      theme={theme}
                       onPreview={() => {
                         setPreviewNotebook(nb);
                         setPreviewPageIdx(0);
@@ -1572,13 +1585,11 @@ function MuzakkiratiApp() {
             {/* قسم أخبار المنصة ومذكرات قيد التجهيز */}
             {settings.newsSectionEnabled && (settings.newsItems || []).length > 0 && (
               <section className="max-w-7xl mx-auto px-4 sm:px-6 pb-12 space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="inline-block px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-[11px] font-black mb-1">
-                      تحديثات وإصدارات قادمة
-                    </span>
-                    <h2 className="text-xl sm:text-2xl font-black text-slate-900">{settings.newsSectionTitle}</h2>
-                  </div>
+                <div>
+                  <span className="inline-block px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-[11px] font-black mb-1">
+                    تحديثات وإصدارات قادمة
+                  </span>
+                  <h2 className="text-xl sm:text-2xl font-black text-slate-900">{settings.newsSectionTitle}</h2>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                   {(settings.newsItems || []).map((item) => (
@@ -1588,7 +1599,7 @@ function MuzakkiratiApp() {
                     >
                       <div className="space-y-2">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-[11px] font-black">
+                          <span className={`px-3 py-1 rounded-full border text-[11px] font-black ${theme.primarySoft}`}>
                             {item.badge || 'خبر جديد'}
                           </span>
                           {item.date && <span className="text-[11px] text-slate-400 font-bold">{item.date}</span>}
@@ -1599,7 +1610,7 @@ function MuzakkiratiApp() {
                       <button
                         type="button"
                         onClick={() => setCustomRequestModalOpen(true)}
-                        className="self-start text-xs font-black text-blue-600 hover:text-blue-800 flex items-center gap-1 pt-1"
+                        className={`self-start text-xs font-black ${theme.primaryText} flex items-center gap-1 pt-1`}
                       >
                         <span>احجز نسختك أو استفسر الآن</span>
                         <ArrowLeft className="w-3.5 h-3.5" />
@@ -1613,15 +1624,10 @@ function MuzakkiratiApp() {
             {/* بنر طلب مذكرة بتصميم خاص */}
             {settings.customBannerEnabled !== false && (
               <section className="max-w-7xl mx-auto px-4 sm:px-6 pb-14">
-                <div className="rounded-3xl bg-gradient-to-l from-blue-700 via-indigo-700 to-slate-900 text-white p-6 sm:p-10 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl">
+                <div className={`rounded-3xl bg-gradient-to-l ${theme.heroGradient} text-white p-6 sm:p-10 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl`}>
                   <div className="space-y-2 text-center md:text-right">
-                    <h3 className="text-xl sm:text-2xl font-black">
-                      {settings.customBannerTitle || 'هل تحتاج مذكرة بتصميم خاص أو منهج مخصص؟'}
-                    </h3>
-                    <p className="text-xs sm:text-sm text-blue-100 font-bold max-w-2xl">
-                      {settings.customBannerSubtitle ||
-                        'فريقنا جاهز لتنسيق وإعداد مذكرتك الخاصة من الصفر باسمك وشعارك وألوانك المفضلة بأعلى جودة للطباعة.'}
-                    </p>
+                    <h3 className="text-xl sm:text-2xl font-black">{settings.customBannerTitle}</h3>
+                    <p className="text-xs sm:text-sm text-slate-200 font-bold max-w-2xl">{settings.customBannerSubtitle}</p>
                   </div>
                   <button
                     type="button"
@@ -1659,7 +1665,6 @@ function MuzakkiratiApp() {
                 </div>
               </div>
 
-              {/* فلاتر الأقسام والمراحل والصفوف */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <select
                   value={selectedCategoryId}
@@ -1684,13 +1689,11 @@ function MuzakkiratiApp() {
                     setSelectedStageId(e.target.value);
                     setSelectedGradeId('');
                   }}
-                  disabled={!selectedCategoryId}
+                  disabled={!selectedCategoryId || selectedCategoryObj?.browseMode === 'direct'}
                   className="px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50 text-xs font-black disabled:opacity-50"
                 >
                   <option value="">جميع المراحل الدراسية</option>
-                  {(
-                    (settings.categories || []).find((c) => c.id === selectedCategoryId)?.stages || []
-                  ).map((st) => (
+                  {(selectedCategoryObj?.stages || []).map((st) => (
                     <option key={st.id} value={st.id}>
                       {st.name}
                     </option>
@@ -1700,16 +1703,12 @@ function MuzakkiratiApp() {
                 <select
                   value={selectedGradeId}
                   onChange={(e) => setSelectedGradeId(e.target.value)}
-                  disabled={!selectedStageId}
+                  disabled={!selectedStageId || selectedCategoryObj?.browseMode === 'direct'}
                   className="px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50 text-xs font-black disabled:opacity-50"
                 >
                   <option value="">جميع الصفوف الدراسية</option>
                   {(
-                    (
-                      (settings.categories || [])
-                        .find((c) => c.id === selectedCategoryId)
-                        ?.stages || []
-                    ).find((s) => s.id === selectedStageId)?.grades || []
+                    (selectedCategoryObj?.stages || []).find((s) => s.id === selectedStageId)?.grades || []
                   ).map((gr) => (
                     <option key={gr.id} value={gr.id}>
                       {gr.name}
@@ -1731,7 +1730,7 @@ function MuzakkiratiApp() {
                     setSelectedGradeId('');
                     setSearchQuery('');
                   }}
-                  className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-black"
+                  className={`px-4 py-2 rounded-xl ${theme.primaryBtn} text-xs font-black`}
                 >
                   عرض جميع المذكرات
                 </button>
@@ -1742,6 +1741,7 @@ function MuzakkiratiApp() {
                   <NotebookCard
                     key={nb.id}
                     nb={nb}
+                    theme={theme}
                     onPreview={() => {
                       setPreviewNotebook(nb);
                       setPreviewPageIdx(0);
@@ -1757,10 +1757,9 @@ function MuzakkiratiApp() {
         {/* صفحة العروض والباقات */}
         {activeView === 'offers' && (
           <section className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
-            {/* الكوبونات النشطة */}
             <div className="space-y-4">
               <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                <Tag className="w-5 h-5 text-blue-600" />
+                <Tag className={`w-5 h-5 ${theme.primaryText}`} />
                 <span>كوبونات الخصم المتاحة حاليًا</span>
               </h2>
               {activeCoupons.length === 0 ? (
@@ -1776,7 +1775,7 @@ function MuzakkiratiApp() {
                     >
                       <div className="space-y-1">
                         <div className="flex items-center justify-between">
-                          <span className="px-3 py-1 rounded-xl bg-blue-50 text-blue-700 font-black text-sm tracking-wider">
+                          <span className={`px-3 py-1 rounded-xl border font-black text-sm tracking-wider ${theme.primarySoft}`}>
                             {cp.code}
                           </span>
                           <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-black">
@@ -1784,6 +1783,9 @@ function MuzakkiratiApp() {
                           </span>
                         </div>
                         {cp.note && <p className="text-xs text-slate-600 font-bold pt-1">{cp.note}</p>}
+                        {Number(cp.minOrder || 0) > 0 && (
+                          <p className="text-[11px] text-slate-500 font-bold">الحد الأدنى للطلب: {cp.minOrder} ج.م</p>
+                        )}
                         {cp.expiresAt && (
                           <p className="text-[11px] text-amber-700 font-black flex items-center gap-1 pt-1">
                             <Clock className="w-3.5 h-3.5" />
@@ -1809,7 +1811,6 @@ function MuzakkiratiApp() {
               )}
             </div>
 
-            {/* باقات التوفير */}
             <div className="space-y-4">
               <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
                 <Award className="w-5 h-5 text-amber-500" />
@@ -1821,35 +1822,53 @@ function MuzakkiratiApp() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {bundles.map((b) => (
-                    <div
-                      key={b.id}
-                      className="bg-white rounded-3xl border border-slate-200 p-5 flex flex-col justify-between gap-4 shadow-sm"
-                    >
-                      <div className="space-y-2">
-                        <span className="inline-block px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-[11px] font-black">
-                          باقة توفير مميزة
-                        </span>
-                        <h3 className="text-base font-black text-slate-900">{b.title}</h3>
-                        <p className="text-xs text-slate-600 font-bold leading-relaxed">{b.description}</p>
-                      </div>
-                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                        <div>
-                          <span className="text-lg font-black text-blue-700">{b.price} ج.م</span>
-                          {Number(b.oldPrice) > Number(b.price) && (
-                            <span className="text-xs text-slate-400 line-through mr-2 font-bold">{b.oldPrice} ج.م</span>
+                  {bundles.map((b) => {
+                    const includedNbs = (b.notebookIds || [])
+                      .map((id) => notebooks.find((n) => n.id === id))
+                      .filter(Boolean);
+                    return (
+                      <div
+                        key={b.id}
+                        className="bg-white rounded-3xl border border-slate-200 p-5 flex flex-col justify-between gap-4 shadow-sm"
+                      >
+                        <div className="space-y-2">
+                          <span className="inline-block px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-[11px] font-black">
+                            باقة توفير مميزة
+                          </span>
+                          <h3 className="text-base font-black text-slate-900">{b.title}</h3>
+                          {b.description && <p className="text-xs text-slate-600 font-bold leading-relaxed">{b.description}</p>}
+                          {includedNbs.length > 0 && (
+                            <div className="pt-1 space-y-1">
+                              <div className="text-[11px] font-black text-slate-500">تشمل المذكرات التالية:</div>
+                              <ul className="space-y-1">
+                                {includedNbs.map((itemNb) => (
+                                  <li key={itemNb.id} className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                                    <span>{itemNb.title}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
                           )}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => addBundleToCart(b)}
-                          className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black"
-                        >
-                          إضافة الباقة
-                        </button>
+                        <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                          <div>
+                            <span className={`text-lg font-black ${theme.primaryText}`}>{b.price} ج.م</span>
+                            {Number(b.oldPrice) > Number(b.price) && (
+                              <span className="text-xs text-slate-400 line-through mr-2 font-bold">{b.oldPrice} ج.م</span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => addBundleToCart(b)}
+                            className={`px-4 py-2.5 rounded-xl ${theme.primaryBtn} text-xs font-black`}
+                          >
+                            إضافة الباقة
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1861,7 +1880,7 @@ function MuzakkiratiApp() {
           <section className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
             <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-6">
               <div className="text-center space-y-1.5">
-                <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
+                <div className={`w-12 h-12 rounded-2xl border ${theme.primarySoft} flex items-center justify-center mx-auto`}>
                   <Package className="w-6 h-6" />
                 </div>
                 <h2 className="text-xl font-black text-slate-900">تتبع حالة طلبك</h2>
@@ -1880,7 +1899,7 @@ function MuzakkiratiApp() {
                 />
                 <button
                   type="submit"
-                  className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black"
+                  className={`px-6 py-3 rounded-2xl ${theme.primaryBtn} text-xs font-black`}
                 >
                   بحث عن الطلب
                 </button>
@@ -1895,7 +1914,7 @@ function MuzakkiratiApp() {
               {trackedOrder && (
                 <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="font-black text-blue-700 text-sm">{trackedOrder.orderCode}</span>
+                    <span className={`font-black ${theme.primaryText} text-sm`}>{trackedOrder.orderCode}</span>
                     <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-black">
                       {trackedOrder.status === 'completed'
                         ? 'تم التسليم'
@@ -1934,8 +1953,6 @@ function MuzakkiratiApp() {
       {/* ==================================================================== */}
       {/* 6. نوافذ المعاينة، السلة، تسجيل الدخول، والتواصل */}
       {/* ==================================================================== */}
-
-      {/* نافذة معاينة المذكرة وعيناتها */}
       {previewNotebook && (
         <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
           <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[92vh] overflow-y-auto shadow-2xl border border-slate-200">
@@ -1956,7 +1973,7 @@ function MuzakkiratiApp() {
             </div>
 
             <div className="p-5 sm:p-6 space-y-5">
-              {previewNotebook.noticeText && (
+              {previewNotebook.noticeText && previewNotebook.noticePosition !== 'bottom' && (
                 <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <span>{previewNotebook.noticeText}</span>
@@ -2022,9 +2039,16 @@ function MuzakkiratiApp() {
                 );
               })()}
 
+              {previewNotebook.noticeText && previewNotebook.noticePosition === 'bottom' && (
+                <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span>{previewNotebook.noticeText}</span>
+                </div>
+              )}
+
               <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-200">
                 <div className="flex items-center gap-3">
-                  <span className="text-xl font-black text-blue-700">{previewNotebook.price} ج.م</span>
+                  <span className={`text-xl font-black ${theme.primaryText}`}>{previewNotebook.price} ج.م</span>
                   {Number(previewNotebook.oldPrice) > Number(previewNotebook.price) && (
                     <span className="text-xs text-slate-400 line-through font-bold">
                       {previewNotebook.oldPrice} ج.م
@@ -2039,7 +2063,7 @@ function MuzakkiratiApp() {
                       rel="noopener noreferrer"
                       className="px-4 py-2.5 rounded-xl border border-slate-300 hover:border-blue-500 text-xs font-black text-slate-800 flex items-center gap-1.5"
                     >
-                      <ExternalLink className="w-4 h-4 text-blue-600" />
+                      <ExternalLink className={`w-4 h-4 ${theme.primaryText}`} />
                       <span>معاينة PDF على Drive</span>
                     </a>
                   )}
@@ -2049,7 +2073,7 @@ function MuzakkiratiApp() {
                       addNotebookToCart(previewNotebook);
                       setPreviewNotebook(null);
                     }}
-                    className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black flex items-center gap-1.5"
+                    className={`px-5 py-2.5 rounded-xl ${theme.primaryBtn} text-xs font-black flex items-center gap-1.5`}
                   >
                     <ShoppingCart className="w-4 h-4" />
                     <span>أضف إلى السلة</span>
@@ -2068,7 +2092,7 @@ function MuzakkiratiApp() {
             <div className="space-y-5">
               <div className="flex items-center justify-between border-b border-slate-200 pb-4">
                 <h3 className="font-black text-slate-900 text-base flex items-center gap-2">
-                  <ShoppingCart className="w-5 h-5 text-blue-600" />
+                  <ShoppingCart className={`w-5 h-5 ${theme.primaryText}`} />
                   <span>سلة الطلبات ({cart.length})</span>
                 </h3>
                 <button
@@ -2087,9 +2111,7 @@ function MuzakkiratiApp() {
                 <div className="p-5 rounded-3xl bg-emerald-50 border border-emerald-200 space-y-4 text-center">
                   <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
                   <h4 className="font-black text-emerald-950 text-base">تم تسجيل طلبك بنجاح!</h4>
-                  <p className="text-xs text-emerald-800 font-bold leading-relaxed">
-                    {settings.orderSuccessMessage}
-                  </p>
+                  <p className="text-xs text-emerald-800 font-bold leading-relaxed">{settings.orderSuccessMessage}</p>
                   <p className="text-xs text-emerald-900 font-bold">
                     رقم تتبع الطلب: <span className="font-black underline">{completedOrder.orderCode}</span>
                   </p>
@@ -2124,7 +2146,7 @@ function MuzakkiratiApp() {
                       >
                         <div>
                           <div className="text-xs font-black text-slate-900">{item.title}</div>
-                          <div className="text-xs font-bold text-blue-600 mt-0.5">{item.price} ج.م</div>
+                          <div className={`text-xs font-bold ${theme.primaryText} mt-0.5`}>{item.price} ج.م</div>
                         </div>
                         <button
                           type="button"
@@ -2137,7 +2159,6 @@ function MuzakkiratiApp() {
                     ))}
                   </div>
 
-                  {/* تطبيق كود الخصم */}
                   <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
                     <label className="block text-xs font-black text-slate-700">هل لديك كوبون خصم؟</label>
                     <div className="flex gap-2">
@@ -2164,7 +2185,6 @@ function MuzakkiratiApp() {
                     )}
                   </div>
 
-                  {/* بيانات المعلم لإتمام الطلب */}
                   <form onSubmit={handleSubmitOrder} className="space-y-3">
                     {(settings.checkoutFields || [])
                       .filter((f) => f.enabled !== false)
@@ -2182,6 +2202,24 @@ function MuzakkiratiApp() {
                               onChange={(e) => setCheckoutForm({ ...checkoutForm, [field.label]: e.target.value })}
                               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
                             />
+                          ) : field.type === 'select' ? (
+                            <select
+                              required={field.required}
+                              value={checkoutForm[field.label] || ''}
+                              onChange={(e) => setCheckoutForm({ ...checkoutForm, [field.label]: e.target.value })}
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                            >
+                              <option value="">اختر...</option>
+                              {String(field.options || '')
+                                .split(/[،,]/)
+                                .map((opt) => opt.trim())
+                                .filter(Boolean)
+                                .map((opt, idx) => (
+                                  <option key={idx} value={opt}>
+                                    {opt}
+                                  </option>
+                                ))}
+                            </select>
                           ) : (
                             <input
                               type={field.type || 'text'}
@@ -2433,7 +2471,7 @@ function MuzakkiratiApp() {
               />
               <button
                 type="submit"
-                className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black"
+                className={`w-full py-3 rounded-2xl ${theme.primaryBtn} text-xs font-black`}
               >
                 إرسال الطلب على واتساب
               </button>
@@ -2460,16 +2498,16 @@ function MuzakkiratiApp() {
 // ============================================================================
 // 6.5 بطاقة عرض المذكرة (NotebookCard)
 // ============================================================================
-function NotebookCard({ nb, onPreview, onAdd }) {
+function NotebookCard({ nb, theme, onPreview, onAdd }) {
   const hasDiscount = Number(nb.oldPrice) > Number(nb.price) && Number(nb.price) >= 0;
   const savedAmount = hasDiscount ? Number(nb.oldPrice) - Number(nb.price) : 0;
 
   return (
-    <div className="group bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl hover:border-blue-400 transition flex flex-col justify-between">
+    <div className={`group bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl ${theme.accentBorder} transition flex flex-col justify-between`}>
       <div>
         <div
           onClick={onPreview}
-          className="relative h-52 w-full bg-gradient-to-br from-blue-600 to-indigo-800 flex items-center justify-center overflow-hidden cursor-pointer"
+          className={`relative h-52 w-full bg-gradient-to-br ${theme.cardGradient} flex items-center justify-center overflow-hidden cursor-pointer`}
         >
           {nb.coverImage ? (
             <img
@@ -2497,7 +2535,7 @@ function NotebookCard({ nb, onPreview, onAdd }) {
         <div className="p-4 space-y-1.5">
           <h3
             onClick={onPreview}
-            className="font-black text-slate-900 text-sm line-clamp-2 cursor-pointer group-hover:text-blue-700"
+            className="font-black text-slate-900 text-sm line-clamp-2 cursor-pointer"
           >
             {nb.title}
           </h3>
@@ -2513,7 +2551,7 @@ function NotebookCard({ nb, onPreview, onAdd }) {
 
       <div className="p-4 pt-2 border-t border-slate-100 space-y-3">
         <div className="flex items-baseline gap-2">
-          <span className="text-base font-black text-blue-700">{nb.price} ج.م</span>
+          <span className={`text-base font-black ${theme.primaryText}`}>{nb.price} ج.م</span>
           {hasDiscount && <span className="text-xs text-slate-400 line-through font-bold">{nb.oldPrice} ج.م</span>}
         </div>
         <div className="grid grid-cols-2 gap-2">
@@ -2522,13 +2560,13 @@ function NotebookCard({ nb, onPreview, onAdd }) {
             onClick={onPreview}
             className="py-2 px-3 rounded-xl border border-slate-200 hover:border-blue-500 text-slate-800 text-xs font-black flex items-center justify-center gap-1 transition"
           >
-            <Eye className="w-3.5 h-3.5 text-blue-600" />
+            <Eye className={`w-3.5 h-3.5 ${theme.primaryText}`} />
             <span>معاينة</span>
           </button>
           <button
             type="button"
             onClick={onAdd}
-            className="py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black flex items-center justify-center gap-1 transition"
+            className={`py-2 px-3 rounded-xl ${theme.primaryBtn} text-xs font-black flex items-center justify-center gap-1 transition`}
           >
             <ShoppingCart className="w-3.5 h-3.5" />
             <span>اطلب الآن</span>
@@ -2540,7 +2578,7 @@ function NotebookCard({ nb, onPreview, onAdd }) {
 }
 
 // ============================================================================
-// 6.8 لوحة تحكم الإدارة (AdminDashboard)
+// 6.8 لوحة تحكم الإدارة الكاملة (AdminDashboard)
 // ============================================================================
 function AdminDashboard({
   settings,
@@ -2562,7 +2600,6 @@ function AdminDashboard({
     setLocalSettings(settings);
   }, [settings]);
 
-  // حالة نموذج المذكرة
   const emptyNbForm = {
     id: '',
     title: '',
@@ -2578,6 +2615,7 @@ function AdminDashboard({
     badge: '',
     driveUrl: '',
     noticeText: '',
+    noticePosition: 'top',
     hidden: false,
     coverImage: '',
     sampleImages: []
@@ -2585,8 +2623,13 @@ function AdminDashboard({
   const [nbForm, setNbForm] = useState(emptyNbForm);
   const [savingNb, setSavingNb] = useState(false);
 
-  // حالة الباقات والكوبونات والطلبات
-  const [bundleForm, setBundleForm] = useState({ title: '', description: '', price: '', oldPrice: '' });
+  const [bundleForm, setBundleForm] = useState({
+    title: '',
+    description: '',
+    price: '',
+    oldPrice: '',
+    notebookIds: []
+  });
   const [couponForm, setCouponForm] = useState({
     code: '',
     type: 'percent',
@@ -2657,6 +2700,7 @@ function AdminDashboard({
         badge: nbForm.badge.trim(),
         driveUrl: nbForm.driveUrl.trim(),
         noticeText: nbForm.noticeText.trim(),
+        noticePosition: nbForm.noticePosition || 'top',
         hidden: Boolean(nbForm.hidden),
         coverImage: nbForm.coverImage || ''
       };
@@ -2730,12 +2774,13 @@ function AdminDashboard({
       description: bundleForm.description.trim(),
       price: Number(bundleForm.price || 0),
       oldPrice: Number(bundleForm.oldPrice || 0),
+      notebookIds: bundleForm.notebookIds || [],
       createdAt: serverTimestamp()
     };
     if (db && auth?.currentUser) {
       await addDoc(publicCol('bundles'), data);
     }
-    setBundleForm({ title: '', description: '', price: '', oldPrice: '' });
+    setBundleForm({ title: '', description: '', price: '', oldPrice: '', notebookIds: [] });
     showToast('تم إضافة الباقة بنجاح');
   };
 
@@ -2774,6 +2819,14 @@ function AdminDashboard({
       setSavingSettings(false);
     }
   };
+
+  const orderStats = useMemo(() => {
+    const totalRevenue = orders.reduce((sum, o) => sum + Number(o.total || 0), 0);
+    const pendingCount = orders.filter((o) => (o.status || 'pending') === 'pending').length;
+    const processingCount = orders.filter((o) => o.status === 'processing').length;
+    const completedCount = orders.filter((o) => o.status === 'completed').length;
+    return { totalRevenue, pendingCount, processingCount, completedCount };
+  }, [orders]);
 
   return (
     <section className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
@@ -2828,7 +2881,6 @@ function AdminDashboard({
       {/* 1. تبويب المذكرات والعينات */}
       {activeTab === 'notebooks' && (
         <div className="space-y-6">
-          {/* أداة استكشاف وربط صور العينات */}
           <div className="bg-amber-50 border border-amber-200 rounded-3xl p-5 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
@@ -2917,7 +2969,6 @@ function AdminDashboard({
             )}
           </div>
 
-          {/* نموذج إضافة / تعديل مذكرة */}
           <form onSubmit={handleSaveNotebook} className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 space-y-4">
             <h3 className="font-black text-slate-900 text-base">
               {nbForm.id ? 'تعديل بيانات المذكرة' : 'إضافة مذكرة دراسية جديدة'}
@@ -3032,13 +3083,23 @@ function AdminDashboard({
               </label>
             </div>
 
-            <input
-              type="text"
-              placeholder="تنبيه يظهر داخل نافذة معاينة المذكرة (اختياري)"
-              value={nbForm.noticeText}
-              onChange={(e) => setNbForm({ ...nbForm, noticeText: e.target.value })}
-              className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold"
-            />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <input
+                type="text"
+                placeholder="تنبيه يظهر داخل نافذة معاينة المذكرة (اختياري)"
+                value={nbForm.noticeText}
+                onChange={(e) => setNbForm({ ...nbForm, noticeText: e.target.value })}
+                className="sm:col-span-2 px-3.5 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold"
+              />
+              <select
+                value={nbForm.noticePosition || 'top'}
+                onChange={(e) => setNbForm({ ...nbForm, noticePosition: e.target.value })}
+                className="px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50 text-xs font-black"
+              >
+                <option value="top">موضع التنبيه: أعلى صور العينة</option>
+                <option value="bottom">موضع التنبيه: أسفل صور العينة</option>
+              </select>
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="p-3.5 rounded-2xl border border-dashed border-slate-300 space-y-2">
@@ -3159,6 +3220,7 @@ function AdminDashboard({
                             badge: nb.badge,
                             driveUrl: nb.driveUrl,
                             noticeText: nb.noticeText,
+                            noticePosition: nb.noticePosition || 'top',
                             hidden: Boolean(nb.hidden),
                             coverImage: nb.coverImage,
                             sampleImages: samplesMap[nb.id] || nb.inlineSamples || []
@@ -3186,6 +3248,7 @@ function AdminDashboard({
                             badge: nb.badge,
                             driveUrl: nb.driveUrl,
                             noticeText: nb.noticeText,
+                            noticePosition: nb.noticePosition || 'top',
                             hidden: false,
                             coverImage: nb.coverImage,
                             sampleImages: samplesMap[nb.id] || nb.inlineSamples || []
@@ -3194,43 +3257,6 @@ function AdminDashboard({
                         className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 text-[11px] font-black"
                       >
                         نسخ
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteNotebook(nb.id)}
-                        className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 text-[11px] font-black"
-                      >
-                        حذف
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-
-                    </div>
-                    <div className="flex gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setNbForm({
-                            id: nb.id,
-                            title: nb.title,
-                            subtitle: nb.subtitle,
-                            categoryId: nb.categoryId,
-                            stageId: nb.stageId,
-                            gradeId: nb.gradeId,
-                            price: String(nb.price),
-                            oldPrice: nb.oldPrice ? String(nb.oldPrice) : '',
-                            badge: nb.badge,
-                            driveUrl: nb.driveUrl,
-                            noticeText: nb.noticeText,
-                            coverImage: nb.coverImage,
-                            sampleImages: samplesMap[nb.id] || nb.inlineSamples || []
-                          })
-                        }
-                        className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 text-[11px] font-black"
-                      >
-                        تعديل
                       </button>
                       <button
                         type="button"
@@ -3260,7 +3286,7 @@ function AdminDashboard({
                   ...prev,
                   categories: [
                     ...(prev.categories || []),
-                    { id: `cat_${Date.now()}`, name: 'قسم جديد', image: '', stages: [] }
+                    { id: `cat_${Date.now()}`, name: 'قسم جديد', browseMode: 'hierarchy', image: '', stages: [] }
                   ]
                 }))
               }
@@ -3311,8 +3337,22 @@ function AdminDashboard({
                         categories: prev.categories.map((c, i) => (i === cIdx ? { ...c, name: val } : c))
                       }));
                     }}
-                    className="flex-1 px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-black"
+                    className="flex-1 min-w-[160px] px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-black"
                   />
+                  <select
+                    value={cat.browseMode || 'hierarchy'}
+                    onChange={(e) => {
+                      const mode = e.target.value;
+                      setLocalSettings((prev) => ({
+                        ...prev,
+                        categories: prev.categories.map((c, i) => (i === cIdx ? { ...c, browseMode: mode } : c))
+                      }));
+                    }}
+                    className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                  >
+                    <option value="hierarchy">تصفح هرمي (مراحل وصفوف)</option>
+                    <option value="direct">عرض المذكرات مباشرة</option>
+                  </select>
                   <label className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-black cursor-pointer">
                     <span>صورة القسم</span>
                     <input
@@ -3365,7 +3405,6 @@ function AdminDashboard({
 
                 {cat.image && <img src={cat.image} alt="" className="h-20 rounded-xl object-cover border" />}
 
-                {/* المراحل داخل القسم */}
                 <div className="space-y-2 pr-4 border-r-2 border-blue-200">
                   {(cat.stages || []).map((st, sIdx) => (
                     <div key={st.id} className="p-3 rounded-xl bg-white border border-slate-200 space-y-2">
@@ -3512,7 +3551,6 @@ function AdminDashboard({
       {/* 3. تبويب الكوبونات والباقات */}
       {activeTab === 'offers' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* إدارة الكوبونات */}
           <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4">
             <h3 className="font-black text-slate-900 text-base">إنشاء كوبون خصم بمدة صلاحية</h3>
             <form onSubmit={handleCreateCoupon} className="space-y-3">
@@ -3550,14 +3588,12 @@ function AdminDashboard({
                   onChange={(e) => setCouponForm({ ...couponForm, minOrder: e.target.value })}
                   className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
                 />
-                <div>
-                  <input
-                    type="datetime-local"
-                    value={couponForm.expiresAt}
-                    onChange={(e) => setCouponForm({ ...couponForm, expiresAt: e.target.value })}
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
-                  />
-                </div>
+                <input
+                  type="datetime-local"
+                  value={couponForm.expiresAt}
+                  onChange={(e) => setCouponForm({ ...couponForm, expiresAt: e.target.value })}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
+                />
               </div>
               <input
                 type="text"
@@ -3633,9 +3669,8 @@ function AdminDashboard({
             </div>
           </div>
 
-          {/* إدارة الباقات */}
           <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4">
-            <h3 className="font-black text-slate-900 text-base">إضافة باقة توفير</h3>
+            <h3 className="font-black text-slate-900 text-base">إضافة باقة توفير وربط مذكراتها</h3>
             <form onSubmit={handleCreateBundle} className="space-y-3">
               <input
                 type="text"
@@ -3647,7 +3682,7 @@ function AdminDashboard({
               />
               <textarea
                 rows={2}
-                placeholder="محتويات الباقة"
+                placeholder="وصف الباقة ومميزاتها"
                 value={bundleForm.description}
                 onChange={(e) => setBundleForm({ ...bundleForm, description: e.target.value })}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
@@ -3669,6 +3704,38 @@ function AdminDashboard({
                   className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
                 />
               </div>
+              {notebooks.length > 0 && (
+                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 max-h-36 overflow-y-auto">
+                  <div className="text-[11px] font-black text-slate-700">حدد المذكرات المشمولة داخل الباقة (اختياري):</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {notebooks.map((n) => {
+                      const checked = (bundleForm.notebookIds || []).includes(n.id);
+                      return (
+                        <label
+                          key={n.id}
+                          className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer ${
+                            checked ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="hidden"
+                            checked={checked}
+                            onChange={() => {
+                              const cur = bundleForm.notebookIds || [];
+                              setBundleForm({
+                                ...bundleForm,
+                                notebookIds: checked ? cur.filter((id) => id !== n.id) : [...cur, n.id]
+                              });
+                            }}
+                          />
+                          <span>{n.title}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               <button
                 type="submit"
                 className="w-full py-2.5 rounded-xl bg-amber-500 text-slate-950 text-xs font-black"
@@ -3685,7 +3752,9 @@ function AdminDashboard({
                 >
                   <div>
                     <div className="font-black text-xs text-slate-900">{b.title}</div>
-                    <div className="text-[11px] font-bold text-blue-600">{b.price} ج.م</div>
+                    <div className="text-[11px] font-bold text-blue-600">
+                      {b.price} ج.م {(b.notebookIds || []).length > 0 ? `• (${b.notebookIds.length} مذكرات)` : ''}
+                    </div>
                   </div>
                   <button
                     type="button"
@@ -3706,6 +3775,26 @@ function AdminDashboard({
       {/* 4. تبويب الطلبات الواردة */}
       {activeTab === 'orders' && (
         <div className="space-y-4">
+          {/* إحصائيات سريعة */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white rounded-2xl border border-slate-200 p-4">
+              <div className="text-[11px] font-bold text-slate-500">قيد المراجعة</div>
+              <div className="text-xl font-black text-amber-600 mt-0.5">{orderStats.pendingCount}</div>
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-4">
+              <div className="text-[11px] font-bold text-slate-500">جاري التجهيز</div>
+              <div className="text-xl font-black text-blue-600 mt-0.5">{orderStats.processingCount}</div>
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-4">
+              <div className="text-[11px] font-bold text-slate-500">طلبات مكتملة</div>
+              <div className="text-xl font-black text-emerald-600 mt-0.5">{orderStats.completedCount}</div>
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-4">
+              <div className="text-[11px] font-bold text-slate-500">إجمالي المبيعات</div>
+              <div className="text-xl font-black text-slate-900 mt-0.5">{orderStats.totalRevenue} ج.م</div>
+            </div>
+          </div>
+
           <div className="bg-white rounded-3xl border border-slate-200 p-4 flex flex-wrap items-center justify-between gap-3">
             <input
               type="text"
@@ -3749,50 +3838,69 @@ function AdminDashboard({
                 }
                 return true;
               })
-              .map((ord) => (
-                <div key={ord.id} className="bg-white rounded-2xl border border-slate-200 p-4 space-y-2.5">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-black text-blue-700 text-sm">{ord.orderCode}</span>
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={ord.status || 'pending'}
-                        onChange={async (e) => {
-                          const st = e.target.value;
-                          if (db && auth?.currentUser) {
-                            await updateDoc(publicDoc('orders', ord.id), { status: st });
-                          }
-                        }}
-                        className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-black"
-                      >
-                        <option value="pending">قيد المراجعة</option>
-                        <option value="processing">جاري التجهيز</option>
-                        <option value="completed">تم التسليم</option>
-                      </select>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (db && auth?.currentUser) await deleteDoc(publicDoc('orders', ord.id));
-                        }}
-                        className="p-1.5 text-rose-600"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+              .map((ord) => {
+                const phoneVal = Object.entries(ord.customer || {}).find(([k]) => /واتساب|هاتف|phone/i.test(k))?.[1];
+                const cleanPhone = String(phoneVal || '').replace(/[^\d]/g, '');
+                const waClientPhone = cleanPhone.startsWith('01') ? `2${cleanPhone}` : cleanPhone;
+
+                return (
+                  <div key={ord.id} className="bg-white rounded-2xl border border-slate-200 p-4 space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-black text-blue-700 text-sm">{ord.orderCode}</span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {waClientPhone && (
+                          <a
+                            href={`https://wa.me/${waClientPhone}?text=${encodeURIComponent(
+                              `مرحبًا أستاذنا الفاضل، تم تجهيز طلبك رقم ${ord.orderCode} من ${settings.platformName} بنجاح!`
+                            )}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-black flex items-center gap-1"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                            <span>مراسلة المعلم</span>
+                          </a>
+                        )}
+                        <select
+                          value={ord.status || 'pending'}
+                          onChange={async (e) => {
+                            const st = e.target.value;
+                            if (db && auth?.currentUser) {
+                              await updateDoc(publicDoc('orders', ord.id), { status: st });
+                            }
+                          }}
+                          className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-black"
+                        >
+                          <option value="pending">قيد المراجعة</option>
+                          <option value="processing">جاري التجهيز</option>
+                          <option value="completed">تم التسليم</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (db && auth?.currentUser) await deleteDoc(publicDoc('orders', ord.id));
+                          }}
+                          className="p-1.5 text-rose-600"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-xs text-slate-700 font-bold">
-                    الإجمالي: {ord.total} ج.م • العناصر: {(ord.items || []).map((i) => i.title).join(' ، ')}
-                  </div>
-                  {ord.customer && Object.keys(ord.customer).length > 0 && (
-                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-[11px] text-slate-600 font-bold flex flex-wrap gap-3">
-                      {Object.entries(ord.customer).map(([k, v]) => (
-                        <span key={k}>
-                          <strong className="text-slate-800">{k}:</strong> {safeText(v)}
-                        </span>
-                      ))}
+                    <div className="text-xs text-slate-700 font-bold">
+                      الإجمالي: {ord.total} ج.م • العناصر: {(ord.items || []).map((i) => i.title).join(' ، ')}
                     </div>
-                  )}
-                </div>
-              ))
+                    {ord.customer && Object.keys(ord.customer).length > 0 && (
+                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-[11px] text-slate-600 font-bold flex flex-wrap gap-3">
+                        {Object.entries(ord.customer).map(([k, v]) => (
+                          <span key={k}>
+                            <strong className="text-slate-800">{k}:</strong> {safeText(v)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
           )}
         </div>
       )}
@@ -3800,7 +3908,7 @@ function AdminDashboard({
       {/* 5. تبويب إعدادات الموقع والمظهر */}
       {activeTab === 'settings' && (
         <div className="space-y-6">
-          {/* أزرار النسخ الاحتياطي والاستعادة */}
+          {/* النسخ الاحتياطي والاستعادة */}
           <div className="bg-white rounded-3xl border border-slate-200 p-5 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="font-black text-slate-900 text-sm">النسخ الاحتياطي للإعدادات والبيانات (JSON)</h3>
@@ -3851,11 +3959,11 @@ function AdminDashboard({
             </div>
           </div>
 
-          {/* 1. الهوية والشريط الترويجي */}
+          {/* 1. الهوية والألوان والشريط الترويجي */}
           <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 space-y-5">
-            <h3 className="font-black text-slate-900 text-base">1. الهوية والشعار والشريط الترويجي</h3>
+            <h3 className="font-black text-slate-900 text-base">1. الهوية ونظام الألوان والشريط الترويجي</h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-black text-slate-700 mb-1">اسم المنصة</label>
                 <input
@@ -3873,6 +3981,20 @@ function AdminDashboard({
                   onChange={(e) => setLocalSettings({ ...localSettings, platformTagline: e.target.value })}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
                 />
+              </div>
+              <div>
+                <label className="block text-xs font-black text-slate-700 mb-1">نظام الألوان الرئيسي للمنصة</label>
+                <select
+                  value={localSettings.primaryTheme || 'blue'}
+                  onChange={(e) => setLocalSettings({ ...localSettings, primaryTheme: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-black"
+                >
+                  {Object.entries(THEME_PALETTES).map(([key, val]) => (
+                    <option key={key} value={key}>
+                      {val.label}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-xs font-black text-slate-700 mb-1">رقم واتساب استقبال الطلبات</label>
@@ -3893,15 +4015,6 @@ function AdminDashboard({
                 />
               </div>
               <div>
-                <label className="block text-xs font-black text-slate-700 mb-1">نص الشريط الترويجي العلوي</label>
-                <input
-                  type="text"
-                  value={localSettings.promoText}
-                  onChange={(e) => setLocalSettings({ ...localSettings, promoText: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
-                />
-              </div>
-              <div>
                 <label className="block text-xs font-black text-slate-700 mb-1">كود الكوبون في الشريط العلوي</label>
                 <input
                   type="text"
@@ -3910,6 +4023,16 @@ function AdminDashboard({
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-black uppercase"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-black text-slate-700 mb-1">نص الشريط الترويجي العلوي</label>
+              <input
+                type="text"
+                value={localSettings.promoText}
+                onChange={(e) => setLocalSettings({ ...localSettings, promoText: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
+              />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -4098,7 +4221,6 @@ function AdminDashboard({
           <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 space-y-5">
             <h3 className="font-black text-slate-900 text-base">3. قسم «ما الجديد؟» وقسم «الأخبار ومذكرات قيد التجهيز»</h3>
 
-            {/* ما الجديد */}
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-black text-slate-800">تفعيل قسم «ما الجديد؟» في الرئيسية</span>
@@ -4163,7 +4285,6 @@ function AdminDashboard({
               )}
             </div>
 
-            {/* الأخبار ومذكرات قيد التجهيز */}
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-black text-slate-800">تفعيل قسم «أخبار المنصة ومذكرات قيد التجهيز»</span>
@@ -4281,7 +4402,6 @@ function AdminDashboard({
 
           {/* 4. حقول بيانات العميل في السلة وروابط التواصل */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* حقول بيانات العميل */}
             <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="font-black text-slate-900 text-sm">4. حقول نموذج طلب المعلم في السلة</h3>
@@ -4292,7 +4412,7 @@ function AdminDashboard({
                       ...localSettings,
                       checkoutFields: [
                         ...(localSettings.checkoutFields || []),
-                        { id: `fld_${Date.now()}`, label: 'حقل إضافي', type: 'text', placeholder: '', required: false, enabled: true }
+                        { id: `fld_${Date.now()}`, label: 'حقل إضافي', type: 'text', placeholder: '', options: '', required: false, enabled: true }
                       ]
                     })
                   }
@@ -4303,90 +4423,110 @@ function AdminDashboard({
               </div>
               <div className="space-y-2">
                 {(localSettings.checkoutFields || []).map((f, idx) => (
-                  <div key={f.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-wrap items-center gap-2">
-                    <div className="flex flex-col gap-0.5">
-                      <button
-                        type="button"
-                        disabled={idx === 0}
-                        onClick={() => {
-                          const arr = [...localSettings.checkoutFields];
-                          [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
-                          setLocalSettings({ ...localSettings, checkoutFields: arr });
-                        }}
-                        className="p-0.5 rounded bg-white border disabled:opacity-30"
-                      >
-                        <ChevronUp className="w-3 h-3" />
-                      </button>
-                      <button
-                        type="button"
-                        disabled={idx === (localSettings.checkoutFields || []).length - 1}
-                        onClick={() => {
-                          const arr = [...localSettings.checkoutFields];
-                          [arr[idx + 1], arr[idx]] = [arr[idx], arr[idx + 1]];
-                          setLocalSettings({ ...localSettings, checkoutFields: arr });
-                        }}
-                        className="p-0.5 rounded bg-white border disabled:opacity-30"
-                      >
-                        <ChevronDown className="w-3 h-3" />
-                      </button>
-                    </div>
-                    <input
-                      type="text"
-                      value={f.label}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setLocalSettings({
-                          ...localSettings,
-                          checkoutFields: localSettings.checkoutFields.map((it, i) =>
-                            i === idx ? { ...it, label: val } : it
-                          )
-                        });
-                      }}
-                      className="flex-1 min-w-[140px] px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold"
-                    />
-                    <select
-                      value={f.type || 'text'}
-                      onChange={(e) =>
-                        setLocalSettings({
-                          ...localSettings,
-                          checkoutFields: localSettings.checkoutFields.map((it, i) =>
-                            i === idx ? { ...it, type: e.target.value } : it
-                          )
-                        })
-                      }
-                      className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[11px] font-bold"
-                    >
-                      <option value="text">نص</option>
-                      <option value="tel">رقم هاتف</option>
-                      <option value="textarea">ملاحظات طويلة</option>
-                    </select>
-                    <label className="text-[11px] font-bold flex items-center gap-1">
+                  <div key={f.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-col gap-0.5">
+                        <button
+                          type="button"
+                          disabled={idx === 0}
+                          onClick={() => {
+                            const arr = [...localSettings.checkoutFields];
+                            [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+                            setLocalSettings({ ...localSettings, checkoutFields: arr });
+                          }}
+                          className="p-0.5 rounded bg-white border disabled:opacity-30"
+                        >
+                          <ChevronUp className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={idx === (localSettings.checkoutFields || []).length - 1}
+                          onClick={() => {
+                            const arr = [...localSettings.checkoutFields];
+                            [arr[idx + 1], arr[idx]] = [arr[idx], arr[idx + 1]];
+                            setLocalSettings({ ...localSettings, checkoutFields: arr });
+                          }}
+                          className="p-0.5 rounded bg-white border disabled:opacity-30"
+                        >
+                          <ChevronDown className="w-3 h-3" />
+                        </button>
+                      </div>
                       <input
-                        type="checkbox"
-                        checked={!!f.required}
+                        type="text"
+                        value={f.label}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setLocalSettings({
+                            ...localSettings,
+                            checkoutFields: localSettings.checkoutFields.map((it, i) =>
+                              i === idx ? { ...it, label: val } : it
+                            )
+                          });
+                        }}
+                        className="flex-1 min-w-[140px] px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold"
+                      />
+                      <select
+                        value={f.type || 'text'}
                         onChange={(e) =>
                           setLocalSettings({
                             ...localSettings,
                             checkoutFields: localSettings.checkoutFields.map((it, i) =>
-                              i === idx ? { ...it, required: e.target.checked } : it
+                              i === idx ? { ...it, type: e.target.value } : it
                             )
                           })
                         }
+                        className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[11px] font-bold"
+                      >
+                        <option value="text">نص</option>
+                        <option value="tel">رقم هاتف</option>
+                        <option value="select">قائمة منسدلة</option>
+                        <option value="textarea">ملاحظات طويلة</option>
+                      </select>
+                      <label className="text-[11px] font-bold flex items-center gap-1">
+                        <input
+                          type="checkbox"
+                          checked={!!f.required}
+                          onChange={(e) =>
+                            setLocalSettings({
+                              ...localSettings,
+                              checkoutFields: localSettings.checkoutFields.map((it, i) =>
+                                i === idx ? { ...it, required: e.target.checked } : it
+                              )
+                            })
+                          }
+                        />
+                        <span>إلزامي</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLocalSettings({
+                            ...localSettings,
+                            checkoutFields: localSettings.checkoutFields.filter((_, i) => i !== idx)
+                          })
+                        }
+                        className="p-1 text-rose-600"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                    {f.type === 'select' && (
+                      <input
+                        type="text"
+                        placeholder="اكتب خيارات القائمة مفصولة بفاصلة (مثال: ترم أول، ترم ثاني، مراجعة)"
+                        value={f.options || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setLocalSettings({
+                            ...localSettings,
+                            checkoutFields: localSettings.checkoutFields.map((it, i) =>
+                              i === idx ? { ...it, options: val } : it
+                            )
+                          });
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-[11px] font-bold"
                       />
-                      <span>إلزامي</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setLocalSettings({
-                          ...localSettings,
-                          checkoutFields: localSettings.checkoutFields.filter((_, i) => i !== idx)
-                        })
-                      }
-                      className="p-1 text-rose-600"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -4401,7 +4541,6 @@ function AdminDashboard({
               </div>
             </div>
 
-            {/* روابط التواصل الاجتماعي */}
             <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="font-black text-slate-900 text-sm">5. روابط التواصل الاجتماعي</h3>
