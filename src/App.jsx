@@ -2898,8 +2898,11 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onOrderNow }) {
                 onTouchEnd={handleTouchEnd}
                 onMouseDown={handleMouseDown}
                 onMouseUp={handleMouseUp}
+                onClick={() => {
+                  if (zoomLevel === 1) setIsFullscreen(true);
+                }}
                 onDoubleClick={handleToggleDoubleClickZoom}
-                style={{ touchAction: zoomLevel > 1 ? 'pan-x pan-y' : 'pinch-zoom' }}
+                style={{ touchAction: zoomLevel > 1 ? 'pan-x pan-y' : 'pan-y pinch-zoom' }}
                 className={`relative max-w-xl w-full rounded-2xl shadow-xl border border-slate-300 bg-white ${
                   zoomLevel > 1
                     ? 'overflow-auto max-h-[65vh] cursor-zoom-out'
@@ -2917,7 +2920,9 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onOrderNow }) {
                     src={images[currentIndex] || images[0]}
                     alt="عينة معاينة"
                     draggable={false}
-                    className="w-full h-auto pointer-events-none select-none block"
+                    className={`w-full pointer-events-none select-none block mx-auto ${
+                      zoomLevel === 1 ? 'max-h-[52vh] object-contain' : 'h-auto'
+                    }`}
                   />
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden">
                     <span className="text-slate-900/15 font-black text-2xl sm:text-3xl -rotate-30 whitespace-nowrap">
