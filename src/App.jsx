@@ -351,6 +351,74 @@ const formatSocialHref = (url = '', platform = '') => {
   return `https://${raw}`;
 };
 
+const getDefaultSocialMeta = (platform = '') => {
+  switch (platform) {
+    case 'whatsapp':
+      return {
+        title: 'محادثة واتساب مباشرة',
+        subtitle: 'تواصل فوري واستفسر عن المذكرات',
+        cardBg: 'bg-emerald-50/70 hover:bg-emerald-50 border-emerald-200/80 hover:border-emerald-400',
+        arrowColor: 'text-emerald-600'
+      };
+    case 'whatsapp_group':
+      return {
+        title: 'جروب المعلمين على واتساب',
+        subtitle: 'انضم لمتابعة أحدث المذكرات والعروض',
+        cardBg: 'bg-teal-50/70 hover:bg-teal-50 border-teal-200/80 hover:border-teal-400',
+        arrowColor: 'text-teal-600'
+      };
+    case 'facebook':
+      return {
+        title: 'صفحتنا الرسمية على فيسبوك',
+        subtitle: 'تابع المنشورات وتواصل عبر ماسنجر',
+        cardBg: 'bg-blue-50/70 hover:bg-blue-50 border-blue-200/80 hover:border-blue-400',
+        arrowColor: 'text-blue-600'
+      };
+    case 'telegram':
+      return {
+        title: 'قناتنا الرسمية على تليجرام',
+        subtitle: 'عينات مجانية وإشعارات الإصدارات الجديدة',
+        cardBg: 'bg-sky-50/70 hover:bg-sky-50 border-sky-200/80 hover:border-sky-400',
+        arrowColor: 'text-sky-600'
+      };
+    case 'youtube':
+      return {
+        title: 'قناتنا على يوتيوب',
+        subtitle: 'شروحات ومراجعات مصورة للمذكرات',
+        cardBg: 'bg-rose-50/70 hover:bg-rose-50 border-rose-200/80 hover:border-rose-400',
+        arrowColor: 'text-rose-600'
+      };
+    case 'instagram':
+      return {
+        title: 'حسابنا على إنستجرام',
+        subtitle: 'أحدث التصميمات والأغلفة الاحترافية',
+        cardBg: 'bg-pink-50/70 hover:bg-pink-50 border-pink-200/80 hover:border-pink-400',
+        arrowColor: 'text-pink-600'
+      };
+    case 'tiktok':
+      return {
+        title: 'حسابنا على تيك توك',
+        subtitle: 'مقاطع سريعة ونماذج من المذكرات',
+        cardBg: 'bg-slate-100/80 hover:bg-slate-100 border-slate-300/80 hover:border-slate-500',
+        arrowColor: 'text-slate-700'
+      };
+    case 'phone':
+      return {
+        title: 'اتصال هاتفي مباشر',
+        subtitle: 'يسعدنا الرد على استفساراتكم هاتفيًا',
+        cardBg: 'bg-slate-50 hover:bg-slate-100 border-slate-200 hover:border-slate-400',
+        arrowColor: 'text-slate-700'
+      };
+    default:
+      return {
+        title: 'رابط تواصل خارجي',
+        subtitle: 'اضغط للانتقال المباشر',
+        cardBg: 'bg-indigo-50/60 hover:bg-indigo-50 border-indigo-200/80 hover:border-indigo-400',
+        arrowColor: 'text-indigo-600'
+      };
+  }
+};
+
 function SocialPlatformBadge({ platform, size = 'md' }) {
   const boxCls = size === 'sm' ? 'w-8 h-8 rounded-lg' : 'w-10 h-10 rounded-xl';
   const iconCls = size === 'sm' ? 'w-4 h-4' : 'w-5 h-5';
@@ -4544,8 +4612,12 @@ function MuzakkiratiApp() {
 
             <button
               onClick={() => setIsContactModalOpen(true)}
-              className="px-4 sm:px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-md shadow-emerald-600/20 transition"
+              className="group relative px-5 py-2.5 rounded-2xl bg-gradient-to-l from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs sm:text-sm flex items-center gap-2.5 shadow-lg shadow-emerald-600/25 hover:shadow-emerald-500/35 hover:-translate-y-0.5 transition-all duration-200"
             >
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-200 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
+              </span>
               <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
               <span>تواصل معنا</span>
             </button>
@@ -4934,144 +5006,71 @@ function MuzakkiratiApp() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl border border-slate-200 space-y-5 animate-in fade-in zoom-in-95 duration-200"
+            className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
           >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
+            {/* رأس النافذة الفخم */}
+            <div className="bg-gradient-to-l from-slate-950 via-slate-900 to-slate-950 text-white px-6 py-5 flex items-center justify-between">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-400 flex items-center justify-center shrink-0">
                   <MessageCircle className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="font-black text-base sm:text-lg text-slate-900">تواصل معنا مباشرة</h3>
-                  <p className="text-xs text-slate-500">اختر وسيلة التواصل المناسبة لك</p>
+                  <h3 className="font-black text-base sm:text-lg text-white">تواصل معنا مباشرة</h3>
+                  <p className="text-xs text-slate-300 mt-0.5">اختر وسيلة التواصل المناسبة لك للرد السريع</p>
                 </div>
               </div>
               <button
                 onClick={() => setIsContactModalOpen(false)}
-                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition"
+                className="p-2 rounded-xl bg-white/10 hover:bg-rose-600 text-slate-300 hover:text-white transition"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-3">
-              {/* واتساب مباشر */}
-              <a
-                href={`https://wa.me/${String(settings.whatsappNumber || '').replace(/[^\d]/g, '')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-between p-4 rounded-2xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
-                    <MessageCircle className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="font-extrabold text-sm text-slate-900">محادثة واتساب مباشرة</h4>
-                    <p className="text-xs text-emerald-700 font-bold" dir="ltr">
-                      +{String(settings.whatsappNumber || '').replace(/[^\d]/g, '')}
-                    </p>
-                  </div>
-                </div>
-                <ExternalLink className="w-4 h-4 text-emerald-600 group-hover:-translate-x-1 transition-transform" />
-              </a>
-
-              {/* جروب الواتساب */}
-              {sanitizeUrl(settings.whatsappGroupUrl) && (
-                <a
-                  href={sanitizeUrl(settings.whatsappGroupUrl)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between p-4 rounded-2xl bg-teal-50 hover:bg-teal-100 border border-teal-200 transition group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0">
-                      <Layers className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="font-extrabold text-sm text-slate-900">انضم لجروب المعلمين على واتساب</h4>
-                      <p className="text-xs text-teal-700">متابعة أحدث المذكرات والعروض الحصرية</p>
-                    </div>
-                  </div>
-                  <ExternalLink className="w-4 h-4 text-teal-600 group-hover:-translate-x-1 transition-transform" />
-                </a>
-              )}
-
-              {/* صفحة الفيسبوك */}
-              {sanitizeUrl(settings.facebookUrl) && (
-                <a
-                  href={sanitizeUrl(settings.facebookUrl)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between p-4 rounded-2xl bg-blue-50 hover:bg-blue-100 border border-blue-200 transition group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-lg shrink-0">
-                      f
-                    </div>
-                    <div>
-                      <h4 className="font-extrabold text-sm text-slate-900">صفحتنا الرسمية على فيسبوك</h4>
-                      <p className="text-xs text-blue-700">تواصل عبر ماسنجر وتابع المنشورات</p>
-                    </div>
-                  </div>
-                  <ExternalLink className="w-4 h-4 text-blue-600 group-hover:-translate-x-1 transition-transform" />
-                </a>
-              )}
-
-              {/* قناة / جروب تليجرام */}
-              {sanitizeUrl(settings.telegramUrl) && (
-                <a
-                  href={sanitizeUrl(settings.telegramUrl)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between p-4 rounded-2xl bg-sky-50 hover:bg-sky-100 border border-sky-200 transition group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-sky-500 text-white flex items-center justify-center shrink-0">
-                      <ExternalLink className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="font-extrabold text-sm text-slate-900">قناتنا الرسمية على تليجرام</h4>
-                      <p className="text-xs text-sky-700">عينات مجانية وإشعارات الإصدارات الجديدة</p>
-                    </div>
-                  </div>
-                  <ExternalLink className="w-4 h-4 text-sky-600 group-hover:-translate-x-1 transition-transform" />
-                </a>
-              )}
-            </div>
-
-            <div className="space-y-3 max-h-[65vh] overflow-y-auto pl-1">
+            {/* قائمة الروابط المنظمة بدون أي فراغ أو تكرار */}
+            <div className="p-5 sm:p-6 space-y-3 max-h-[68vh] overflow-y-auto">
               {(settings.socialLinks || [])
                 .filter((s) => s.visible !== false && s.url)
                 .map((s) => {
                   const plat = detectSocialPlatform(s.url, s.platform);
                   const href = formatSocialHref(s.url, plat);
+                  const meta = getDefaultSocialMeta(plat);
+                  const cleanTitle =
+                    s.title && s.title.trim() && s.title.trim() !== 'وسيلة تواصل جديدة'
+                      ? s.title.trim()
+                      : meta.title;
+                  const cleanSubtitle =
+                    s.subtitle && s.subtitle.trim() ? s.subtitle.trim() : meta.subtitle;
+
                   return (
                     <a
                       key={s.id}
                       href={href}
                       target={href.startsWith('tel:') ? undefined : '_blank'}
                       rel="noopener noreferrer"
-                      className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 hover:bg-blue-50/70 border border-slate-200 hover:border-blue-300 transition group"
+                      className={`flex items-center justify-between p-4 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md group ${meta.cardBg}`}
                     >
                       <div className="flex items-center gap-3.5 min-w-0">
                         <SocialPlatformBadge platform={plat} />
                         <div className="min-w-0">
-                          <h4 className="font-extrabold text-sm text-slate-900 truncate">{s.title}</h4>
-                          {s.subtitle && (
-                            <p className="text-xs text-slate-500 truncate mt-0.5">{s.subtitle}</p>
-                          )}
+                          <h4 className="font-extrabold text-sm sm:text-base text-slate-900 truncate">
+                            {cleanTitle}
+                          </h4>
+                          <p className="text-xs text-slate-600 truncate mt-0.5">{cleanSubtitle}</p>
                         </div>
                       </div>
-                      <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-blue-600 group-hover:-translate-x-1 transition-transform shrink-0" />
+                      <div className="w-8 h-8 rounded-xl bg-white/80 flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
+                        <ExternalLink className={`w-4 h-4 ${meta.arrowColor}`} />
+                      </div>
                     </a>
                   );
                 })}
 
               {(settings.socialLinks || []).filter((s) => s.visible !== false && s.url).length === 0 && (
-                <p className="text-center text-xs text-slate-500 py-6">
-                  لم يتم إضافة روابط تواصل نشطة بعد.
-                </p>
+                <div className="text-center py-8 space-y-2">
+                  <p className="text-sm font-bold text-slate-700">لم يتم إضافة روابط تواصل نشطة بعد</p>
+                  <p className="text-xs text-slate-500">يمكنك إضافتها من تبويب إعدادات الموقع في لوحة التحكم</p>
+                </div>
               )}
             </div>
           </div>
