@@ -157,6 +157,79 @@ function sanitizeUrl(url) {
   return 'https://' + trimmed;
 }
 
+function toTextItem(item) {
+  if (typeof item === 'string') return item;
+  if (item && typeof item === 'object') {
+    return String(item.name || item.label || item.title || '').trim();
+  }
+  return '';
+}
+
+function normalizeTaxonomyList(list, fallback) {
+  if (!Array.isArray(list) || list.length === 0) return fallback;
+  const cleaned = list
+    .filter((item) => !(item && typeof item === 'object' && item.visible === false))
+    .map(toTextItem)
+    .filter(Boolean);
+  return cleaned.length > 0 ? cleaned : fallback;
+}
+
+function normalizeSettings(raw) {
+  const merged = { ...DEFAULT_SETTINGS, ...(raw || {}) };
+  return {
+    ...merged,
+    logoUrl: merged.logoUrl || merged.brandLogo || merged.logo || '',
+    heroBgImage: merged.heroBgImage || merged.heroBgUrl || merged.heroBackground || '',
+    categories: normalizeTaxonomyList(merged.categories, DEFAULT_SETTINGS.categories),
+    stages: normalizeTaxonomyList(merged.stages, DEFAULT_SETTINGS.stages),
+    grades: normalizeTaxonomyList(merged.grades, DEFAULT_SETTINGS.grades),
+    subjects: normalizeTaxonomyList(merged.subjects, DEFAULT_SETTINGS.subjects),
+    heroCards: Array.isArray(merged.heroCards)
+      ? merged.heroCards.map((c, i) => ({
+          id: c.id || `hc-${i}`,
+          title: toTextItem(c.title) || 'قسم دراسي',
+          description: toTextItem(c.description) || '',
+          badge: toTextItem(c.badge) || '',
+          category: toTextItem(c.category) || DEFAULT_SETTINGS.categories[0],
+          buttonText: toTextItem(c.buttonText) || 'تصفح القسم',
+          coverImage: c.coverImage || c.image || ''
+        }))
+      : DEFAULT_HERO_CARDS,
+    orderFormFields: Array.isArray(merged.orderFormFields)
+      ? merged.orderFormFields.map((f, i) => ({
+          id: f.id || `fld-${i}`,
+          label: toTextItem(f.label) || 'حقل',
+          placeholder: toTextItem(f.placeholder) || '',
+          type: f.type || 'text',
+          required: Boolean(f.required),
+          enabled: f.enabled !== false
+        }))
+      : DEFAULT_ORDER_FIELDS,
+    socialLinks: Array.isArray(merged.socialLinks)
+      ? merged.socialLinks.map((s, i) => ({
+          id: s.id || `soc-${i}`,
+          label: toTextItem(s.label) || 'رابط تواصل',
+          url: String(s.url || ''),
+          color: s.color || 'blue'
+        }))
+      : DEFAULT_SOCIAL_LINKS
+  };
+}
+
+function normalizeNotebook(nb) {
+  if (!nb || typeof nb !== 'object') return null;
+  return {
+    ...nb,
+    title: toTextItem(nb.title) || 'مذكرة دراسية',
+    category: toTextItem(nb.category) || DEFAULT_SETTINGS.categories[0],
+    stage: toTextItem(nb.stage) || DEFAULT_SETTINGS.stages[0],
+    grade: toTextItem(nb.grade) || DEFAULT_SETTINGS.grades[0],
+    subject: toTextItem(nb.subject) || DEFAULT_SETTINGS.subjects[0],
+    badge: toTextItem(nb.badge) || '',
+    description: toTextItem(nb.description) || ''
+  };
+}
+
 function compressImageFile(file, maxWidth = 1100, quality = 0.82) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -3501,12 +3574,11 @@ function AdminPortal({
 function MuzakkiratiApp() {
   const [activePage, setActivePage] = useState('home');
   const [catalogCategory, setCatalogCategory] = useState('all');
-  const [settings, setSettings] = useState(() => ({
-    ...DEFAULT_SETTINGS,
-    ...readLS(LS_KEYS.SETTINGS, {})
-  }));
+  const [settings, setSettings] = useState(() =>
+    normalizeSettings(readLS(LS_KEYS.SETTINGS, {}))
+  );
   const [notebooks, setNotebooks] = useState(() =>
-    readLS(LS_KEYS.NOTEBOOKS, INITIAL_NOTEBOOKS)
+    readLS(LS_KEYS.NOTEBOOKS, INITIAL_NOTEBOOKS).map(normalizeNotebook).filter(Boolean)
   );
   const [coupons, setCoupons] = useState(() =>
     readLS(LS_KEYS.COUPONS, INITIAL_COUPONS)
@@ -3580,7 +3652,7 @@ function MuzakkiratiApp() {
       publicDoc('config', 'main'),
       (snap) => {
         if (snap.exists()) {
-          const merged = { ...DEFAULT_SETTINGS, ...snap.data() };
+          const merged = normalizeSettings(snap.data());
           setSettings(merged);
           writeLS(LS_KEYS.SETTINGS, merged);
         }
@@ -3592,7 +3664,9 @@ function MuzakkiratiApp() {
       publicCol('notebooks'),
       (snap) => {
         if (!snap.empty) {
-          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          const list = snap.docs
+            .map((d) => normalizeNotebook({ id: d.id, ...d.data() }))
+            .filter(Boolean);
           setNotebooks(list);
           writeLS(LS_KEYS.NOTEBOOKS, list);
         }
@@ -3634,10 +3708,11 @@ function MuzakkiratiApp() {
 
   // Cloud & Local Persistence Handlers
   const handleSaveSettings = async (nextSettings) => {
-    setSettings(nextSettings);
-    writeLS(LS_KEYS.SETTINGS, nextSettings);
+    const cleanSettings = normalizeSettings(nextSettings);
+    setSettings(cleanSettings);
+    writeLS(LS_KEYS.SETTINGS, cleanSettings);
     try {
-      await setDoc(publicDoc('config', 'main'), nextSettings);
+      await setDoc(publicDoc('config', 'main'), cleanSettings);
       showToast('تم حفظ الإعدادات ومزامنتها في السحابة بنجاح');
     } catch (err) {
       showToast(`تم الحفظ محليًا — تعذرت المزامنة السحابية: ${err.code || ''}`, 'error');
@@ -3782,10 +3857,11 @@ function MuzakkiratiApp() {
     reader.onload = async () => {
       try {
         const parsed = JSON.parse(reader.result);
-        if (parsed.settings) await handleSaveSettings({ ...DEFAULT_SETTINGS, ...parsed.settings });
+        if (parsed.settings) await handleSaveSettings(normalizeSettings(parsed.settings));
         if (Array.isArray(parsed.notebooks)) {
-          setNotebooks(parsed.notebooks);
-          writeLS(LS_KEYS.NOTEBOOKS, parsed.notebooks);
+          const cleanNbs = parsed.notebooks.map(normalizeNotebook).filter(Boolean);
+          setNotebooks(cleanNbs);
+          writeLS(LS_KEYS.NOTEBOOKS, cleanNbs);
         }
         if (Array.isArray(parsed.coupons)) {
           setCoupons(parsed.coupons);
@@ -4069,17 +4145,8 @@ function MuzakkiratiApp() {
             </div>
           </div>
         </div>
-        <div className="border-t border-slate-900 py-4 px-4 text-center text-[11px] text-slate-500 flex items-center justify-center gap-3">
+        <div className="border-t border-slate-900 py-4 px-4 text-center text-[11px] text-slate-500">
           <span>© {new Date().getFullYear()} {settings.brandName}. جميع الحقوق محفوظة.</span>
-          <button
-            type="button"
-            onClick={() => setShowAdminModal(true)}
-            title="دخول الإدارة"
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
-          >
-            <Lock className="w-3.5 h-3.5" />
-            <span>إدارة</span>
-          </button>
         </div>
       </footer>
 
