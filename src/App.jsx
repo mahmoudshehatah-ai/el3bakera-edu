@@ -897,6 +897,7 @@ function OrderCheckoutModal({
   const [couponInput, setCouponInput] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [couponError, setCouponError] = useState('');
+  const [expandedBundles, setExpandedBundles] = useState({});
   const [formData, setFormData] = useState({});
   const [logoPreview, setLogoPreview] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -905,10 +906,11 @@ function OrderCheckoutModal({
 
   const subtotal = useMemo(() => cart.reduce((sum, item) => sum + (Number(item.price) || 0), 0), [cart]);
 
-  // التحقق من وجود باقة توفير مطابقة في السلة
+  // التحقق من وجود باقة توفير مطابقة للمذكرات الفردية في السلة (فقط للعناصر غير المضافة كباقة مسبقة)
   const matchedBundleDiscount = useMemo(() => {
     const bundles = settings.bundles || [];
-    const cartIds = new Set(cart.map((c) => c.id));
+    const singleItems = cart.filter((c) => !c.isBundle);
+    const cartIds = new Set(singleItems.map((c) => c.id));
     let bestSaving = 0;
     let bestBundleName = '';
 
@@ -916,7 +918,7 @@ function OrderCheckoutModal({
       const ids = b.notebookIds || [];
       if (ids.length > 0 && ids.every((id) => cartIds.has(id))) {
         const itemsSum = ids.reduce((acc, id) => {
-          const item = cart.find((c) => c.id === id);
+          const item = singleItems.find((c) => c.id === id);
           return acc + (Number(item?.price) || 0);
         }, 0);
 
@@ -1029,7 +1031,15 @@ function OrderCheckoutModal({
 
       const orderRecord = {
         orderNumber,
-        items: cart.map((c) => ({ id: c.id, title: c.title, price: c.price, grade: c.grade, subject: c.subject })),
+        items: cart.map((c) => ({
+          id: c.id,
+          title: c.title,
+          price: c.price,
+          grade: c.grade || '',
+          subject: c.subject || '',
+          isBundle: Boolean(c.isBundle),
+          bundleItems: c.bundleItems || []
+        })),
         subtotal,
         bundleDiscount: matchedBundleDiscount.saving,
         couponCode: appliedCoupon?.code || '',
@@ -1059,8 +1069,12 @@ function OrderCheckoutModal({
       `السلام عليكم، أرغب في تأكيد طلبي من *${settings.siteName}*`,
       `*رقم الطلب:* ${orderObj.orderNumber}`,
       `------------------`,
-      `*المذكرات المطلوبة:*`,
-      ...orderObj.items.map((it, idx) => `${idx + 1}. ${it.title} (${it.price} ج.م)`),
+      `*الطلبات المختارة:*`,
+      ...orderObj.items.map((it, idx) =>
+        it.isBundle
+          ? `${idx + 1}. [باقة] ${it.title} (${it.price} ج.م) — تشمل: ${(it.bundleItems || []).map((b) => b.title).join('، ')}`
+          : `${idx + 1}. ${it.title} (${it.price} ج.م)`
+      ),
       `------------------`,
       `*الإجمالي النهائي:* ${orderObj.total} ج.م`
     ];
@@ -1100,27 +1114,26 @@ function OrderCheckoutModal({
               </div>
 
               {completedOrder.nextOrderCouponCode && (
-                <div className="bg-gradient-to-l from-amber-50 to-yellow-50 border-2 border-amber-300 rounded-2xl p-4 text-center space-y-2">
+                <div className="bg-gradient-to-l from-amber-50 to-orange-50 border-2 border-dashed border-amber-400 rounded-2xl p-4 space-y-2">
                   <div className="flex items-center justify-center gap-1.5 text-amber-900 font-black text-sm">
                     <Gift className="w-5 h-5 text-amber-600" />
                     <span>{settings.nextOrderRewardTitle || 'هدية خاصة لطلبك القادم!'}</span>
                   </div>
-                  <p className="text-xs text-amber-800">
-                    {settings.nextOrderRewardMessage || 'استخدم كود الخصم التالي عند طلبك القادم:'}
-                  </p>
+                  <p className="text-xs text-slate-700">{settings.nextOrderRewardMessage}</p>
                   <div className="flex items-center justify-center gap-2 pt-1">
-                    <span className="px-4 py-2 rounded-xl bg-white border border-amber-300 font-black text-base text-slate-950 tracking-wider">
+                    <span className="px-4 py-2 rounded-xl bg-white border border-amber-300 font-black text-base text-slate-900 tracking-wider">
                       {completedOrder.nextOrderCouponCode}
                     </span>
                     <button
+                      type="button"
                       onClick={() => {
                         navigator.clipboard?.writeText(completedOrder.nextOrderCouponCode);
                         setCopiedReward(true);
                         setTimeout(() => setCopiedReward(false), 2000);
                       }}
-                      className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs flex items-center gap-1.5"
+                      className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs flex items-center gap-1"
                     >
-                      <Copy className="w-4 h-4" />
+                      <Copy className="w-3.5 h-3.5" />
                       <span>{copiedReward ? 'تم النسخ!' : 'انسخ الكوبون'}</span>
                     </button>
                   </div>
@@ -1128,9 +1141,8 @@ function OrderCheckoutModal({
               )}
 
               {settings.paymentInstructions && (
-                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-right text-xs sm:text-sm text-blue-950 leading-relaxed">
-                  <div className="font-black mb-1">تعليمات الدفع والتأكيد:</div>
-                  <div>{settings.paymentInstructions}</div>
+                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-xs sm:text-sm text-blue-950 font-bold text-right leading-relaxed">
+                  {settings.paymentInstructions}
                 </div>
               )}
 
@@ -1138,41 +1150,91 @@ function OrderCheckoutModal({
                 href={buildWhatsappMessage(completedOrder)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-base flex items-center justify-center gap-2 shadow-lg"
+                className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-base shadow-lg flex items-center justify-center gap-2"
               >
-                <MessageCircle className="w-5 h-5" />
-                <span>إرسال تفاصيل الطلب على واتساب الآن</span>
+                <Send className="w-5 h-5" />
+                <span>إرسال تفاصيل الطلب على واتساب للتأكيد</span>
               </a>
             </div>
-          ) : cart.length === 0 ? (
-            <div className="text-center py-10 space-y-3">
-              <ShoppingCart className="w-12 h-12 text-slate-300 mx-auto" />
-              <p className="text-slate-600 font-bold">سلة الطلبات فارغة حاليًا</p>
-              <button onClick={onClose} className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm">
-                تصفح المذكرات
-              </button>
-            </div>
           ) : (
-            <form onSubmit={handleSubmitOrder} className="space-y-5 text-right">
-              {/* قائمة العناصر في السلة */}
-              <div className="space-y-2">
-                <div className="font-black text-sm text-slate-800">المذكرات المختارة ({cart.length}):</div>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {cart.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-xl p-3">
-                      <div className="min-w-0">
-                        <div className="font-bold text-sm text-slate-900 truncate">{item.title}</div>
-                        <div className="text-xs text-slate-500">{item.grade} • {item.price} ج.م</div>
+            <form onSubmit={handleSubmitOrder} className="space-y-4 text-right">
+              {/* قائمة العناصر في السلة (فصل الباقات المجمعة عن المذكرات الفردية) */}
+              <div className="space-y-2.5">
+                <div className="font-black text-sm text-slate-800">محتويات سلة الطلبات ({cart.length}):</div>
+                <div className="space-y-2.5 max-h-60 overflow-y-auto pl-0.5">
+                  {cart.map((item) => {
+                    if (item.isBundle) {
+                      const isExpanded = Boolean(expandedBundles[item.id]);
+                      return (
+                        <div
+                          key={item.id}
+                          className="bg-gradient-to-l from-blue-50/90 to-indigo-50/60 border border-blue-200 rounded-2xl p-3 space-y-2"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="px-2 py-0.5 rounded-md bg-blue-600 text-white text-[10px] font-black">
+                                  باقة مجمعة
+                                </span>
+                                <span className="font-black text-sm text-slate-950 truncate">{item.title}</span>
+                              </div>
+                              <div className="flex items-center gap-2 mt-1 text-xs">
+                                <span className="font-black text-blue-700">{item.price} ج.م</span>
+                                {item.originalPrice > item.price && (
+                                  <span className="text-slate-400 line-through">{item.originalPrice} ج.م</span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedBundles((p) => ({ ...p, [item.id]: !p[item.id] }))
+                                  }
+                                  className="text-[11px] font-bold text-indigo-700 hover:underline flex items-center gap-0.5"
+                                >
+                                  <span>({item.bundleItems?.length || 0} مذكرات)</span>
+                                  {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                </button>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => onRemoveItem(item.id)}
+                              title="حذف الباقة من السلة"
+                              className="p-2 text-red-600 hover:bg-red-100/70 rounded-xl shrink-0 transition"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          {isExpanded && item.bundleItems?.length > 0 && (
+                            <div className="bg-white/80 rounded-xl p-2.5 border border-blue-100 space-y-1 text-[11px] text-slate-700">
+                              {item.bundleItems.map((sub, i) => (
+                                <div key={sub.id || i} className="flex items-center justify-between gap-2">
+                                  <span className="truncate">• {sub.title}</span>
+                                  <span className="text-slate-400 shrink-0">{sub.grade}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div key={item.id} className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                        <div className="min-w-0">
+                          <div className="font-bold text-sm text-slate-900 truncate">{item.title}</div>
+                          <div className="text-xs text-slate-500">{item.grade} • {item.price} ج.م</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onRemoveItem(item.id)}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg shrink-0"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => onRemoveItem(item.id)}
-                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg shrink-0"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -1691,7 +1753,7 @@ function OffersAndBundlesPage({ settings, notebooks, coupons, onAddBundleToCart,
                     </div>
 
                     <button
-                      onClick={() => onAddBundleToCart(includedNotebooks)}
+                      onClick={() => onAddBundleToCart(bundle, includedNotebooks, finalPrice, originalSum)}
                       className="px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm flex items-center gap-2 shadow-md transition"
                     >
                       <ShoppingCart className="w-4 h-4" />
@@ -3934,9 +3996,10 @@ function MuzakkiratiApp() {
       } else {
         setShowAdminLogin(false);
         setAdminViewOpen(true);
+        setLoginPass('');
       }
-    } catch (err) {
-      setLoginError('بيانات الدخول غير صحيحة: ' + (err?.message || ''));
+    } catch {
+      setLoginError('بيانات الدخول غير صحيحة');
     } finally {
       setLoggingIn(false);
     }
@@ -3945,17 +4008,35 @@ function MuzakkiratiApp() {
   const cartIds = useMemo(() => new Set(cart.map((c) => c.id)), [cart]);
 
   const handleAddToCart = (nb) => {
-    setCart((prev) => {
-      if (prev.some((x) => x.id === nb.id)) return prev;
-      return [...prev, nb];
-    });
+    setCart((prev) => [...prev, { ...nb, isBundle: false }]);
+    setPreviewNotebook(null);
+    setCartOpen(true);
   };
 
-  const handleAddBundleToCart = (items) => {
+  const handleAddBundleToCart = (bundle, includedNotebooks, finalPrice, originalSum) => {
+    const bundleCartId = `bundle_item_${bundle.id}`;
+    const includedIds = new Set(includedNotebooks.map((n) => n.id));
     setCart((prev) => {
-      const map = new Map(prev.map((i) => [i.id, i]));
-      items.forEach((it) => map.set(it.id, it));
-      return Array.from(map.values());
+      // إزالة أي نسخة سابقة من نفس الباقة أو مذكراتها المفردة لمنع التكرار
+      const cleaned = prev.filter((item) => item.id !== bundleCartId && !includedIds.has(item.id));
+      return [
+        ...cleaned,
+        {
+          id: bundleCartId,
+          bundleId: bundle.id,
+          isBundle: true,
+          title: bundle.title,
+          price: finalPrice,
+          originalPrice: originalSum,
+          bundleItems: includedNotebooks.map((n) => ({
+            id: n.id,
+            title: n.title,
+            grade: n.grade,
+            subject: n.subject,
+            price: n.price
+          }))
+        }
+      ];
     });
     setCartOpen(true);
   };
