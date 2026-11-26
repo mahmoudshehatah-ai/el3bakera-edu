@@ -139,6 +139,12 @@ const DEFAULT_SETTINGS = {
   paymentInstructions: 'فودافون كاش / إنستاباي: 01068481536',
   promoBannerActive: true,
   promoBannerText: '🎉 عرض خاص للمعلمين: خصم 15% على جميع مذكرات الترم الأول + إضافة الشعار مجانًا لفترة محدودة!',
+  whatsNewEnabled: true,
+  whatsNewTitle: 'ما الجديد؟ أحدث المذكرات والإصدارات',
+  whatsNewSubtitle: 'اطّلع على أحدث المذكرات والملخصات وبنوك الأسئلة التي تمت إضافتها حديثًا للمنصة',
+  whatsNewMode: 'auto', // 'auto' (أحدث المذكرات تلقائيًا) | 'manual' (اختيار يدوي من لوحة التحكم)
+  whatsNewLimit: 6,
+  whatsNewSelectedIds: [],
   nextOrderRewardEnabled: true,
   nextOrderDiscountPercent: 15,
   categories: ['مذكرات الترم الأول', 'مذكرات الترم الثاني', 'كورسات التأسيس'],
@@ -187,6 +193,10 @@ const normalizeSettings = (raw) => {
   merged.socialLinks = Array.isArray(raw.socialLinks)
     ? raw.socialLinks.filter((s) => s && typeof s === 'object' && s.label)
     : DEFAULT_SETTINGS.socialLinks;
+
+  merged.whatsNewSelectedIds = Array.isArray(raw.whatsNewSelectedIds)
+    ? raw.whatsNewSelectedIds
+    : [];
 
   return merged;
 };
@@ -1917,6 +1927,31 @@ const AdminPortal = ({
 
                   <div className="flex items-center gap-1.5">
                     <button
+                      onClick={() => {
+                        const currentIds = localSettings.whatsNewSelectedIds || [];
+                        const exists = currentIds.includes(nb.id);
+                        const updatedIds = exists
+                          ? currentIds.filter((id) => id !== nb.id)
+                          : [...currentIds, nb.id];
+                        const nextSettings = {
+                          ...localSettings,
+                          whatsNewMode: 'manual',
+                          whatsNewSelectedIds: updatedIds
+                        };
+                        setLocalSettings(nextSettings);
+                        onSaveSettings(nextSettings);
+                      }}
+                      className={`px-2.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1 transition ${
+                        (localSettings.whatsNewSelectedIds || []).includes(nb.id)
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-purple-50 text-purple-700 hover:bg-purple-100'
+                      }`}
+                      title="تثبيت أو إزالة من قسم «ما الجديد» في الصفحة الرئيسية"
+                    >
+                      <Sparkles size={13} />
+                      <span>{(localSettings.whatsNewSelectedIds || []).includes(nb.id) ? 'في ما الجديد ★' : 'ما الجديد'}</span>
+                    </button>
+                    <button
                       onClick={() => onUpdateNotebook(nb.id, { isHidden: !nb.isHidden }, [])}
                       className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 transition ${
                         nb.isHidden
@@ -2507,6 +2542,110 @@ const AdminPortal = ({
                   className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-sm"
                 />
               </div>
+            </div>
+
+            {/* إعدادات قسم «ما الجديد؟» في الصفحة الرئيسية */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <h3 className="font-black text-slate-900 text-lg flex items-center gap-2">
+                  <Sparkles size={18} className="text-amber-500" />
+                  <span>التحكم في قسم «ما الجديد؟» بالصفحة الرئيسية</span>
+                </h3>
+                <label className="flex items-center gap-2 text-xs font-black text-slate-800 cursor-pointer bg-slate-100 px-3 py-1.5 rounded-xl">
+                  <input
+                    type="checkbox"
+                    checked={localSettings.whatsNewEnabled !== false}
+                    onChange={(e) => setLocalSettings({ ...localSettings, whatsNewEnabled: e.target.checked })}
+                  />
+                  <span>إظهار القسم في الرئيسية</span>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">عنوان القسم</label>
+                  <input
+                    type="text"
+                    value={localSettings.whatsNewTitle || ''}
+                    onChange={(e) => setLocalSettings({ ...localSettings, whatsNewTitle: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-sm font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">الوصف المختصر أسفل العنوان</label>
+                  <input
+                    type="text"
+                    value={localSettings.whatsNewSubtitle || ''}
+                    onChange={(e) => setLocalSettings({ ...localSettings, whatsNewSubtitle: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">طريقة عرض المذكرات في القسم</label>
+                  <select
+                    value={localSettings.whatsNewMode || 'auto'}
+                    onChange={(e) => setLocalSettings({ ...localSettings, whatsNewMode: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 bg-white text-xs font-bold"
+                  >
+                    <option value="auto">تلقائي: عرض أحدث المذكرات المضافة للمنصة</option>
+                    <option value="manual">يدوي: عرض المذكرات التي أختارها بنفسي فقط</option>
+                  </select>
+                </div>
+                {localSettings.whatsNewMode !== 'manual' && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">عدد المذكرات المعروضة تلقائيًا</label>
+                    <select
+                      value={localSettings.whatsNewLimit || 6}
+                      onChange={(e) => setLocalSettings({ ...localSettings, whatsNewLimit: Number(e.target.value) })}
+                      className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 bg-white text-xs font-bold"
+                    >
+                      <option value={3}>3 مذكرات</option>
+                      <option value={6}>6 مذكرات</option>
+                      <option value={9}>9 مذكرات</option>
+                      <option value={12}>12 مذكرة</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {localSettings.whatsNewMode === 'manual' && (
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                  <div className="text-xs font-black text-slate-700">اختر المذكرات التي تريد إظهارها في «ما الجديد؟»:</div>
+                  {notebooks.length === 0 ? (
+                    <p className="text-xs text-slate-400">أضف مذكرات أولًا من تبويب المذكرات لتظهر هنا</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                      {notebooks.map((nb) => {
+                        const checked = (localSettings.whatsNewSelectedIds || []).includes(nb.id);
+                        return (
+                          <label
+                            key={nb.id}
+                            className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-bold cursor-pointer ${
+                              checked ? 'bg-blue-50 border-blue-300 text-blue-900' : 'bg-white border-slate-200 text-slate-700'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                const curr = localSettings.whatsNewSelectedIds || [];
+                                const next = e.target.checked
+                                  ? [...curr, nb.id]
+                                  : curr.filter((id) => id !== nb.id);
+                                setLocalSettings({ ...localSettings, whatsNewSelectedIds: next });
+                              }}
+                            />
+                            <span className="truncate">{nb.title} ({nb.grade})</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* التحكم في حقول نموذج طلب العميل */}
@@ -3519,6 +3658,128 @@ function MuzakkiratiApp() {
                 })}
               </div>
             </section>
+
+            {/* قسم «ما الجديد؟» لأحدث المذكرات في الصفحة الرئيسية */}
+            {settings.whatsNewEnabled !== false && (() => {
+              const latestList = settings.whatsNewMode === 'manual'
+                ? visibleNotebooks.filter((n) => (settings.whatsNewSelectedIds || []).includes(n.id))
+                : visibleNotebooks.slice(0, settings.whatsNewLimit || 6);
+
+              if (latestList.length === 0) return null;
+
+              return (
+                <section className="max-w-7xl mx-auto px-4 sm:px-6 pb-16 space-y-8">
+                  <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-slate-200/80 pb-5">
+                    <div className="space-y-1.5">
+                      <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-black">
+                        <Sparkles size={14} />
+                        <span>إصدارات حديثة</span>
+                      </span>
+                      <h2 className="text-2xl sm:text-3xl font-black text-slate-900">
+                        {settings.whatsNewTitle || 'ما الجديد؟ أحدث المذكرات والإصدارات'}
+                      </h2>
+                      {settings.whatsNewSubtitle && (
+                        <p className="text-sm text-slate-500">{settings.whatsNewSubtitle}</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => navigateTo('catalog')}
+                      className="self-start sm:self-auto px-5 py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-2 transition"
+                    >
+                      <span>عرض كل المذكرات</span>
+                      <ArrowLeft size={15} />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {latestList.map((nb) => (
+                      <div
+                        key={nb.id}
+                        className="bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl transition overflow-hidden flex flex-col"
+                      >
+                        <div className="relative h-56 bg-slate-100 overflow-hidden">
+                          {nb.coverImage ? (
+                            <img src={nb.coverImage} alt={nb.title} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-slate-400">
+                              <BookOpen size={44} />
+                            </div>
+                          )}
+                          <span className="absolute top-3 right-3 px-3 py-1 rounded-full bg-amber-400 text-slate-950 text-xs font-black shadow">
+                            {nb.badge || 'جديد ✨'}
+                          </span>
+                          {nb.comingSoon && (
+                            <span className="absolute top-3 left-3 px-3 py-1 rounded-full bg-slate-900 text-amber-300 text-xs font-black shadow">
+                              قريبًا • حجز مسبق
+                            </span>
+                          )}
+                          {nb.pagesCount > 0 && (
+                            <span className="absolute bottom-3 left-3 px-2.5 py-1 rounded-lg bg-slate-900/80 text-white text-xs font-bold">
+                              {nb.pagesCount} صفحة
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+                          <div className="space-y-1.5">
+                            <div className="text-xs font-bold text-slate-400">{nb.category} • {nb.grade}</div>
+                            <h3 className="font-black text-slate-900 text-lg leading-snug">{nb.title}</h3>
+                            <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{nb.description}</p>
+                          </div>
+
+                          <div className="space-y-3 pt-2 border-t border-slate-100">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-baseline gap-2">
+                                <span className="text-xl font-black text-blue-600">{nb.price} ج.م</span>
+                                {nb.oldPrice > nb.price && (
+                                  <span className="text-xs text-slate-400 line-through">{nb.oldPrice} ج.م</span>
+                                )}
+                              </div>
+                              <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-bold">
+                                {nb.subject}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2">
+                              <button
+                                onClick={() => setPreviewNotebook(nb)}
+                                className="py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center justify-center gap-1 transition"
+                              >
+                                <Eye size={15} />
+                                <span>معاينة</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (!cart.some((c) => c.id === nb.id)) {
+                                    setCart([...cart, nb]);
+                                    notify(`تمت إضافة "${nb.title}" إلى سلة الطلبات`, 'success');
+                                  } else {
+                                    notify('المذكرة موجودة بالفعل في السلة', 'info');
+                                  }
+                                }}
+                                className="py-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center gap-1 transition"
+                              >
+                                <ShoppingBag size={15} />
+                                <span>للسلة</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (!cart.some((c) => c.id === nb.id)) setCart([...cart, nb]);
+                                  setOrderModalOpen(true);
+                                }}
+                                className="py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs flex items-center justify-center gap-1 transition"
+                              >
+                                <span>اطلب الآن</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              );
+            })()}
           </>
         )}
 
