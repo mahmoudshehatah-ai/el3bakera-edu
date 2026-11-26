@@ -176,10 +176,27 @@ function normalizeTaxonomyList(list, fallback) {
 
 function normalizeSettings(raw) {
   const merged = { ...DEFAULT_SETTINGS, ...(raw || {}) };
+  // البحث التلقائي عن أي صورة شعار أو خلفية مخزنة في السحابة بأي اسم حقل سابق
+  const detectedLogo =
+    merged.logoUrl ||
+    merged.logoData ||
+    merged.brandLogo ||
+    merged.logo ||
+    merged.siteLogo ||
+    '';
+  const detectedHeroBg =
+    merged.heroBgImage ||
+    merged.heroBg ||
+    merged.heroBgUrl ||
+    merged.heroImage ||
+    merged.heroBackground ||
+    merged.bgImage ||
+    '';
+
   return {
     ...merged,
-    logoUrl: merged.logoUrl || merged.brandLogo || merged.logo || '',
-    heroBgImage: merged.heroBgImage || merged.heroBgUrl || merged.heroBackground || '',
+    logoUrl: detectedLogo,
+    heroBgImage: detectedHeroBg,
     categories: normalizeTaxonomyList(merged.categories, DEFAULT_SETTINGS.categories),
     stages: normalizeTaxonomyList(merged.stages, DEFAULT_SETTINGS.stages),
     grades: normalizeTaxonomyList(merged.grades, DEFAULT_SETTINGS.grades),
