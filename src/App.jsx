@@ -156,7 +156,8 @@ const extractAnyImagesFromDoc = (data) => {
     data.images,
     data.sampleImages,
     data.urls,
-    data.files
+    data.files,
+    data.previewPages
   ];
   for (const arr of candidateArrays) {
     if (Array.isArray(arr)) {
@@ -164,10 +165,16 @@ const extractAnyImagesFromDoc = (data) => {
         const img = extractImageFromValue(item);
         if (img && !found.includes(img)) found.push(img);
       }
+    } else if (arr && typeof arr === 'object') {
+      for (const val of Object.values(arr)) {
+        const img = extractImageFromValue(val);
+        if (img && !found.includes(img)) found.push(img);
+      }
     }
   }
   for (const [k, v] of Object.entries(data)) {
-    if (/img|image|page|sample|photo|url|data/i.test(k)) {
+    if (/cover/i.test(k)) continue;
+    if (/img|image|page|sample|photo|url|data|preview/i.test(k)) {
       const single = extractImageFromValue(v);
       if (single && !found.includes(single)) found.push(single);
     }
@@ -808,10 +815,42 @@ function MuzakkiratiApp() {
     return filtered.length > 0 ? filtered : nb.coverImage ? [nb.coverImage] : [];
   };
 
+  // جلب العينات عند فتح نافذة المعاينة إن كانت مخزنة كمجموعة فرعية تحت المذكرة
+  useEffect(() => {
+    if (!previewNotebook || !db) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const subCol = collection(db, 'artifacts', APP_ID, 'public', 'data', 'notebooks', previewNotebook.id, 'samples');
+        const subSnap = await getDocs(subCol);
+        if (!cancelled && !subSnap.empty) {
+          const imgs = [];
+          subSnap.docs.forEach((d) => {
+            extractAnyImagesFromDoc(d.data()).forEach((im) => {
+              if (!imgs.includes(im)) imgs.push(im);
+            });
+          });
+          if (imgs.length > 0) {
+            setSamplesMap((prev) => ({
+              ...prev,
+              [previewNotebook.id]: Array.from(new Set([...(prev[previewNotebook.id] || []), ...imgs]))
+            }));
+          }
+        }
+      } catch {
+        // تجاهل
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [previewNotebook]);
+
   const countNotebooksInCategory = (cat) => {
     if (!cat) return 0;
     const stageIds = new Set((cat.stages || []).map((s) => s.id));
-    const gradeIds = new Set((cat.stages || []).flatMap((s) => (s.grades || []).map((g) => g.id)));
+    const gradeIds = new Set();
+    (cat.stages || []).forEach((s) => (s.grades || []).forEach((g) => gradeIds.add(g.id)));
     return notebooks.filter(
       (nb) => nb.categoryId === cat.id || stageIds.has(nb.stageId) || gradeIds.has(nb.gradeId)
     ).length;
@@ -819,23 +858,24 @@ function MuzakkiratiApp() {
 
   const whatsNewNotebooks = useMemo(() => {
     if (!settings.whatsNewEnabled) return [];
+    const count = Math.max(1, Number(settings.whatsNewCount || 4));
     if (settings.whatsNewMode === 'manual' && Array.isArray(settings.whatsNewIds) && settings.whatsNewIds.length > 0) {
-      return notebooks.filter((nb) => settings.whatsNewIds.includes(nb.id));
+      const idSet = new Set(settings.whatsNewIds);
+      return notebooks.filter((n) => idSet.has(n.id)).slice(0, count);
     }
-    return [...notebooks]
-      .sort((a, b) => toTimeMs(b.createdAt) - toTimeMs(a.createdAt))
-      .slice(0, settings.whatsNewCount || 4);
-  }, [notebooks, settings]);
+    return [...notebooks].sort((a, b) => toTimeMs(b.createdAt) - toTimeMs(a.createdAt)).slice(0, count);
+  }, [notebooks, settings.whatsNewEnabled, settings.whatsNewMode, settings.whatsNewCount, settings.whatsNewIds]);
 
   const filteredNotebooks = useMemo(() => {
     return notebooks.filter((nb) => {
       if (selectedCategoryId) {
         const cat = (settings.categories || []).find((c) => c.id === selectedCategoryId);
         const stageIds = new Set((cat?.stages || []).map((s) => s.id));
-        const gradeIds = new Set((cat?.stages || []).flatMap((s) => (s.grades || []).map((g) => g.id)));
-        const matchesCat =
-          nb.categoryId === selectedCategoryId || stageIds.has(nb.stageId) || gradeIds.has(nb.gradeId);
-        if (!matchesCat) return false;
+        const gradeIds = new Set();
+        (cat?.stages || []).forEach((s) => (s.grades || []).forEach((g) => gradeIds.add(g.id)));
+        if (nb.categoryId !== selectedCategoryId && !stageIds.has(nb.stageId) && !gradeIds.has(nb.gradeId)) {
+          return false;
+        }
       }
       if (selectedStageId) {
         const cat = (settings.categories || []).find((c) => c.id === selectedCategoryId);
@@ -1246,7 +1286,7 @@ function MuzakkiratiApp() {
               <span className="hidden sm:inline">تواصل معنا</span>
             </button>
 
-            {isAdmin ? (
+            {isAdmin && (
               <button
                 type="button"
                 onClick={() => setActiveView(activeView === 'admin' ? 'home' : 'admin')}
@@ -1254,15 +1294,6 @@ function MuzakkiratiApp() {
               >
                 <ShieldCheck className="w-4 h-4" />
                 <span className="hidden sm:inline">{activeView === 'admin' ? 'واجهة الزوار' : 'الإدارة'}</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setLoginModalOpen(true)}
-                className="p-2 rounded-xl border border-slate-200 text-slate-400 hover:text-slate-700 hover:border-slate-300 transition"
-                title="دخول الإدارة"
-              >
-                <Lock className="w-4 h-4" />
               </button>
             )}
           </div>
