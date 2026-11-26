@@ -78,10 +78,11 @@ try {
 }
 
 const APP_ID = 'el3bakera-edu';
-const publicDoc = (colName, docId) =>
-  doc(db, 'artifacts', APP_ID, 'public', 'data', colName, docId);
-const publicCol = (colName) =>
-  collection(db, 'artifacts', APP_ID, 'public', 'data', colName);
+const LEGACY_APP_IDS = ['el3bakera-edu', 'default-app-id'];
+const publicDoc = (colName, docId, appId = APP_ID) =>
+  doc(db, 'artifacts', appId, 'public', 'data', colName, docId);
+const publicCol = (colName, appId = APP_ID) =>
+  collection(db, 'artifacts', appId, 'public', 'data', colName);
 
 // ==========================================
 // 2. LocalStorage Keys & Default Data
@@ -3720,44 +3721,7 @@ function MuzakkiratiApp() {
         setPreviewNotebook(null);
         return;
       }
-      if (orderModalOpen) {
-        setOrderModalOpen(false);
-        return;
-      }
-      if (showSocialModal) {
-        setShowSocialModal(false);
-        return;
-      }
-      if (e.state?.mzNav) {
-        setNavState(e.state.mzNav);
-      } else {
-        setNavState({ page: 'home', category: 'all', stage: 'all', grade: 'all', subject: 'all' });
-      }
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, [previewNotebook, orderModalOpen, showSocialModal]);
-
-  // Secret Admin Shortcuts (#admin hash or Alt + Shift + A)
-  useEffect(() => {
-    const onHash = () => {
-      if (window.location.hash === '#admin') setShowAdmin(true);
-    };
-    const onKeyDown = (e) => {
-      if (e.altKey && e.shiftKey && (e.key === 'A' || e.key === 'a' || e.code === 'KeyA')) {
-        setShowAdmin((prev) => !prev);
-      }
-    };
-    window.addEventListener('hashchange', onHash);
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      window.removeEventListener('hashchange', onHash);
-      window.removeEventListener('keydown', onKeyDown);
-    };
-  }, []);
-
-  // Firebase Auth & Real-Time Firestore Listeners
+  // Firebase Auth & Real-Time Firestore Listeners (Reads both main & settings + legacy paths)
   useEffect(() => {
     if (!auth || !db) return;
     const unsubAuth = onAuthStateChanged(auth, (user) => {
@@ -3768,58 +3732,94 @@ function MuzakkiratiApp() {
       console.warn('Firestore snapshot notice:', err?.code || err?.message);
     };
 
-    const unsubSettings = onSnapshot(
-      publicDoc('config', 'settings'),
-      (snap) => {
-        if (snap.exists()) {
-          const norm = normalizeSettings(snap.data());
-          setSettings(norm);
-          writeLS(LS_KEYS.SETTINGS, norm);
-        }
-      },
-      handleListenerError
-    );
+    const unsubscribers = [];
 
-    const unsubNotebooks = onSnapshot(
-      publicCol('notebooks'),
-      (snap) => {
-        const list = snap.docs
-          .map((d) => normalizeNotebook({ id: d.id, ...d.data() }))
-          .filter(Boolean);
-        setNotebooks(list);
-        writeLS(LS_KEYS.NOTEBOOKS, list);
-      },
-      handleListenerError
-    );
+    // Listen to both 'main' and 'settings' config docs across primary & legacy app IDs
+    LEGACY_APP_IDS.forEach((aid) => {
+      ['main', 'settings'].forEach((docName) => {
+        unsubscribers.push(
+          onSnapshot(
+            publicDoc('config', docName, aid),
+            (snap) => {
+              if (snap.exists()) {
+                const raw = snap.data();
+                if (raw && Object.keys(raw).length > 0) {
+                  const norm = normalizeSettings(raw);
+                  setSettings(norm);
+                  writeLS(LS_KEYS.SETTINGS, norm);
+                }
+              }
+            },
+            handleListenerError
+          )
+        );
+      });
 
-    const unsubOrders = onSnapshot(
-      publicCol('orders'),
-      (snap) => {
-        const list = snap.docs
-          .map((d) => ({ id: d.id, ...d.data() }))
-          .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
-        setOrders(list);
-        writeLS(LS_KEYS.ORDERS, list);
-      },
-      handleListenerError
-    );
+      unsubscribers.push(
+        onSnapshot(
+          publicCol('notebooks', aid),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs
+                .map((d) => normalizeNotebook({ id: d.id, ...d.data() }))
+                .filter(Boolean);
+              setNotebooks((prev) => {
+                const mergedMap = new Map(prev.map((item) => [item.id, item]));
+                list.forEach((item) => mergedMap.set(item.id, item));
+                const merged = Array.from(mergedMap.values());
+                writeLS(LS_KEYS.NOTEBOOKS, merged);
+                return merged;
+              });
+            }
+          },
+          handleListenerError
+        )
+      );
 
-    const unsubCoupons = onSnapshot(
-      publicCol('coupons'),
-      (snap) => {
-        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setCoupons(list);
-        writeLS(LS_KEYS.COUPONS, list);
-      },
-      handleListenerError
-    );
+      unsubscribers.push(
+        onSnapshot(
+          publicCol('orders', aid),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+              setOrders((prev) => {
+                const mergedMap = new Map(prev.map((item) => [item.id, item]));
+                list.forEach((item) => mergedMap.set(item.id, item));
+                const merged = Array.from(mergedMap.values()).sort((a, b) =>
+                  String(b.createdAt || '').localeCompare(String(a.createdAt || ''))
+                );
+                writeLS(LS_KEYS.ORDERS, merged);
+                return merged;
+              });
+            }
+          },
+          handleListenerError
+        )
+      );
+
+      unsubscribers.push(
+        onSnapshot(
+          publicCol('coupons', aid),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+              setCoupons((prev) => {
+                const mergedMap = new Map(prev.map((item) => [item.id, item]));
+                list.forEach((item) => mergedMap.set(item.id, item));
+                const merged = Array.from(mergedMap.values());
+                writeLS(LS_KEYS.COUPONS, merged);
+                return merged;
+              });
+            }
+          },
+          handleListenerError
+        )
+      );
+    });
 
     return () => {
       unsubAuth();
-      unsubSettings();
-      unsubNotebooks();
-      unsubOrders();
-      unsubCoupons();
+      unsubscribers.forEach((fn) => fn && fn());
     };
   }, []);
 
@@ -3829,6 +3829,7 @@ function MuzakkiratiApp() {
     writeLS(LS_KEYS.SETTINGS, clean);
     try {
       await setDoc(publicDoc('config', 'settings'), clean);
+      await setDoc(publicDoc('config', 'main'), clean);
       showToast('تم حفظ ومزامنة الإعدادات بنجاح');
     } catch {
       showToast('تم الحفظ محليًا', 'error');
