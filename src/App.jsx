@@ -506,6 +506,9 @@ const normalizeNotebook = (id, raw = {}) => ({
   pages: Number(raw.pages) || 0,
   badge: toCleanString(raw.badge || ''),
   description: toCleanString(raw.description || ''),
+  customNoticeTitle: toCleanString(raw.customNoticeTitle || 'تنبيه هام خاص بهذه المذكرة'),
+  customNoticeBadge: toCleanString(raw.customNoticeBadge || 'هام جدًا'),
+  customNoticeTheme: toCleanString(raw.customNoticeTheme || 'rose'),
   customNotice: toCleanString(raw.customNotice || ''),
   driveUrl: toCleanString(raw.driveUrl || ''),
   coverUrl: toCleanString(raw.coverUrl || ''),
@@ -516,23 +519,68 @@ const normalizeNotebook = (id, raw = {}) => ({
   createdAt: raw.createdAt || null
 });
 
-const compressImageFile = (file, maxWidth = 800, quality = 0.75) =>
+const getCustomNoticeThemeStyles = (theme = 'rose') => {
+  switch (theme) {
+    case 'amber':
+      return {
+        box: 'bg-gradient-to-l from-amber-50 to-orange-50 border-amber-300 shadow-amber-500/10',
+        title: 'text-amber-950',
+        body: 'text-amber-950',
+        iconBox: 'bg-amber-500 text-slate-950',
+        badge: 'bg-amber-500 text-slate-950',
+        ping: 'bg-amber-400'
+      };
+    case 'blue':
+      return {
+        box: 'bg-gradient-to-l from-blue-50 to-sky-50 border-blue-300 shadow-blue-500/10',
+        title: 'text-blue-950',
+        body: 'text-blue-950',
+        iconBox: 'bg-blue-600 text-white',
+        badge: 'bg-blue-600 text-white',
+        ping: 'bg-blue-400'
+      };
+    case 'emerald':
+      return {
+        box: 'bg-gradient-to-l from-emerald-50 to-teal-50 border-emerald-300 shadow-emerald-500/10',
+        title: 'text-emerald-950',
+        body: 'text-emerald-950',
+        iconBox: 'bg-emerald-600 text-white',
+        badge: 'bg-emerald-600 text-white',
+        ping: 'bg-emerald-400'
+      };
+    case 'purple':
+      return {
+        box: 'bg-gradient-to-l from-purple-50 to-indigo-50 border-purple-300 shadow-purple-500/10',
+        title: 'text-purple-950',
+        body: 'text-purple-950',
+        iconBox: 'bg-purple-600 text-white',
+        badge: 'bg-purple-600 text-white',
+        ping: 'bg-purple-400'
+      };
+    default:
+      return {
+        box: 'bg-gradient-to-l from-rose-50 to-red-50 border-rose-300 shadow-rose-500/10',
+        title: 'text-rose-950',
+        body: 'text-rose-950',
+        iconBox: 'bg-rose-600 text-white',
+        badge: 'bg-rose-600 text-white',
+        ping: 'bg-rose-400'
+      };
+  }
+};
+
+const compressImageFile = (file, maxWidth = 850, quality = 0.75) =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const img = new Image();
       img.onload = () => {
+        const scale = Math.min(1, maxWidth / img.width);
         const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        if (width > maxWidth) {
-          height = Math.round((height * maxWidth) / width);
-          width = maxWidth;
-        }
-        canvas.width = width;
-        canvas.height = height;
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
         const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         resolve(canvas.toDataURL('image/jpeg', quality));
       };
       img.onerror = reject;
@@ -643,6 +691,11 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onAddToCart, onOrd
     if (!u) return '';
     return /^https?:\/\//i.test(u) ? u : `https://${u}`;
   }, [notebook.driveUrl]);
+
+  const customNoticeStyles = useMemo(
+    () => getCustomNoticeThemeStyles(notebook.customNoticeTheme || 'rose'),
+    [notebook.customNoticeTheme]
+  );
 
   const driveThemeStyles = useMemo(() => {
     switch (settings.driveButtonTheme || 'blue') {
@@ -814,35 +867,35 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onAddToCart, onOrd
                 </p>
               )}
 
-              {/* صندوق التنبيهات العامة (كل تنبيه في سطر مستقل) */}
-              {settings.notebookNoticeEnabled && noticeLines.length > 0 && (
-                <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-4 space-y-2.5">
-                  <div className="flex items-center gap-2 text-amber-800 font-extrabold text-sm">
-                    <Bell className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>{settings.notebookNoticeTitle || 'تنبيه هام قبل تأكيد الطلب'}</span>
-                  </div>
-                  <ul className="space-y-2 pr-1">
-                    {noticeLines.map((line, idx) => (
-                      <li
-                        key={idx}
-                        className="flex items-start gap-2 text-xs text-amber-950/90 leading-relaxed font-semibold"
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-600 shrink-0 mt-2"></span>
-                        <span>{line}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* صندوق التنبيه / الملاحظة الخاصة بهذه المذكرة (منفصل تمامًا) */}
+              {/* صندوق التنبيه / الملاحظة الخاصة بهذه المذكرة (منفصل تمامًا مع علامة أهمية بارزة) */}
               {notebook.customNotice && (
-                <div className="bg-indigo-50/90 border border-indigo-200 rounded-2xl p-4 space-y-1.5">
-                  <div className="flex items-center gap-2 text-indigo-900 font-extrabold text-sm">
-                    <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
-                    <span>تنبيه خاص بهذه المذكرة</span>
+                <div
+                  className={`relative rounded-2xl p-4 border-2 shadow-md space-y-2 ${customNoticeStyles.box}`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className={`flex items-center gap-2 font-black text-sm ${customNoticeStyles.title}`}>
+                      <span
+                        className={`relative w-7 h-7 rounded-xl flex items-center justify-center shrink-0 shadow-xs ${customNoticeStyles.iconBox}`}
+                      >
+                        <span
+                          className={`animate-ping absolute inline-flex h-full w-full rounded-xl opacity-45 ${customNoticeStyles.ping}`}
+                        ></span>
+                        <AlertTriangle className="w-4 h-4 relative z-10" />
+                      </span>
+                      <span>{notebook.customNoticeTitle || 'تنبيه هام خاص بهذه المذكرة'}</span>
+                    </div>
+
+                    {notebook.customNoticeBadge && (
+                      <span
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-black tracking-wide shadow-2xs flex items-center gap-1 ${customNoticeStyles.badge}`}
+                      >
+                        <Sparkles className="w-3 h-3" />
+                        {notebook.customNoticeBadge}
+                      </span>
+                    )}
                   </div>
-                  <p className="text-xs font-bold text-indigo-950 leading-relaxed pr-1">
+
+                  <p className={`text-xs sm:text-[13px] font-extrabold leading-relaxed pr-1 whitespace-pre-line ${customNoticeStyles.body}`}>
                     {notebook.customNotice}
                   </p>
                 </div>
@@ -2007,6 +2060,9 @@ function AdminPortal({
     pages: 60,
     badge: '',
     description: '',
+    customNoticeTitle: 'تنبيه هام خاص بهذه المذكرة',
+    customNoticeBadge: 'هام جدًا',
+    customNoticeTheme: 'rose',
     customNotice: '',
     driveUrl: '',
     coverUrl: '',
@@ -2121,6 +2177,9 @@ function AdminPortal({
         pages: Number(nbForm.pages) || 0,
         badge: nbForm.badge.trim(),
         description: nbForm.description.trim(),
+        customNoticeTitle: (nbForm.customNoticeTitle || '').trim() || 'تنبيه هام خاص بهذه المذكرة',
+        customNoticeBadge: (nbForm.customNoticeBadge || '').trim(),
+        customNoticeTheme: nbForm.customNoticeTheme || 'rose',
         customNotice: nbForm.customNotice.trim(),
         driveUrl: nbForm.driveUrl.trim(),
         coverUrl: nbForm.coverUrl,
@@ -2175,6 +2234,9 @@ function AdminPortal({
         pages: 60,
         badge: '',
         description: '',
+        customNoticeTitle: 'تنبيه هام خاص بهذه المذكرة',
+        customNoticeBadge: 'هام جدًا',
+        customNoticeTheme: 'rose',
         customNotice: '',
         driveUrl: '',
         coverUrl: '',
@@ -2219,6 +2281,9 @@ function AdminPortal({
       pages: nb.pages,
       badge: nb.badge || '',
       description: nb.description || '',
+      customNoticeTitle: nb.customNoticeTitle || 'تنبيه هام خاص بهذه المذكرة',
+      customNoticeBadge: nb.customNoticeBadge || 'هام جدًا',
+      customNoticeTheme: nb.customNoticeTheme || 'rose',
       customNotice: nb.customNotice || '',
       driveUrl: nb.driveUrl || '',
       coverUrl: nb.coverUrl || '',
@@ -2556,13 +2621,65 @@ function AdminPortal({
                 className="w-full px-4 py-2.5 rounded-2xl border border-slate-300 text-xs"
               />
 
-              <input
-                type="text"
-                placeholder="تنبيه خاص يظهر داخل صفحة هذه المذكرة فقط (اختياري)..."
-                value={nbForm.customNotice}
-                onChange={(e) => setNbForm({ ...nbForm, customNotice: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-2xl border border-amber-300 bg-amber-50/50 text-xs"
-              />
+              {/* قسم التحكم الكامل في التنبيه الخاص بهذه المذكرة */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-rose-600" />
+                    التنبيه الخاص بهذه المذكرة (اختياري)
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    placeholder="عنوان التنبيه (مثلاً: تنبيه هام للمعلم)"
+                    value={nbForm.customNoticeTitle}
+                    onChange={(e) => setNbForm({ ...nbForm, customNoticeTitle: e.target.value })}
+                    className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold"
+                  />
+                  <input
+                    type="text"
+                    placeholder="علامة الأهمية (مثلاً: هام جدًا! / انتبه)"
+                    value={nbForm.customNoticeBadge}
+                    onChange={(e) => setNbForm({ ...nbForm, customNoticeBadge: e.target.value })}
+                    className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold"
+                  />
+                </div>
+
+                <textarea
+                  rows={2}
+                  placeholder="اكتب نص التنبيه الخاص بهذه المذكرة هنا (اتركه فارغًا لإخفائه)..."
+                  value={nbForm.customNotice}
+                  onChange={(e) => setNbForm({ ...nbForm, customNotice: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold"
+                />
+
+                <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                  <span className="text-[11px] font-bold text-slate-600 ml-1">لون الصندوق:</span>
+                  {[
+                    { id: 'rose', label: 'أحمر تنبيهي', dot: 'bg-rose-600' },
+                    { id: 'amber', label: 'ذهبي', dot: 'bg-amber-500' },
+                    { id: 'blue', label: 'أزرق', dot: 'bg-blue-600' },
+                    { id: 'emerald', label: 'أخضر', dot: 'bg-emerald-600' },
+                    { id: 'purple', label: 'بنفسجي', dot: 'bg-purple-600' }
+                  ].map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setNbForm({ ...nbForm, customNoticeTheme: t.id })}
+                      className={`px-2.5 py-1 rounded-lg border text-[11px] font-extrabold flex items-center gap-1 transition ${
+                        (nbForm.customNoticeTheme || 'rose') === t.id
+                          ? 'border-slate-900 bg-white shadow-2xs'
+                          : 'border-slate-200 bg-white/60 hover:bg-white'
+                      }`}
+                    >
+                      <span className={`w-2.5 h-2.5 rounded-full ${t.dot}`}></span>
+                      <span>{t.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               <label className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 px-4 py-3 rounded-2xl cursor-pointer">
                 <input
