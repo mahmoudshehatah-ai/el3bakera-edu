@@ -218,6 +218,16 @@ const DEFAULT_SETTINGS = {
   facebookUrl: '',
   whatsappGroupUrl: '',
   telegramUrl: '',
+  socialLinks: [
+    {
+      id: 'soc-wa-direct',
+      platform: 'whatsapp',
+      title: 'محادثة واتساب مباشرة',
+      subtitle: 'تواصل فوري مع إدارة المنصة',
+      url: 'https://wa.me/201068481536',
+      visible: true
+    }
+  ],
   paymentInstructions: 'يتم تأكيد الطلب عبر واتساب وتحويل قيمة المذكرات عبر فودافون كاش أو إنستا باي قبل بدء التجهيز.',
   emptyStateTitle: 'لا توجد مذكرات منشورة في هذا القسم حاليًا',
   emptyStateDesc: 'نعمل حاليًا على تجهيز ومراجعة أحدث المذكرات لهذا الصف، يمكنك طلب حجز مسبق وسنتواصل معك فور جاهزيتها.',
@@ -263,8 +273,157 @@ const normalizeSettings = (raw = {}) => {
   merged.newsItems = Array.isArray(merged.newsItems) ? merged.newsItems : [];
   merged.bundles = Array.isArray(merged.bundles) ? merged.bundles : [];
   merged.whatsNewSelectedIds = Array.isArray(merged.whatsNewSelectedIds) ? merged.whatsNewSelectedIds : [];
+
+  // تطبيع قائمة روابط التواصل الاجتماعي مع الحفاظ على التوافق مع الحقول السابقة
+  if (Array.isArray(raw?.socialLinks) && raw.socialLinks.length > 0) {
+    merged.socialLinks = raw.socialLinks;
+  } else {
+    const migrated = [];
+    const cleanWa = String(merged.whatsappNumber || '').replace(/[^\d]/g, '');
+    if (cleanWa) {
+      migrated.push({
+        id: 'soc-wa',
+        platform: 'whatsapp',
+        title: 'محادثة واتساب مباشرة',
+        subtitle: `+${cleanWa}`,
+        url: `https://wa.me/${cleanWa}`,
+        visible: true
+      });
+    }
+    if (merged.whatsappGroupUrl) {
+      migrated.push({
+        id: 'soc-wagroup',
+        platform: 'whatsapp_group',
+        title: 'جروب المعلمين على واتساب',
+        subtitle: 'تابع أحدث المذكرات والعروض',
+        url: merged.whatsappGroupUrl,
+        visible: true
+      });
+    }
+    if (merged.facebookUrl) {
+      migrated.push({
+        id: 'soc-fb',
+        platform: 'facebook',
+        title: 'صفحتنا الرسمية على فيسبوك',
+        subtitle: 'تواصل عبر ماسنجر وتابع المنشورات',
+        url: merged.facebookUrl,
+        visible: true
+      });
+    }
+    if (merged.telegramUrl) {
+      migrated.push({
+        id: 'soc-tg',
+        platform: 'telegram',
+        title: 'قناتنا على تليجرام',
+        subtitle: 'عينات مجانية وإشعارات الإصدارات',
+        url: merged.telegramUrl,
+        visible: true
+      });
+    }
+    merged.socialLinks = migrated.length ? migrated : DEFAULT_SETTINGS.socialLinks;
+  }
+
   return merged;
 };
+
+// اكتشاف المنصة وأيقونتها ولونها تلقائيًا من الرابط أو النوع المختار
+const detectSocialPlatform = (url = '', explicitPlatform = '') => {
+  const u = String(url || '').toLowerCase();
+  const p = String(explicitPlatform || '').toLowerCase();
+  if (p === 'whatsapp_group' || u.includes('chat.whatsapp.com')) return 'whatsapp_group';
+  if (p === 'whatsapp' || u.includes('wa.me') || u.includes('whatsapp.com')) return 'whatsapp';
+  if (p === 'facebook' || u.includes('facebook.com') || u.includes('fb.com') || u.includes('m.me')) return 'facebook';
+  if (p === 'telegram' || u.includes('t.me') || u.includes('telegram.me')) return 'telegram';
+  if (p === 'youtube' || u.includes('youtube.com') || u.includes('youtu.be')) return 'youtube';
+  if (p === 'instagram' || u.includes('instagram.com')) return 'instagram';
+  if (p === 'tiktok' || u.includes('tiktok.com')) return 'tiktok';
+  if (p === 'phone' || u.startsWith('tel:')) return 'phone';
+  return p && p !== 'auto' ? p : 'website';
+};
+
+const formatSocialHref = (url = '', platform = '') => {
+  const raw = String(url || '').trim();
+  if (!raw) return '';
+  if (/^(https?:\/\/|tel:|mailto:)/i.test(raw)) return raw;
+  const digits = raw.replace(/[^\d]/g, '');
+  if (platform === 'whatsapp' && digits) return `https://wa.me/${digits}`;
+  if (platform === 'phone' && digits) return `tel:+${digits}`;
+  return `https://${raw}`;
+};
+
+function SocialPlatformBadge({ platform, size = 'md' }) {
+  const boxCls = size === 'sm' ? 'w-8 h-8 rounded-lg' : 'w-10 h-10 rounded-xl';
+  const iconCls = size === 'sm' ? 'w-4 h-4' : 'w-5 h-5';
+
+  switch (platform) {
+    case 'whatsapp':
+      return (
+        <div className={`${boxCls} bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs`}>
+          <svg viewBox="0 0 24 24" fill="currentColor" className={iconCls}>
+            <path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0012.04 2zm5.82 14.01c-.24.68-1.41 1.3-1.95 1.38-.5.08-1.13.11-1.82-.11-.42-.13-.96-.31-1.65-.61-2.9-1.25-4.79-4.18-4.94-4.37-.14-.19-1.18-1.57-1.18-3 0-1.43.75-2.13 1.01-2.42.27-.29.58-.36.77-.36.19 0 .39 0 .56.01.18.01.42-.07.66.5.24.58.82 2 .89 2.15.07.14.12.31.02.5-.1.19-.14.31-.29.48-.14.17-.3.38-.43.51-.14.14-.29.3-.13.58.17.29.74 1.22 1.59 1.98 1.09.97 2.01 1.27 2.3 1.42.29.14.46.12.63-.07.17-.19.72-.84.91-1.13.19-.29.39-.24.65-.14.27.1 1.69.8 1.98.94.29.14.48.22.55.34.07.12.07.69-.17 1.37z" />
+          </svg>
+        </div>
+      );
+    case 'whatsapp_group':
+      return (
+        <div className={`${boxCls} bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs`}>
+          <Layers className={iconCls} />
+        </div>
+      );
+    case 'facebook':
+      return (
+        <div className={`${boxCls} bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs`}>
+          <svg viewBox="0 0 24 24" fill="currentColor" className={iconCls}>
+            <path d="M14 13.5h2.5l1-4H14v-2c0-1.03 0-2 2-2h1.5V2.14c-.326-.043-1.557-.14-2.857-.14C11.928 2 10 3.657 10 6.7v2.8H7v4h3V22h4v-8.5z" />
+          </svg>
+        </div>
+      );
+    case 'telegram':
+      return (
+        <div className={`${boxCls} bg-sky-500 text-white flex items-center justify-center shrink-0 shadow-xs`}>
+          <svg viewBox="0 0 24 24" fill="currentColor" className={iconCls}>
+            <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
+          </svg>
+        </div>
+      );
+    case 'youtube':
+      return (
+        <div className={`${boxCls} bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs`}>
+          <svg viewBox="0 0 24 24" fill="currentColor" className={iconCls}>
+            <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+          </svg>
+        </div>
+      );
+    case 'instagram':
+      return (
+        <div className={`${boxCls} bg-gradient-to-tr from-amber-500 via-pink-600 to-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs`}>
+          <svg viewBox="0 0 24 24" fill="currentColor" className={iconCls}>
+            <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
+          </svg>
+        </div>
+      );
+    case 'tiktok':
+      return (
+        <div className={`${boxCls} bg-slate-900 text-white flex items-center justify-center shrink-0 shadow-xs`}>
+          <svg viewBox="0 0 24 24" fill="currentColor" className={iconCls}>
+            <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z" />
+          </svg>
+        </div>
+      );
+    case 'phone':
+      return (
+        <div className={`${boxCls} bg-slate-800 text-white flex items-center justify-center shrink-0 shadow-xs`}>
+          <Phone className={iconCls} />
+        </div>
+      );
+    default:
+      return (
+        <div className={`${boxCls} bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs`}>
+          <ExternalLink className={iconCls} />
+        </div>
+      );
+  }
+}
 
 const normalizeNotebook = (id, raw = {}) => ({
   id,
@@ -3526,9 +3685,14 @@ function AdminPortal({
             </div>
 
             {/* 4. التحكم الكامل في حقول نموذج طلب العميل */}
-            <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
+            <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-lg font-black text-slate-900">التحكم الكامل في إعدادات وحقول نموذج طلب العميل</h3>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">التحكم الكامل في إعدادات وحقول نموذج طلب العميل</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    عدّل عناوين النافذة، أضف حقولًا جديدة، غيّر نوع أي حقل أو ترتيبه، أو اجعله إلزاميًا أو مخفيًا بحرية تامة
+                  </p>
+                </div>
                 <button
                   type="button"
                   onClick={() =>
@@ -3547,47 +3711,50 @@ function AdminPortal({
                       ]
                     })
                   }
-                  className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold"
+                  className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold flex items-center gap-1.5"
                 >
-                  + إضافة حقل جديد للنموذج
+                  <Plus className="w-4 h-4" />
+                  إضافة حقل جديد
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
                 <div>
-                  <label className="text-[11px] font-bold text-slate-600 block mb-1">عنوان نافذة الطلب</label>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">عنوان نافذة الطلب</label>
                   <input
                     type="text"
                     value={localSettings.orderModalTitle}
                     onChange={(e) => setLocalSettings({ ...localSettings, orderModalTitle: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-slate-600 block mb-1">نص زر تأكيد الطلب</label>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">نص زر تأكيد الطلب</label>
                   <input
                     type="text"
                     value={localSettings.orderSubmitText}
                     onChange={(e) => setLocalSettings({ ...localSettings, orderSubmitText: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold"
                   />
                 </div>
-                <div className="flex flex-col justify-center gap-2">
-                  <label className="flex items-center gap-2 text-xs font-bold">
+                <div className="md:col-span-2 flex flex-wrap gap-6 pt-1">
+                  <label className="flex items-center gap-2 text-xs font-extrabold text-slate-800 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={localSettings.orderEnableCoupons}
+                      checked={localSettings.orderEnableCoupons !== false}
                       onChange={(e) => setLocalSettings({ ...localSettings, orderEnableCoupons: e.target.checked })}
+                      className="w-4 h-4 accent-blue-600"
                     />
-                    إظهار خانة كوبون الخصم
+                    تفعيل خانة كود الخصم في نموذج الطلب
                   </label>
-                  <label className="flex items-center gap-2 text-xs font-bold">
+                  <label className="flex items-center gap-2 text-xs font-extrabold text-slate-800 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={localSettings.orderEnableMultiCart}
+                      checked={localSettings.orderEnableMultiCart !== false}
                       onChange={(e) => setLocalSettings({ ...localSettings, orderEnableMultiCart: e.target.checked })}
+                      className="w-4 h-4 accent-blue-600"
                     />
-                    السماح بإضافة أكثر من مذكرة في الطلب
+                    السماح بإضافة أكثر من مذكرة في نفس الطلب
                   </label>
                 </div>
               </div>
@@ -3596,33 +3763,35 @@ function AdminPortal({
                 {(localSettings.orderFormFields || []).map((field, idx) => (
                   <div
                     key={field.id}
-                    className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50 grid grid-cols-1 md:grid-cols-12 gap-3 items-center"
+                    className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50 grid grid-cols-1 lg:grid-cols-12 gap-3 items-center"
                   >
-                    <div className="md:col-span-4 flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setLocalSettings({
-                            ...localSettings,
-                            orderFormFields: moveArrayItem(localSettings.orderFormFields, idx, -1)
-                          })
-                        }
-                        className="p-1 rounded bg-white border"
-                      >
-                        <ChevronUp className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setLocalSettings({
-                            ...localSettings,
-                            orderFormFields: moveArrayItem(localSettings.orderFormFields, idx, 1)
-                          })
-                        }
-                        className="p-1 rounded bg-white border"
-                      >
-                        <ChevronDown className="w-3.5 h-3.5" />
-                      </button>
+                    <div className="lg:col-span-4 flex items-center gap-2">
+                      <div className="flex flex-col gap-1">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setLocalSettings({
+                              ...localSettings,
+                              orderFormFields: moveArrayItem(localSettings.orderFormFields, idx, -1)
+                            })
+                          }
+                          className="p-1 rounded bg-white border border-slate-200 hover:bg-slate-100"
+                        >
+                          <ChevronUp className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setLocalSettings({
+                              ...localSettings,
+                              orderFormFields: moveArrayItem(localSettings.orderFormFields, idx, 1)
+                            })
+                          }
+                          className="p-1 rounded bg-white border border-slate-200 hover:bg-slate-100"
+                        >
+                          <ChevronDown className="w-3 h-3" />
+                        </button>
+                      </div>
                       <input
                         type="text"
                         value={field.label}
@@ -3631,11 +3800,11 @@ function AdminPortal({
                           copy[idx] = { ...field, label: e.target.value };
                           setLocalSettings({ ...localSettings, orderFormFields: copy });
                         }}
-                        className="flex-1 px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                        className="flex-1 px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white"
                       />
                     </div>
 
-                    <div className="md:col-span-3">
+                    <div className="lg:col-span-3">
                       <input
                         type="text"
                         placeholder="النص التوضيحي..."
@@ -3645,29 +3814,29 @@ function AdminPortal({
                           copy[idx] = { ...field, placeholder: e.target.value };
                           setLocalSettings({ ...localSettings, orderFormFields: copy });
                         }}
-                        className="w-full px-3 py-1.5 rounded-xl border border-slate-300 text-xs bg-white"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white"
                       />
                     </div>
 
-                    <div className="md:col-span-2">
+                    <div className="lg:col-span-2">
                       <select
-                        value={field.type}
+                        value={field.type || 'text'}
                         onChange={(e) => {
                           const copy = [...localSettings.orderFormFields];
                           copy[idx] = { ...field, type: e.target.value };
                           setLocalSettings({ ...localSettings, orderFormFields: copy });
                         }}
-                        className="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                        className="w-full px-2.5 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white"
                       >
                         <option value="text">نص قصير</option>
                         <option value="tel">رقم هاتف</option>
                         <option value="textarea">فقرة طويلة</option>
-                        <option value="file">رفع صورة</option>
+                        <option value="file">رفع صورة/شعار</option>
                       </select>
                     </div>
 
-                    <div className="md:col-span-3 flex items-center justify-end gap-3">
-                      <label className="flex items-center gap-1 text-xs font-bold">
+                    <div className="lg:col-span-3 flex items-center justify-end gap-3 text-xs font-bold">
+                      <label className="flex items-center gap-1 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={field.visible !== false}
@@ -3679,7 +3848,7 @@ function AdminPortal({
                         />
                         ظاهر
                       </label>
-                      <label className="flex items-center gap-1 text-xs font-bold">
+                      <label className="flex items-center gap-1 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={Boolean(field.required)}
@@ -3699,7 +3868,7 @@ function AdminPortal({
                             orderFormFields: localSettings.orderFormFields.filter((_, i) => i !== idx)
                           })
                         }
-                        className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg"
+                        className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -3709,46 +3878,209 @@ function AdminPortal({
               </div>
             </div>
 
-            {/* 5. بيانات التواصل والنسخ الاحتياطي */}
-            <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
-              <h3 className="text-lg font-black text-slate-900">التواصل الاجتماعي والدفع والنسخ الاحتياطي</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* 5. التحكم الكامل في وسائل وروابط التواصل الاجتماعي + الدفع + النسخ الاحتياطي */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">رقم الواتساب (بالكود الدولي 20)</label>
+                  <h3 className="text-lg font-black text-slate-900">التحكم الكامل في وسائل وروابط التواصل الاجتماعي</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    أضف أي رابط وسيتعرف النظام تلقائيًا على المنصة ويُظهر أيقونتها، ويمكنك الترتيب بالأسهم أو الحذف بحرية تامة
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setLocalSettings({
+                      ...localSettings,
+                      socialLinks: [
+                        ...(localSettings.socialLinks || []),
+                        {
+                          id: `soc-${Date.now()}`,
+                          platform: 'auto',
+                          title: 'وسيلة تواصل جديدة',
+                          subtitle: '',
+                          url: '',
+                          visible: true
+                        }
+                      ]
+                    })
+                  }
+                  className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  إضافة رابط تواصل جديد
+                </button>
+              </div>
+
+              {/* رقم الواتساب الأساسي لاستقبال طلبات السلة */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-emerald-50/70 p-4 rounded-2xl border border-emerald-200">
+                <div>
+                  <label className="text-xs font-extrabold text-emerald-950 block mb-1">
+                    رقم واتساب استقبال الطلبات الآلي (بالكود الدولي 20)
+                  </label>
                   <input
                     type="text"
+                    dir="ltr"
                     value={localSettings.whatsappNumber}
                     onChange={(e) => setLocalSettings({ ...localSettings, whatsappNumber: e.target.value })}
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                    placeholder="2010xxxxxxxx"
+                    className="w-full px-3.5 py-2 rounded-xl border border-emerald-300 bg-white text-xs font-black text-left"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">رابط جروب الواتساب</label>
+                  <label className="text-xs font-extrabold text-emerald-950 block mb-1">
+                    تعليمات الدفع والتحويل بعد الطلب
+                  </label>
                   <input
-                    type="url"
-                    value={localSettings.whatsappGroupUrl}
-                    onChange={(e) => setLocalSettings({ ...localSettings, whatsappGroupUrl: e.target.value })}
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs"
+                    type="text"
+                    value={localSettings.paymentInstructions}
+                    onChange={(e) => setLocalSettings({ ...localSettings, paymentInstructions: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-emerald-300 bg-white text-xs"
                   />
                 </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">رابط صفحة الفيسبوك</label>
-                  <input
-                    type="url"
-                    value={localSettings.facebookUrl}
-                    onChange={(e) => setLocalSettings({ ...localSettings, facebookUrl: e.target.value })}
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">رابط قناة / جروب تليجرام</label>
-                  <input
-                    type="url"
-                    value={localSettings.telegramUrl || ''}
-                    onChange={(e) => setLocalSettings({ ...localSettings, telegramUrl: e.target.value })}
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs"
-                  />
-                </div>
+              </div>
+
+              {/* قائمة روابط التواصل القابلة للإضافة والحذف والترتيب مع معاينة الأيقونة فورًا */}
+              <div className="space-y-3">
+                {(localSettings.socialLinks || []).map((item, idx) => {
+                  const detected = detectSocialPlatform(item.url, item.platform);
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50 grid grid-cols-1 lg:grid-cols-12 gap-3 items-center"
+                    >
+                      {/* الترتيب + الأيقونة الحية */}
+                      <div className="lg:col-span-2 flex items-center gap-2">
+                        <div className="flex flex-col gap-1">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setLocalSettings({
+                                ...localSettings,
+                                socialLinks: moveArrayItem(localSettings.socialLinks, idx, -1)
+                              })
+                            }
+                            className="p-1 rounded bg-white border border-slate-200 hover:bg-slate-100"
+                            title="تحريك لأعلى"
+                          >
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setLocalSettings({
+                                ...localSettings,
+                                socialLinks: moveArrayItem(localSettings.socialLinks, idx, 1)
+                              })
+                            }
+                            className="p-1 rounded bg-white border border-slate-200 hover:bg-slate-100"
+                            title="تحريك لأسفل"
+                          >
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        <SocialPlatformBadge platform={detected} />
+
+                        <select
+                          value={item.platform || 'auto'}
+                          onChange={(e) => {
+                            const copy = [...localSettings.socialLinks];
+                            copy[idx] = { ...item, platform: e.target.value };
+                            setLocalSettings({ ...localSettings, socialLinks: copy });
+                          }}
+                          className="px-2 py-1.5 rounded-xl border border-slate-300 text-[11px] font-bold bg-white"
+                        >
+                          <option value="auto">تلقائي</option>
+                          <option value="whatsapp">واتساب</option>
+                          <option value="whatsapp_group">جروب واتساب</option>
+                          <option value="facebook">فيسبوك</option>
+                          <option value="telegram">تليجرام</option>
+                          <option value="youtube">يوتيوب</option>
+                          <option value="instagram">إنستجرام</option>
+                          <option value="tiktok">تيك توك</option>
+                          <option value="phone">اتصال هاتفي</option>
+                          <option value="website">موقع خارجي</option>
+                        </select>
+                      </div>
+
+                      {/* اسم الوسيلة */}
+                      <div className="lg:col-span-3">
+                        <input
+                          type="text"
+                          placeholder="العنوان (مثال: صفحتنا على فيسبوك)"
+                          value={item.title}
+                          onChange={(e) => {
+                            const copy = [...localSettings.socialLinks];
+                            copy[idx] = { ...item, title: e.target.value };
+                            setLocalSettings({ ...localSettings, socialLinks: copy });
+                          }}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-extrabold bg-white"
+                        />
+                      </div>
+
+                      {/* الوصف الفرعي */}
+                      <div className="lg:col-span-2">
+                        <input
+                          type="text"
+                          placeholder="وصف قصير (اختياري)"
+                          value={item.subtitle || ''}
+                          onChange={(e) => {
+                            const copy = [...localSettings.socialLinks];
+                            copy[idx] = { ...item, subtitle: e.target.value };
+                            setLocalSettings({ ...localSettings, socialLinks: copy });
+                          }}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white"
+                        />
+                      </div>
+
+                      {/* الرابط أو الرقم */}
+                      <div className="lg:col-span-3">
+                        <input
+                          type="text"
+                          dir="ltr"
+                          placeholder="https://... أو رقم الهاتف"
+                          value={item.url || ''}
+                          onChange={(e) => {
+                            const copy = [...localSettings.socialLinks];
+                            copy[idx] = { ...item, url: e.target.value };
+                            setLocalSettings({ ...localSettings, socialLinks: copy });
+                          }}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono text-left bg-white"
+                        />
+                      </div>
+
+                      {/* إظهار / حذف */}
+                      <div className="lg:col-span-2 flex items-center justify-end gap-2">
+                        <label className="flex items-center gap-1 text-xs font-bold cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={item.visible !== false}
+                            onChange={(e) => {
+                              const copy = [...localSettings.socialLinks];
+                              copy[idx] = { ...item, visible: e.target.checked };
+                              setLocalSettings({ ...localSettings, socialLinks: copy });
+                            }}
+                          />
+                          ظاهر
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setLocalSettings({
+                              ...localSettings,
+                              socialLinks: localSettings.socialLinks.filter((_, i) => i !== idx)
+                            })
+                          }
+                          className="p-2 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100"
+                          title="حذف الرابط"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-slate-100">
@@ -4530,35 +4862,25 @@ function MuzakkiratiApp() {
 
           <div className="space-y-3">
             <h4 className="text-white font-extrabold text-sm">تواصل معنا</h4>
-            <div className="flex flex-wrap gap-2">
-              <a
-                href={`https://wa.me/${String(settings.whatsappNumber || '').replace(/[^\d]/g, '')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"
-              >
-                واتساب مباشر
-              </a>
-              {sanitizeUrl(settings.facebookUrl) && (
-                <a
-                  href={sanitizeUrl(settings.facebookUrl)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold"
-                >
-                  صفحة الفيسبوك
-                </a>
-              )}
-              {sanitizeUrl(settings.whatsappGroupUrl) && (
-                <a
-                  href={sanitizeUrl(settings.whatsappGroupUrl)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold"
-                >
-                  جروب الواتساب
-                </a>
-              )}
+            <div className="flex flex-wrap gap-2.5">
+              {(settings.socialLinks || [])
+                .filter((s) => s.visible !== false && s.url)
+                .map((s) => {
+                  const plat = detectSocialPlatform(s.url, s.platform);
+                  const href = formatSocialHref(s.url, plat);
+                  return (
+                    <a
+                      key={s.id}
+                      href={href}
+                      target={href.startsWith('tel:') ? undefined : '_blank'}
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition"
+                    >
+                      <SocialPlatformBadge platform={plat} size="sm" />
+                      <span>{s.title}</span>
+                    </a>
+                  );
+                })}
             </div>
           </div>
         </div>
@@ -4700,30 +5022,48 @@ function MuzakkiratiApp() {
                       <ExternalLink className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="font-extrabold text-sm text-slate-900">قناتنا على تليجرام</h4>
+                      <h4 className="font-extrabold text-sm text-slate-900">قناتنا الرسمية على تليجرام</h4>
                       <p className="text-xs text-sky-700">عينات مجانية وإشعارات الإصدارات الجديدة</p>
                     </div>
                   </div>
                   <ExternalLink className="w-4 h-4 text-sky-600 group-hover:-translate-x-1 transition-transform" />
                 </a>
               )}
+            </div>
 
-              {/* اتصال هاتفي مباشر */}
-              <a
-                href={`tel:+${String(settings.whatsappNumber || '').replace(/[^\d]/g, '')}`}
-                className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-slate-800 text-white flex items-center justify-center shrink-0">
-                    <Phone className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="font-extrabold text-sm text-slate-900">اتصال هاتفي مباشر</h4>
-                    <p className="text-xs text-slate-500">للاستفسارات العاجلة والدعم الفني</p>
-                  </div>
-                </div>
-                <ArrowLeft className="w-4 h-4 text-slate-500 group-hover:-translate-x-1 transition-transform" />
-              </a>
+            <div className="space-y-3 max-h-[65vh] overflow-y-auto pl-1">
+              {(settings.socialLinks || [])
+                .filter((s) => s.visible !== false && s.url)
+                .map((s) => {
+                  const plat = detectSocialPlatform(s.url, s.platform);
+                  const href = formatSocialHref(s.url, plat);
+                  return (
+                    <a
+                      key={s.id}
+                      href={href}
+                      target={href.startsWith('tel:') ? undefined : '_blank'}
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 hover:bg-blue-50/70 border border-slate-200 hover:border-blue-300 transition group"
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <SocialPlatformBadge platform={plat} />
+                        <div className="min-w-0">
+                          <h4 className="font-extrabold text-sm text-slate-900 truncate">{s.title}</h4>
+                          {s.subtitle && (
+                            <p className="text-xs text-slate-500 truncate mt-0.5">{s.subtitle}</p>
+                          )}
+                        </div>
+                      </div>
+                      <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-blue-600 group-hover:-translate-x-1 transition-transform shrink-0" />
+                    </a>
+                  );
+                })}
+
+              {(settings.socialLinks || []).filter((s) => s.visible !== false && s.url).length === 0 && (
+                <p className="text-center text-xs text-slate-500 py-6">
+                  لم يتم إضافة روابط تواصل نشطة بعد.
+                </p>
+              )}
             </div>
           </div>
         </div>
