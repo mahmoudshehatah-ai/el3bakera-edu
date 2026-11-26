@@ -3416,6 +3416,290 @@ function AdminDashboard({ settings, notebooks, coupons, orders, onSaveSettings, 
               </div>
             </div>
 
+            {/* التحكم في قسم «ما الجديد؟» وقسم «أخبار المنصة ومذكرات قيد التجهيز» */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* إعدادات ما الجديد؟ */}
+              <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-black text-slate-900">قسم «ما الجديد؟» في الرئيسية</h2>
+                  <label className="flex items-center gap-2 text-xs font-black">
+                    <input
+                      type="checkbox"
+                      checked={localSettings.whatsNewEnabled}
+                      onChange={(e) => setLocalSettings((p) => ({ ...p, whatsNewEnabled: e.target.checked }))}
+                    />
+                    <span>إظهار القسم</span>
+                  </label>
+                </div>
+
+                <input
+                  type="text"
+                  value={localSettings.whatsNewTitle}
+                  onChange={(e) => setLocalSettings((p) => ({ ...p, whatsNewTitle: e.target.value }))}
+                  placeholder="عنوان القسم"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-bold"
+                />
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <select
+                    value={localSettings.whatsNewMode}
+                    onChange={(e) => setLocalSettings((p) => ({ ...p, whatsNewMode: e.target.value }))}
+                    className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                  >
+                    <option value="auto">تلقائي (أحدث المذكرات)</option>
+                    <option value="manual">اختيار يدوي محدد</option>
+                  </select>
+                  <input
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={localSettings.whatsNewLimit || 6}
+                    onChange={(e) => setLocalSettings((p) => ({ ...p, whatsNewLimit: Number(e.target.value) }))}
+                    placeholder="العدد المعروض"
+                    className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                  />
+                </div>
+
+                {localSettings.whatsNewMode === 'manual' && (
+                  <div className="bg-slate-50 p-3 rounded-2xl border max-h-44 overflow-y-auto space-y-1.5">
+                    <div className="text-xs font-bold text-slate-600">اختر المذكرات التي تظهر في «ما الجديد؟»:</div>
+                    {notebooks.map((nb) => {
+                      const checked = (localSettings.whatsNewManualIds || []).includes(nb.id);
+                      return (
+                        <label key={nb.id} className="flex items-center gap-2 text-xs bg-white p-2 rounded-xl border cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              const prevIds = localSettings.whatsNewManualIds || [];
+                              setLocalSettings((p) => ({
+                                ...p,
+                                whatsNewManualIds: e.target.checked
+                                  ? [...prevIds, nb.id]
+                                  : prevIds.filter((id) => id !== nb.id)
+                              }));
+                            }}
+                          />
+                          <span className="truncate font-bold">{nb.title}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* إعدادات أخبار المنصة ومذكرات قيد التجهيز */}
+              <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-black text-slate-900">أخبار المنصة ومذكرات قيد التجهيز</h2>
+                  <label className="flex items-center gap-2 text-xs font-black">
+                    <input
+                      type="checkbox"
+                      checked={localSettings.newsSectionEnabled}
+                      onChange={(e) => setLocalSettings((p) => ({ ...p, newsSectionEnabled: e.target.checked }))}
+                    />
+                    <span>إظهار القسم</span>
+                  </label>
+                </div>
+
+                <input
+                  type="text"
+                  value={localSettings.newsSectionTitle}
+                  onChange={(e) => setLocalSettings((p) => ({ ...p, newsSectionTitle: e.target.value }))}
+                  placeholder="عنوان قسم الأخبار"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm font-bold"
+                />
+
+                <div className="space-y-2 max-h-52 overflow-y-auto">
+                  {(localSettings.newsItems || []).map((item, idx) => (
+                    <div key={item.id || idx} className="p-2.5 rounded-2xl bg-slate-50 border space-y-1.5">
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text"
+                          value={item.title}
+                          onChange={(e) => {
+                            const arr = [...localSettings.newsItems];
+                            arr[idx] = { ...item, title: e.target.value };
+                            setLocalSettings((p) => ({ ...p, newsItems: arr }));
+                          }}
+                          placeholder="عنوان الخبر"
+                          className="flex-1 px-2.5 py-1.5 rounded-lg border bg-white text-xs font-bold"
+                        />
+                        <input
+                          type="text"
+                          value={item.badge || ''}
+                          onChange={(e) => {
+                            const arr = [...localSettings.newsItems];
+                            arr[idx] = { ...item, badge: e.target.value };
+                            setLocalSettings((p) => ({ ...p, newsItems: arr }));
+                          }}
+                          placeholder="شارة (قريبًا)"
+                          className="w-24 px-2 py-1.5 rounded-lg border bg-white text-xs font-bold"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setLocalSettings((p) => ({
+                              ...p,
+                              newsItems: p.newsItems.filter((_, i) => i !== idx)
+                            }))
+                          }
+                          className="p-1.5 text-red-600 bg-red-50 rounded-lg"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        value={item.details || ''}
+                        onChange={(e) => {
+                          const arr = [...localSettings.newsItems];
+                          arr[idx] = { ...item, details: e.target.value };
+                          setLocalSettings((p) => ({ ...p, newsItems: arr }));
+                        }}
+                        placeholder="تفاصيل الخبر..."
+                        className="w-full px-2.5 py-1.5 rounded-lg border bg-white text-xs"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setLocalSettings((p) => ({
+                      ...p,
+                      newsItems: [
+                        ...(p.newsItems || []),
+                        { id: 'news_' + Date.now(), title: 'خبر أو إصدار قادم جديد', badge: 'قريبًا', date: 'جديد', details: '' }
+                      ]
+                    }))
+                  }
+                  className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold"
+                >
+                  + إضافة خبر أو إعلان جديد
+                </button>
+              </div>
+            </div>
+
+            {/* التحكم في حقول نموذج طلب العميل */}
+            <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900">التحكم في حقول بيانات العميل داخل السلة</h2>
+                  <p className="text-xs text-slate-500">أضف أو رتّب أو أخفِ أي حقل يظهر للعميل عند إتمام الطلب</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setLocalSettings((p) => ({
+                      ...p,
+                      checkoutFields: [
+                        ...p.checkoutFields,
+                        { id: 'field_' + Date.now(), label: 'حقل إضافي جديد', placeholder: '', type: 'text', required: false, visible: true }
+                      ]
+                    }))
+                  }
+                  className="px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs"
+                >
+                  + إضافة حقل جديد
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {localSettings.checkoutFields.map((f, idx) => (
+                  <div key={f.id} className="p-3 rounded-2xl bg-slate-50 border flex flex-wrap items-center gap-2">
+                    <input
+                      type="text"
+                      value={f.label}
+                      onChange={(e) => {
+                        const arr = [...localSettings.checkoutFields];
+                        arr[idx] = { ...f, label: e.target.value };
+                        setLocalSettings((p) => ({ ...p, checkoutFields: arr }));
+                      }}
+                      className="flex-1 min-w-[160px] px-3 py-1.5 rounded-xl border bg-white text-xs font-bold"
+                    />
+                    <select
+                      value={f.type}
+                      onChange={(e) => {
+                        const arr = [...localSettings.checkoutFields];
+                        arr[idx] = { ...f, type: e.target.value };
+                        setLocalSettings((p) => ({ ...p, checkoutFields: arr }));
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl border bg-white text-xs font-bold"
+                    >
+                      <option value="text">نص قصير</option>
+                      <option value="tel">رقم هاتف</option>
+                      <option value="textarea">ملاحظات طويلة</option>
+                      <option value="file">رفع صورة/شعار</option>
+                    </select>
+                    <label className="flex items-center gap-1 text-xs font-bold px-2">
+                      <input
+                        type="checkbox"
+                        checked={f.required}
+                        onChange={(e) => {
+                          const arr = [...localSettings.checkoutFields];
+                          arr[idx] = { ...f, required: e.target.checked };
+                          setLocalSettings((p) => ({ ...p, checkoutFields: arr }));
+                        }}
+                      />
+                      <span>إلزامي</span>
+                    </label>
+                    <label className="flex items-center gap-1 text-xs font-bold px-2">
+                      <input
+                        type="checkbox"
+                        checked={f.visible !== false}
+                        onChange={(e) => {
+                          const arr = [...localSettings.checkoutFields];
+                          arr[idx] = { ...f, visible: e.target.checked };
+                          setLocalSettings((p) => ({ ...p, checkoutFields: arr }));
+                        }}
+                      />
+                      <span>ظاهر</span>
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={idx === 0}
+                        onClick={() => {
+                          const arr = [...localSettings.checkoutFields];
+                          [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+                          setLocalSettings((p) => ({ ...p, checkoutFields: arr }));
+                        }}
+                        className="p-1.5 bg-white border rounded-lg disabled:opacity-30"
+                      >
+                        <ChevronUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={idx === localSettings.checkoutFields.length - 1}
+                        onClick={() => {
+                          const arr = [...localSettings.checkoutFields];
+                          [arr[idx + 1], arr[idx]] = [arr[idx], arr[idx + 1]];
+                          setLocalSettings((p) => ({ ...p, checkoutFields: arr }));
+                        }}
+                        className="p-1.5 bg-white border rounded-lg disabled:opacity-30"
+                      >
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLocalSettings((p) => ({
+                            ...p,
+                            checkoutFields: p.checkoutFields.filter((_, i) => i !== idx)
+                          }))
+                        }
+                        className="p-1.5 bg-red-100 text-red-600 rounded-lg"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* التنبيهات العامة + ترتيب العناصر داخل نافذة المذكرة + زر Drive */}
             <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-4">
               <h2 className="text-lg font-black text-slate-900">التنبيهات العامة وترتيب العناصر داخل نافذة المذكرة</h2>
@@ -4391,6 +4675,76 @@ function MuzakkiratiApp() {
                 </div>
               </section>
             )}
+
+            {/* قسم أخبار المنصة ومذكرات قيد التجهيز */}
+            {settings.newsSectionEnabled &&
+              ((settings.newsItems || []).length > 0 || notebooks.some((n) => n.comingSoon)) && (
+                <section className="max-w-7xl mx-auto px-3 sm:px-6 space-y-5 text-right">
+                  <div className="bg-gradient-to-l from-slate-950 via-slate-900 to-blue-950 rounded-3xl p-5 sm:p-7 text-white shadow-xl space-y-5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-10 h-10 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center shadow">
+                          <Bell className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h2 className="text-lg sm:text-2xl font-black">{settings.newsSectionTitle}</h2>
+                          <p className="text-xs text-slate-300">تابع أحدث الإعلانات والمذكرات الجاري تجهيزها للحجز المسبق</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* بطاقات الأخبار */}
+                    {(settings.newsItems || []).length > 0 && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                        {settings.newsItems.map((news, idx) => (
+                          <div
+                            key={news.id || idx}
+                            className="bg-white/10 backdrop-blur-sm border border-white/15 rounded-2xl p-4 space-y-1.5"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-black text-sm sm:text-base text-white">{news.title}</span>
+                              {news.badge && (
+                                <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[11px] font-black shrink-0">
+                                  {news.badge}
+                                </span>
+                              )}
+                            </div>
+                            {news.details && <p className="text-xs text-slate-200 leading-relaxed">{news.details}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* المذكرات قيد التجهيز (حجز مسبق) */}
+                    {notebooks.some((n) => n.comingSoon) && (
+                      <div className="space-y-2.5 pt-1">
+                        <div className="text-xs font-black text-amber-300">مذكرات قيد التجهيز (متاحة للحجز المسبق):</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {notebooks
+                            .filter((n) => n.comingSoon)
+                            .map((nb) => (
+                              <div
+                                key={nb.id}
+                                onClick={() => setPreviewNotebook(nb)}
+                                className="bg-white text-slate-900 rounded-2xl p-3 flex items-center justify-between gap-3 cursor-pointer hover:shadow-lg transition"
+                              >
+                                <div className="min-w-0">
+                                  <div className="font-black text-xs sm:text-sm truncate">{nb.title}</div>
+                                  <div className="text-[11px] text-slate-500">
+                                    {nb.grade} • {nb.price} ج.م
+                                  </div>
+                                </div>
+                                <span className="px-2.5 py-1 rounded-xl bg-amber-100 text-amber-900 text-[11px] font-black shrink-0">
+                                  احجز مسبقًا
+                                </span>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
           </main>
         )}
 
