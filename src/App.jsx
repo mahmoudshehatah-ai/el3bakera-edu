@@ -3741,6 +3741,7 @@ function MuzakkiratiApp() {
   const [previewNotebook, setPreviewNotebook] = useState(null);
   const [cart, setCart] = useState([]);
   const [cartOpen, setCartOpen] = useState(false);
+  const [cartToast, setCartToast] = useState('');
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [copiedPromo, setCopiedPromo] = useState(false);
   const [trackQuery, setTrackQuery] = useState('');
@@ -4007,10 +4008,17 @@ function MuzakkiratiApp() {
 
   const cartIds = useMemo(() => new Set(cart.map((c) => c.id)), [cart]);
 
+  const triggerCartToast = (title) => {
+    setCartToast(`تمت إضافة "${title}" إلى سلة الطلبات`);
+    setTimeout(() => {
+      setCartToast((prev) => (prev.includes(title) ? '' : prev));
+    }, 2800);
+  };
+
   const handleAddToCart = (nb) => {
     setCart((prev) => [...prev, { ...nb, isBundle: false }]);
     setPreviewNotebook(null);
-    setCartOpen(true);
+    triggerCartToast(nb.title);
   };
 
   const handleAddBundleToCart = (bundle, includedNotebooks, finalPrice, originalSum) => {
@@ -4038,7 +4046,7 @@ function MuzakkiratiApp() {
         }
       ];
     });
-    setCartOpen(true);
+    triggerCartToast(bundle.title);
   };
 
   const handleTrackOrder = async (e) => {
@@ -4461,13 +4469,23 @@ function MuzakkiratiApp() {
                   <div className="text-xs text-slate-700">
                     المذكرات: {(trackedOrder.items || []).map((i) => i.title).join(' + ')}
                   </div>
-                  <div className="font-black text-blue-800">الإجمالي: {trackedOrder.total} ج.م</div>
+                  <div className="text-xs font-black text-emerald-800">
+                    الإجمالي النهائي: {trackedOrder.total} ج.م
+                  </div>
                 </div>
               )}
             </div>
           </div>
         )}
       </div>
+
+      {/* إشعار صغير عند إضافة مذكرة أو باقة للسلة دون فتح النافذة */}
+      {cartToast && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white px-4 py-2.5 rounded-2xl shadow-xl border border-emerald-400/40 flex items-center gap-2 text-xs sm:text-sm font-black max-w-[92%]">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span className="truncate">{cartToast}</span>
+        </div>
+      )}
 
       {/* شريط سلة عائم أسفل الشاشة عند إضافة مذكرات */}
       {cart.length > 0 && !cartOpen && (
