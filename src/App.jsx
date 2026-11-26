@@ -72,30 +72,70 @@ import {
 // ============================================================================
 // 1. تهيئة Firebase الثابتة والمستقرة لمشروع el3bakera-edu
 // ============================================================================
-const DEFAULT_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyDummyKeyForFallbackOnlyReplaceIfNeeded",
-  authDomain: "el3bakera-edu.firebaseapp.com",
-  projectId: "el3bakera-edu",
-  storageBucket: "el3bakera-edu.firebasestorage.app",
-  messagingSenderId: "000000000000",
-  appId: "1:000000000000:web:0000000000000000"
+const LS_FIREBASE_CFG_KEY = 'el3bakera_firebase_custom_cfg_v1';
+
+const getEnvVar = (key) => {
+  try {
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
+      return import.meta.env[key];
+    }
+  } catch {}
+  try {
+    if (typeof process !== 'undefined' && process.env && process.env[key]) {
+      return process.env[key];
+    }
+  } catch {}
+  return '';
 };
 
 const firebaseConfig = (() => {
+  // 1. الأولوية لبيئة المعاينة المدمجة إن وجدت
   try {
     if (typeof __firebase_config !== 'undefined' && __firebase_config) {
       return JSON.parse(__firebase_config);
     }
-  } catch (e) {
-    console.warn('Config parse fallback', e);
+  } catch {}
+
+  // 2. قراءة مفاتيح مشروعك الحقيقية من متغيرات البيئة في Vercel / Vite
+  const envApiKey = getEnvVar('VITE_FIREBASE_API_KEY') || getEnvVar('REACT_APP_FIREBASE_API_KEY');
+  if (envApiKey) {
+    return {
+      apiKey: envApiKey,
+      authDomain: getEnvVar('VITE_FIREBASE_AUTH_DOMAIN') || getEnvVar('REACT_APP_FIREBASE_AUTH_DOMAIN') || 'el3bakera-edu.firebaseapp.com',
+      projectId: getEnvVar('VITE_FIREBASE_PROJECT_ID') || getEnvVar('REACT_APP_FIREBASE_PROJECT_ID') || 'el3bakera-edu',
+      storageBucket: getEnvVar('VITE_FIREBASE_STORAGE_BUCKET') || getEnvVar('REACT_APP_FIREBASE_STORAGE_BUCKET') || 'el3bakera-edu.firebasestorage.app',
+      messagingSenderId: getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID') || getEnvVar('REACT_APP_FIREBASE_MESSAGING_SENDER_ID') || '',
+      appId: getEnvVar('VITE_FIREBASE_APP_ID') || getEnvVar('REACT_APP_FIREBASE_APP_ID') || ''
+    };
   }
-  return DEFAULT_FIREBASE_CONFIG;
+
+  // 3. قراءة الإعداد المحفوظ محليًا إن تم إدخاله يدويًا
+  try {
+    const savedCfg = localStorage.getItem(LS_FIREBASE_CFG_KEY);
+    if (savedCfg) {
+      const parsed = JSON.parse(savedCfg);
+      if (parsed && parsed.apiKey) return parsed;
+    }
+  } catch {}
+
+  return {
+    apiKey: '',
+    authDomain: 'el3bakera-edu.firebaseapp.com',
+    projectId: 'el3bakera-edu',
+    storageBucket: 'el3bakera-edu.firebasestorage.app',
+    messagingSenderId: '',
+    appId: ''
+  };
 })();
+
+const hasValidFirebaseKey = Boolean(firebaseConfig.apiKey && firebaseConfig.apiKey.startsWith('AIza'));
 
 const appId = typeof __app_id !== 'undefined' && __app_id ? __app_id : 'el3bakera-edu';
 const ADMIN_EMAIL = 'mahmoudelzaaty7@gmail.com';
 
-const firebaseApp = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+const firebaseApp = getApps().length
+  ? getApps()[0]
+  : initializeApp(hasValidFirebaseKey ? firebaseConfig : { ...firebaseConfig, apiKey: 'AIzaSyPlaceholderKey' });
 const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
 
@@ -3770,8 +3810,8 @@ function MuzakkiratiApp() {
   const [loginEmail, setLoginEmail] = useState(ADMIN_EMAIL);
   const [loginPass, setLoginPass] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
-
-  // تتبع الطلب للزوار
+  const [customFirebaseInput, setCustomFirebaseInput] = useState('');
+  const [showKeySetup, setShowKeySetup] = useState(!hasValidFirebaseKey);
   const [trackQuery, setTrackQuery] = useState('');
   const [trackedOrders, setTrackedOrders] = useState([]);
   const [trackSearched, setTrackSearched] = useState(false);
@@ -3788,6 +3828,7 @@ function MuzakkiratiApp() {
 
   // تهيئة المصادقة ومراقبة حالة المدير
   useEffect(() => {
+    if (!hasValidFirebaseKey) return;
     const initAuth = async () => {
       try {
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -3814,7 +3855,7 @@ function MuzakkiratiApp() {
 
   // الاستماع المباشر للإعدادات والمذكرات والكوبونات من السحابة
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || !hasValidFirebaseKey) return;
 
     const unsubSettings = onSnapshot(
       publicDoc('config', 'main'),
@@ -3936,6 +3977,11 @@ function MuzakkiratiApp() {
 
   const handleAdminLogin = async (e) => {
     e.preventDefault();
+    if (!hasValidFirebaseKey) {
+      notify('يرجى لصق إعدادات Firebase (firebaseConfig) أولاً لربط الموقع بقاعدة بياناتك', 'error');
+      setShowKeySetup(true);
+      return;
+    }
     setLoginLoading(true);
     try {
       await signInWithEmailAndPassword(auth, loginEmail.trim(), loginPass);
@@ -4541,6 +4587,60 @@ function MuzakkiratiApp() {
             </div>
 
             <form onSubmit={handleAdminLogin} className="space-y-4">
+              {(!hasValidFirebaseKey || showKeySetup) && (
+                <div className="bg-amber-50 border border-amber-300 rounded-2xl p-3.5 space-y-2 text-right">
+                  <p className="text-xs font-extrabold text-amber-900">
+                    ⚠️ مفتاح Firebase غير مفعّل في متغيرات البيئة:
+                  </p>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    الصق كود <code className="bg-white px-1 rounded">firebaseConfig</code> من إعدادات مشروعك في Firebase (أو أضف <code className="bg-white px-1 rounded">VITE_FIREBASE_API_KEY</code> في Vercel) وسيعمل فورًا وتعود كل بياناتك:
+                  </p>
+                  <textarea
+                    rows={3}
+                    dir="ltr"
+                    value={customFirebaseInput}
+                    onChange={(e) => setCustomFirebaseInput(e.target.value)}
+                    placeholder='{"apiKey": "AIzaSy...", "authDomain": "el3bakera-edu.firebaseapp.com", "projectId": "el3bakera-edu", ...}'
+                    className="w-full p-2 rounded-xl border border-amber-300 bg-white text-[11px] font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        const raw = customFirebaseInput.trim();
+                        const apiKeyMatch = raw.match(/apiKey\s*:\s*["']([^"']+)["']/);
+                        const authDomainMatch = raw.match(/authDomain\s*:\s*["']([^"']+)["']/);
+                        const projectIdMatch = raw.match(/projectId\s*:\s*["']([^"']+)["']/);
+                        const appIdMatch = raw.match(/appId\s*:\s*["']([^"']+)["']/);
+                        let parsed = null;
+                        if (raw.startsWith('{') && raw.includes('"apiKey"')) {
+                          parsed = JSON.parse(raw);
+                        } else if (apiKeyMatch) {
+                          parsed = {
+                            apiKey: apiKeyMatch[1],
+                            authDomain: authDomainMatch?.[1] || 'el3bakera-edu.firebaseapp.com',
+                            projectId: projectIdMatch?.[1] || 'el3bakera-edu',
+                            storageBucket: 'el3bakera-edu.firebasestorage.app',
+                            appId: appIdMatch?.[1] || ''
+                          };
+                        }
+                        if (!parsed || !parsed.apiKey) {
+                          notify('تعذر قراءة apiKey، تأكد من نسخ كود firebaseConfig كاملًا', 'error');
+                          return;
+                        }
+                        localStorage.setItem(LS_FIREBASE_CFG_KEY, JSON.stringify(parsed));
+                        window.location.reload();
+                      } catch {
+                        notify('صيغة الكود غير صحيحة', 'error');
+                      }
+                    }}
+                    className="w-full py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs"
+                  >
+                    حفظ الربط وإعادة تحميل المنصة
+                  </button>
+                </div>
+              )}
+
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1">البريد الإلكتروني</label>
                 <input
