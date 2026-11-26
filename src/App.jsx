@@ -475,6 +475,26 @@ function compressDataUrl(dataUrl, maxWidth = 900, quality = 0.75) {
   });
 }
 
+function compressImageFile(file, maxWidth = 1000, quality = 0.8) {
+  return new Promise((resolve, reject) => {
+    if (!file) {
+      resolve('');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        const result = await compressDataUrl(ev.target?.result || '', maxWidth, quality);
+        resolve(result);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+}
+
 function getUtf8ByteSize(obj) {
   try {
     return new TextEncoder().encode(JSON.stringify(obj)).length;
