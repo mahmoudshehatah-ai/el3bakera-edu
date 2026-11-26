@@ -51,7 +51,14 @@ import {
   Award,
   MessageCircle,
   ArrowLeft,
-  Percent
+  Percent,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  Minimize2,
+  RotateCcw,
+  Filter,
+  Layers
 } from 'lucide-react';
 
 // ============================================================================
@@ -485,7 +492,7 @@ const mergeAndNormalizeSettings = (base, incoming) => {
   return next;
 };
 
-const compressImageFile = (file, maxWidth = 1000, quality = 0.78) =>
+const compressImageFile = (file, maxWidth = 1800, quality = 0.92) =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -496,6 +503,8 @@ const compressImageFile = (file, maxWidth = 1000, quality = 0.78) =>
         canvas.width = Math.round(img.width * scale);
         canvas.height = Math.round(img.height * scale);
         const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         resolve(canvas.toDataURL('image/jpeg', quality));
       };
@@ -610,6 +619,8 @@ function MuzakkiratiApp() {
 
   const [previewNotebook, setPreviewNotebook] = useState(null);
   const [previewPageIdx, setPreviewPageIdx] = useState(0);
+  const [previewZoom, setPreviewZoom] = useState(1);
+  const [previewFullscreen, setPreviewFullscreen] = useState(false);
 
   const [cart, setCart] = useState(() => {
     try {
@@ -1236,9 +1247,12 @@ function MuzakkiratiApp() {
 
       {/* الشريط الترويجي العلوي */}
       {settings.promoEnabled && !promoDismissed && (
-        <div className="bg-gradient-to-l from-indigo-700 via-purple-700 to-indigo-800 text-white px-3 py-2 text-[11px] sm:text-xs font-bold">
+        <div className="bg-slate-900 text-slate-100 border-b border-slate-800 px-3 py-2 text-[11px] sm:text-xs font-bold">
           <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-center gap-2 sm:gap-3 text-center">
-            <span>{settings.promoText}</span>
+            <span className="inline-flex items-center gap-1.5 text-amber-300 font-black">
+              <Sparkles className="w-3.5 h-3.5 shrink-0" />
+              <span>{settings.promoText}</span>
+            </span>
             {settings.promoCouponCode && (
               <button
                 type="button"
@@ -1248,11 +1262,11 @@ function MuzakkiratiApp() {
                   setTimeout(() => setPromoCopied(false), 2000);
                   showToast(`تم نسخ الكوبون: ${settings.promoCouponCode}`);
                 }}
-                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-white text-indigo-900 font-black hover:bg-amber-300 transition"
+                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 text-white font-black transition"
               >
-                <Copy className="w-3 h-3" />
-                <span>انسخ الكوبون: {settings.promoCouponCode}</span>
-                {promoCopied && <Check className="w-3 h-3 text-emerald-600" />}
+                <Copy className="w-3 h-3 text-amber-300" />
+                <span>الكوبون: {settings.promoCouponCode}</span>
+                {promoCopied && <Check className="w-3 h-3 text-emerald-400" />}
               </button>
             )}
             <button
@@ -1260,12 +1274,12 @@ function MuzakkiratiApp() {
               onClick={() => setActiveView('offers')}
               className="px-2.5 py-0.5 rounded-lg bg-amber-400 text-slate-950 font-black hover:bg-amber-300 transition"
             >
-              العروض ←
+              تصفح العروض ←
             </button>
             <button
               type="button"
               onClick={() => setPromoDismissed(true)}
-              className="p-1 text-white/70 hover:text-white"
+              className="p-1 text-slate-400 hover:text-white"
               aria-label="إغلاق الشريط"
             >
               <X className="w-3.5 h-3.5" />
@@ -1276,7 +1290,7 @@ function MuzakkiratiApp() {
 
       {/* الهيدر الرئيسي المدمج والمتجاوب للهاتف والكمبيوتر */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 flex items-center justify-between gap-2">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-3">
           {/* الشعار واسم المنصة */}
           <button
             type="button"
@@ -1289,25 +1303,25 @@ function MuzakkiratiApp() {
                 else setLoginModalOpen(true);
               }
             }}
-            className="flex items-center gap-2.5 text-right group shrink-0"
+            className="flex items-center gap-3 text-right group shrink-0"
           >
             {settings.logoUrl ? (
               <img
                 src={settings.logoUrl}
                 alt={settings.platformName}
-                className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl object-cover border border-slate-200 shadow-sm"
+                className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl object-cover border border-slate-200 shadow-sm"
               />
             ) : (
-              <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-2xl ${theme.primaryBtn} flex items-center justify-center shadow-md`}>
-                <BookOpen className="w-5 h-5 sm:w-6 sm:h-6" />
+              <div className={`w-11 h-11 sm:w-14 sm:h-14 rounded-2xl ${theme.primaryBtn} flex items-center justify-center shadow-md`}>
+                <BookOpen className="w-6 h-6 sm:w-7 sm:h-7" />
               </div>
             )}
             <div>
-              <div className={`text-sm sm:text-base font-black ${theme.primaryText} leading-tight`}>
+              <div className="text-base sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
                 {settings.platformName}
               </div>
-              <div className="hidden sm:flex items-center gap-1.5 text-[11px] font-bold text-slate-500 mt-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+              <div className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-500 mt-0.5">
+                <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
                 <span>{settings.platformTagline}</span>
               </div>
             </div>
@@ -1574,6 +1588,8 @@ function MuzakkiratiApp() {
                       onPreview={() => {
                         setPreviewNotebook(nb);
                         setPreviewPageIdx(0);
+                        setPreviewZoom(1);
+                        setPreviewFullscreen(false);
                       }}
                       onAdd={() => addNotebookToCart(nb)}
                     />
@@ -1745,6 +1761,8 @@ function MuzakkiratiApp() {
                     onPreview={() => {
                       setPreviewNotebook(nb);
                       setPreviewPageIdx(0);
+                      setPreviewZoom(1);
+                      setPreviewFullscreen(false);
                     }}
                     onAdd={() => addNotebookToCart(nb)}
                   />
@@ -1954,27 +1972,86 @@ function MuzakkiratiApp() {
       {/* 6. نوافذ المعاينة، السلة، تسجيل الدخول، والتواصل */}
       {/* ==================================================================== */}
       {previewNotebook && (
-        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
-          <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[92vh] overflow-y-auto shadow-2xl border border-slate-200">
-            <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-md px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3">
-              <div>
-                <h3 className="font-black text-slate-900 text-sm sm:text-base">{previewNotebook.title}</h3>
+        <div
+          className={`fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center ${
+            previewFullscreen ? 'p-0' : 'p-2 sm:p-5'
+          }`}
+        >
+          <div
+            className={`bg-white flex flex-col shadow-2xl border border-slate-200 overflow-hidden transition-all ${
+              previewFullscreen
+                ? 'w-screen h-screen rounded-none'
+                : 'rounded-3xl max-w-5xl w-full max-h-[94vh]'
+            }`}
+          >
+            {/* رأس نافذة المعاينة + شريط التكبير وملء الشاشة */}
+            <div className="bg-white px-4 sm:px-6 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
+              <div className="min-w-0 flex-1">
+                <h3 className="font-black text-slate-900 text-sm sm:text-base truncate">{previewNotebook.title}</h3>
                 {previewNotebook.subtitle && (
-                  <p className="text-xs text-slate-500 font-bold">{previewNotebook.subtitle}</p>
+                  <p className="text-[11px] text-slate-500 font-bold truncate">{previewNotebook.subtitle}</p>
                 )}
               </div>
+
+              {/* أدوات التكبير والشاشة الكاملة */}
+              <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setPreviewZoom((z) => Math.max(0.75, +(z - 0.25).toFixed(2)))}
+                  title="تصغير"
+                  className="p-2 rounded-xl bg-white hover:bg-blue-50 text-slate-700 shadow-xs"
+                >
+                  <ZoomOut className="w-4 h-4" />
+                </button>
+                <span className="px-2 text-[11px] font-black text-slate-800 min-w-[46px] text-center">
+                  {Math.round(previewZoom * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPreviewZoom((z) => Math.min(2.75, +(z + 0.25).toFixed(2)))}
+                  title="تكبير"
+                  className="p-2 rounded-xl bg-white hover:bg-blue-50 text-slate-700 shadow-xs"
+                >
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+                {previewZoom !== 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setPreviewZoom(1)}
+                    title="إعادة الحجم الطبيعي"
+                    className="p-2 rounded-xl bg-white hover:bg-amber-50 text-amber-700 shadow-xs"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setPreviewFullscreen((f) => !f)}
+                  title={previewFullscreen ? 'إنهاء ملء الشاشة' : 'ملء الشاشة الكاملة'}
+                  className="px-2.5 py-2 rounded-xl bg-slate-900 text-white hover:bg-blue-600 text-[11px] font-black flex items-center gap-1 transition"
+                >
+                  {previewFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                  <span className="hidden sm:inline">{previewFullscreen ? 'تصغير النافذة' : 'ملء الشاشة'}</span>
+                </button>
+              </div>
+
               <button
                 type="button"
-                onClick={() => setPreviewNotebook(null)}
-                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700"
+                onClick={() => {
+                  setPreviewNotebook(null);
+                  setPreviewFullscreen(false);
+                  setPreviewZoom(1);
+                }}
+                className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-5 sm:p-6 space-y-5">
+            {/* جسم المعاينة القابل للتمرير */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
               {previewNotebook.noticeText && previewNotebook.noticePosition !== 'bottom' && (
-                <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold flex items-start gap-2">
+                <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <span>{previewNotebook.noticeText}</span>
                 </div>
@@ -1982,16 +2059,24 @@ function MuzakkiratiApp() {
 
               {(() => {
                 const pages = getNotebookSamples(previewNotebook);
-                const currentImg = pages[previewPageIdx] || pages[0] || '';
+                const safeIdx = Math.min(previewPageIdx, Math.max(0, pages.length - 1));
+                const currentImg = pages[safeIdx] || pages[0] || '';
                 return (
                   <div className="space-y-3">
-                    <div className="relative bg-slate-100 rounded-2xl border border-slate-200 min-h-[300px] sm:min-h-[420px] flex items-center justify-center overflow-hidden">
+                    <div className="relative bg-slate-900/5 rounded-2xl border border-slate-200 overflow-auto flex items-center justify-center min-h-[340px] sm:min-h-[480px] max-h-[68vh]">
                       {currentImg ? (
-                        <img
-                          src={currentImg}
-                          alt={`عينة ${previewPageIdx + 1}`}
-                          className="max-h-[60vh] w-auto object-contain"
-                        />
+                        <div className="p-3 flex items-center justify-center min-w-full min-h-full">
+                          <img
+                            src={currentImg}
+                            alt={`عينة ${safeIdx + 1}`}
+                            onDoubleClick={() => setPreviewZoom((z) => (z > 1 ? 1 : 1.75))}
+                            style={{
+                              transform: `scale(${previewZoom})`,
+                              transformOrigin: 'top center'
+                            }}
+                            className="max-h-[64vh] w-auto object-contain rounded-lg shadow-md transition-transform duration-200 cursor-zoom-in"
+                          />
+                        </div>
                       ) : (
                         <div className="text-center p-8 text-slate-400 space-y-2">
                           <BookOpen className="w-12 h-12 mx-auto" />
@@ -1999,19 +2084,31 @@ function MuzakkiratiApp() {
                         </div>
                       )}
 
+                      {pages.length > 0 && (
+                        <span className="sticky bottom-3 left-3 px-3 py-1 rounded-full bg-slate-900/80 text-white text-[11px] font-black backdrop-blur-sm">
+                          صفحة {safeIdx + 1} من {pages.length}
+                        </span>
+                      )}
+
                       {pages.length > 1 && (
                         <>
                           <button
                             type="button"
-                            onClick={() => setPreviewPageIdx((i) => (i > 0 ? i - 1 : pages.length - 1))}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-white/90 shadow-md text-slate-800 hover:bg-blue-600 hover:text-white"
+                            onClick={() => {
+                              setPreviewZoom(1);
+                              setPreviewPageIdx((i) => (i > 0 ? i - 1 : pages.length - 1));
+                            }}
+                            className="fixed sm:absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/95 shadow-lg border border-slate-200 text-slate-800 hover:bg-blue-600 hover:text-white transition"
                           >
                             <ChevronRight className="w-5 h-5" />
                           </button>
                           <button
                             type="button"
-                            onClick={() => setPreviewPageIdx((i) => (i < pages.length - 1 ? i + 1 : 0))}
-                            className="absolute left-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-white/90 shadow-md text-slate-800 hover:bg-blue-600 hover:text-white"
+                            onClick={() => {
+                              setPreviewZoom(1);
+                              setPreviewPageIdx((i) => (i < pages.length - 1 ? i + 1 : 0));
+                            }}
+                            className="fixed sm:absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/95 shadow-lg border border-slate-200 text-slate-800 hover:bg-blue-600 hover:text-white transition"
                           >
                             <ChevronLeft className="w-5 h-5" />
                           </button>
@@ -2025,9 +2122,12 @@ function MuzakkiratiApp() {
                           <button
                             key={idx}
                             type="button"
-                            onClick={() => setPreviewPageIdx(idx)}
-                            className={`w-14 h-16 rounded-xl overflow-hidden border-2 shrink-0 ${
-                              previewPageIdx === idx ? 'border-blue-600 scale-105' : 'border-slate-200 opacity-70'
+                            onClick={() => {
+                              setPreviewZoom(1);
+                              setPreviewPageIdx(idx);
+                            }}
+                            className={`w-14 h-16 rounded-xl overflow-hidden border-2 shrink-0 transition ${
+                              safeIdx === idx ? 'border-blue-600 scale-105 shadow' : 'border-slate-200 opacity-70 hover:opacity-100'
                             }`}
                           >
                             <img src={pg} alt={`مصغرة ${idx + 1}`} className="w-full h-full object-cover" />
@@ -2040,45 +2140,47 @@ function MuzakkiratiApp() {
               })()}
 
               {previewNotebook.noticeText && previewNotebook.noticePosition === 'bottom' && (
-                <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold flex items-start gap-2">
+                <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <span>{previewNotebook.noticeText}</span>
                 </div>
               )}
+            </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-200">
-                <div className="flex items-center gap-3">
-                  <span className={`text-xl font-black ${theme.primaryText}`}>{previewNotebook.price} ج.م</span>
-                  {Number(previewNotebook.oldPrice) > Number(previewNotebook.price) && (
-                    <span className="text-xs text-slate-400 line-through font-bold">
-                      {previewNotebook.oldPrice} ج.م
-                    </span>
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {previewNotebook.driveUrl && (
-                    <a
-                      href={previewNotebook.driveUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-4 py-2.5 rounded-xl border border-slate-300 hover:border-blue-500 text-xs font-black text-slate-800 flex items-center gap-1.5"
-                    >
-                      <ExternalLink className={`w-4 h-4 ${theme.primaryText}`} />
-                      <span>معاينة PDF على Drive</span>
-                    </a>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      addNotebookToCart(previewNotebook);
-                      setPreviewNotebook(null);
-                    }}
-                    className={`px-5 py-2.5 rounded-xl ${theme.primaryBtn} text-xs font-black flex items-center gap-1.5`}
+            {/* تذييل نافذة المعاينة */}
+            <div className="bg-slate-50 px-5 py-3.5 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-3">
+                <span className={`text-xl font-black ${theme.primaryText}`}>{previewNotebook.price} ج.م</span>
+                {Number(previewNotebook.oldPrice) > Number(previewNotebook.price) && (
+                  <span className="text-xs text-slate-400 line-through font-bold">
+                    {previewNotebook.oldPrice} ج.م
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {previewNotebook.driveUrl && (
+                  <a
+                    href={previewNotebook.driveUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2.5 rounded-xl bg-white border border-slate-300 hover:border-blue-500 text-xs font-black text-slate-800 flex items-center gap-1.5"
                   >
-                    <ShoppingCart className="w-4 h-4" />
-                    <span>أضف إلى السلة</span>
-                  </button>
-                </div>
+                    <ExternalLink className={`w-4 h-4 ${theme.primaryText}`} />
+                    <span>معاينة PDF على Drive</span>
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    addNotebookToCart(previewNotebook);
+                    setPreviewNotebook(null);
+                    setPreviewFullscreen(false);
+                  }}
+                  className={`px-5 py-2.5 rounded-xl ${theme.primaryBtn} text-xs font-black flex items-center gap-1.5 shadow`}
+                >
+                  <ShoppingCart className="w-4 h-4" />
+                  <span>أضف إلى السلة</span>
+                </button>
               </div>
             </div>
           </div>
@@ -2640,6 +2742,9 @@ function AdminDashboard({
   });
   const [orderStatusFilter, setOrderStatusFilter] = useState('all');
   const [orderSearch, setOrderSearch] = useState('');
+  const [adminNbSearch, setAdminNbSearch] = useState('');
+  const [adminNbCategoryFilter, setAdminNbCategoryFilter] = useState('');
+  const [showCloudScanner, setShowCloudScanner] = useState(false);
   const [customColName, setCustomColName] = useState('notebook_samples');
   const [discoveredDocs, setDiscoveredDocs] = useState([]);
   const [scanningCol, setScanningCol] = useState(false);
@@ -2714,11 +2819,20 @@ function AdminDashboard({
           targetId = added.id;
         }
         if (nbForm.sampleImages && nbForm.sampleImages.length > 0) {
-          await setDoc(
-            publicDoc('notebook_samples', targetId),
-            { notebookId: targetId, pages: nbForm.sampleImages },
-            { merge: true }
-          );
+          // تقسيم صفحات العينة عالية الدقة على مستندات مرقمة لتجنب حد 1MB في Firestore والحفاظ على أقصى جودة
+          for (let i = 0; i < nbForm.sampleImages.length; i++) {
+            await setDoc(
+              publicDoc('notebook_samples', `${targetId}_p${i}`),
+              { notebookId: targetId, pageIndex: i, image: nbForm.sampleImages[i] },
+              { merge: true }
+            );
+          }
+          // حذف أي مستند رئيسي قديم مضغوط لنفس المذكرة حتى تظهر الصور عالية الدقة الجديدة
+          try {
+            await deleteDoc(publicDoc('notebook_samples', targetId));
+          } catch {
+            // تجاهل
+          }
         }
       } else {
         targetId = targetId || `local_nb_${Date.now()}`;
@@ -2830,35 +2944,34 @@ function AdminDashboard({
 
   return (
     <section className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-      {/* رأس لوحة التحكم */}
-      <div className="bg-slate-900 text-white rounded-3xl p-5 sm:p-6 flex flex-wrap items-center justify-between gap-4 shadow-xl">
+      <div className="bg-slate-900 text-white rounded-3xl p-5 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center">
+          <div className="w-11 h-11 rounded-2xl bg-amber-400/15 border border-amber-400/30 text-amber-400 flex items-center justify-center">
             <ShieldCheck className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-base sm:text-lg font-black">لوحة تحكم الإدارة — {settings.platformName}</h2>
-            <p className="text-xs text-slate-300 font-bold">إدارة المذكرات، العينات، الأقسام، الكوبونات، الطلبات، وإعدادات المنصة</p>
+            <h2 className="text-lg font-black">لوحة تحكم الإدارة الشاملة</h2>
+            <p className="text-xs text-slate-400 font-bold">إدارة المذكرات، العينات، الأقسام، الكوبونات، والطلبات</p>
           </div>
         </div>
         <button
           type="button"
           onClick={onLogout}
-          className="px-4 py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black flex items-center gap-1.5"
+          className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black flex items-center gap-1.5"
         >
           <LogOut className="w-4 h-4" />
           <span>تسجيل الخروج</span>
         </button>
       </div>
 
-      {/* شريط تبويبات الإدارة */}
-      <div className="flex flex-wrap gap-2 bg-white p-2 rounded-3xl border border-slate-200 shadow-sm">
+      {/* شريط تبويبات الإدارة المطور */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
         {[
-          { id: 'notebooks', label: `المذكرات والعينات (${notebooks.length})`, icon: BookOpen },
-          { id: 'categories', label: 'الأقسام والمراحل والصفوف', icon: FolderOpen },
-          { id: 'offers', label: `الكوبونات والباقات (${coupons.length})`, icon: Tag },
-          { id: 'orders', label: `الطلبات الواردة (${orders.length})`, icon: Package },
-          { id: 'settings', label: 'إعدادات الموقع والمظهر', icon: Sliders }
+          { id: 'notebooks', label: 'المذكرات والعينات', count: notebooks.length, icon: BookOpen, desc: 'إضافة وتعديل ورفع العينات' },
+          { id: 'categories', label: 'الأقسام والمراحل', count: (settings.categories || []).length, icon: Layers, desc: 'هيكلة الأقسام والصفوف' },
+          { id: 'offers', label: 'الكوبونات والباقات', count: coupons.length + bundles.length, icon: Tag, desc: 'الخصومات وباقات التوفير' },
+          { id: 'orders', label: 'الطلبات الواردة', count: orders.length, icon: Package, desc: 'متابعة وتسليم الطلبات' },
+          { id: 'settings', label: 'إعدادات المنصة', count: null, icon: Sliders, desc: 'المظهر والواجهة والنموذج' }
         ].map((t) => {
           const Icon = t.icon;
           const active = activeTab === t.id;
@@ -2867,112 +2980,140 @@ function AdminDashboard({
               key={t.id}
               type="button"
               onClick={() => setActiveTab(t.id)}
-              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-black transition ${
-                active ? 'bg-blue-600 text-white shadow' : 'text-slate-600 hover:bg-slate-100'
+              className={`text-right p-3.5 rounded-2xl border transition flex flex-col justify-between gap-2 ${
+                active
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-600/20'
+                  : 'bg-white text-slate-800 border-slate-200 hover:border-blue-400 hover:bg-blue-50/30'
               }`}
             >
-              <Icon className="w-4 h-4" />
-              <span>{t.label}</span>
+              <div className="flex items-center justify-between w-full">
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${active ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-600'}`}>
+                  <Icon className="w-4 h-4" />
+                </div>
+                {t.count !== null && (
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-black ${active ? 'bg-white text-blue-700' : 'bg-slate-100 text-slate-700'}`}>
+                    {t.count}
+                  </span>
+                )}
+              </div>
+              <div>
+                <div className="text-xs font-black leading-tight">{t.label}</div>
+                <div className={`text-[10px] font-bold mt-0.5 ${active ? 'text-blue-100' : 'text-slate-400'}`}>
+                  {t.desc}
+                </div>
+              </div>
             </button>
           );
         })}
       </div>
 
-      {/* 1. تبويب المذكرات والعينات */}
+      {/* 1. تبويب المذكرات والعينات المطور */}
       {activeTab === 'notebooks' && (
         <div className="space-y-6">
-          <div className="bg-amber-50 border border-amber-200 rounded-3xl p-5 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
+          <form onSubmit={handleSaveNotebook} className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 space-y-4 shadow-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
               <div>
-                <h3 className="font-black text-amber-950 text-sm">مستكشف ورابط صور العينات من السحابة</h3>
-                <p className="text-xs text-amber-800 font-bold">
-                  افحص مجلد العينات في Firestore (مثل notebook_samples) واربط الصور بأي مذكرة بضغطة واحدة
+                <h3 className="font-black text-slate-900 text-base">
+                  {nbForm.id ? 'تعديل بيانات المذكرة وعيناتها' : 'إضافة مذكرة دراسية جديدة'}
+                </h3>
+                <p className="text-[11px] text-slate-500 font-bold">
+                  يتم حفظ صور العينات بدقة فائقة (HD) مع دعم التكبير وملء الشاشة للعملاء
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  dir="ltr"
-                  value={customColName}
-                  onChange={(e) => setCustomColName(e.target.value)}
-                  className="px-3 py-2 rounded-xl border border-amber-300 bg-white text-xs font-black"
-                />
-                <button
-                  type="button"
-                  onClick={handleScanSamplesCollection}
-                  disabled={scanningCol}
-                  className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-black"
-                >
-                  {scanningCol ? 'جاري الفحص...' : 'فحص المجلد'}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowCloudScanner((v) => !v)}
+                className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11px] font-black"
+              >
+                {showCloudScanner ? 'إخفاء مستكشف السحابة' : 'استكشاف وربط عينات من السحابة'}
+              </button>
             </div>
 
-            {discoveredDocs.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-                {discoveredDocs.map((docItem, idx) => (
-                  <div key={idx} className="bg-white rounded-2xl border border-amber-200 p-3 space-y-2">
-                    <div className="text-[11px] font-black text-slate-500">
-                      المصدر: {docItem.source} | المستند: {docItem.docId} ({docItem.images.length} صورة)
-                    </div>
-                    {docItem.images.length > 0 && (
-                      <div className="flex gap-1.5 overflow-x-auto py-1">
-                        {docItem.images.slice(0, 5).map((im, i) => (
-                          <img key={i} src={im} alt="" className="w-12 h-14 rounded-lg object-cover border" />
-                        ))}
-                      </div>
-                    )}
-                    <div className="flex gap-2">
-                      <select
-                        value={docItem.targetNbId || docItem.notebookId}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setDiscoveredDocs((prev) =>
-                            prev.map((d, i) => (i === idx ? { ...d, targetNbId: val } : d))
-                          );
-                        }}
-                        className="flex-1 px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs font-bold"
-                      >
-                        <option value="">اختر المذكرة لربط العينات بها...</option>
-                        {notebooks.map((n) => (
-                          <option key={n.id} value={n.id}>
-                            {n.title}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const targetId = docItem.targetNbId || docItem.notebookId;
-                          if (!targetId || docItem.images.length === 0) return;
-                          setSamplesMap((prev) => ({
-                            ...prev,
-                            [targetId]: Array.from(new Set([...(prev[targetId] || []), ...docItem.images]))
-                          }));
-                          if (db && auth?.currentUser) {
-                            await setDoc(
-                              publicDoc('notebook_samples', targetId),
-                              { notebookId: targetId, pages: docItem.images },
-                              { merge: true }
-                            );
-                          }
-                          showToast('تم ربط صور العينات بالمذكرة بنجاح!');
-                        }}
-                        className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-black"
-                      >
-                        ربط وحفظ
-                      </button>
-                    </div>
+            {showCloudScanner && (
+              <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-black text-amber-950">فحص مجلد العينات في Firestore:</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      dir="ltr"
+                      value={customColName}
+                      onChange={(e) => setCustomColName(e.target.value)}
+                      className="px-3 py-1.5 rounded-xl border border-amber-300 bg-white text-xs font-black"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleScanSamplesCollection}
+                      disabled={scanningCol}
+                      className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-black"
+                    >
+                      {scanningCol ? 'جاري الفحص...' : 'فحص المجلد'}
+                    </button>
                   </div>
-                ))}
+                </div>
+
+                {discoveredDocs.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                    {discoveredDocs.map((docItem, idx) => (
+                      <div key={idx} className="bg-white rounded-2xl border border-amber-200 p-3 space-y-2">
+                        <div className="text-[11px] font-black text-slate-500">
+                          {docItem.source} | {docItem.docId} ({docItem.images.length} صورة)
+                        </div>
+                        {docItem.images.length > 0 && (
+                          <div className="flex gap-1.5 overflow-x-auto py-1">
+                            {docItem.images.slice(0, 5).map((im, i) => (
+                              <img key={i} src={im} alt="" className="w-12 h-14 rounded-lg object-cover border" />
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex gap-2">
+                          <select
+                            value={docItem.targetNbId || docItem.notebookId}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setDiscoveredDocs((prev) =>
+                                prev.map((d, i) => (i === idx ? { ...d, targetNbId: val } : d))
+                              );
+                            }}
+                            className="flex-1 px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs font-bold"
+                          >
+                            <option value="">اختر المذكرة...</option>
+                            {notebooks.map((n) => (
+                              <option key={n.id} value={n.id}>
+                                {n.title}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const targetId = docItem.targetNbId || docItem.notebookId;
+                              if (!targetId || docItem.images.length === 0) return;
+                              setSamplesMap((prev) => ({
+                                ...prev,
+                                [targetId]: Array.from(new Set([...(prev[targetId] || []), ...docItem.images]))
+                              }));
+                              if (db && auth?.currentUser) {
+                                await setDoc(
+                                  publicDoc('notebook_samples', targetId),
+                                  { notebookId: targetId, pages: docItem.images },
+                                  { merge: true }
+                                );
+                              }
+                              showToast('تم ربط صور العينات بالمذكرة بنجاح!');
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-black"
+                          >
+                            ربط وحفظ
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
-          </div>
 
-          <form onSubmit={handleSaveNotebook} className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 space-y-4">
-            <h3 className="font-black text-slate-900 text-base">
-              {nbForm.id ? 'تعديل بيانات المذكرة' : 'إضافة مذكرة دراسية جديدة'}
-            </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <input
                 type="text"
@@ -3102,28 +3243,50 @@ function AdminDashboard({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-3.5 rounded-2xl border border-dashed border-slate-300 space-y-2">
-                <label className="block text-xs font-black text-slate-700">صورة غلاف المذكرة</label>
+              <div className="p-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50/50 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black text-slate-800">صورة غلاف المذكرة</label>
+                  {nbForm.coverImage && (
+                    <button
+                      type="button"
+                      onClick={() => setNbForm((prev) => ({ ...prev, coverImage: '' }))}
+                      className="text-[11px] font-black text-rose-600"
+                    >
+                      حذف الغلاف
+                    </button>
+                  )}
+                </div>
                 <input
                   type="file"
                   accept="image/*"
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
-                    const dataUrl = await compressImageFile(file, 900, 0.8);
+                    const dataUrl = await compressImageFile(file, 1400, 0.9);
                     setNbForm((prev) => ({ ...prev, coverImage: dataUrl }));
                   }}
                   className="text-xs"
                 />
                 {nbForm.coverImage && (
-                  <img src={nbForm.coverImage} alt="غلاف" className="h-24 rounded-xl object-cover border" />
+                  <img src={nbForm.coverImage} alt="غلاف" className="h-28 rounded-xl object-cover border shadow-xs" />
                 )}
               </div>
 
-              <div className="p-3.5 rounded-2xl border border-dashed border-slate-300 space-y-2">
-                <label className="block text-xs font-black text-slate-700">
-                  صور صفحات العينة ({nbForm.sampleImages.length} صفحة)
-                </label>
+              <div className="p-4 rounded-2xl border border-dashed border-blue-300 bg-blue-50/30 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black text-slate-800">
+                    صور صفحات العينة عالية الدقة ({nbForm.sampleImages.length} صفحة)
+                  </label>
+                  {nbForm.sampleImages.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setNbForm((prev) => ({ ...prev, sampleImages: [] }))}
+                      className="text-[11px] font-black text-rose-600"
+                    >
+                      مسح الكل
+                    </button>
+                  )}
+                </div>
                 <input
                   type="file"
                   accept="image/*"
@@ -3131,7 +3294,7 @@ function AdminDashboard({
                   onChange={async (e) => {
                     const files = Array.from(e.target.files || []);
                     if (files.length === 0) return;
-                    const compressed = await Promise.all(files.map((f) => compressImageFile(f, 1000, 0.76)));
+                    const compressed = await Promise.all(files.map((f) => compressImageFile(f, 1800, 0.92)));
                     setNbForm((prev) => ({
                       ...prev,
                       sampleImages: [...prev.sampleImages, ...compressed]
@@ -3140,10 +3303,37 @@ function AdminDashboard({
                   className="text-xs"
                 />
                 {nbForm.sampleImages.length > 0 && (
-                  <div className="flex gap-2 overflow-x-auto py-1">
+                  <div className="flex gap-2.5 overflow-x-auto py-1">
                     {nbForm.sampleImages.map((img, i) => (
-                      <div key={i} className="relative shrink-0">
-                        <img src={img} alt="" className="h-16 w-14 rounded-lg object-cover border" />
+                      <div key={i} className="relative shrink-0 bg-white p-1 rounded-xl border border-slate-200 shadow-xs space-y-1">
+                        <img src={img} alt="" className="h-20 w-16 rounded-lg object-cover" />
+                        <div className="flex items-center justify-between px-0.5">
+                          <button
+                            type="button"
+                            disabled={i === 0}
+                            onClick={() => {
+                              const arr = [...nbForm.sampleImages];
+                              [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]];
+                              setNbForm((prev) => ({ ...prev, sampleImages: arr }));
+                            }}
+                            className="text-[10px] font-black text-slate-600 disabled:opacity-30"
+                          >
+                            →
+                          </button>
+                          <span className="text-[9px] font-black text-slate-400">{i + 1}</span>
+                          <button
+                            type="button"
+                            disabled={i === nbForm.sampleImages.length - 1}
+                            onClick={() => {
+                              const arr = [...nbForm.sampleImages];
+                              [arr[i + 1], arr[i]] = [arr[i], arr[i + 1]];
+                              setNbForm((prev) => ({ ...prev, sampleImages: arr }));
+                            }}
+                            className="text-[10px] font-black text-slate-600 disabled:opacity-30"
+                          >
+                            ←
+                          </button>
+                        </div>
                         <button
                           type="button"
                           onClick={() =>
@@ -3152,7 +3342,7 @@ function AdminDashboard({
                               sampleImages: prev.sampleImages.filter((_, idx) => idx !== i)
                             }))
                           }
-                          className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-600 text-white text-[10px] flex items-center justify-center"
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-600 text-white text-[10px] font-black flex items-center justify-center shadow"
                         >
                           ×
                         </button>
@@ -3183,93 +3373,141 @@ function AdminDashboard({
             </div>
           </form>
 
+          {/* شريط بحث وفلترة المذكرات في لوحة التحكم */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={adminNbSearch}
+                onChange={(e) => setAdminNbSearch(e.target.value)}
+                placeholder="بحث في المذكرات المضافة..."
+                className="w-full pr-10 pl-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-slate-400" />
+              <select
+                value={adminNbCategoryFilter}
+                onChange={(e) => setAdminNbCategoryFilter(e.target.value)}
+                className="px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-black"
+              >
+                <option value="">جميع الأقسام ({notebooks.length})</option>
+                {(localSettings.categories || []).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
           {/* قائمة المذكرات الحالية */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {notebooks.map((nb) => {
-              const sCount = (samplesMap[nb.id] || nb.inlineSamples || []).length;
-              return (
-                <div key={nb.id} className="bg-white rounded-2xl border border-slate-200 p-4 flex gap-3 items-center">
-                  {nb.coverImage ? (
-                    <img src={nb.coverImage} alt="" className="w-16 h-20 rounded-xl object-cover border shrink-0" />
-                  ) : (
-                    <div className="w-16 h-20 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                      <BookOpen className="w-6 h-6" />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <div className="font-black text-slate-900 text-xs truncate">{nb.title}</div>
-                    <div className="text-[11px] text-blue-600 font-bold">
-                      {nb.price} ج.م • {sCount} صورة عينة {nb.hidden ? '• (مخفية)' : ''}
-                    </div>
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setNbForm({
-                            id: nb.id,
-                            title: nb.title,
-                            subtitle: nb.subtitle,
-                            categoryId: nb.categoryId,
-                            stageId: nb.stageId,
-                            gradeId: nb.gradeId,
-                            subject: nb.subject || '',
-                            term: nb.term || '',
-                            pagesCount: nb.pagesCount ? String(nb.pagesCount) : '',
-                            price: String(nb.price),
-                            oldPrice: nb.oldPrice ? String(nb.oldPrice) : '',
-                            badge: nb.badge,
-                            driveUrl: nb.driveUrl,
-                            noticeText: nb.noticeText,
-                            noticePosition: nb.noticePosition || 'top',
-                            hidden: Boolean(nb.hidden),
-                            coverImage: nb.coverImage,
-                            sampleImages: samplesMap[nb.id] || nb.inlineSamples || []
-                          })
-                        }
-                        className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 text-[11px] font-black"
-                      >
-                        تعديل
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setNbForm({
-                            id: '',
-                            title: `${nb.title} (نسخة)`,
-                            subtitle: nb.subtitle,
-                            categoryId: nb.categoryId,
-                            stageId: nb.stageId,
-                            gradeId: nb.gradeId,
-                            subject: nb.subject || '',
-                            term: nb.term || '',
-                            pagesCount: nb.pagesCount ? String(nb.pagesCount) : '',
-                            price: String(nb.price),
-                            oldPrice: nb.oldPrice ? String(nb.oldPrice) : '',
-                            badge: nb.badge,
-                            driveUrl: nb.driveUrl,
-                            noticeText: nb.noticeText,
-                            noticePosition: nb.noticePosition || 'top',
-                            hidden: false,
-                            coverImage: nb.coverImage,
-                            sampleImages: samplesMap[nb.id] || nb.inlineSamples || []
-                          })
-                        }
-                        className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 text-[11px] font-black"
-                      >
-                        نسخ
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteNotebook(nb.id)}
-                        className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 text-[11px] font-black"
-                      >
-                        حذف
-                      </button>
+            {notebooks
+              .filter((nb) => {
+                if (adminNbCategoryFilter && nb.categoryId !== adminNbCategoryFilter) return false;
+                if (adminNbSearch.trim()) {
+                  const q = adminNbSearch.trim().toLowerCase();
+                  if (!`${nb.title} ${nb.subject} ${nb.subtitle}`.toLowerCase().includes(q)) return false;
+                }
+                return true;
+              })
+              .map((nb) => {
+                const sCount = (samplesMap[nb.id] || nb.inlineSamples || []).length;
+                const catName = (localSettings.categories || []).find((c) => c.id === nb.categoryId)?.name;
+                return (
+                  <div key={nb.id} className="bg-white rounded-2xl border border-slate-200 p-4 flex gap-3.5 items-start shadow-xs hover:border-blue-300 transition">
+                    {nb.coverImage ? (
+                      <img src={nb.coverImage} alt="" className="w-16 h-22 rounded-xl object-cover border shrink-0" />
+                    ) : (
+                      <div className="w-16 h-22 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                        <BookOpen className="w-6 h-6" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      <div className="font-black text-slate-900 text-xs line-clamp-2">{nb.title}</div>
+                      {catName && <div className="text-[10px] font-bold text-slate-400 truncate">{catName}</div>}
+                      <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-black">
+                        <span className="text-blue-600">{nb.price} ج.م</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] ${sCount > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                          {sCount} عينة
+                        </span>
+                        {nb.hidden && (
+                          <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px]">مخفية</span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNbForm({
+                              id: nb.id,
+                              title: nb.title,
+                              subtitle: nb.subtitle,
+                              categoryId: nb.categoryId,
+                              stageId: nb.stageId,
+                              gradeId: nb.gradeId,
+                              subject: nb.subject || '',
+                              term: nb.term || '',
+                              pagesCount: nb.pagesCount ? String(nb.pagesCount) : '',
+                              price: String(nb.price),
+                              oldPrice: nb.oldPrice ? String(nb.oldPrice) : '',
+                              badge: nb.badge,
+                              driveUrl: nb.driveUrl,
+                              noticeText: nb.noticeText,
+                              noticePosition: nb.noticePosition || 'top',
+                              hidden: Boolean(nb.hidden),
+                              coverImage: nb.coverImage,
+                              sampleImages: samplesMap[nb.id] || nb.inlineSamples || []
+                            });
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-black"
+                        >
+                          تعديل
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNbForm({
+                              id: '',
+                              title: `${nb.title} (نسخة)`,
+                              subtitle: nb.subtitle,
+                              categoryId: nb.categoryId,
+                              stageId: nb.stageId,
+                              gradeId: nb.gradeId,
+                              subject: nb.subject || '',
+                              term: nb.term || '',
+                              pagesCount: nb.pagesCount ? String(nb.pagesCount) : '',
+                              price: String(nb.price),
+                              oldPrice: nb.oldPrice ? String(nb.oldPrice) : '',
+                              badge: nb.badge,
+                              driveUrl: nb.driveUrl,
+                              noticeText: nb.noticeText,
+                              noticePosition: nb.noticePosition || 'top',
+                              hidden: false,
+                              coverImage: nb.coverImage,
+                              sampleImages: samplesMap[nb.id] || nb.inlineSamples || []
+                            });
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 text-[11px] font-black"
+                        >
+                          نسخ
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteNotebook(nb.id)}
+                          className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-black"
+                        >
+                          حذف
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         </div>
       )}
