@@ -72,19 +72,29 @@ const DEFAULT_FIREBASE_CONFIG = {
   appId: "1:74663879858:web:4327c0ea1b825dd6c615ab"
 };
 
-const firebaseApp = getApps().length ? getApp() : initializeApp(DEFAULT_FIREBASE_CONFIG);
-const auth = getAuth(firebaseApp);
-const db = getFirestore(firebaseApp);
+let firebaseApp = null;
+let auth = null;
+let db = null;
+
+try {
+  firebaseApp = getApps().length ? getApp() : initializeApp(DEFAULT_FIREBASE_CONFIG);
+  auth = getAuth(firebaseApp);
+  db = getFirestore(firebaseApp);
+} catch (initErr) {
+  console.warn('Firebase init fallback:', initErr);
+}
 
 const APP_ID = 'el3bakera-edu';
+const LEGACY_APP_ID = 'muzakkirati-edu-app';
 const ADMIN_EMAIL = 'mahmoudelzaaty7@gmail.com';
 const LOCAL_SETTINGS_KEY = 'el3bakera_settings_cache_v3';
 const LOCAL_NOTEBOOKS_KEY = 'el3bakera_notebooks_cache_v1';
 const LOCAL_SAMPLES_KEY = 'el3bakera_samples_cache_v1';
 
-const publicCol = (colName) => collection(db, 'artifacts', APP_ID, 'public', 'data', colName);
-const publicDoc = (colName, docId) => doc(db, 'artifacts', APP_ID, 'public', 'data', colName, docId);
-const legacyPublicDoc = (colName, docId) => doc(db, 'artifacts', 'default-app-id', 'public', 'data', colName, docId);
+const publicCol = (colName) => (db ? collection(db, 'artifacts', APP_ID, 'public', 'data', colName) : null);
+const publicDoc = (colName, docId) => (db ? doc(db, 'artifacts', APP_ID, 'public', 'data', colName, docId) : null);
+const legacyPublicCol = (colName) => (db ? collection(db, 'artifacts', LEGACY_APP_ID, 'public', 'data', colName) : null);
+const legacyPublicDoc = (colName, docId) => (db ? doc(db, 'artifacts', LEGACY_APP_ID, 'public', 'data', colName, docId) : null);
 
 // ==========================================
 // حاجز حماية لمنع الشاشة البيضاء عند أي خطأ
@@ -1314,16 +1324,18 @@ function AdminDashboard({
       const target = mergeAndNormalizeSettings(settings, overrideObj || localSettings);
       const { logoUrl, heroBgImage, categoryImages, ...lightMain } = target;
 
-      await setDoc(publicDoc('settings', 'main'), lightMain, { merge: true });
-      await setDoc(
-        publicDoc('settings', 'media_assets'),
-        {
-          logoUrl: logoUrl || '',
-          heroBgImage: heroBgImage || '',
-          categoryImages: categoryImages || {}
-        },
-        { merge: true }
-      );
+      if (auth.currentUser?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        await setDoc(publicDoc('settings', 'main'), lightMain, { merge: true });
+        await setDoc(
+          publicDoc('settings', 'media_assets'),
+          {
+            logoUrl: logoUrl || '',
+            heroBgImage: heroBgImage || '',
+            categoryImages: categoryImages || {}
+          },
+          { merge: true }
+        );
+      }
 
       setSettings(target);
       try {
@@ -1334,7 +1346,11 @@ function AdminDashboard({
       } catch {
         // تجاهل امتلاء التخزين المحلي
       }
-      showToast('تم حفظ جميع الإعدادات في السحابة بنجاح!');
+      showToast(
+        auth.currentUser?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()
+          ? 'تم حفظ جميع الإعدادات في السحابة بنجاح!'
+          : 'تم الحفظ في المعاينة المحلية (ارفع الكود لـ Vercel للحفظ السحابي المباشر)'
+      );
     } catch (err) {
       showToast(`تعذر الحفظ في السحابة: ${err?.message || 'تحقق من صلاحيات Firestore'}`, 'error');
     } finally {
@@ -3169,113 +3185,135 @@ function MuzakkiratiApp() {
       // تجاهل
     }
 
+    if (!db || !auth) return undefined;
+
     const handleSnapError = (err) => {
       console.warn('Firestore listener notice:', err?.code || err?.message);
     };
 
-    const unsubMain = onSnapshot(
-      publicDoc('settings', 'main'),
-      (snap) => {
-        if (snap.exists()) {
-          setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
-        }
-      },
-      handleSnapError
-    );
+    const unsubscribers = [];
 
-    const unsubMedia = onSnapshot(
-      publicDoc('settings', 'media_assets'),
-      (snap) => {
-        if (snap.exists()) {
-          setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
-        }
-      },
-      handleSnapError
-    );
-
-    const unsubNotebooks = onSnapshot(
-      publicCol('notebooks'),
-      (snap) => {
-        const list = snap.docs.map((d) => normalizeNotebook({ id: d.id, ...d.data() }));
-        if (list.length > 0 || !snap.metadata.fromCache) {
-          setNotebooks(list);
-          try {
-            localStorage.setItem(LOCAL_NOTEBOOKS_KEY, JSON.stringify(list));
-          } catch {
-            // تجاهل
-          }
-        }
-      },
-      handleSnapError
-    );
-
-    const unsubSamples = onSnapshot(
-      publicCol('notebook_samples'),
-      (snap) => {
-        const map = {};
-        snap.docs.forEach((d) => {
-          const data = d.data() || {};
-          const arr =
-            (Array.isArray(data.pages) && data.pages) ||
-            (Array.isArray(data.samples) && data.samples) ||
-            (Array.isArray(data.images) && data.images) ||
-            [];
-          const cleaned = arr.map((it) => (typeof it === 'string' ? it : it?.url || it?.src || '')).filter(Boolean);
-          if (cleaned.length > 0) {
-            map[d.id] = cleaned;
-          }
-        });
-        if (Object.keys(map).length > 0) {
-          setSamplesMap((prev) => {
-            const merged = { ...prev, ...map };
-            try {
-              localStorage.setItem(LOCAL_SAMPLES_KEY, JSON.stringify(merged));
-            } catch {
-              // تجاهل
+    try {
+      unsubscribers.push(
+        onSnapshot(
+          publicDoc('settings', 'main'),
+          (snap) => {
+            if (snap.exists()) {
+              setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
             }
-            return merged;
-          });
-        }
-      },
-      handleSnapError
-    );
+          },
+          handleSnapError
+        )
+      );
 
-    const unsubCoupons = onSnapshot(
-      publicCol('coupons'),
-      (snap) => {
-        setCoupons(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      },
-      handleSnapError
-    );
+      unsubscribers.push(
+        onSnapshot(
+          publicDoc('settings', 'media_assets'),
+          (snap) => {
+            if (snap.exists()) {
+              setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
+            }
+          },
+          handleSnapError
+        )
+      );
 
-    const unsubOrders = onSnapshot(
-      publicCol('orders'),
-      (snap) => {
-        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-        setOrders(list);
-      },
-      handleSnapError
-    );
+      unsubscribers.push(
+        onSnapshot(
+          publicCol('notebooks'),
+          (snap) => {
+            const list = snap.docs.map((d) => normalizeNotebook({ id: d.id, ...d.data() }));
+            if (list.length > 0 || !snap.metadata.fromCache) {
+              setNotebooks(list);
+              try {
+                localStorage.setItem(LOCAL_NOTEBOOKS_KEY, JSON.stringify(list));
+              } catch {
+                // تجاهل
+              }
+            }
+          },
+          handleSnapError
+        )
+      );
 
-    const unsubAuth = onAuthStateChanged(
-      auth,
-      (user) => {
-        if (user && user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
-          setIsAdmin(true);
-        }
-      },
-      handleSnapError
-    );
+      unsubscribers.push(
+        onSnapshot(
+          publicCol('notebook_samples'),
+          (snap) => {
+            const map = {};
+            snap.docs.forEach((d) => {
+              const data = d.data() || {};
+              const arr =
+                (Array.isArray(data.pages) && data.pages) ||
+                (Array.isArray(data.samples) && data.samples) ||
+                (Array.isArray(data.images) && data.images) ||
+                [];
+              const cleaned = arr.map((it) => (typeof it === 'string' ? it : it?.url || it?.src || '')).filter(Boolean);
+              if (cleaned.length > 0) {
+                map[d.id] = cleaned;
+              }
+            });
+            if (Object.keys(map).length > 0) {
+              setSamplesMap((prev) => {
+                const merged = { ...prev, ...map };
+                try {
+                  localStorage.setItem(LOCAL_SAMPLES_KEY, JSON.stringify(merged));
+                } catch {
+                  // تجاهل
+                }
+                return merged;
+              });
+            }
+          },
+          handleSnapError
+        )
+      );
+
+      unsubscribers.push(
+        onSnapshot(
+          publicCol('coupons'),
+          (snap) => {
+            setCoupons(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+          },
+          handleSnapError
+        )
+      );
+
+      unsubscribers.push(
+        onSnapshot(
+          publicCol('orders'),
+          (snap) => {
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+            list.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+            setOrders(list);
+          },
+          handleSnapError
+        )
+      );
+
+      unsubscribers.push(
+        onAuthStateChanged(
+          auth,
+          (user) => {
+            if (user && user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+              setIsAdmin(true);
+            }
+          },
+          handleSnapError
+        )
+      );
+    } catch (subErr) {
+      console.warn('Firestore subscription setup skipped:', subErr);
+    }
 
     return () => {
-      unsubMain();
-      unsubMedia();
-      unsubNotebooks();
-      unsubSamples();
-      unsubCoupons();
-      unsubOrders();
-      unsubAuth();
+      unsubscribers.forEach((unsub) => {
+        try {
+          if (typeof unsub === 'function') unsub();
+        } catch {
+          // تجاهل
+        }
+      });
     };
   }, []);
 
