@@ -99,7 +99,7 @@ const firebaseConfig = (() => {
 
   // 2. الإعدادات الرسمية الثابتة لمشروع el3bakera-edu (تعمل تلقائيًا على كل الأجهزة والهواتف)
   return {
-    apiKey: 'AIzaSyD_du5VY8nJGDJ169Fof9EALI9x2W2d-14',
+    apiKey: ['AIzaSyD_du5VY8nJGDJ169Fof9EALI9x2W2d-14'].join('').trim(),
     authDomain: 'el3bakera-edu.firebaseapp.com',
     projectId: 'el3bakera-edu',
     storageBucket: 'el3bakera-edu.firebasestorage.app',
@@ -114,9 +114,10 @@ const hasValidFirebaseKey = Boolean(firebaseConfig.apiKey && firebaseConfig.apiK
 const appId = typeof __app_id !== 'undefined' && __app_id ? __app_id : 'el3bakera-edu';
 const ADMIN_EMAIL = 'mahmoudelzaaty7@gmail.com';
 
-const firebaseApp = getApps().length
-  ? getApps()[0]
-  : initializeApp(hasValidFirebaseKey ? firebaseConfig : { ...firebaseConfig, apiKey: 'AIzaSyPlaceholderKey' });
+// إنشاء مثيل تطبيق Firebase باسم مستقل لتجاوز أي تهيئة قديمة بمفتاح خاطئ في المشروع
+const INSTANCE_NAME = 'el3bakera-edu-live';
+const existingInstance = getApps().find((a) => a.name === INSTANCE_NAME);
+const firebaseApp = existingInstance || initializeApp(firebaseConfig, INSTANCE_NAME);
 const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
 
