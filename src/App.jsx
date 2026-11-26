@@ -2918,6 +2918,23 @@ function AdminPortal({
   const [showConfigFixer, setShowConfigFixer] = useState(false);
   const [rawConfigInput, setRawConfigInput] = useState('');
 
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    if (!auth) {
+      showToast('خدمة تسجيل الدخول غير متاحة حاليًا', 'error');
+      return;
+    }
+    setAuthLoading(true);
+    try {
+      await signInWithEmailAndPassword(auth, email.trim(), password);
+      showToast('تم تسجيل الدخول بنجاح ✅');
+    } catch (err) {
+      showToast(`تعذر تسجيل الدخول: ${err.code || err.message}`, 'error');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   const handleSaveFirebaseConfig = () => {
     try {
       const text = rawConfigInput.trim();
