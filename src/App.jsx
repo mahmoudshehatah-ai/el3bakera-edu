@@ -205,6 +205,8 @@ const normalizeNotebook = (raw, idFallback = '') => {
     badge: safeText(d.badge, ''),
     driveUrl: safeText(d.driveUrl || d.driveLink || d.sampleUrl, ''),
     noticeText: safeText(d.noticeText || d.note || d.alertText, ''),
+    hidden: Boolean(d.hidden),
+    sortOrder: Number(d.sortOrder ?? 9999),
     coverImage,
     inlineSamples: extractAnyImagesFromDoc(d),
     createdAt: d.createdAt || null
@@ -274,10 +276,15 @@ const DEFAULT_SETTINGS = {
   platformName: 'منصة العباقرة للمذكرات التعليمية',
   platformTagline: 'مذكرات دراسية احترافية مخصصة للمعلم باسمه وبياناته الخاصة',
   logoUrl: '',
+  primaryTheme: 'blue', // blue | emerald | indigo | slate
   heroBadge: 'الإصدار المعتمد للمعلمين والسناتر التعليمية',
   heroTitle: 'مذكرتك التعليمية الجاهزة... باسمك وشعارك وهويتك الاحترافية',
   heroSubtitle:
     'نوفر للمعلمين مذكرات دراسية منسقة باحترافية ومحدثة وفق أحدث المناهج بصيغة PDF عالية الدقة، مع إضافة بيانات المعلم وشعاره على الغلاف وجميع الصفحات.',
+  heroPrimaryBtnText: 'تصفح مكتبة المذكرات',
+  heroSecondaryBtnText: 'باقات التوفير والخصومات',
+  heroCustomBtnText: 'اطلب إعداد مذكرة خاصة',
+  showHeroCustomBtn: true,
   heroBgImage: '',
   heroOverlayOpacity: 78,
   heroMinHeight: 460,
@@ -309,16 +316,23 @@ const DEFAULT_SETTINGS = {
       summary: 'يجري الآن الانتهاء من تنسيق ومراجعة مذكرات المراجعة النهائية بنماذج الوزارة الحديثة.'
     }
   ],
+  customBannerEnabled: true,
+  customBannerTitle: 'هل تحتاج مذكرة بتصميم خاص أو منهج مخصص؟',
+  customBannerSubtitle:
+    'فريقنا جاهز لتنسيق وإعداد مذكرتك الخاصة من الصفر باسمك وشعارك وألوانك المفضلة بأعلى جودة للطباعة.',
+  customBannerBtnText: 'اطلب مذكرة مخصصة الآن',
+  footerNote: 'جميع المذكرات منسقة بأعلى جودة وجاهزة للطباعة والتسليم الفوري بصيغة PDF.',
+  orderSuccessMessage: 'تم تسجيل طلبك بنجاح! سيقوم فريقنا بمراجعة بياناتك وإرسال المذكرة باسمك وشعارك عبر واتساب.',
   categories: DEFAULT_CATEGORIES,
   socialLinks: [
     { id: 'soc_fb', label: 'صفحتنا على فيسبوك', url: 'https://facebook.com' },
     { id: 'soc_tg', label: 'قناتنا على تليجرام', url: 'https://t.me' }
   ],
   checkoutFields: [
-    { id: 'teacherName', label: 'اسم المعلم (كما سيُطبع على المذكرة)', required: true, enabled: true },
-    { id: 'phone', label: 'رقم الواتساب للتواصل والتسليم', required: true, enabled: true },
-    { id: 'subject', label: 'المادة الدراسية / المسمى الوظيفي', required: false, enabled: true },
-    { id: 'notes', label: 'ملاحظات إضافية للتصميم', required: false, enabled: true }
+    { id: 'teacherName', label: 'اسم المعلم (كما سيُطبع على المذكرة)', type: 'text', placeholder: 'أ/ محمود...', required: true, enabled: true },
+    { id: 'phone', label: 'رقم الواتساب للتواصل والتسليم', type: 'tel', placeholder: '010xxxxxxxx', required: true, enabled: true },
+    { id: 'subject', label: 'المادة الدراسية / المسمى الوظيفي', type: 'text', placeholder: 'معلم أول لغة عربية...', required: false, enabled: true },
+    { id: 'notes', label: 'ملاحظات إضافية للتصميم', type: 'textarea', placeholder: 'أي تفاصيل إضافية...', required: false, enabled: true }
   ],
   nextOrderReward: {
     enabled: true,
@@ -335,15 +349,24 @@ const mergeAndNormalizeSettings = (base, incoming) => {
   const textKeys = [
     'platformName',
     'platformTagline',
+    'primaryTheme',
     'heroBadge',
     'heroTitle',
     'heroSubtitle',
+    'heroPrimaryBtnText',
+    'heroSecondaryBtnText',
+    'heroCustomBtnText',
     'promoText',
     'promoCouponCode',
     'whatsappNumber',
     'trustTitle',
     'whatsNewTitle',
-    'whatsNewMode'
+    'whatsNewMode',
+    'customBannerTitle',
+    'customBannerSubtitle',
+    'customBannerBtnText',
+    'footerNote',
+    'orderSuccessMessage'
   ];
   for (const k of textKeys) {
     if (incoming[k] !== undefined && incoming[k] !== null && String(incoming[k]).trim() !== '') {
@@ -352,6 +375,8 @@ const mergeAndNormalizeSettings = (base, incoming) => {
   }
 
   if (typeof incoming.promoEnabled === 'boolean') next.promoEnabled = incoming.promoEnabled;
+  if (typeof incoming.showHeroCustomBtn === 'boolean') next.showHeroCustomBtn = incoming.showHeroCustomBtn;
+  if (typeof incoming.customBannerEnabled === 'boolean') next.customBannerEnabled = incoming.customBannerEnabled;
   if (typeof incoming.whatsNewEnabled === 'boolean') next.whatsNewEnabled = incoming.whatsNewEnabled;
   if (typeof incoming.newsSectionEnabled === 'boolean') next.newsSectionEnabled = incoming.newsSectionEnabled;
   if (incoming.newsSectionTitle) next.newsSectionTitle = safeText(incoming.newsSectionTitle, base.newsSectionTitle);
@@ -879,12 +904,18 @@ function MuzakkiratiApp() {
     };
   }, [previewNotebook]);
 
+  const visibleNotebooks = useMemo(() => {
+    return [...notebooks]
+      .filter((n) => !n.hidden)
+      .sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999) || toTimeMs(b.createdAt) - toTimeMs(a.createdAt));
+  }, [notebooks]);
+
   const countNotebooksInCategory = (cat) => {
     if (!cat) return 0;
     const stageIds = new Set((cat.stages || []).map((s) => s.id));
     const gradeIds = new Set();
     (cat.stages || []).forEach((s) => (s.grades || []).forEach((g) => gradeIds.add(g.id)));
-    return notebooks.filter(
+    return visibleNotebooks.filter(
       (nb) => nb.categoryId === cat.id || stageIds.has(nb.stageId) || gradeIds.has(nb.gradeId)
     ).length;
   };
@@ -894,13 +925,13 @@ function MuzakkiratiApp() {
     const count = Math.max(1, Number(settings.whatsNewCount || 4));
     if (settings.whatsNewMode === 'manual' && Array.isArray(settings.whatsNewIds) && settings.whatsNewIds.length > 0) {
       const idSet = new Set(settings.whatsNewIds);
-      return notebooks.filter((n) => idSet.has(n.id)).slice(0, count);
+      return visibleNotebooks.filter((n) => idSet.has(n.id)).slice(0, count);
     }
-    return [...notebooks].sort((a, b) => toTimeMs(b.createdAt) - toTimeMs(a.createdAt)).slice(0, count);
-  }, [notebooks, settings.whatsNewEnabled, settings.whatsNewMode, settings.whatsNewCount, settings.whatsNewIds]);
+    return [...visibleNotebooks].sort((a, b) => toTimeMs(b.createdAt) - toTimeMs(a.createdAt)).slice(0, count);
+  }, [visibleNotebooks, settings.whatsNewEnabled, settings.whatsNewMode, settings.whatsNewCount, settings.whatsNewIds]);
 
   const filteredNotebooks = useMemo(() => {
-    return notebooks.filter((nb) => {
+    return visibleNotebooks.filter((nb) => {
       if (selectedCategoryId) {
         const cat = (settings.categories || []).find((c) => c.id === selectedCategoryId);
         const stageIds = new Set((cat?.stages || []).map((s) => s.id));
@@ -924,7 +955,7 @@ function MuzakkiratiApp() {
       }
       return true;
     });
-  }, [notebooks, selectedCategoryId, selectedStageId, selectedGradeId, searchQuery, settings.categories]);
+  }, [visibleNotebooks, selectedCategoryId, selectedStageId, selectedGradeId, searchQuery, settings.categories]);
 
   // دوال السلة
   const addNotebookToCart = (nb) => {
@@ -995,6 +1026,10 @@ function MuzakkiratiApp() {
     }
     if (isCouponExpired(found)) {
       setCouponError(`عذرًا، انتهت مدة صلاحية هذا الكوبون في ${formatExpiryAr(found.expiresAt)}.`);
+      return;
+    }
+    if (Number(found.minOrder || 0) > 0 && subtotal < Number(found.minOrder)) {
+      setCouponError(`الحد الأدنى للطلب لاستخدام هذا الكوبون هو ${found.minOrder} ج.م.`);
       return;
     }
     setAppliedCoupon(found);
@@ -1404,22 +1439,24 @@ function MuzakkiratiApp() {
                       }}
                       className="px-6 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-black shadow-lg shadow-blue-600/30 transition"
                     >
-                      تصفح مكتبة المذكرات
+                      {settings.heroPrimaryBtnText || 'تصفح مكتبة المذكرات'}
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveView('offers')}
                       className="px-5 py-3.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs sm:text-sm font-black backdrop-blur-sm transition"
                     >
-                      باقات التوفير والخصومات
+                      {settings.heroSecondaryBtnText || 'باقات التوفير والخصومات'}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setCustomRequestModalOpen(true)}
-                      className="px-5 py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs sm:text-sm font-black transition"
-                    >
-                      اطلب إعداد مذكرة خاصة
-                    </button>
+                    {settings.showHeroCustomBtn !== false && (
+                      <button
+                        type="button"
+                        onClick={() => setCustomRequestModalOpen(true)}
+                        className="px-5 py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs sm:text-sm font-black transition"
+                      >
+                        {settings.heroCustomBtnText || 'اطلب إعداد مذكرة خاصة'}
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -1574,23 +1611,28 @@ function MuzakkiratiApp() {
             )}
 
             {/* بنر طلب مذكرة بتصميم خاص */}
-            <section className="max-w-7xl mx-auto px-4 sm:px-6 pb-14">
-              <div className="rounded-3xl bg-gradient-to-l from-blue-700 via-indigo-700 to-slate-900 text-white p-6 sm:p-10 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl">
-                <div className="space-y-2 text-center md:text-right">
-                  <h3 className="text-xl sm:text-2xl font-black">هل تحتاج مذكرة بتصميم خاص أو منهج مخصص؟</h3>
-                  <p className="text-xs sm:text-sm text-blue-100 font-bold max-w-2xl">
-                    فريقنا جاهز لتنسيق وإعداد مذكرتك الخاصة من الصفر باسمك وشعارك وألوانك المفضلة بأعلى جودة للطباعة.
-                  </p>
+            {settings.customBannerEnabled !== false && (
+              <section className="max-w-7xl mx-auto px-4 sm:px-6 pb-14">
+                <div className="rounded-3xl bg-gradient-to-l from-blue-700 via-indigo-700 to-slate-900 text-white p-6 sm:p-10 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl">
+                  <div className="space-y-2 text-center md:text-right">
+                    <h3 className="text-xl sm:text-2xl font-black">
+                      {settings.customBannerTitle || 'هل تحتاج مذكرة بتصميم خاص أو منهج مخصص؟'}
+                    </h3>
+                    <p className="text-xs sm:text-sm text-blue-100 font-bold max-w-2xl">
+                      {settings.customBannerSubtitle ||
+                        'فريقنا جاهز لتنسيق وإعداد مذكرتك الخاصة من الصفر باسمك وشعارك وألوانك المفضلة بأعلى جودة للطباعة.'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCustomRequestModalOpen(true)}
+                    className="px-6 py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs sm:text-sm font-black shrink-0 shadow-lg transition"
+                  >
+                    {settings.customBannerBtnText || 'اطلب مذكرة مخصصة الآن'}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setCustomRequestModalOpen(true)}
-                  className="px-6 py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs sm:text-sm font-black shrink-0 shadow-lg transition"
-                >
-                  اطلب مذكرة مخصصة الآن
-                </button>
-              </div>
-            </section>
+              </section>
+            )}
           </div>
         )}
 
@@ -2045,7 +2087,10 @@ function MuzakkiratiApp() {
                 <div className="p-5 rounded-3xl bg-emerald-50 border border-emerald-200 space-y-4 text-center">
                   <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
                   <h4 className="font-black text-emerald-950 text-base">تم تسجيل طلبك بنجاح!</h4>
-                  <p className="text-xs text-emerald-800 font-bold">
+                  <p className="text-xs text-emerald-800 font-bold leading-relaxed">
+                    {settings.orderSuccessMessage}
+                  </p>
+                  <p className="text-xs text-emerald-900 font-bold">
                     رقم تتبع الطلب: <span className="font-black underline">{completedOrder.orderCode}</span>
                   </p>
                   {completedOrder.rewardCoupon && (
@@ -2128,13 +2173,25 @@ function MuzakkiratiApp() {
                           <label className="block text-xs font-black text-slate-700 mb-1">
                             {field.label} {field.required && <span className="text-rose-500">*</span>}
                           </label>
-                          <input
-                            type="text"
-                            required={field.required}
-                            value={checkoutForm[field.label] || ''}
-                            onChange={(e) => setCheckoutForm({ ...checkoutForm, [field.label]: e.target.value })}
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
-                          />
+                          {field.type === 'textarea' ? (
+                            <textarea
+                              rows={2}
+                              required={field.required}
+                              placeholder={field.placeholder || ''}
+                              value={checkoutForm[field.label] || ''}
+                              onChange={(e) => setCheckoutForm({ ...checkoutForm, [field.label]: e.target.value })}
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
+                            />
+                          ) : (
+                            <input
+                              type={field.type || 'text'}
+                              required={field.required}
+                              placeholder={field.placeholder || ''}
+                              value={checkoutForm[field.label] || ''}
+                              onChange={(e) => setCheckoutForm({ ...checkoutForm, [field.label]: e.target.value })}
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
+                            />
+                          )}
                         </div>
                       ))}
 
@@ -2390,6 +2447,7 @@ function MuzakkiratiApp() {
         <div className="max-w-7xl mx-auto space-y-2">
           <div className="text-white font-black text-sm">{settings.platformName}</div>
           <p>{settings.platformTagline}</p>
+          {settings.footerNote && <p className="text-[11px] text-slate-400">{settings.footerNote}</p>}
           <p className="text-[11px] text-slate-500 pt-2">
             © {new Date().getFullYear()} جميع الحقوق محفوظة — {settings.platformName}
           </p>
@@ -2400,18 +2458,18 @@ function MuzakkiratiApp() {
 }
 
 // ============================================================================
-// 5. مكون بطاقة المذكرة (NotebookCard)
+// 6.5 بطاقة عرض المذكرة (NotebookCard)
 // ============================================================================
 function NotebookCard({ nb, onPreview, onAdd }) {
-  const hasDiscount = Number(nb.oldPrice) > Number(nb.price);
-  const saveAmount = hasDiscount ? Number(nb.oldPrice) - Number(nb.price) : 0;
+  const hasDiscount = Number(nb.oldPrice) > Number(nb.price) && Number(nb.price) >= 0;
+  const savedAmount = hasDiscount ? Number(nb.oldPrice) - Number(nb.price) : 0;
 
   return (
-    <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl hover:border-blue-300 transition flex flex-col justify-between group">
+    <div className="group bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl hover:border-blue-400 transition flex flex-col justify-between">
       <div>
         <div
           onClick={onPreview}
-          className="relative h-52 bg-gradient-to-br from-blue-700 to-indigo-800 cursor-pointer overflow-hidden flex items-center justify-center"
+          className="relative h-52 w-full bg-gradient-to-br from-blue-600 to-indigo-800 flex items-center justify-center overflow-hidden cursor-pointer"
         >
           {nb.coverImage ? (
             <img
@@ -2423,14 +2481,15 @@ function NotebookCard({ nb, onPreview, onAdd }) {
             <BookOpen className="w-12 h-12 text-white/80" />
           )}
 
-          {hasDiscount && (
-            <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-rose-600 text-white text-[11px] font-black shadow">
-              وفر {saveAmount} ج.م
+          {nb.badge && (
+            <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black shadow">
+              {nb.badge}
             </span>
           )}
-          {nb.badge && (
-            <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-amber-400 text-slate-950 text-[11px] font-black shadow">
-              {nb.badge}
+
+          {hasDiscount && (
+            <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-rose-600 text-white text-[10px] font-black shadow">
+              وفر {savedAmount} ج.م
             </span>
           )}
         </div>
@@ -2438,15 +2497,21 @@ function NotebookCard({ nb, onPreview, onAdd }) {
         <div className="p-4 space-y-1.5">
           <h3
             onClick={onPreview}
-            className="font-black text-slate-900 text-sm line-clamp-2 cursor-pointer hover:text-blue-700"
+            className="font-black text-slate-900 text-sm line-clamp-2 cursor-pointer group-hover:text-blue-700"
           >
             {nb.title}
           </h3>
           {nb.subtitle && <p className="text-xs text-slate-500 font-bold line-clamp-2">{nb.subtitle}</p>}
+          {(nb.subject || nb.pagesCount > 0) && (
+            <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-slate-500 font-bold">
+              {nb.subject && <span>• {nb.subject}</span>}
+              {nb.pagesCount > 0 && <span>• {nb.pagesCount} صفحة</span>}
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="p-4 pt-0 space-y-3">
+      <div className="p-4 pt-2 border-t border-slate-100 space-y-3">
         <div className="flex items-baseline gap-2">
           <span className="text-base font-black text-blue-700">{nb.price} ج.م</span>
           {hasDiscount && <span className="text-xs text-slate-400 line-through font-bold">{nb.oldPrice} ج.م</span>}
@@ -2455,7 +2520,7 @@ function NotebookCard({ nb, onPreview, onAdd }) {
           <button
             type="button"
             onClick={onPreview}
-            className="py-2 px-3 rounded-xl border border-slate-200 hover:border-blue-400 text-slate-800 text-xs font-black flex items-center justify-center gap-1"
+            className="py-2 px-3 rounded-xl border border-slate-200 hover:border-blue-500 text-slate-800 text-xs font-black flex items-center justify-center gap-1 transition"
           >
             <Eye className="w-3.5 h-3.5 text-blue-600" />
             <span>معاينة</span>
@@ -2463,10 +2528,10 @@ function NotebookCard({ nb, onPreview, onAdd }) {
           <button
             type="button"
             onClick={onAdd}
-            className="py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black flex items-center justify-center gap-1"
+            className="py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black flex items-center justify-center gap-1 transition"
           >
             <ShoppingCart className="w-3.5 h-3.5" />
-            <span>أضف للسلة</span>
+            <span>اطلب الآن</span>
           </button>
         </div>
       </div>
@@ -2475,7 +2540,7 @@ function NotebookCard({ nb, onPreview, onAdd }) {
 }
 
 // ============================================================================
-// 6. لوحة تحكم الإدارة الكاملة (AdminDashboard)
+// 6.8 لوحة تحكم الإدارة (AdminDashboard)
 // ============================================================================
 function AdminDashboard({
   settings,
@@ -2489,7 +2554,7 @@ function AdminDashboard({
   showToast,
   onLogout
 }) {
-  const [activeTab, setActiveTab] = useState('notebooks'); // notebooks | categories | offers | orders | settings
+  const [activeTab, setActiveTab] = useState('notebooks');
   const [localSettings, setLocalSettings] = useState(settings);
   const [savingSettings, setSavingSettings] = useState(false);
 
@@ -2505,26 +2570,33 @@ function AdminDashboard({
     categoryId: settings.categories?.[0]?.id || '',
     stageId: '',
     gradeId: '',
+    subject: '',
+    term: '',
+    pagesCount: '',
     price: '',
     oldPrice: '',
     badge: '',
     driveUrl: '',
     noticeText: '',
+    hidden: false,
     coverImage: '',
     sampleImages: []
   };
   const [nbForm, setNbForm] = useState(emptyNbForm);
   const [savingNb, setSavingNb] = useState(false);
 
-  // حالة الباقات والكوبونات
+  // حالة الباقات والكوبونات والطلبات
   const [bundleForm, setBundleForm] = useState({ title: '', description: '', price: '', oldPrice: '' });
   const [couponForm, setCouponForm] = useState({
     code: '',
     type: 'percent',
     value: '15',
+    minOrder: '',
     expiresAt: '',
     note: ''
   });
+  const [orderStatusFilter, setOrderStatusFilter] = useState('all');
+  const [orderSearch, setOrderSearch] = useState('');
   const [customColName, setCustomColName] = useState('notebook_samples');
   const [discoveredDocs, setDiscoveredDocs] = useState([]);
   const [scanningCol, setScanningCol] = useState(false);
@@ -2577,11 +2649,15 @@ function AdminDashboard({
         categoryId: nbForm.categoryId,
         stageId: nbForm.stageId,
         gradeId: nbForm.gradeId,
+        subject: nbForm.subject.trim(),
+        term: nbForm.term.trim(),
+        pagesCount: Number(nbForm.pagesCount || 0),
         price: Number(nbForm.price || 0),
         oldPrice: Number(nbForm.oldPrice || 0),
         badge: nbForm.badge.trim(),
         driveUrl: nbForm.driveUrl.trim(),
         noticeText: nbForm.noticeText.trim(),
+        hidden: Boolean(nbForm.hidden),
         coverImage: nbForm.coverImage || ''
       };
 
@@ -2633,6 +2709,7 @@ function AdminDashboard({
       code: couponForm.code.trim().toUpperCase(),
       type: couponForm.type,
       value: Number(couponForm.value || 0),
+      minOrder: Number(couponForm.minOrder || 0),
       expiresAt: couponForm.expiresAt || '',
       note: couponForm.note.trim(),
       active: true,
@@ -2641,7 +2718,7 @@ function AdminDashboard({
     if (db && auth?.currentUser) {
       await addDoc(publicCol('coupons'), data);
     }
-    setCouponForm({ code: '', type: 'percent', value: '15', expiresAt: '', note: '' });
+    setCouponForm({ code: '', type: 'percent', value: '15', minOrder: '', expiresAt: '', note: '' });
     showToast('تم إنشاء كوبون الخصم');
   };
 
@@ -2931,6 +3008,28 @@ function AdminDashboard({
                 onChange={(e) => setNbForm({ ...nbForm, driveUrl: e.target.value })}
                 className="px-3.5 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold text-left"
               />
+              <input
+                type="text"
+                placeholder="المادة الدراسية (اختياري)"
+                value={nbForm.subject}
+                onChange={(e) => setNbForm({ ...nbForm, subject: e.target.value })}
+                className="px-3.5 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold"
+              />
+              <input
+                type="number"
+                placeholder="عدد صفحات المذكرة (اختياري)"
+                value={nbForm.pagesCount}
+                onChange={(e) => setNbForm({ ...nbForm, pagesCount: e.target.value })}
+                className="px-3.5 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold"
+              />
+              <label className="flex items-center gap-2 px-3.5 py-2.5 rounded-2xl border border-slate-200 bg-slate-50 text-xs font-black cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!!nbForm.hidden}
+                  onChange={(e) => setNbForm({ ...nbForm, hidden: e.target.checked })}
+                />
+                <span>إخفاء المذكرة مؤقتًا عن الزوار</span>
+              </label>
             </div>
 
             <input
@@ -3039,7 +3138,75 @@ function AdminDashboard({
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="font-black text-slate-900 text-xs truncate">{nb.title}</div>
                     <div className="text-[11px] text-blue-600 font-bold">
-                      {nb.price} ج.م • {sCount} صورة عينة
+                      {nb.price} ج.م • {sCount} صورة عينة {nb.hidden ? '• (مخفية)' : ''}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setNbForm({
+                            id: nb.id,
+                            title: nb.title,
+                            subtitle: nb.subtitle,
+                            categoryId: nb.categoryId,
+                            stageId: nb.stageId,
+                            gradeId: nb.gradeId,
+                            subject: nb.subject || '',
+                            term: nb.term || '',
+                            pagesCount: nb.pagesCount ? String(nb.pagesCount) : '',
+                            price: String(nb.price),
+                            oldPrice: nb.oldPrice ? String(nb.oldPrice) : '',
+                            badge: nb.badge,
+                            driveUrl: nb.driveUrl,
+                            noticeText: nb.noticeText,
+                            hidden: Boolean(nb.hidden),
+                            coverImage: nb.coverImage,
+                            sampleImages: samplesMap[nb.id] || nb.inlineSamples || []
+                          })
+                        }
+                        className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 text-[11px] font-black"
+                      >
+                        تعديل
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setNbForm({
+                            id: '',
+                            title: `${nb.title} (نسخة)`,
+                            subtitle: nb.subtitle,
+                            categoryId: nb.categoryId,
+                            stageId: nb.stageId,
+                            gradeId: nb.gradeId,
+                            subject: nb.subject || '',
+                            term: nb.term || '',
+                            pagesCount: nb.pagesCount ? String(nb.pagesCount) : '',
+                            price: String(nb.price),
+                            oldPrice: nb.oldPrice ? String(nb.oldPrice) : '',
+                            badge: nb.badge,
+                            driveUrl: nb.driveUrl,
+                            noticeText: nb.noticeText,
+                            hidden: false,
+                            coverImage: nb.coverImage,
+                            sampleImages: samplesMap[nb.id] || nb.inlineSamples || []
+                          })
+                        }
+                        className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 text-[11px] font-black"
+                      >
+                        نسخ
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteNotebook(nb.id)}
+                        className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 text-[11px] font-black"
+                      >
+                        حذف
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+
                     </div>
                     <div className="flex gap-2 pt-1">
                       <button
@@ -3108,6 +3275,32 @@ function AdminDashboard({
             {(localSettings.categories || []).map((cat, cIdx) => (
               <div key={cat.id} className="p-4 rounded-2xl border border-slate-200 bg-slate-50 space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-col gap-0.5">
+                    <button
+                      type="button"
+                      disabled={cIdx === 0}
+                      onClick={() => {
+                        const arr = [...localSettings.categories];
+                        [arr[cIdx - 1], arr[cIdx]] = [arr[cIdx], arr[cIdx - 1]];
+                        setLocalSettings({ ...localSettings, categories: arr });
+                      }}
+                      className="p-1 rounded bg-white border disabled:opacity-30"
+                    >
+                      <ChevronUp className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={cIdx === (localSettings.categories || []).length - 1}
+                      onClick={() => {
+                        const arr = [...localSettings.categories];
+                        [arr[cIdx + 1], arr[cIdx]] = [arr[cIdx], arr[cIdx + 1]];
+                        setLocalSettings({ ...localSettings, categories: arr });
+                      }}
+                      className="p-1 rounded bg-white border disabled:opacity-30"
+                    >
+                      <ChevronDown className="w-3 h-3" />
+                    </button>
+                  </div>
                   <input
                     type="text"
                     value={cat.name}
@@ -3341,13 +3534,20 @@ function AdminDashboard({
                   <option value="fixed">مبلغ ثابت (ج.م)</option>
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <input
                   type="number"
                   required
                   placeholder="قيمة الخصم"
                   value={couponForm.value}
                   onChange={(e) => setCouponForm({ ...couponForm, value: e.target.value })}
+                  className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
+                />
+                <input
+                  type="number"
+                  placeholder="الحد الأدنى للطلب (ج.م)"
+                  value={couponForm.minOrder}
+                  onChange={(e) => setCouponForm({ ...couponForm, minOrder: e.target.value })}
                   className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
                 />
                 <div>
@@ -3388,6 +3588,11 @@ function AdminDashboard({
                         <span className="text-[11px] font-bold text-blue-600">
                           ({cp.value} {cp.type === 'fixed' ? 'ج.م' : '%'})
                         </span>
+                        {cp.active === false && (
+                          <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-black">
+                            متوقف
+                          </span>
+                        )}
                         {expired && (
                           <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[10px] font-black">
                             منتهي
@@ -3400,15 +3605,28 @@ function AdminDashboard({
                         </div>
                       )}
                     </div>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (db && auth?.currentUser) await deleteDoc(publicDoc('coupons', cp.id));
-                      }}
-                      className="p-1.5 text-rose-600"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (db && auth?.currentUser) {
+                            await updateDoc(publicDoc('coupons', cp.id), { active: cp.active === false });
+                          }
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-white border text-[11px] font-black"
+                      >
+                        {cp.active === false ? 'تفعيل' : 'إيقاف'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (db && auth?.currentUser) await deleteDoc(publicDoc('coupons', cp.id));
+                        }}
+                        className="p-1.5 text-rose-600"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -3487,47 +3705,94 @@ function AdminDashboard({
 
       {/* 4. تبويب الطلبات الواردة */}
       {activeTab === 'orders' && (
-        <div className="space-y-3">
-          {orders.length === 0 ? (
+        <div className="space-y-4">
+          <div className="bg-white rounded-3xl border border-slate-200 p-4 flex flex-wrap items-center justify-between gap-3">
+            <input
+              type="text"
+              value={orderSearch}
+              onChange={(e) => setOrderSearch(e.target.value)}
+              placeholder="بحث برقم الطلب أو اسم المعلم أو الهاتف..."
+              className="flex-1 min-w-[200px] px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+            />
+            <select
+              value={orderStatusFilter}
+              onChange={(e) => setOrderStatusFilter(e.target.value)}
+              className="px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-black"
+            >
+              <option value="all">جميع الحالات ({orders.length})</option>
+              <option value="pending">قيد المراجعة</option>
+              <option value="processing">جاري التجهيز</option>
+              <option value="completed">تم التسليم</option>
+            </select>
+          </div>
+
+          {orders.filter((o) => {
+            if (orderStatusFilter !== 'all' && (o.status || 'pending') !== orderStatusFilter) return false;
+            if (orderSearch.trim()) {
+              const q = orderSearch.trim().toLowerCase();
+              const blob = `${o.orderCode} ${JSON.stringify(o.customer || {})}`.toLowerCase();
+              if (!blob.includes(q)) return false;
+            }
+            return true;
+          }).length === 0 ? (
             <div className="bg-white rounded-3xl border border-slate-200 p-10 text-center text-xs font-bold text-slate-500">
-              لا توجد طلبات مسجلة حتى الآن.
+              لا توجد طلبات مطابقة حاليًا.
             </div>
           ) : (
-            orders.map((ord) => (
-              <div key={ord.id} className="bg-white rounded-2xl border border-slate-200 p-4 space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-black text-blue-700 text-sm">{ord.orderCode}</span>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={ord.status || 'pending'}
-                      onChange={async (e) => {
-                        const st = e.target.value;
-                        if (db && auth?.currentUser) {
-                          await updateDoc(publicDoc('orders', ord.id), { status: st });
-                        }
-                      }}
-                      className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-black"
-                    >
-                      <option value="pending">قيد المراجعة</option>
-                      <option value="processing">جاري التجهيز</option>
-                      <option value="completed">تم التسليم</option>
-                    </select>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (db && auth?.currentUser) await deleteDoc(publicDoc('orders', ord.id));
-                      }}
-                      className="p-1.5 text-rose-600"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+            orders
+              .filter((o) => {
+                if (orderStatusFilter !== 'all' && (o.status || 'pending') !== orderStatusFilter) return false;
+                if (orderSearch.trim()) {
+                  const q = orderSearch.trim().toLowerCase();
+                  const blob = `${o.orderCode} ${JSON.stringify(o.customer || {})}`.toLowerCase();
+                  if (!blob.includes(q)) return false;
+                }
+                return true;
+              })
+              .map((ord) => (
+                <div key={ord.id} className="bg-white rounded-2xl border border-slate-200 p-4 space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-black text-blue-700 text-sm">{ord.orderCode}</span>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={ord.status || 'pending'}
+                        onChange={async (e) => {
+                          const st = e.target.value;
+                          if (db && auth?.currentUser) {
+                            await updateDoc(publicDoc('orders', ord.id), { status: st });
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-black"
+                      >
+                        <option value="pending">قيد المراجعة</option>
+                        <option value="processing">جاري التجهيز</option>
+                        <option value="completed">تم التسليم</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (db && auth?.currentUser) await deleteDoc(publicDoc('orders', ord.id));
+                        }}
+                        className="p-1.5 text-rose-600"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
+                  <div className="text-xs text-slate-700 font-bold">
+                    الإجمالي: {ord.total} ج.م • العناصر: {(ord.items || []).map((i) => i.title).join(' ، ')}
+                  </div>
+                  {ord.customer && Object.keys(ord.customer).length > 0 && (
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-[11px] text-slate-600 font-bold flex flex-wrap gap-3">
+                      {Object.entries(ord.customer).map(([k, v]) => (
+                        <span key={k}>
+                          <strong className="text-slate-800">{k}:</strong> {safeText(v)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div className="text-xs text-slate-600 font-bold">
-                  الإجمالي: {ord.total} ج.م • العناصر: {(ord.items || []).map((i) => i.title).join(' ، ')}
-                </div>
-              </div>
-            ))
+              ))
           )}
         </div>
       )}
@@ -3743,6 +4008,36 @@ function AdminDashboard({
                 onChange={(e) => setLocalSettings({ ...localSettings, heroSubtitle: e.target.value })}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
               />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-black text-slate-700 mb-1">نص الزر الرئيسي الأول</label>
+                <input
+                  type="text"
+                  value={localSettings.heroPrimaryBtnText || ''}
+                  onChange={(e) => setLocalSettings({ ...localSettings, heroPrimaryBtnText: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-black text-slate-700 mb-1">نص زر الباقات الثاني</label>
+                <input
+                  type="text"
+                  value={localSettings.heroSecondaryBtnText || ''}
+                  onChange={(e) => setLocalSettings({ ...localSettings, heroSecondaryBtnText: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-black text-slate-700 mb-1">نص زر المذكرة الخاصة</label>
+                <input
+                  type="text"
+                  value={localSettings.heroCustomBtnText || ''}
+                  onChange={(e) => setLocalSettings({ ...localSettings, heroCustomBtnText: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                />
+              </div>
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
@@ -3997,7 +4292,7 @@ function AdminDashboard({
                       ...localSettings,
                       checkoutFields: [
                         ...(localSettings.checkoutFields || []),
-                        { id: `fld_${Date.now()}`, label: 'حقل إضافي', required: false, enabled: true }
+                        { id: `fld_${Date.now()}`, label: 'حقل إضافي', type: 'text', placeholder: '', required: false, enabled: true }
                       ]
                     })
                   }
@@ -4008,7 +4303,33 @@ function AdminDashboard({
               </div>
               <div className="space-y-2">
                 {(localSettings.checkoutFields || []).map((f, idx) => (
-                  <div key={f.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-2">
+                  <div key={f.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-wrap items-center gap-2">
+                    <div className="flex flex-col gap-0.5">
+                      <button
+                        type="button"
+                        disabled={idx === 0}
+                        onClick={() => {
+                          const arr = [...localSettings.checkoutFields];
+                          [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+                          setLocalSettings({ ...localSettings, checkoutFields: arr });
+                        }}
+                        className="p-0.5 rounded bg-white border disabled:opacity-30"
+                      >
+                        <ChevronUp className="w-3 h-3" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={idx === (localSettings.checkoutFields || []).length - 1}
+                        onClick={() => {
+                          const arr = [...localSettings.checkoutFields];
+                          [arr[idx + 1], arr[idx]] = [arr[idx], arr[idx + 1]];
+                          setLocalSettings({ ...localSettings, checkoutFields: arr });
+                        }}
+                        className="p-0.5 rounded bg-white border disabled:opacity-30"
+                      >
+                        <ChevronDown className="w-3 h-3" />
+                      </button>
+                    </div>
                     <input
                       type="text"
                       value={f.label}
@@ -4021,8 +4342,24 @@ function AdminDashboard({
                           )
                         });
                       }}
-                      className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold"
+                      className="flex-1 min-w-[140px] px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold"
                     />
+                    <select
+                      value={f.type || 'text'}
+                      onChange={(e) =>
+                        setLocalSettings({
+                          ...localSettings,
+                          checkoutFields: localSettings.checkoutFields.map((it, i) =>
+                            i === idx ? { ...it, type: e.target.value } : it
+                          )
+                        })
+                      }
+                      className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[11px] font-bold"
+                    >
+                      <option value="text">نص</option>
+                      <option value="tel">رقم هاتف</option>
+                      <option value="textarea">ملاحظات طويلة</option>
+                    </select>
                     <label className="text-[11px] font-bold flex items-center gap-1">
                       <input
                         type="checkbox"
@@ -4052,6 +4389,15 @@ function AdminDashboard({
                     </button>
                   </div>
                 ))}
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">رسالة تأكيد الطلب بعد الإرسال</label>
+                <input
+                  type="text"
+                  value={localSettings.orderSuccessMessage || ''}
+                  onChange={(e) => setLocalSettings({ ...localSettings, orderSuccessMessage: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
+                />
               </div>
             </div>
 
@@ -4184,6 +4530,48 @@ function AdminDashboard({
                 />
               </div>
             </div>
+          </div>
+
+          {/* 7. بنر المذكرة الخاصة ونص الفوتر */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-black text-slate-900">7. بنر «طلب مذكرة بتصميم خاص» والفوتر</span>
+              <input
+                type="checkbox"
+                checked={localSettings.customBannerEnabled !== false}
+                onChange={(e) => setLocalSettings({ ...localSettings, customBannerEnabled: e.target.checked })}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <input
+                type="text"
+                placeholder="عنوان البنر"
+                value={localSettings.customBannerTitle || ''}
+                onChange={(e) => setLocalSettings({ ...localSettings, customBannerTitle: e.target.value })}
+                className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
+              />
+              <input
+                type="text"
+                placeholder="نص زر البنر"
+                value={localSettings.customBannerBtnText || ''}
+                onChange={(e) => setLocalSettings({ ...localSettings, customBannerBtnText: e.target.value })}
+                className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
+              />
+            </div>
+            <input
+              type="text"
+              placeholder="وصف البنر"
+              value={localSettings.customBannerSubtitle || ''}
+              onChange={(e) => setLocalSettings({ ...localSettings, customBannerSubtitle: e.target.value })}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
+            />
+            <input
+              type="text"
+              placeholder="ملاحظة تذييل الصفحة (Footer)"
+              value={localSettings.footerNote || ''}
+              onChange={(e) => setLocalSettings({ ...localSettings, footerNote: e.target.value })}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
+            />
           </div>
 
           <button
