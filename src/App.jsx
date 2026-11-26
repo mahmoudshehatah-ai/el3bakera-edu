@@ -164,6 +164,7 @@ const DEFAULT_SETTINGS = {
   promoBarEnabled: true,
   promoBarText: '🎉 عرض خاص للمعلمين: خصم 15% على جميع مذكرات الترم الأول + إضافة الشعار مجانًا لفترة محدودة!',
   promoBarCouponCode: 'EL3B15',
+  promoBarCopyLabel: 'انسخ الكوبون',
   promoBarTheme: 'slate', // 'slate' | 'blue' | 'emerald' | 'rose' | 'purple'
   trustCardEnabled: true,
   trustCardTitle: 'لماذا يثق بنا المعلمون؟',
@@ -1930,9 +1931,13 @@ function AdminDashboard({
   const [activeTab, setActiveTab] = useState('notebooks');
   const [localSettings, setLocalSettings] = useState(() => normalizeSettings(settings));
   const [savingSettings, setSavingSettings] = useState(false);
+  const hasInitializedSettingsRef = useRef(false);
 
   useEffect(() => {
-    setLocalSettings(normalizeSettings(settings));
+    if (!hasInitializedSettingsRef.current) {
+      setLocalSettings(normalizeSettings(settings));
+      hasInitializedSettingsRef.current = true;
+    }
   }, [settings]);
 
   const emptyNbForm = {
@@ -2186,7 +2191,7 @@ function AdminDashboard({
           {[
             { id: 'notebooks', label: `المذكرات (${notebooks.length})`, icon: BookOpen },
             { id: 'categories', label: 'الأقسام والمراحل والصفوف', icon: Folder },
-            { id: 'offers', label: 'الباقات وكوبونات الخصم', icon: Percent },
+            { id: 'offers', label: 'الخصومات والعروض', icon: Percent },
             { id: 'orders', label: `الطلبات (${orders.length})`, icon: ShoppingCart },
             { id: 'settings', label: 'إعدادات الموقع والمظهر وطلب العميل', icon: Settings }
           ].map((tab) => {
@@ -2207,811 +2212,195 @@ function AdminDashboard({
         </div>
 
         {/* ================================================================= */}
-        {/* تبويب 1: إدارة المذكرات + التعديل السريع الجماعي                  */}
+        {/* تبويب 3: الخصومات والعروض (التحكم الكامل في كل ما يخص الخصومات)    */}
         {/* ================================================================= */}
-        {activeTab === 'notebooks' && (
+        {activeTab === 'offers' && (
           <div className="space-y-6">
-            {/* شريط الحفظ الجماعي السريع عند وجود تعديلات غير محفوظة */}
-            {editedCount > 0 && (
-              <div className="sticky top-20 z-20 bg-amber-500 text-slate-950 px-5 py-3.5 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-3 border border-amber-600">
-                <span className="font-black text-xs sm:text-sm">
-                  لديك تعديلات غير محفوظة على {editedCount} مذكرة
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setBulkEdits({})}
-                    className="px-4 py-2 rounded-xl bg-white/80 hover:bg-white text-slate-900 font-extrabold text-xs"
+            {/* 1. التحكم الكامل في الشريط الترويجي العلوي وكوبون العرض */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="font-black text-base flex items-center gap-2">
+                  <Megaphone className="w-5 h-5 text-blue-600" />
+                  <span>1. الشريط الترويجي العلوي وكوبون العرض السريع</span>
+                </h3>
+                <label className="flex items-center gap-2 text-xs font-extrabold cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={localSettings.promoBarEnabled !== false}
+                    onChange={(e) => setLocalSettings({ ...localSettings, promoBarEnabled: e.target.checked })}
+                  />
+                  <span>تفعيل الشريط الترويجي أعلى الموقع</span>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                <div className="md:col-span-2">
+                  <label className="text-xs font-bold text-slate-700 block mb-1">نص الإعلان الترويجي</label>
+                  <input
+                    type="text"
+                    value={localSettings.promoBarText}
+                    onChange={(e) => setLocalSettings({ ...localSettings, promoBarText: e.target.value })}
+                    placeholder="اكتب نص العرض الترويجي..."
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">كود الكوبون داخل الشريط (اختياري)</label>
+                  <input
+                    type="text"
+                    value={localSettings.promoBarCouponCode || ''}
+                    onChange={(e) =>
+                      setLocalSettings({ ...localSettings, promoBarCouponCode: e.target.value.toUpperCase() })
+                    }
+                    placeholder="مثال: EL3B15"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs font-black uppercase"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">النص المكتوب على زر النسخ</label>
+                  <input
+                    type="text"
+                    value={localSettings.promoBarCopyLabel || 'انسخ الكوبون'}
+                    onChange={(e) => setLocalSettings({ ...localSettings, promoBarCopyLabel: e.target.value })}
+                    placeholder="مثال: انسخ الكوبون"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-xs font-bold text-slate-700 block mb-1">لون خلفية الشريط الترويجي</label>
+                  <select
+                    value={localSettings.promoBarTheme || 'slate'}
+                    onChange={(e) => setLocalSettings({ ...localSettings, promoBarTheme: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold"
                   >
-                    إلغاء التعديلات
-                  </button>
-                  <button
-                    type="button"
-                    disabled={savingBulk}
-                    onClick={handleSaveAllBulkEdits}
-                    className="px-5 py-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-white font-black text-xs shadow-md"
-                  >
-                    {savingBulk ? 'جاري الحفظ...' : `حفظ جميع التعديلات دفعة واحدة (${editedCount})`}
-                  </button>
+                    <option value="slate">كحلي ملكي داكن (نص ذهبي)</option>
+                    <option value="blue">أزرق سماوي متدرج</option>
+                    <option value="emerald">أخضر زمردي متدرج</option>
+                    <option value="rose">أحمر ياقوتي لافت</option>
+                    <option value="purple">بنفسجي فاخر</option>
+                  </select>
                 </div>
               </div>
-            )}
+            </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* العمود الأيمن: نموذج إضافة / تعديل مذكرة */}
-              <form
-                onSubmit={handleSaveNotebook}
-                className="lg:col-span-5 bg-white rounded-3xl p-6 border border-slate-200 space-y-4 shadow-xs"
-              >
-                <div className="flex items-center justify-between">
-                  <h3 className="font-black text-base text-slate-900">
-                    {nbForm.id ? 'تعديل بيانات المذكرة' : 'إضافة مذكرة جديدة'}
-                  </h3>
-                  {nbForm.id && (
-                    <button
-                      type="button"
-                      onClick={() => setNbForm(emptyNbForm)}
-                      className="text-xs font-extrabold text-rose-600 hover:underline"
-                    >
-                      إلغاء التعديل
-                    </button>
-                  )}
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">اسم المذكرة *</label>
+            {/* 2. التحكم الكامل في كوبون مكافأة الطلب القادم (يظهر بعد إتمام الطلب) */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="font-black text-base flex items-center gap-2">
+                  <Gift className="w-5 h-5 text-amber-600" />
+                  <span>2. كوبون مكافأة الطلب القادم (يظهر للعميل فور إتمام الطلب)</span>
+                </h3>
+                <label className="flex items-center gap-2 text-xs font-extrabold cursor-pointer">
                   <input
-                    type="text"
-                    required
-                    value={nbForm.title}
-                    onChange={(e) => setNbForm({ ...nbForm, title: e.target.value })}
-                    placeholder="مثال: مذكرة الشرح المتكاملة - الصف الثالث الإعدادي"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
+                    type="checkbox"
+                    checked={localSettings.nextOrderRewardEnabled !== false}
+                    onChange={(e) => setLocalSettings({ ...localSettings, nextOrderRewardEnabled: e.target.checked })}
                   />
-                </div>
+                  <span>إظهار الكوبون للعميل بعد إتمام الطلب</span>
+                </label>
+              </div>
 
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="text-xs font-bold text-slate-600 block mb-1">القسم</label>
-                    <select
-                      value={nbForm.category}
-                      onChange={(e) => setNbForm({ ...nbForm, category: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white"
-                    >
-                      {(localSettings.categories || []).map((c) => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-slate-600 block mb-1">المرحلة</label>
-                    <select
-                      value={nbForm.stage}
-                      onChange={(e) => {
-                        const newSt = e.target.value;
-                        const firstGr = (localSettings.stageGrades?.[newSt] || [])[0] || '';
-                        setNbForm({ ...nbForm, stage: newSt, grade: firstGr });
-                      }}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white"
-                    >
-                      {(localSettings.stages || []).map((st) => (
-                        <option key={st} value={st}>{st}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-slate-600 block mb-1">الصف الدراسي</label>
-                    <select
-                      value={nbForm.grade}
-                      onChange={(e) => setNbForm({ ...nbForm, grade: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white"
-                    >
-                      {(localSettings.stageGrades?.[nbForm.stage] || []).map((gr) => (
-                        <option key={gr} value={gr}>{gr}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-slate-600 block mb-1">المادة الدراسية</label>
-                    <select
-                      value={nbForm.subject}
-                      onChange={(e) => setNbForm({ ...nbForm, subject: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white"
-                    >
-                      {(localSettings.subjects || []).map((sub) => (
-                        <option key={sub} value={sub}>{sub}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <label className="text-xs font-bold text-slate-600 block mb-1">السعر الحالي</label>
-                    <input
-                      type="number"
-                      value={nbForm.price}
-                      onChange={(e) => setNbForm({ ...nbForm, price: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-black"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-600 block mb-1">قبل الخصم</label>
-                    <input
-                      type="number"
-                      value={nbForm.oldPrice}
-                      onChange={(e) => setNbForm({ ...nbForm, oldPrice: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-600 block mb-1">الصفحات</label>
-                    <input
-                      type="number"
-                      value={nbForm.pagesCount}
-                      onChange={(e) => setNbForm({ ...nbForm, pagesCount: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
-                    />
-                  </div>
-                </div>
-
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-amber-50/70 p-4 rounded-2xl border border-amber-200">
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">شارة التميز (اختياري)</label>
-                  <input
-                    type="text"
-                    value={nbForm.badge}
-                    onChange={(e) => setNbForm({ ...nbForm, badge: e.target.value })}
-                    placeholder="مثال: الأكثر طلبًا / مطابق لأحدث المواصفات"
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">وصف ومواصفات المذكرة</label>
-                  <textarea
-                    rows={3}
-                    value={nbForm.description}
-                    onChange={(e) => setNbForm({ ...nbForm, description: e.target.value })}
-                    placeholder="اكتب محتوى ومميزات المذكرة..."
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
-                  />
-                </div>
-
-                {/* التنبيه الخاص بهذه المذكرة */}
-                <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200 space-y-2">
-                  <p className="text-xs font-black text-amber-950">تنبيه خاص يظهر داخل هذه المذكرة (اختياري):</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      value={nbForm.customNoticeTitle}
-                      onChange={(e) => setNbForm({ ...nbForm, customNoticeTitle: e.target.value })}
-                      placeholder="عنوان التنبيه..."
-                      className="px-2.5 py-1.5 rounded-xl border border-amber-300 bg-white text-xs font-bold"
-                    />
-                    <input
-                      type="text"
-                      value={nbForm.customNoticeBadge}
-                      onChange={(e) => setNbForm({ ...nbForm, customNoticeBadge: e.target.value })}
-                      placeholder="شارة الأهمية (هام جدًا!)"
-                      className="px-2.5 py-1.5 rounded-xl border border-amber-300 bg-white text-xs font-bold"
-                    />
-                  </div>
-                  <textarea
-                    rows={2}
-                    value={nbForm.customNotice}
-                    onChange={(e) => setNbForm({ ...nbForm, customNotice: e.target.value })}
-                    placeholder="نص التنبيه الخاص بهذه المذكرة..."
-                    className="w-full px-2.5 py-1.5 rounded-xl border border-amber-300 bg-white text-xs font-bold"
-                  />
+                  <label className="text-xs font-bold text-slate-700 block mb-1">نظام توليد كود الكوبون</label>
                   <select
-                    value={nbForm.customNoticeTheme}
-                    onChange={(e) => setNbForm({ ...nbForm, customNoticeTheme: e.target.value })}
-                    className="w-full px-2.5 py-1.5 rounded-xl border border-amber-300 bg-white text-xs font-bold"
+                    value={localSettings.nextOrderRewardMode || 'auto'}
+                    onChange={(e) => setLocalSettings({ ...localSettings, nextOrderRewardMode: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-amber-300 bg-white text-xs font-bold"
                   >
-                    <option value="amber">لون الصندوق: ذهبي عنبري</option>
-                    <option value="rose">لون الصندوق: أحمر تنبيهي</option>
-                    <option value="blue">لون الصندوق: أزرق ملكي</option>
-                    <option value="emerald">لون الصندوق: أخضر زمردي</option>
-                    <option value="purple">لون الصندوق: بنفسجي</option>
+                    <option value="auto">توليد كود تلقائي فريد لكل عميل (يُستخدم مرة واحدة)</option>
+                    <option value="custom">تحديد كود ثابت من اختياري</option>
                   </select>
                 </div>
 
-                <label className="flex items-center gap-2 p-3 rounded-2xl bg-amber-50 border border-amber-200 text-xs font-extrabold text-amber-950 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(nbForm.isComingSoon)}
-                    onChange={(e) => setNbForm({ ...nbForm, isComingSoon: e.target.checked })}
-                  />
-                  <span>المذكرة قيد التجهيز (وضع إعلان «قريبًا / حجز مسبق»)</span>
-                </label>
-
-                <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">رابط معاينة Google Drive (اختياري)</label>
-                  <input
-                    type="url"
-                    dir="ltr"
-                    value={nbForm.driveLink}
-                    onChange={(e) => setNbForm({ ...nbForm, driveLink: e.target.value })}
-                    placeholder="https://drive.google.com/..."
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-mono text-left"
-                  />
-                </div>
-
-                {/* رفع الغلاف وصفحات العينة */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3 rounded-2xl border border-dashed border-slate-300 text-center space-y-1.5">
-                    <span className="text-xs font-extrabold text-slate-700 block">صورة غلاف المذكرة</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        const compressed = await compressImageFile(file, 850, 0.78);
-                        setNbForm((prev) => ({ ...prev, coverUrl: compressed }));
-                      }}
-                      className="w-full text-[11px]"
-                    />
-                    {nbForm.coverUrl && (
-                      <img src={nbForm.coverUrl} alt="" className="w-16 h-20 object-cover rounded-xl mx-auto border" />
-                    )}
-                  </div>
-
-                  <div className="p-3 rounded-2xl border border-dashed border-slate-300 text-center space-y-1.5">
-                    <span className="text-xs font-extrabold text-slate-700 block">صفحات العينة (حتى 15 صفحة)</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={async (e) => {
-                        const files = Array.from(e.target.files || []);
-                        if (!files.length) return;
-                        const compressedList = [];
-                        for (const f of files) {
-                          compressedList.push(await compressImageFile(f, 950, 0.78));
-                        }
-                        setNbForm((prev) => ({
-                          ...prev,
-                          sampleUrls: [...(prev.sampleUrls || []), ...compressedList].slice(0, 15)
-                        }));
-                        e.target.value = '';
-                      }}
-                      className="w-full text-[11px]"
-                    />
-                    {(nbForm.sampleUrls || []).length > 0 && (
-                      <p className="text-[11px] font-black text-emerald-700">
-                        تم تجهيز {nbForm.sampleUrls.length} صفحة
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* مصغرات صفحات العينة مع إمكانية حذف أي صفحة */}
-                {(nbForm.sampleUrls || []).length > 0 && (
-                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-extrabold text-slate-600">
-                        صفحات العينة المرفوعة ({nbForm.sampleUrls.length}/15):
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setNbForm((prev) => ({ ...prev, sampleUrls: [] }))}
-                        className="text-[11px] font-bold text-rose-600 hover:underline"
-                      >
-                        مسح الكل
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {nbForm.sampleUrls.map((u, idx) => (
-                        <div key={idx} className="relative w-12 h-16 rounded-lg overflow-hidden border border-slate-300">
-                          <img src={u} alt="" className="w-full h-full object-cover" />
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setNbForm((prev) => ({
-                                ...prev,
-                                sampleUrls: prev.sampleUrls.filter((_, i) => i !== idx)
-                              }))
-                            }
-                            className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-rose-600 text-white text-[10px] font-black flex items-center justify-center"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={savingNb}
-                  className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-lg transition"
-                >
-                  {savingNb ? 'جاري الحفظ...' : nbForm.id ? 'حفظ التعديلات على المذكرة' : '+ إضافة المذكرة'}
-                </button>
-              </form>
-
-              {/* العمود الأيسر: قائمة المذكرات مع التعديل السريع الجماعي */}
-              <div className="lg:col-span-7 space-y-3">
-                <div className="bg-white rounded-2xl p-4 border border-slate-200 flex items-center justify-between">
-                  <h3 className="font-black text-sm sm:text-base text-slate-900">
-                    قائمة المذكرات ({notebooks.length}) — عدّل أي عدد ثم احفظ دفعة واحدة
-                  </h3>
-                </div>
-
-                {notebooks.length === 0 ? (
-                  <div className="bg-white rounded-3xl p-10 border border-slate-200 text-center text-sm text-slate-500">
-                    لا توجد مذكرات مضافة بعد. ابدأ بإضافة أول مذكرة من النموذج الجانبي.
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {notebooks.map((nb) => {
-                      const edits = bulkEdits[nb.id] || {};
-                      const currentTitle = edits.title !== undefined ? edits.title : nb.title;
-                      const currentCategory = edits.category !== undefined ? edits.category : nb.category;
-                      const currentStage = edits.stage !== undefined ? edits.stage : nb.stage;
-                      const currentGrade = edits.grade !== undefined ? edits.grade : nb.grade;
-                      const currentSubject = edits.subject !== undefined ? edits.subject : nb.subject;
-                      const currentPrice = edits.price !== undefined ? edits.price : nb.price;
-                      const currentOldPrice = edits.oldPrice !== undefined ? edits.oldPrice : nb.oldPrice;
-                      const isEdited = Boolean(bulkEdits[nb.id]);
-
-                      return (
-                        <div
-                          key={nb.id}
-                          className={`bg-white rounded-2xl p-4 border transition space-y-3 ${
-                            isEdited ? 'border-amber-500 ring-2 ring-amber-200' : 'border-slate-200'
-                          }`}
-                        >
-                          <div className="flex items-start gap-3">
-                            {nb.coverUrl ? (
-                              <img src={nb.coverUrl} alt="" className="w-14 h-20 rounded-xl object-cover border shrink-0" />
-                            ) : (
-                              <div className="w-14 h-20 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
-                                <BookOpen className="w-6 h-6 text-slate-400" />
-                              </div>
-                            )}
-                            <div className="flex-1 min-w-0 space-y-2">
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="text"
-                                  value={currentTitle}
-                                  onChange={(e) => handleBulkFieldChange(nb.id, 'title', e.target.value)}
-                                  className="flex-1 px-3 py-1.5 rounded-xl border border-slate-300 text-xs sm:text-sm font-black"
-                                />
-                                {isEdited && (
-                                  <span className="px-2 py-1 rounded-lg bg-amber-100 text-amber-900 text-[10px] font-black shrink-0">
-                                    معدّلة
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                <select
-                                  value={currentCategory}
-                                  onChange={(e) => handleBulkFieldChange(nb.id, 'category', e.target.value)}
-                                  className="px-2 py-1.5 rounded-lg border border-slate-200 text-[11px] font-bold bg-slate-50"
-                                >
-                                  {(localSettings.categories || []).map((c) => (
-                                    <option key={c} value={c}>{c}</option>
-                                  ))}
-                                </select>
-                                <select
-                                  value={currentStage}
-                                  onChange={(e) => {
-                                    const st = e.target.value;
-                                    const gr = (localSettings.stageGrades?.[st] || [])[0] || '';
-                                    handleBulkFieldChange(nb.id, 'stage', st);
-                                    handleBulkFieldChange(nb.id, 'grade', gr);
-                                  }}
-                                  className="px-2 py-1.5 rounded-lg border border-slate-200 text-[11px] font-bold bg-slate-50"
-                                >
-                                  {(localSettings.stages || []).map((st) => (
-                                    <option key={st} value={st}>{st}</option>
-                                  ))}
-                                </select>
-                                <select
-                                  value={currentGrade}
-                                  onChange={(e) => handleBulkFieldChange(nb.id, 'grade', e.target.value)}
-                                  className="px-2 py-1.5 rounded-lg border border-slate-200 text-[11px] font-bold bg-slate-50"
-                                >
-                                  {(localSettings.stageGrades?.[currentStage] || []).map((gr) => (
-                                    <option key={gr} value={gr}>{gr}</option>
-                                  ))}
-                                </select>
-                              </div>
-
-                              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                                <div className="flex items-center gap-2">
-                                  <select
-                                    value={currentSubject}
-                                    onChange={(e) => handleBulkFieldChange(nb.id, 'subject', e.target.value)}
-                                    className="px-2 py-1 rounded-lg border border-slate-200 text-[11px] font-bold bg-slate-50"
-                                  >
-                                    {(localSettings.subjects || []).map((sub) => (
-                                      <option key={sub} value={sub}>{sub}</option>
-                                    ))}
-                                  </select>
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-[10px] text-slate-500">السعر:</span>
-                                    <input
-                                      type="number"
-                                      value={currentPrice}
-                                      onChange={(e) => handleBulkFieldChange(nb.id, 'price', e.target.value)}
-                                      className="w-16 px-2 py-1 rounded-lg border border-slate-300 text-xs font-black text-blue-600"
-                                    />
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-[10px] text-slate-500">قبل:</span>
-                                    <input
-                                      type="number"
-                                      value={currentOldPrice}
-                                      onChange={(e) => handleBulkFieldChange(nb.id, 'oldPrice', e.target.value)}
-                                      className="w-16 px-2 py-1 rounded-lg border border-slate-300 text-xs font-bold text-slate-500"
-                                    />
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center gap-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleEditNotebookClick(nb)}
-                                    className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-extrabold flex items-center gap-1"
-                                  >
-                                    <Edit3 className="w-3.5 h-3.5" />
-                                    <span>تعديل كامل</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteNotebook(nb.id)}
-                                    className="p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ================================================================= */}
-        {/* تبويب 2: الأقسام والمراحل والصفوف والمواد                          */}
-        {/* ================================================================= */}
-        {activeTab === 'categories' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* الأقسام الرئيسية */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
-                <h3 className="font-black text-base">الأقسام الرئيسية وصور البطاقات</h3>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newCatInput}
-                    onChange={(e) => setNewCatInput(e.target.value)}
-                    placeholder="اسم قسم جديد..."
-                    className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!newCatInput.trim()) return;
-                      setLocalSettings((prev) => ({
-                        ...prev,
-                        categories: [...(prev.categories || []), newCatInput.trim()]
-                      }));
-                      setNewCatInput('');
-                    }}
-                    className="px-4 py-2.5 rounded-xl bg-blue-600 text-white font-extrabold text-xs"
-                  >
-                    + إضافة
-                  </button>
-                </div>
-                <div className="space-y-2.5">
-                  {(localSettings.categories || []).map((cat, idx, arr) => (
-                    <div key={cat} className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="flex flex-col gap-0.5">
-                          <button
-                            type="button"
-                            onClick={() => setLocalSettings({ ...localSettings, categories: moveArrayItem(arr, idx, -1) })}
-                            className="p-0.5 rounded bg-white border"
-                          >
-                            <ChevronUp className="w-3 h-3" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setLocalSettings({ ...localSettings, categories: moveArrayItem(arr, idx, 1) })}
-                            className="p-0.5 rounded bg-white border"
-                          >
-                            <ChevronDown className="w-3 h-3" />
-                          </button>
-                        </div>
-                        {localSettings.categoryImages?.[cat] && (
-                          <img src={localSettings.categoryImages[cat]} alt="" className="w-9 h-9 rounded-lg object-cover border shrink-0" />
-                        )}
-                        <span className="font-extrabold text-xs truncate">{cat}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <label className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-[11px] font-bold cursor-pointer hover:bg-slate-100">
-                          صورة القسم
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              const img = await compressImageFile(file, 700, 0.75);
-                              setLocalSettings((prev) => ({
-                                ...prev,
-                                categoryImages: { ...(prev.categoryImages || {}), [cat]: img }
-                              }));
-                            }}
-                          />
-                        </label>
-                        {localSettings.categoryImages?.[cat] && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const copy = { ...(localSettings.categoryImages || {}) };
-                              delete copy[cat];
-                              setLocalSettings({ ...localSettings, categoryImages: copy });
-                            }}
-                            title="إزالة الصورة"
-                            className="px-2 py-1 rounded-lg bg-amber-50 text-amber-800 text-[10px] font-bold"
-                          >
-                            مسح الصورة
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setLocalSettings((prev) => ({
-                              ...prev,
-                              categories: prev.categories.filter((_, i) => i !== idx)
-                            }))
-                          }
-                          className="p-1.5 text-rose-600"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* المراحل والصفوف الدراسية */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
-                <h3 className="font-black text-base">المراحل التعليمية والصفوف الدراسية</h3>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newStageInput}
-                    onChange={(e) => setNewStageInput(e.target.value)}
-                    placeholder="إضافة مرحلة جديدة..."
-                    className="flex-1 px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const st = newStageInput.trim();
-                      if (!st) return;
-                      setLocalSettings((prev) => ({
-                        ...prev,
-                        stages: [...(prev.stages || []), st],
-                        stageGrades: { ...(prev.stageGrades || {}), [st]: [] }
-                      }));
-                      setSelectedStageForGrades(st);
-                      setNewStageInput('');
-                    }}
-                    className="px-4 py-2 rounded-xl bg-blue-600 text-white font-extrabold text-xs"
-                  >
-                    + مرحلة
-                  </button>
-                </div>
-
-                <div className="flex flex-wrap gap-1.5">
-                  {(localSettings.stages || []).map((st, idx) => (
-                    <span
-                      key={st}
-                      onClick={() => setSelectedStageForGrades(st)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-extrabold cursor-pointer flex items-center gap-1.5 border ${
-                        selectedStageForGrades === st
-                          ? 'bg-slate-900 text-white border-slate-900'
-                          : 'bg-slate-50 text-slate-700 border-slate-200'
-                      }`}
-                    >
-                      <span>{st}</span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setLocalSettings((prev) => ({
-                            ...prev,
-                            stages: prev.stages.filter((_, i) => i !== idx)
-                          }));
-                        }}
-                        className="text-rose-400 hover:text-rose-200 font-black"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-
-                <div className="pt-2 border-t border-slate-100 space-y-3">
-                  <p className="text-xs font-extrabold text-slate-600">
-                    صفوف: <span className="text-blue-600">{selectedStageForGrades}</span>
-                  </p>
-                  <div className="flex gap-2">
+                {localSettings.nextOrderRewardMode === 'custom' && (
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">الكود الثابت للمكافأة</label>
                     <input
                       type="text"
-                      value={newGradeInput}
-                      onChange={(e) => setNewGradeInput(e.target.value)}
-                      placeholder="اسم الصف الدراسي..."
-                      className="flex-1 px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                      value={localSettings.nextOrderRewardCustomCode || ''}
+                      onChange={(e) =>
+                        setLocalSettings({ ...localSettings, nextOrderRewardCustomCode: e.target.value.toUpperCase() })
+                      }
+                      placeholder="مثال: VIP20"
+                      className="w-full px-3.5 py-2 rounded-xl border border-amber-300 bg-white text-xs font-black uppercase"
                     />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const gr = newGradeInput.trim();
-                        if (!gr || !selectedStageForGrades) return;
-                        setLocalSettings((prev) => ({
-                          ...prev,
-                          stageGrades: {
-                            ...(prev.stageGrades || {}),
-                            [selectedStageForGrades]: [...(prev.stageGrades?.[selectedStageForGrades] || []), gr]
-                          }
-                        }));
-                        setNewGradeInput('');
-                      }}
-                      className="px-4 py-2 rounded-xl bg-blue-600 text-white font-extrabold text-xs"
-                    >
-                      + صف
-                    </button>
                   </div>
+                )}
 
-                  <div className="space-y-1.5">
-                    {(localSettings.stageGrades?.[selectedStageForGrades] || []).map((gr, idx, arr) => (
-                      <div key={gr} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
-                        <span>{gr}</span>
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setLocalSettings({
-                                ...localSettings,
-                                stageGrades: {
-                                  ...localSettings.stageGrades,
-                                  [selectedStageForGrades]: moveArrayItem(arr, idx, -1)
-                                }
-                              })
-                            }
-                            className="p-1 rounded bg-white border"
-                          >
-                            <ChevronUp className="w-3 h-3" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setLocalSettings({
-                                ...localSettings,
-                                stageGrades: {
-                                  ...localSettings.stageGrades,
-                                  [selectedStageForGrades]: moveArrayItem(arr, idx, 1)
-                                }
-                              })
-                            }
-                            className="p-1 rounded bg-white border"
-                          >
-                            <ChevronDown className="w-3 h-3" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setLocalSettings({
-                                ...localSettings,
-                                stageGrades: {
-                                  ...localSettings.stageGrades,
-                                  [selectedStageForGrades]: arr.filter((_, i) => i !== idx)
-                                }
-                              })
-                            }
-                            className="p-1 text-rose-600"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">نوع الخصم</label>
+                  <select
+                    value={localSettings.nextOrderRewardDiscountType || 'percent'}
+                    onChange={(e) => setLocalSettings({ ...localSettings, nextOrderRewardDiscountType: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-amber-300 bg-white text-xs font-bold"
+                  >
+                    <option value="percent">نسبة مئوية (%)</option>
+                    <option value="amount">مبلغ ثابت (ج.م)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    {localSettings.nextOrderRewardDiscountType === 'amount' ? 'قيمة الخصم (ج.م)' : 'نسبة الخصم (%)'}
+                  </label>
+                  <input
+                    type="number"
+                    value={localSettings.nextOrderRewardPercent || 15}
+                    onChange={(e) => setLocalSettings({ ...localSettings, nextOrderRewardPercent: Number(e.target.value) })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-amber-300 bg-white text-xs font-black"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">عنوان بطاقة المكافأة</label>
+                  <input
+                    type="text"
+                    value={localSettings.nextOrderRewardTitle || ''}
+                    onChange={(e) => setLocalSettings({ ...localSettings, nextOrderRewardTitle: e.target.value })}
+                    placeholder="هدية خاصة لطلبك القادم!"
+                    className="w-full px-3.5 py-2 rounded-xl border border-amber-300 bg-white text-xs font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">الرسالة التوضيحية للعميل</label>
+                  <input
+                    type="text"
+                    value={localSettings.nextOrderRewardDesc || ''}
+                    onChange={(e) => setLocalSettings({ ...localSettings, nextOrderRewardDesc: e.target.value })}
+                    placeholder="احتفظ بهذا الكوبون واستخدمه في طلبك القادم..."
+                    className="w-full px-3.5 py-2 rounded-xl border border-amber-300 bg-white text-xs font-bold"
+                  />
                 </div>
               </div>
-            </div>
 
-            {/* إدارة المواد الدراسية */}
-            <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
-              <h3 className="font-black text-base">المواد الدراسية المتاحة</h3>
-              <div className="flex gap-2 max-w-md">
-                <input
-                  type="text"
-                  value={newSubjectInput}
-                  onChange={(e) => setNewSubjectInput(e.target.value)}
-                  placeholder="اسم مادة دراسية جديدة..."
-                  className="flex-1 px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!newSubjectInput.trim()) return;
-                    setLocalSettings((prev) => ({
-                      ...prev,
-                      subjects: [...(prev.subjects || []), newSubjectInput.trim()]
-                    }));
-                    setNewSubjectInput('');
-                  }}
-                  className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-extrabold text-xs"
-                >
-                  + إضافة مادة
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {(localSettings.subjects || []).map((sub, idx) => (
-                  <span key={sub} className="px-3.5 py-1.5 rounded-xl bg-emerald-50 text-emerald-900 border border-emerald-200 text-xs font-extrabold flex items-center gap-2">
-                    <span>{sub}</span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setLocalSettings((prev) => ({
-                          ...prev,
-                          subjects: prev.subjects.filter((_, i) => i !== idx)
-                        }))
-                      }
-                      className="text-rose-600 font-black"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                <label className="flex items-center gap-2 text-xs font-extrabold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={localSettings.orderEnableCoupons !== false}
+                    onChange={(e) => setLocalSettings({ ...localSettings, orderEnableCoupons: e.target.checked })}
+                  />
+                  <span>تفعيل خانة إدخال كوبونات الخصم داخل سلة الطلبات</span>
+                </label>
 
-              <div className="pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   disabled={savingSettings}
                   onClick={handlePersistAllSettings}
-                  className="px-8 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs sm:text-sm shadow-md"
+                  className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs sm:text-sm shadow-md"
                 >
-                  {savingSettings ? 'جاري الحفظ...' : 'حفظ جميع الأقسام والمراحل والصفوف والمواد'}
+                  {savingSettings ? 'جاري الحفظ...' : 'حفظ إعدادات الشريط الترويجي وكوبون الطلب القادم'}
                 </button>
               </div>
             </div>
-          </div>
-        )}
 
-        {/* ================================================================= */}
-        {/* تبويب 3: الباقات وكوبونات الخصم                                   */}
-        {/* ================================================================= */}
-        {activeTab === 'offers' && (
-          <div className="space-y-6">
-            {/* إعداد باقة توفير جديدة */}
+            {/* 3. إعداد باقة توفير جديدة */}
             <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
               <h3 className="font-black text-base flex items-center gap-2">
                 <Layers className="w-5 h-5 text-blue-600" />
-                <span>إعداد خصم عند طلب مجموعة مذكرات محددة (باقات التوفير)</span>
+                <span>3. إعداد خصم عند طلب مجموعة مذكرات محددة (باقات التوفير)</span>
               </h3>
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
@@ -3188,11 +2577,11 @@ function AdminDashboard({
               )}
             </div>
 
-            {/* إدارة كوبونات الخصم */}
+            {/* 4. إدارة كوبونات الخصم */}
             <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
               <h3 className="font-black text-base flex items-center gap-2">
                 <Tag className="w-5 h-5 text-amber-600" />
-                <span>كوبونات الخصم الترويجية</span>
+                <span>4. كوبونات الخصم الترويجية العامة</span>
               </h3>
               <div className="flex flex-wrap gap-2">
                 <input
@@ -3490,57 +2879,6 @@ function AdminDashboard({
                     onChange={(e) => setLocalSettings({ ...localSettings, heroDesc: e.target.value })}
                     className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
                   />
-                </div>
-
-                <div className="md:col-span-2 space-y-2.5 bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-black text-slate-800">الشريط الترويجي العلوي وكوبون الخصم</label>
-                    <label className="flex items-center gap-1.5 text-xs font-bold">
-                      <input
-                        type="checkbox"
-                        checked={localSettings.promoBarEnabled !== false}
-                        onChange={(e) => setLocalSettings({ ...localSettings, promoBarEnabled: e.target.checked })}
-                      />
-                      <span>تفعيل الشريط الترويجي</span>
-                    </label>
-                  </div>
-                  <input
-                    type="text"
-                    value={localSettings.promoBarText}
-                    onChange={(e) => setLocalSettings({ ...localSettings, promoBarText: e.target.value })}
-                    placeholder="اكتب نص العرض الترويجي..."
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-bold"
-                  />
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                        كود الكوبون داخل الشريط (يظهر بجانبه زر انسخ الكوبون)
-                      </label>
-                      <input
-                        type="text"
-                        value={localSettings.promoBarCouponCode || ''}
-                        onChange={(e) =>
-                          setLocalSettings({ ...localSettings, promoBarCouponCode: e.target.value.toUpperCase() })
-                        }
-                        placeholder="مثال: EL3B15 (اتركه فارغًا لإخفاء زر النسخ)"
-                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-black uppercase"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-600 block mb-1">لون خلفية الشريط الترويجي</label>
-                      <select
-                        value={localSettings.promoBarTheme || 'slate'}
-                        onChange={(e) => setLocalSettings({ ...localSettings, promoBarTheme: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold"
-                      >
-                        <option value="slate">كحلي ملكي داكن (نص ذهبي)</option>
-                        <option value="blue">أزرق سماوي متدرج</option>
-                        <option value="emerald">أخضر زمردي متدرج</option>
-                        <option value="rose">أحمر ياقوتي لافت</option>
-                        <option value="purple">بنفسجي فاخر</option>
-                      </select>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -3876,10 +3214,10 @@ function AdminDashboard({
               </div>
             </div>
 
-            {/* 6. التحكم الكامل في نموذج طلب العميل ومكافأة الطلب القادم */}
+            {/* 6. التحكم الكامل في نموذج طلب العميل */}
             <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="font-black text-base">6. التحكم الكامل في حقول نموذج طلب العميل ومكافأة الطلب القادم</h3>
+                <h3 className="font-black text-base">6. التحكم الكامل في حقول نموذج طلب العميل</h3>
                 <button
                   type="button"
                   onClick={() =>
@@ -3897,30 +3235,14 @@ function AdminDashboard({
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-blue-50/60 p-4 rounded-2xl border border-blue-200">
+              <div className="bg-blue-50/60 p-4 rounded-2xl border border-blue-200">
                 <label className="flex items-center gap-2 text-xs font-extrabold text-slate-800">
                   <input
                     type="checkbox"
                     checked={localSettings.orderEnableMultiCart !== false}
                     onChange={(e) => setLocalSettings({ ...localSettings, orderEnableMultiCart: e.target.checked })}
                   />
-                  <span>تفعيل السلة وطلب أكثر من مذكرة</span>
-                </label>
-                <label className="flex items-center gap-2 text-xs font-extrabold text-slate-800">
-                  <input
-                    type="checkbox"
-                    checked={localSettings.orderEnableCoupons !== false}
-                    onChange={(e) => setLocalSettings({ ...localSettings, orderEnableCoupons: e.target.checked })}
-                  />
-                  <span>تفعيل خانة كود الخصم في الطلب</span>
-                </label>
-                <label className="flex items-center gap-2 text-xs font-extrabold text-slate-800">
-                  <input
-                    type="checkbox"
-                    checked={localSettings.nextOrderRewardEnabled !== false}
-                    onChange={(e) => setLocalSettings({ ...localSettings, nextOrderRewardEnabled: e.target.checked })}
-                  />
-                  <span>هدية كوبون للطلب القادم ({localSettings.nextOrderRewardPercent || 15}%)</span>
+                  <span>تفعيل السلة وطلب أكثر من مذكرة في نفس الطلب</span>
                 </label>
               </div>
 
@@ -4617,7 +3939,11 @@ function MuzakkiratiApp() {
                   className="inline-flex items-center gap-1.5 px-3 py-0.5 sm:py-1 rounded-full bg-white text-slate-950 hover:bg-amber-300 text-[11px] sm:text-xs font-black transition shadow-sm"
                 >
                   {copiedPromoCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-blue-600" />}
-                  <span>{copiedPromoCode ? `تم نسخ ${promoCode}` : `انسخ الكوبون: ${promoCode}`}</span>
+                  <span>
+                    {copiedPromoCode
+                      ? `تم نسخ ${promoCode}`
+                      : `${settings.promoBarCopyLabel || 'انسخ الكوبون'}: ${promoCode}`}
+                  </span>
                 </button>
               )}
               <button
