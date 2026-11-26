@@ -1185,20 +1185,49 @@ function OrderCheckoutModal({
                     value={couponInput}
                     onChange={(e) => setCouponInput(e.target.value)}
                     placeholder="أدخل كود الكوبون هنا..."
-                    className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold uppercase"
+                    className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold uppercase bg-white"
                   />
-                  <button
-                    type="button"
-                    onClick={handleApplyCoupon}
-                    className="px-4 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs sm:text-sm hover:bg-slate-800"
-                  >
-                    تطبيق
-                  </button>
+                  {appliedCoupon ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAppliedCoupon(null);
+                        setCouponInput('');
+                        setCouponError('');
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-red-600 text-white font-bold text-xs sm:text-sm hover:bg-red-700 flex items-center gap-1"
+                    >
+                      <X className="w-4 h-4" />
+                      <span>إلغاء</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleApplyCoupon}
+                      className="px-4 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs sm:text-sm hover:bg-slate-800"
+                    >
+                      تطبيق
+                    </button>
+                  )}
                 </div>
                 {appliedCoupon && (
-                  <p className="text-xs font-bold text-emerald-600">
-                    تم تطبيق الكوبون ({appliedCoupon.code}) بنجاح!
-                  </p>
+                  <div className="flex items-center justify-between gap-2 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-xl">
+                    <span className="text-xs font-bold text-emerald-700">
+                      تم تطبيق الكوبون ({appliedCoupon.code}) بنجاح!
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAppliedCoupon(null);
+                        setCouponInput('');
+                        setCouponError('');
+                      }}
+                      className="text-xs font-black text-red-600 hover:bg-red-100 px-2 py-1 rounded-lg flex items-center gap-1 transition"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>حذف الكوبون</span>
+                    </button>
+                  </div>
                 )}
                 {couponError && <p className="text-xs font-bold text-red-600">{couponError}</p>}
               </div>
@@ -1216,8 +1245,21 @@ function OrderCheckoutModal({
                   </div>
                 )}
                 {couponDiscount > 0 && (
-                  <div className="flex justify-between text-emerald-700 font-bold">
-                    <span>خصم الكوبون:</span>
+                  <div className="flex items-center justify-between text-emerald-700 font-bold">
+                    <div className="flex items-center gap-1.5">
+                      <span>خصم الكوبون ({appliedCoupon?.code}):</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAppliedCoupon(null);
+                          setCouponInput('');
+                        }}
+                        title="حذف الكوبون"
+                        className="text-[11px] text-red-600 hover:underline font-black"
+                      >
+                        [حذف]
+                      </button>
+                    </div>
                     <span>- {couponDiscount} ج.م</span>
                   </div>
                 )}
@@ -3729,78 +3771,52 @@ function MuzakkiratiApp() {
 
   // مزامنة الإعدادات والمذكرات والكوبونات من Firestore في الوقت الفعلي
   useEffect(() => {
-    const mergeSettingsWithMedia = async (baseData, fallbackPrev = {}) => {
-      try {
-        const mediaSnap = await getDoc(publicDoc('settings', 'media_assets'));
-        const mediaData = mediaSnap.exists() ? mediaSnap.data() : {};
-        return normalizeSettings({
-          ...baseData,
-          logoUrl:
-            mediaData.logoUrl !== undefined && mediaData.logoUrl !== ''
-              ? mediaData.logoUrl
-              : fallbackPrev.logoUrl || baseData.logoUrl || '',
-          heroBgImage:
-            mediaData.heroBgImage !== undefined && mediaData.heroBgImage !== ''
-              ? mediaData.heroBgImage
-              : fallbackPrev.heroBgImage || baseData.heroBgImage || '',
-          categoryImages:
-            mediaData.categoryImages && Object.keys(mediaData.categoryImages).length > 0
-              ? mediaData.categoryImages
-              : Object.keys(fallbackPrev.categoryImages || {}).length > 0
-              ? fallbackPrev.categoryImages
-              : baseData.categoryImages || {}
-        });
-      } catch {
-        return normalizeSettings({
-          ...baseData,
-          logoUrl: fallbackPrev.logoUrl || baseData.logoUrl || '',
-          heroBgImage: fallbackPrev.heroBgImage || baseData.heroBgImage || '',
-          categoryImages:
-            Object.keys(fallbackPrev.categoryImages || {}).length > 0
-              ? fallbackPrev.categoryImages
-              : baseData.categoryImages || {}
-        });
-      }
-    };
-
-    getDoc(publicDoc('settings', 'main'))
-      .then(async (snap) => {
-        if (snap.exists()) {
-          setSettings((prev) => {
-            mergeSettingsWithMedia(snap.data(), prev).then((full) => setSettings(full));
-            return normalizeSettings({ ...prev, ...snap.data() });
-          });
-        }
-      })
-      .catch(() => {});
-
     const unsubSettings = onSnapshot(
       publicDoc('settings', 'main'),
-      async (snap) => {
+      (snap) => {
         if (snap.exists()) {
           const rawMain = snap.data();
           setSettings((prev) => {
-            const immediate = normalizeSettings({
+            const next = normalizeSettings({
               ...rawMain,
-              logoUrl: rawMain.logoUrl || prev.logoUrl || '',
-              heroBgImage: rawMain.heroBgImage || prev.heroBgImage || '',
+              logoUrl: prev.logoUrl || rawMain.logoUrl || '',
+              heroBgImage: prev.heroBgImage || rawMain.heroBgImage || '',
               categoryImages:
-                rawMain.categoryImages && Object.keys(rawMain.categoryImages).length > 0
-                  ? rawMain.categoryImages
-                  : prev.categoryImages || {}
+                Object.keys(prev.categoryImages || {}).length > 0
+                  ? prev.categoryImages
+                  : rawMain.categoryImages || {}
             });
-            mergeSettingsWithMedia(rawMain, immediate).then((full) => {
-              setSettings(full);
-              try {
-                const lightCopy = { ...full, heroBgImage: '', categoryImages: {} };
-                localStorage.setItem(LS_SETTINGS_KEY, JSON.stringify(lightCopy));
-              } catch {}
-            });
-            return immediate;
+            try {
+              const lightCopy = { ...next, logoUrl: '', heroBgImage: '', categoryImages: {} };
+              localStorage.setItem(LS_SETTINGS_KEY, JSON.stringify(lightCopy));
+            } catch {}
+            return next;
           });
         }
       },
       (err) => console.warn('Settings snapshot:', err)
+    );
+
+    const unsubLogo = onSnapshot(
+      publicDoc('settings', 'media_logo'),
+      (snap) => {
+        if (snap.exists()) {
+          const val = snap.data().logoUrl ?? '';
+          setSettings((prev) => normalizeSettings({ ...prev, logoUrl: val }));
+        }
+      },
+      () => {}
+    );
+
+    const unsubHero = onSnapshot(
+      publicDoc('settings', 'media_hero'),
+      (snap) => {
+        if (snap.exists()) {
+          const val = snap.data().heroBgImage ?? '';
+          setSettings((prev) => normalizeSettings({ ...prev, heroBgImage: val }));
+        }
+      },
+      () => {}
     );
 
     const unsubMedia = onSnapshot(
@@ -3811,8 +3827,8 @@ function MuzakkiratiApp() {
           setSettings((prev) =>
             normalizeSettings({
               ...prev,
-              logoUrl: m.logoUrl !== undefined ? m.logoUrl : prev.logoUrl,
-              heroBgImage: m.heroBgImage !== undefined ? m.heroBgImage : prev.heroBgImage,
+              logoUrl: prev.logoUrl || m.logoUrl || '',
+              heroBgImage: prev.heroBgImage || m.heroBgImage || '',
               categoryImages:
                 m.categoryImages && Object.keys(m.categoryImages).length > 0
                   ? m.categoryImages
@@ -3847,6 +3863,8 @@ function MuzakkiratiApp() {
 
     return () => {
       unsubSettings();
+      unsubLogo();
+      unsubHero();
       unsubMedia();
       unsubNotebooks();
       unsubCoupons();
@@ -3869,13 +3887,6 @@ function MuzakkiratiApp() {
   const handleSaveSettings = async (nextSettings) => {
     const normalized = normalizeSettings(nextSettings);
 
-    const mediaPayload = {
-      logoUrl: normalized.logoUrl || '',
-      heroBgImage: normalized.heroBgImage || '',
-      categoryImages: normalized.categoryImages || {},
-      updatedAt: serverTimestamp()
-    };
-
     const lightSettingsPayload = {
       ...normalized,
       logoUrl: '',
@@ -3884,21 +3895,26 @@ function MuzakkiratiApp() {
       updatedAt: serverTimestamp()
     };
 
-    // حفظ إعدادات الموقع أولاً حتى لا تعيق أحجام الصور الكبيرة وصول التعديلات للعملاء
+    // 1. حفظ الإعدادات النصية والألوان والخصومات والأقسام أولاً (خفيف جدًا وفوري)
     await setDoc(publicDoc('settings', 'main'), lightSettingsPayload);
 
-    try {
-      await setDoc(publicDoc('settings', 'media_assets'), mediaPayload);
-    } catch (mediaErr) {
-      console.warn('Media assets size/save warning:', mediaErr);
-      // محاولة حفظ الشعار والغلاف فقط إذا كانت صور الأقسام كبيرة
-      await setDoc(publicDoc('settings', 'media_assets'), {
-        logoUrl: normalized.logoUrl || '',
-        heroBgImage: normalized.heroBgImage || '',
-        categoryImages: {},
-        updatedAt: serverTimestamp()
-      }).catch(() => {});
-    }
+    // 2. حفظ الشعار في مستند مستقل صغير
+    await setDoc(publicDoc('settings', 'media_logo'), {
+      logoUrl: normalized.logoUrl || '',
+      updatedAt: serverTimestamp()
+    });
+
+    // 3. حفظ صورة الخلفية في مستند مستقل صغير
+    await setDoc(publicDoc('settings', 'media_hero'), {
+      heroBgImage: normalized.heroBgImage || '',
+      updatedAt: serverTimestamp()
+    });
+
+    // 4. حفظ صور الأقسام في مستند مستقل
+    await setDoc(publicDoc('settings', 'media_assets'), {
+      categoryImages: normalized.categoryImages || {},
+      updatedAt: serverTimestamp()
+    }).catch((e) => console.warn('Category images save warning:', e));
 
     setSettings(normalized);
     try {
@@ -4035,9 +4051,9 @@ function MuzakkiratiApp() {
 
         {/* الهيدر الرئيسي المتجاوب بالكامل للهاتف والكمبيوتر */}
         <header className="bg-white/95 backdrop-blur-md border-b border-slate-200 sticky top-0 z-40 shadow-sm">
-          <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 space-y-2.5 lg:space-y-0 lg:flex lg:items-center lg:justify-between lg:gap-4">
-            {/* الصف الأول: الشعار + الاسم + أزرار التواصل والسلة */}
-            <div className="flex items-center justify-between gap-2 min-w-0">
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3">
+            <div className="flex flex-wrap lg:flex-nowrap items-center justify-between gap-3">
+              {/* اليمين: الشعار واسم المنصة */}
               <div
                 onClick={() => {
                   logoClickCountRef.current += 1;
@@ -4048,47 +4064,78 @@ function MuzakkiratiApp() {
                   }
                   navigateTo('home');
                 }}
-                className="flex items-center gap-2.5 cursor-pointer min-w-0"
+                className="flex items-center gap-3 cursor-pointer min-w-0 shrink-0 max-w-[65%] sm:max-w-none"
               >
                 {settings.logoUrl ? (
                   <img
                     src={settings.logoUrl}
                     alt={settings.siteName}
-                    className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl object-cover border-2 border-slate-900 shadow-sm shrink-0"
+                    style={{
+                      width: `${Math.min(64, Math.max(44, settings.logoSize || 54))}px`,
+                      height: `${Math.min(64, Math.max(44, settings.logoSize || 54))}px`
+                    }}
+                    className="rounded-2xl object-cover border-2 border-slate-900 shadow-sm shrink-0"
                   />
                 ) : (
-                  <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl bg-slate-950 text-amber-400 flex items-center justify-center font-black text-lg shrink-0">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-950 text-amber-400 flex items-center justify-center font-black text-xl shrink-0 shadow-sm">
                     ع
                   </div>
                 )}
                 <div className="text-right min-w-0">
-                  <h1 className="text-sm sm:text-xl lg:text-2xl font-black bg-gradient-to-l from-slate-950 via-blue-900 to-blue-700 bg-clip-text text-transparent truncate">
+                  <h1 className="text-sm sm:text-lg xl:text-xl font-black bg-gradient-to-l from-slate-950 via-blue-900 to-blue-700 bg-clip-text text-transparent leading-snug">
                     {settings.siteName}
                   </h1>
-                  <p className="hidden sm:block text-xs text-slate-500 font-semibold truncate">{settings.siteTagline}</p>
+                  <p className="hidden md:block text-[11px] text-slate-500 font-semibold truncate max-w-[290px]">
+                    {settings.siteTagline}
+                  </p>
                 </div>
               </div>
 
-              {/* أزرار السلة وتواصل معنا ولوحة التحكم */}
-              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              {/* المنتصف (على الشاشات الكبيرة): روابط التنقل */}
+              <nav className="order-3 lg:order-2 w-full lg:w-auto grid grid-cols-4 lg:flex items-center gap-1 bg-slate-100/90 p-1 rounded-2xl border border-slate-200/70">
+                {[
+                  { id: 'home', label: 'الرئيسية', icon: Home },
+                  { id: 'catalog', label: 'المذكرات', icon: BookOpen },
+                  { id: 'offers', label: 'العروض', icon: Percent },
+                  { id: 'track', label: 'تتبع طلبك', icon: Package }
+                ].map((navItem) => {
+                  const Icon = navItem.icon;
+                  const active = activePage === navItem.id;
+                  return (
+                    <button
+                      key={navItem.id}
+                      onClick={() => navigateTo(navItem.id)}
+                      className={`py-2 px-2 sm:px-3.5 rounded-xl font-black text-[11px] sm:text-xs xl:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap ${
+                        active ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-700 hover:bg-white'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4 shrink-0" />
+                      <span>{navItem.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+
+              {/* اليسار: أزرار الإجراءات (الإدارة، السلة، تواصل معنا) */}
+              <div className="order-2 lg:order-3 flex items-center gap-1.5 sm:gap-2 shrink-0">
                 {isAdmin && (
                   <button
                     onClick={() => setAdminViewOpen(true)}
-                    className="px-2.5 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs flex items-center gap-1"
+                    className="px-2.5 sm:px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition"
                   >
-                    <ShieldCheck className="w-4 h-4 text-blue-400" />
+                    <ShieldCheck className="w-4 h-4 text-blue-400 shrink-0" />
                     <span className="hidden sm:inline">الإدارة</span>
                   </button>
                 )}
 
                 <button
                   onClick={() => setCartOpen(true)}
-                  className="relative px-3 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-black text-xs sm:text-sm flex items-center gap-1.5"
+                  className="relative px-2.5 sm:px-3.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-black text-xs sm:text-sm flex items-center gap-1.5 transition"
                 >
-                  <ShoppingCart className="w-4 h-4" />
+                  <ShoppingCart className="w-4 h-4 shrink-0" />
                   <span>السلة</span>
                   {cart.length > 0 && (
-                    <span className="px-1.5 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-black">
+                    <span className="px-1.5 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-black leading-none">
                       {cart.length}
                     </span>
                   )}
@@ -4096,39 +4143,13 @@ function MuzakkiratiApp() {
 
                 <button
                   onClick={() => setContactModalOpen(true)}
-                  className="px-3 sm:px-4 py-2 rounded-xl bg-gradient-to-l from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-xs sm:text-sm flex items-center gap-1.5 shadow-sm"
+                  className="px-3 sm:px-4 py-2 rounded-xl bg-gradient-to-l from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-xs sm:text-sm flex items-center gap-1.5 shadow-sm transition whitespace-nowrap"
                 >
-                  <span className="w-2 h-2 rounded-full bg-lime-300 animate-ping hidden sm:inline-block" />
-                  <MessageCircle className="w-4 h-4" />
+                  <MessageCircle className="w-4 h-4 shrink-0" />
                   <span>تواصل معنا</span>
                 </button>
               </div>
             </div>
-
-            {/* شريط التنقل المتجاوب (grid-cols-4 على الهاتف لمنع أي انزياح أفقي) */}
-            <nav className="grid grid-cols-4 lg:flex items-center gap-1 bg-slate-100 p-1 rounded-2xl">
-              {[
-                { id: 'home', label: 'الرئيسية', icon: Home },
-                { id: 'catalog', label: 'المذكرات', icon: BookOpen },
-                { id: 'offers', label: 'العروض', icon: Percent },
-                { id: 'track', label: 'تتبع طلبك', icon: Package }
-              ].map((navItem) => {
-                const Icon = navItem.icon;
-                const active = activePage === navItem.id;
-                return (
-                  <button
-                    key={navItem.id}
-                    onClick={() => navigateTo(navItem.id)}
-                    className={`py-2 px-2 sm:px-4 rounded-xl font-black text-[11px] sm:text-sm flex items-center justify-center gap-1 transition ${
-                      active ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-700 hover:bg-white/70'
-                    }`}
-                  >
-                    <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                    <span className="truncate">{navItem.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
           </div>
         </header>
 
