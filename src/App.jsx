@@ -1967,12 +1967,21 @@ function AdminPortal({
     try {
       const normalized = normalizeSettings(updatedObj);
       setLocalSettings(normalized);
-      localStorage.setItem(LS_SETTINGS_KEY, JSON.stringify(normalized));
+      // 1. الحفظ الأساسي في السحابة أولاً (الأولوية لـ Firestore)
       await setDoc(publicDoc('config', 'main'), normalized, { merge: true });
       onSaveSettings(normalized);
+      // 2. حفظ نسخة خفيفة في ذاكرة المتصفح داخل try/catch لتجنب خطأ QuotaExceededError
+      try {
+        localStorage.setItem(LS_SETTINGS_KEY, JSON.stringify(normalized));
+      } catch {
+        try {
+          const lightCopy = { ...normalized, heroBgImage: '', categoryImages: {} };
+          localStorage.setItem(LS_SETTINGS_KEY, JSON.stringify(lightCopy));
+        } catch {}
+      }
       onNotify('تم حفظ جميع الإعدادات ومزامنتها مع السحابة بنجاح!', 'success');
     } catch (err) {
-      onNotify(`تعذر حفظ الإعدادات: ${err?.message || 'تأكد من صلاحيات Firestore'}`, 'error');
+      onNotify(`تعذر حفظ الإعدادات في السحابة: ${err?.message || 'تأكد من حجم الصور أو صلاحيات Firestore'}`, 'error');
     } finally {
       setSavingSettings(false);
     }
