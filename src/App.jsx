@@ -101,13 +101,13 @@ const DEFAULT_STAGE_GRADES = {
 };
 
 const DEFAULT_ORDER_FIELDS = [
-  { id: 'teacherName', label: 'اسم المعلم كما سيُكتب على المذكرة', placeholder: 'مثال: أ/ محمود شحاتة', type: 'text', required: true, visible: true, locked: true },
-  { id: 'phone', label: 'رقم الهاتف / الواتساب للتواصل والتسليم', placeholder: '010xxxxxxxx', type: 'tel', required: true, visible: true, locked: true },
-  { id: 'subject', label: 'المادة الدراسية', placeholder: 'مثال: اللغة العربية', type: 'text', required: false, visible: true, locked: false },
-  { id: 'governorate', label: 'المحافظة (اختياري)', placeholder: 'مثال: الغربية / القاهرة', type: 'text', required: false, visible: true, locked: false },
-  { id: 'coverPhone', label: 'رقم الهاتف الذي يُطبع على الغلاف (إن اختلف)', placeholder: '010xxxxxxxx', type: 'tel', required: false, visible: true, locked: false },
-  { id: 'logoFile', label: 'رفع شعار المعلم (Logo) لإضافته للمذكرة', placeholder: '', type: 'file', required: false, visible: true, locked: false },
-  { id: 'notes', label: 'ملاحظات إضافية للتصميم أو الألوان', placeholder: 'أي تفاصيل إضافية تود إضافتها...', type: 'textarea', required: false, visible: true, locked: false }
+  { id: 'teacherName', label: 'اسم المعلم كما سيُكتب على المذكرة', placeholder: 'مثال: أ/ محمود شحاتة', type: 'text', options: [], required: true, visible: true, locked: false },
+  { id: 'phone', label: 'رقم الهاتف / الواتساب للتواصل والتسليم', placeholder: '010xxxxxxxx', type: 'tel', options: [], required: true, visible: true, locked: false },
+  { id: 'subject', label: 'المادة الدراسية', placeholder: 'مثال: اللغة العربية', type: 'text', options: [], required: false, visible: true, locked: false },
+  { id: 'governorate', label: 'المحافظة (اختياري)', placeholder: 'مثال: الغربية / القاهرة', type: 'text', options: [], required: false, visible: true, locked: false },
+  { id: 'coverPhone', label: 'رقم الهاتف الذي يُطبع على الغلاف (إن اختلف)', placeholder: '010xxxxxxxx', type: 'tel', options: [], required: false, visible: true, locked: false },
+  { id: 'logoFile', label: 'رفع شعار المعلم (Logo) لإضافته للمذكرة', placeholder: '', type: 'file', options: [], required: false, visible: true, locked: false },
+  { id: 'notes', label: 'ملاحظات إضافية للتصميم أو الألوان', placeholder: 'أي تفاصيل إضافية تود إضافتها...', type: 'textarea', options: [], required: false, visible: true, locked: false }
 ];
 
 const DEFAULT_SETTINGS = {
@@ -146,6 +146,12 @@ const DEFAULT_SETTINGS = {
   stages: ['المرحلة الابتدائية', 'المرحلة الإعدادية', 'المرحلة الثانوية'],
   stageGrades: DEFAULT_STAGE_GRADES,
   subjects: ['اللغة العربية', 'اللغة الإنجليزية', 'الرياضيات', 'العلوم', 'الدراسات الاجتماعية'],
+  orderModalTitle: 'إتمام طلب التخصيص',
+  orderModalSubtitle: 'يمكنك طلب مذكرة واحدة أو إضافة أكثر من مذكرة معًا',
+  orderSubmitButtonText: 'تأكيد وإرسال الطلب الآن',
+  orderSuccessTitle: 'تم استلام طلبك بنجاح!',
+  orderAllowMultiSelect: true,
+  orderShowCouponBox: true,
   orderFormFields: DEFAULT_ORDER_FIELDS,
   socialLinks: [
     { id: 'fb-1', label: 'صفحة الفيسبوك', url: 'https://www.facebook.com', color: '#1877F2' },
@@ -701,7 +707,7 @@ const OrderCartModal = ({
             <CheckCircle2 size={36} />
           </div>
           <div className="space-y-1">
-            <h3 className="text-2xl font-black text-slate-900">تم استلام طلبك بنجاح!</h3>
+            <h3 className="text-2xl font-black text-slate-900">{settings.orderSuccessTitle || 'تم استلام طلبك بنجاح!'}</h3>
             <p className="text-sm text-slate-500">احتفظ برقم الطلب لمتابعة حالة التجهيز في أي وقت</p>
           </div>
 
@@ -759,8 +765,8 @@ const OrderCartModal = ({
               <ShoppingCart size={20} />
             </div>
             <div>
-              <h3 className="font-black text-slate-900 text-base sm:text-lg">إتمام طلب التخصيص</h3>
-              <p className="text-xs text-slate-500">يمكنك طلب مذكرة واحدة أو إضافة أكثر من مذكرة معًا</p>
+              <h3 className="font-black text-slate-900 text-base sm:text-lg">{settings.orderModalTitle || 'إتمام طلب التخصيص'}</h3>
+              <p className="text-xs text-slate-500">{settings.orderModalSubtitle || 'يمكنك طلب مذكرة واحدة أو إضافة أكثر من مذكرة معًا'}</p>
             </div>
           </div>
           <button
@@ -779,17 +785,19 @@ const OrderCartModal = ({
                 <ShoppingBag size={16} className="text-blue-600" />
                 <span>المذكرات في طلبك ({cart.length})</span>
               </span>
-              <button
-                type="button"
-                onClick={() => setShowAddMore(!showAddMore)}
-                className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 bg-blue-50 px-3 py-1.5 rounded-xl"
-              >
-                <Plus size={14} />
-                <span>{showAddMore ? 'إخفاء القائمة' : 'إضافة مذكرة أخرى للطلب'}</span>
-              </button>
+              {settings.orderAllowMultiSelect !== false && (
+                <button
+                  type="button"
+                  onClick={() => setShowAddMore(!showAddMore)}
+                  className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 bg-blue-50 px-3 py-1.5 rounded-xl"
+                >
+                  <Plus size={14} />
+                  <span>{showAddMore ? 'إخفاء القائمة' : 'إضافة مذكرة أخرى للطلب'}</span>
+                </button>
+              )}
             </div>
 
-            {showAddMore && (
+            {settings.orderAllowMultiSelect !== false && showAddMore && (
               <div className="bg-white rounded-xl p-3 border border-blue-100 max-h-44 overflow-y-auto space-y-1.5">
                 {visibleNotebooks.map((nb) => {
                   const alreadyIn = cart.some((c) => c.id === nb.id);
@@ -846,7 +854,7 @@ const OrderCartModal = ({
             )}
 
             {/* كوبون الخصم */}
-            {cart.length > 0 && (
+            {cart.length > 0 && settings.orderShowCouponBox !== false && (
               <div className="pt-2 border-t border-slate-200/70 space-y-2">
                 <div className="flex gap-2">
                   <input
@@ -926,6 +934,26 @@ const OrderCartModal = ({
                     </div>
                   );
                 }
+                if (field.type === 'select') {
+                  return (
+                    <div key={field.id} className="space-y-1">
+                      <label className="block text-xs font-bold text-slate-700">
+                        {field.label} {field.required && <span className="text-rose-500">*</span>}
+                      </label>
+                      <select
+                        required={field.required}
+                        value={formValues[field.id] || ''}
+                        onChange={(e) => setFormValues({ ...formValues, [field.id]: e.target.value })}
+                        className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 bg-white text-sm focus:outline-none focus:border-blue-500"
+                      >
+                        <option value="">{field.placeholder || 'اختر من القائمة...'}</option>
+                        {(field.options || []).map((opt, i) => (
+                          <option key={i} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                }
                 return (
                   <div key={field.id} className="space-y-1">
                     <label className="block text-xs font-bold text-slate-700">
@@ -949,7 +977,7 @@ const OrderCartModal = ({
             disabled={submitting}
             className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-black text-base shadow-lg shadow-blue-600/20 transition"
           >
-            {submitting ? 'جاري تسجيل الطلب...' : 'تأكيد وإرسال الطلب الآن'}
+            {submitting ? 'جاري تسجيل الطلب...' : (settings.orderSubmitButtonText || 'تأكيد وإرسال الطلب الآن')}
           </button>
         </form>
       </div>
@@ -1406,6 +1434,8 @@ const AdminPortal = ({
   // تبويب حقول طلب العميل
   const [newOrderFieldLabel, setNewOrderFieldLabel] = useState('');
   const [newOrderFieldPlaceholder, setNewOrderFieldPlaceholder] = useState('');
+  const [newOrderFieldType, setNewOrderFieldType] = useState('text');
+  const [newOrderFieldOptions, setNewOrderFieldOptions] = useState('');
 
   useEffect(() => {
     setLocalSettings(settings);
@@ -2484,90 +2514,264 @@ const AdminPortal = ({
               <div className="border-b border-slate-100 pb-2">
                 <h3 className="font-black text-slate-900 text-lg flex items-center gap-2">
                   <Sliders size={18} className="text-blue-600" />
-                  <span>التحكم في إعدادات وحقول نموذج طلب العميل</span>
+                  <span>التحكم الكامل في إعدادات وحقول نموذج طلب العميل</span>
                 </h3>
-                <p className="text-xs text-slate-500">تحكم في إظهار أو إخفاء أو تعديل الحقول التي تظهر للعميل عند طلب مذكرة</p>
+                <p className="text-xs text-slate-500">تحكم في نصوص نافذة الطلب، خيارات السلة والكوبون، وترتيب وتعديل وإضافة أي حقل بأي نوع</p>
               </div>
 
-              <div className="space-y-2.5">
+              {/* إعدادات نافذة الطلب العامة */}
+              <div className="p-4 rounded-2xl bg-blue-50/50 border border-blue-100 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">عنوان نافذة الطلب</label>
+                    <input
+                      type="text"
+                      value={localSettings.orderModalTitle || ''}
+                      onChange={(e) => setLocalSettings({ ...localSettings, orderModalTitle: e.target.value })}
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">نص زر إرسال الطلب</label>
+                    <input
+                      type="text"
+                      value={localSettings.orderSubmitButtonText || ''}
+                      onChange={(e) => setLocalSettings({ ...localSettings, orderSubmitButtonText: e.target.value })}
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">الوصف الفرعي لنافذة الطلب</label>
+                    <input
+                      type="text"
+                      value={localSettings.orderModalSubtitle || ''}
+                      onChange={(e) => setLocalSettings({ ...localSettings, orderModalSubtitle: e.target.value })}
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">رسالة نجاح الطلب</label>
+                    <input
+                      type="text"
+                      value={localSettings.orderSuccessTitle || ''}
+                      onChange={(e) => setLocalSettings({ ...localSettings, orderSuccessTitle: e.target.value })}
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-4 pt-1">
+                  <label className="flex items-center gap-2 text-xs font-bold text-slate-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={localSettings.orderAllowMultiSelect !== false}
+                      onChange={(e) => setLocalSettings({ ...localSettings, orderAllowMultiSelect: e.target.checked })}
+                    />
+                    <span>السماح للعميل بإضافة أكثر من مذكرة في نفس الطلب</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-xs font-bold text-slate-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={localSettings.orderShowCouponBox !== false}
+                      onChange={(e) => setLocalSettings({ ...localSettings, orderShowCouponBox: e.target.checked })}
+                    />
+                    <span>إظهار خانة إدخال كوبون الخصم للعميل</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* قائمة حقول النموذج القابلة للتحكم الكامل */}
+              <div className="space-y-3">
                 {localSettings.orderFormFields.map((field, idx) => (
-                  <div key={field.id} className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
-                    <div className="flex-1 min-w-[200px]">
-                      <input
-                        type="text"
-                        value={field.label}
-                        onChange={(e) => {
-                          const updated = [...localSettings.orderFormFields];
-                          updated[idx] = { ...field, label: e.target.value };
-                          setLocalSettings({ ...localSettings, orderFormFields: updated });
-                        }}
-                        className="w-full px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
-                      />
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          disabled={field.locked}
-                          checked={field.visible !== false}
-                          onChange={(e) => {
-                            const updated = [...localSettings.orderFormFields];
-                            updated[idx] = { ...field, visible: e.target.checked };
-                            setLocalSettings({ ...localSettings, orderFormFields: updated });
-                          }}
-                        />
-                        <span>{field.visible !== false ? 'ظاهر للعميل' : 'مخفي'}</span>
-                      </label>
-                      <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          disabled={field.locked}
-                          checked={Boolean(field.required)}
-                          onChange={(e) => {
-                            const updated = [...localSettings.orderFormFields];
-                            updated[idx] = { ...field, required: e.target.checked };
-                            setLocalSettings({ ...localSettings, orderFormFields: updated });
-                          }}
-                        />
-                        <span>إلزامي</span>
-                      </label>
-                      {!field.locked && (
+                  <div key={field.id} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* أسهم الترتيب */}
+                      <div className="flex flex-col gap-0.5">
                         <button
-                          onClick={() =>
-                            setLocalSettings({
-                              ...localSettings,
-                              orderFormFields: localSettings.orderFormFields.filter((f) => f.id !== field.id)
-                            })
-                          }
-                          className="p-1.5 rounded-lg bg-rose-50 text-rose-600"
+                          type="button"
+                          onClick={() => setLocalSettings({ ...localSettings, orderFormFields: moveArrayItem(localSettings.orderFormFields, idx, -1) })}
+                          className="p-1 rounded bg-white border border-slate-200 hover:bg-slate-100"
+                          title="تحريك لأعلى"
                         >
-                          <Trash2 size={14} />
+                          <ArrowUp size={12} />
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => setLocalSettings({ ...localSettings, orderFormFields: moveArrayItem(localSettings.orderFormFields, idx, 1) })}
+                          className="p-1 rounded bg-white border border-slate-200 hover:bg-slate-100"
+                          title="تحريك لأسفل"
+                        >
+                          <ArrowDown size={12} />
+                        </button>
+                      </div>
+
+                      {/* اسم الحقل */}
+                      <div className="flex-1 min-w-[180px]">
+                        <label className="block text-[10px] font-bold text-slate-500 mb-0.5">عنوان الحقل</label>
+                        <input
+                          type="text"
+                          value={field.label}
+                          onChange={(e) => {
+                            const updated = [...localSettings.orderFormFields];
+                            updated[idx] = { ...field, label: e.target.value };
+                            setLocalSettings({ ...localSettings, orderFormFields: updated });
+                          }}
+                          className="w-full px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                        />
+                      </div>
+
+                      {/* النص التوضيحي */}
+                      {field.type !== 'file' && (
+                        <div className="flex-1 min-w-[150px]">
+                          <label className="block text-[10px] font-bold text-slate-500 mb-0.5">النص التوضيحي (Placeholder)</label>
+                          <input
+                            type="text"
+                            value={field.placeholder || ''}
+                            onChange={(e) => {
+                              const updated = [...localSettings.orderFormFields];
+                              updated[idx] = { ...field, placeholder: e.target.value };
+                              setLocalSettings({ ...localSettings, orderFormFields: updated });
+                            }}
+                            className="w-full px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs"
+                          />
+                        </div>
                       )}
+
+                      {/* نوع الحقل */}
+                      <div className="w-36">
+                        <label className="block text-[10px] font-bold text-slate-500 mb-0.5">نوع الحقل</label>
+                        <select
+                          value={field.type || 'text'}
+                          onChange={(e) => {
+                            const updated = [...localSettings.orderFormFields];
+                            updated[idx] = { ...field, type: e.target.value };
+                            setLocalSettings({ ...localSettings, orderFormFields: updated });
+                          }}
+                          className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                        >
+                          <option value="text">نص قصير</option>
+                          <option value="tel">رقم هاتف</option>
+                          <option value="textarea">فقرة طويلة</option>
+                          <option value="select">قائمة اختيارات</option>
+                          <option value="file">رفع صورة / ملف</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* خيارات القائمة المنسدلة إذا كان النوع select */}
+                    {field.type === 'select' && (
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-0.5">
+                          خيارات القائمة (افصل بين كل خيار وآخر بفاصلة ,)
+                        </label>
+                        <input
+                          type="text"
+                          value={(field.options || []).join(', ')}
+                          placeholder="مثال: طباعة ملونة, طباعة أبيض وأسود, PDF فقط"
+                          onChange={(e) => {
+                            const opts = e.target.value.split(',').map((s) => s.trim()).filter(Boolean);
+                            const updated = [...localSettings.orderFormFields];
+                            updated[idx] = { ...field, options: opts };
+                            setLocalSettings({ ...localSettings, orderFormFields: updated });
+                          }}
+                          className="w-full px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs"
+                        />
+                      </div>
+                    )}
+
+                    {/* أزرار الظهور والإلزام والحذف */}
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-200/70">
+                      <div className="flex items-center gap-4">
+                        <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={field.visible !== false}
+                            onChange={(e) => {
+                              const updated = [...localSettings.orderFormFields];
+                              updated[idx] = { ...field, visible: e.target.checked };
+                              setLocalSettings({ ...localSettings, orderFormFields: updated });
+                            }}
+                          />
+                          <span>{field.visible !== false ? 'ظاهر للعميل' : 'مخفي'}</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(field.required)}
+                            onChange={(e) => {
+                              const updated = [...localSettings.orderFormFields];
+                              updated[idx] = { ...field, required: e.target.checked };
+                              setLocalSettings({ ...localSettings, orderFormFields: updated });
+                            }}
+                          />
+                          <span>حقل إلزامي</span>
+                        </label>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLocalSettings({
+                            ...localSettings,
+                            orderFormFields: localSettings.orderFormFields.filter((f) => f.id !== field.id)
+                          })
+                        }
+                        className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold flex items-center gap-1"
+                      >
+                        <Trash2 size={13} />
+                        <span>حذف الحقل</span>
+                      </button>
                     </div>
                   </div>
                 ))}
               </div>
 
-              <div className="flex flex-wrap gap-2 pt-1">
-                <input
-                  type="text"
-                  placeholder="اسم حقل جديد للعميل (مثال: اسم المدرسة أو السنتر)..."
-                  value={newOrderFieldLabel}
-                  onChange={(e) => setNewOrderFieldLabel(e.target.value)}
-                  className="flex-1 min-w-[200px] px-3.5 py-2 rounded-xl border border-slate-200 text-xs"
-                />
-                <input
-                  type="text"
-                  placeholder="نص توضيحي داخل الحقل..."
-                  value={newOrderFieldPlaceholder}
-                  onChange={(e) => setNewOrderFieldPlaceholder(e.target.value)}
-                  className="flex-1 min-w-[160px] px-3.5 py-2 rounded-xl border border-slate-200 text-xs"
-                />
+              {/* إضافة حقل جديد مخصص */}
+              <div className="p-4 rounded-2xl bg-slate-100/80 border border-dashed border-slate-300 space-y-2.5">
+                <div className="text-xs font-black text-slate-800">+ إضافة حقل جديد مخصص لنموذج الطلب:</div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <input
+                    type="text"
+                    placeholder="عنوان الحقل (مثال: اسم السنتر أو المدرسة)..."
+                    value={newOrderFieldLabel}
+                    onChange={(e) => setNewOrderFieldLabel(e.target.value)}
+                    className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                  />
+                  <input
+                    type="text"
+                    placeholder="النص التوضيحي داخل الحقل..."
+                    value={newOrderFieldPlaceholder}
+                    onChange={(e) => setNewOrderFieldPlaceholder(e.target.value)}
+                    className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs"
+                  />
+                  <select
+                    value={newOrderFieldType}
+                    onChange={(e) => setNewOrderFieldType(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                  >
+                    <option value="text">نوع الحقل: نص قصير</option>
+                    <option value="tel">نوع الحقل: رقم هاتف</option>
+                    <option value="textarea">نوع الحقل: فقرة طويلة</option>
+                    <option value="select">نوع الحقل: قائمة اختيارات</option>
+                    <option value="file">نوع الحقل: رفع صورة / ملف</option>
+                  </select>
+                </div>
+                {newOrderFieldType === 'select' && (
+                  <input
+                    type="text"
+                    placeholder="اكتب خيارات القائمة مفصولة بفاصلة (مثال: خيار 1, خيار 2, خيار 3)..."
+                    value={newOrderFieldOptions}
+                    onChange={(e) => setNewOrderFieldOptions(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs"
+                  />
+                )}
                 <button
                   type="button"
                   onClick={() => {
                     if (!newOrderFieldLabel.trim()) return;
+                    const opts = newOrderFieldType === 'select'
+                      ? newOrderFieldOptions.split(',').map((s) => s.trim()).filter(Boolean)
+                      : [];
                     setLocalSettings({
                       ...localSettings,
                       orderFormFields: [
@@ -2576,7 +2780,8 @@ const AdminPortal = ({
                           id: `custom_${Date.now()}`,
                           label: newOrderFieldLabel.trim(),
                           placeholder: newOrderFieldPlaceholder.trim(),
-                          type: 'text',
+                          type: newOrderFieldType,
+                          options: opts,
                           required: false,
                           visible: true,
                           locked: false
@@ -2585,10 +2790,12 @@ const AdminPortal = ({
                     });
                     setNewOrderFieldLabel('');
                     setNewOrderFieldPlaceholder('');
+                    setNewOrderFieldOptions('');
+                    setNewOrderFieldType('text');
                   }}
-                  className="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs"
+                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs"
                 >
-                  + إضافة حقل للعميل
+                  + إضافة الحقل للنموذج
                 </button>
               </div>
             </div>
