@@ -808,6 +808,16 @@ function MuzakkiratiApp() {
         )
       );
 
+      unsubscribers.push(
+        onSnapshot(
+          publicCol('notebook_samples'),
+          (snap) => {
+            if (!snap.empty) mapSampleDocsToState(snap.docs);
+          },
+          handleSnapError
+        )
+      );
+
       (async () => {
         const extraNotebookSources = [
           () => getDocs(legacyPublicCol('notebooks')),
@@ -2835,7 +2845,7 @@ function AdminDashboard({
       };
 
       let targetId = nbForm.id;
-      if (db && auth?.currentUser) {
+      if (db) {
         if (targetId) {
           await updateDoc(publicDoc('notebooks', targetId), payload);
         } else {
@@ -2875,7 +2885,7 @@ function AdminDashboard({
   };
 
   const handleDeleteNotebook = async (id) => {
-    if (!db || !auth?.currentUser) return;
+    if (!db) return;
     try {
       await deleteDoc(publicDoc('notebooks', id));
       showToast('تم حذف المذكرة');
@@ -2897,7 +2907,7 @@ function AdminDashboard({
       active: true,
       createdAt: serverTimestamp()
     };
-    if (db && auth?.currentUser) {
+    if (db) {
       await addDoc(publicCol('coupons'), data);
     }
     setCouponForm({ code: '', type: 'percent', value: '15', minOrder: '', expiresAt: '', note: '' });
@@ -2915,7 +2925,7 @@ function AdminDashboard({
       notebookIds: bundleForm.notebookIds || [],
       createdAt: serverTimestamp()
     };
-    if (db && auth?.currentUser) {
+    if (db) {
       await addDoc(publicCol('bundles'), data);
     }
     setBundleForm({ title: '', description: '', price: '', oldPrice: '', notebookIds: [] });
@@ -2932,8 +2942,8 @@ function AdminDashboard({
       } catch {
         // تجاهل
       }
-      if (!db || !auth?.currentUser) {
-        showToast('تم الحفظ محليًا في المعاينة (يرجى النشر والتسجيل بالحساب الحقيقي لتعميمها على جميع العملاء)', 'info');
+      if (!db) {
+        showToast('تعذر الاتصال بقاعدة البيانات السحابية', 'error');
         return;
       }
       const { logoUrl, heroBgImage, categories, ...lightSettings } = normalized;
