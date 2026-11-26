@@ -174,10 +174,8 @@ const extractAnyImagesFromDoc = (data) => {
   }
   for (const [k, v] of Object.entries(data)) {
     if (/cover/i.test(k)) continue;
-    if (/img|image|page|sample|photo|url|data|preview/i.test(k)) {
-      const single = extractImageFromValue(v);
-      if (single && !found.includes(single)) found.push(single);
-    }
+    const single = extractImageFromValue(v);
+    if (single && !found.includes(single)) found.push(single);
   }
   return found;
 };
@@ -516,8 +514,7 @@ function MuzakkiratiApp() {
   const [notebooks, setNotebooks] = useState(() => {
     try {
       const saved = localStorage.getItem(LOCAL_NOTEBOOKS_KEY);
-      const parsed = saved ? JSON.parse(saved) : [];
-      return Array.isArray(parsed) ? parsed.map((n) => normalizeNotebook(n, n.id)) : [];
+      return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
     }
@@ -536,7 +533,7 @@ function MuzakkiratiApp() {
   const [coupons, setCoupons] = useState([]);
   const [orders, setOrders] = useState([]);
 
-  const [activeView, setActiveView] = useState('home'); // home | library | offers | track | admin
+  const [activeView, setActiveView] = useState('home');
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [selectedStageId, setSelectedStageId] = useState('');
   const [selectedGradeId, setSelectedGradeId] = useState('');
@@ -561,6 +558,12 @@ function MuzakkiratiApp() {
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [completedOrder, setCompletedOrder] = useState(null);
 
+  const [trackQuery, setTrackQuery] = useState('');
+  const [trackedOrder, setTrackedOrder] = useState(null);
+  const [trackNotFound, setTrackNotFound] = useState(false);
+
+  const [promoDismissed, setPromoDismissed] = useState(false);
+  const [promoCopied, setPromoCopied] = useState(false);
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [customRequestModalOpen, setCustomRequestModalOpen] = useState(false);
   const [customRequestForm, setCustomRequestForm] = useState({
@@ -570,10 +573,6 @@ function MuzakkiratiApp() {
     subject: '',
     details: ''
   });
-
-  const [trackQuery, setTrackQuery] = useState('');
-  const [trackedOrder, setTrackedOrder] = useState(null);
-  const [trackNotFound, setTrackNotFound] = useState(false);
 
   const [firebaseUser, setFirebaseUser] = useState(null);
   const [previewAdminUnlocked, setPreviewAdminUnlocked] = useState(false);
@@ -585,17 +584,14 @@ function MuzakkiratiApp() {
   const [loginLoading, setLoginLoading] = useState(false);
 
   const [toast, setToast] = useState(null);
-  const [promoDismissed, setPromoDismissed] = useState(false);
-  const [promoCopied, setPromoCopied] = useState(false);
   const logoClickCountRef = useRef(0);
 
   const isAdmin =
-    (firebaseUser && firebaseUser.email && firebaseUser.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) ||
-    previewAdminUnlocked;
+    (firebaseUser && firebaseUser.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) || previewAdminUnlocked;
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 3500);
+    setTimeout(() => setToast(null), 3200);
   };
 
   useEffect(() => {
@@ -606,61 +602,70 @@ function MuzakkiratiApp() {
     }
   }, [cart]);
 
-  // الاستماع لحالة تسجيل الدخول
   useEffect(() => {
-    if (!auth) return undefined;
-    try {
-      return onAuthStateChanged(auth, (u) => {
-        setFirebaseUser(u || null);
-      });
-    } catch {
-      return undefined;
-    }
+    if (!auth) return;
+    const unsub = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user || null);
+    });
+    return () => unsub();
   }, []);
 
-  // الاستماع الفوري لبيانات السحابة من المسار الأساسي والمسار القديم معًا
   useEffect(() => {
-    if (!db) return undefined;
+    if (!db) return;
     const unsubscribers = [];
     const handleSnapError = (err) => {
-      console.warn('Firestore listener notice:', err?.code || err?.message);
+      console.warn('Snapshot warning:', err?.code || err?.message);
     };
 
-    const mapSampleDocsToState = (docsList) => {
-      const nextSamples = {};
-      docsList.forEach((d) => {
-        const data = d.data() || {};
-        const rawTarget = safeText(data.notebookId || data.nbId || data.parentId || '', '');
-        const baseDocId = d.id.includes('_') ? d.id.split('_')[0] : d.id;
-        const imgs = extractAnyImagesFromDoc(data);
-        if (imgs.length > 0) {
-          const keys = Array.from(new Set([rawTarget, baseDocId, d.id].filter(Boolean)));
-          keys.forEach((k) => {
-            nextSamples[k] = [...(nextSamples[k] || []), ...imgs];
-          });
-        }
-      });
-      if (Object.keys(nextSamples).length > 0) {
-        setSamplesMap((prev) => {
-          const merged = { ...prev };
-          for (const [k, arr] of Object.entries(nextSamples)) {
-            merged[k] = Array.from(new Set([...(merged[k] || []), ...arr]));
+    const mapSampleDocsToState = (docs) => {
+      setSamplesMap((prev) => {
+        const next = { ...prev };
+        docs.forEach((d) => {
+          const data = d.data() || {};
+          const rawId = safeText(data.notebookId || data.nbId, d.id);
+          const baseId = rawId.includes('_') ? rawId.split('_')[0] : rawId;
+          const imgs = extractAnyImagesFromDoc(data);
+          if (imgs.length > 0) {
+            next[baseId] = Array.from(new Set([...(next[baseId] || []), ...imgs]));
           }
-          try {
-            localStorage.setItem(LOCAL_SAMPLES_KEY, JSON.stringify(merged));
-          } catch {
-            // تجاهل
-          }
-          return merged;
         });
-      }
+        try {
+          localStorage.setItem(LOCAL_SAMPLES_KEY, JSON.stringify(next));
+        } catch {
+          // تجاهل
+        }
+        return next;
+      });
     };
 
     try {
-      // 1. الإعدادات والوسائط من كافة مستندات settings
+      // 1. الإعدادات والوسائط من كافة مستندات settings و config
       unsubscribers.push(
         onSnapshot(
           publicCol('settings'),
+          (snap) => {
+            if (!snap.empty) {
+              setSettings((prev) => {
+                let merged = { ...prev };
+                snap.docs.forEach((d) => {
+                  merged = mergeAndNormalizeSettings(merged, d.data());
+                });
+                try {
+                  localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(merged));
+                } catch {
+                  // تجاهل
+                }
+                return merged;
+              });
+            }
+          },
+          handleSnapError
+        )
+      );
+
+      unsubscribers.push(
+        onSnapshot(
+          publicCol('config'),
           (snap) => {
             if (!snap.empty) {
               setSettings((prev) => {
@@ -713,19 +718,32 @@ function MuzakkiratiApp() {
 
       // 3.5 جلب أي وسائط إضافية من مجموعات أخرى في المسار الأساسي أو القديم أو الجذر
       (async () => {
-        for (const extraCol of ['notebook_media', 'samples', 'media_assets']) {
+        const candidateCols = [
+          'notebook_samples',
+          'notebook_media',
+          'notebook_images',
+          'notebook_pages',
+          'samples',
+          'sample_pages',
+          'pages',
+          'media_assets',
+          'images'
+        ];
+        for (const extraCol of candidateCols) {
           try {
             const extraSnap = await getDocs(publicCol(extraCol));
             if (!extraSnap.empty) mapSampleDocsToState(extraSnap.docs);
           } catch {
             // تجاهل
           }
-        }
-
-        // فحص الجذر المباشر في Firestore إن وُجدت عينات خارج artifacts
-        for (const rootColName of ['notebook_samples', 'samples']) {
           try {
-            const rootSnap = await getDocs(collection(db, rootColName));
+            const legacySnap = await getDocs(legacyPublicCol(extraCol));
+            if (!legacySnap.empty) mapSampleDocsToState(legacySnap.docs);
+          } catch {
+            // تجاهل
+          }
+          try {
+            const rootSnap = await getDocs(collection(db, extraCol));
             if (!rootSnap.empty) mapSampleDocsToState(rootSnap.docs);
           } catch {
             // تجاهل
@@ -734,15 +752,17 @@ function MuzakkiratiApp() {
 
         // 4. استرجاع من المسار القديم legacyPublicCol (muzakkirati-edu-app)
         try {
-          const legacySettings = await getDocs(legacyPublicCol('settings'));
-          if (!legacySettings.empty) {
-            setSettings((prev) => {
-              let merged = { ...prev };
-              legacySettings.docs.forEach((d) => {
-                merged = mergeAndNormalizeSettings(merged, d.data());
+          for (const legacyColName of ['settings', 'config']) {
+            const legacySettings = await getDocs(legacyPublicCol(legacyColName));
+            if (!legacySettings.empty) {
+              setSettings((prev) => {
+                let merged = { ...prev };
+                legacySettings.docs.forEach((d) => {
+                  merged = mergeAndNormalizeSettings(merged, d.data());
+                });
+                return merged;
               });
-              return merged;
-            });
+            }
           }
           const legacySamples = await getDocs(legacyPublicCol('notebook_samples'));
           if (!legacySamples.empty) mapSampleDocsToState(legacySamples.docs);
@@ -2431,34 +2451,44 @@ function AdminDashboard({
     expiresAt: '',
     note: ''
   });
+  const [customColName, setCustomColName] = useState('notebook_samples');
+  const [discoveredDocs, setDiscoveredDocs] = useState([]);
+  const [scanningCol, setScanningCol] = useState(false);
 
-  const handleSaveSettings = async () => {
-    setSavingSettings(true);
+  const handleScanSamplesCollection = async () => {
+    if (!db) return;
+    setScanningCol(true);
     try {
-      setSettings(localSettings);
-      try {
-        localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(localSettings));
-      } catch {
-        // تجاهل
+      const colName = customColName.trim();
+      if (!colName) return;
+      const results = [];
+      const sources = [
+        { label: `el3bakera-edu/${colName}`, ref: publicCol(colName) },
+        { label: `muzakkirati-edu-app/${colName}`, ref: legacyPublicCol(colName) },
+        { label: `root/${colName}`, ref: collection(db, colName) }
+      ];
+      for (const src of sources) {
+        try {
+          const snap = await getDocs(src.ref);
+          snap.docs.forEach((d) => {
+            const data = d.data() || {};
+            const imgs = extractAnyImagesFromDoc(data);
+            results.push({
+              source: src.label,
+              docId: d.id,
+              notebookId: safeText(data.notebookId || data.nbId || d.id.split('_')[0], ''),
+              images: imgs,
+              targetNbId: ''
+            });
+          });
+        } catch {
+          // تجاهل
+        }
       }
-      if (db && auth?.currentUser) {
-        const { logoUrl, heroBgImage, categories, ...coreFields } = localSettings;
-        const catImages = {};
-        const cleanCategories = (categories || []).map((c) => {
-          if (c.image) catImages[c.id] = c.image;
-          return { ...c, image: '' };
-        });
-
-        await setDoc(publicDoc('settings', 'main'), { ...coreFields, categories: cleanCategories }, { merge: true });
-        await setDoc(publicDoc('settings', 'media_logo'), { logoUrl: logoUrl || '' }, { merge: true });
-        await setDoc(publicDoc('settings', 'media_hero'), { heroBgImage: heroBgImage || '' }, { merge: true });
-        await setDoc(publicDoc('settings', 'media_categories'), { categoryImages: catImages }, { merge: true });
-      }
-      showToast('تم حفظ جميع الإعدادات بنجاح!');
-    } catch (err) {
-      showToast(`تم الحفظ محليًا (${err?.message || 'تنبيه سحابي'})`, 'info');
+      setDiscoveredDocs(results);
+      showToast(`تم العثور على ${results.length} مستند في «${colName}»`, 'info');
     } finally {
-      setSavingSettings(false);
+      setScanningCol(false);
     }
   };
 
@@ -2558,45 +2588,83 @@ function AdminDashboard({
     showToast('تم إضافة الباقة بنجاح');
   };
 
+  const handleSaveSettings = async () => {
+    setSavingSettings(true);
+    try {
+      const normalized = mergeAndNormalizeSettings(settings, localSettings);
+      setSettings(normalized);
+      try {
+        localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(normalized));
+      } catch {
+        // تجاهل
+      }
+      if (db && auth?.currentUser) {
+        const { logoUrl, heroBgImage, categories, ...lightSettings } = normalized;
+        const catImages = {};
+        const lightCategories = (categories || []).map((c) => {
+          if (c.image) catImages[c.id] = c.image;
+          return { ...c, image: '' };
+        });
+        await setDoc(
+          publicDoc('settings', 'main'),
+          { ...lightSettings, categories: lightCategories },
+          { merge: true }
+        );
+        await setDoc(
+          publicDoc('settings', 'media_assets'),
+          { logoUrl: logoUrl || '', heroBgImage: heroBgImage || '', categoryImages: catImages },
+          { merge: true }
+        );
+      }
+      showToast('تم حفظ جميع الإعدادات بنجاح!');
+    } catch (err) {
+      showToast(`تعذر الحفظ السحابي: ${err?.message}`, 'error');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   return (
     <section className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-      {/* شريط الإدارة العلوي */}
-      <div className="bg-slate-900 text-white rounded-3xl p-5 flex flex-wrap items-center justify-between gap-4 shadow-lg">
-        <div>
-          <h2 className="text-lg font-black text-amber-400">لوحة تحكم الإدارة — {settings.platformName}</h2>
-          <p className="text-xs text-slate-300 font-bold">
-            إدارة المذكرات والعينات والأقسام والباقات والكوبونات والطلبات
-          </p>
+      {/* رأس لوحة التحكم */}
+      <div className="bg-slate-900 text-white rounded-3xl p-5 sm:p-6 flex flex-wrap items-center justify-between gap-4 shadow-xl">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center">
+            <ShieldCheck className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="text-base sm:text-lg font-black">لوحة تحكم الإدارة — {settings.platformName}</h2>
+            <p className="text-xs text-slate-300 font-bold">إدارة المذكرات، العينات، الأقسام، الكوبونات، الطلبات، وإعدادات المنصة</p>
+          </div>
         </div>
         <button
           type="button"
           onClick={onLogout}
-          className="px-4 py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black flex items-center gap-1.5"
+          className="px-4 py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black flex items-center gap-1.5"
         >
           <LogOut className="w-4 h-4" />
           <span>تسجيل الخروج</span>
         </button>
       </div>
 
-      {/* تبويبات الإدارة */}
-      <div className="flex flex-wrap gap-2">
+      {/* شريط تبويبات الإدارة */}
+      <div className="flex flex-wrap gap-2 bg-white p-2 rounded-3xl border border-slate-200 shadow-sm">
         {[
-          { id: 'notebooks', label: `المذكرات (${notebooks.length})`, icon: BookOpen },
-          { id: 'categories', label: 'الأقسام والمراحل', icon: FolderOpen },
-          { id: 'offers', label: 'العروض والكوبونات', icon: Tag },
-          { id: 'orders', label: `الطلبات (${orders.length})`, icon: Package },
+          { id: 'notebooks', label: `المذكرات والعينات (${notebooks.length})`, icon: BookOpen },
+          { id: 'categories', label: 'الأقسام والمراحل والصفوف', icon: FolderOpen },
+          { id: 'offers', label: `الكوبونات والباقات (${coupons.length})`, icon: Tag },
+          { id: 'orders', label: `الطلبات الواردة (${orders.length})`, icon: Package },
           { id: 'settings', label: 'إعدادات الموقع والمظهر', icon: Sliders }
         ].map((t) => {
           const Icon = t.icon;
+          const active = activeTab === t.id;
           return (
             <button
               key={t.id}
               type="button"
               onClick={() => setActiveTab(t.id)}
               className={`flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-black transition ${
-                activeTab === t.id
-                  ? 'bg-blue-600 text-white shadow'
-                  : 'bg-white border border-slate-200 text-slate-700 hover:border-blue-400'
+                active ? 'bg-blue-600 text-white shadow' : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
               <Icon className="w-4 h-4" />
@@ -2606,352 +2674,432 @@ function AdminDashboard({
         })}
       </div>
 
-      {/* 1. تبويب إدارة المذكرات */}
+      {/* 1. تبويب المذكرات والعينات */}
       {activeTab === 'notebooks' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <form
-            onSubmit={handleSaveNotebook}
-            className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 p-5 space-y-3.5 shadow-sm h-fit"
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="font-black text-slate-900 text-sm">
-                {nbForm.id ? 'تعديل المذكرة' : 'إضافة مذكرة جديدة'}
-              </h3>
-              {nbForm.id && (
+        <div className="space-y-6">
+          {/* أداة استكشاف وربط صور العينات */}
+          <div className="bg-amber-50 border border-amber-200 rounded-3xl p-5 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="font-black text-amber-950 text-sm">مستكشف ورابط صور العينات من السحابة</h3>
+                <p className="text-xs text-amber-800 font-bold">
+                  افحص مجلد العينات في Firestore (مثل notebook_samples) واربط الصور بأي مذكرة بضغطة واحدة
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  dir="ltr"
+                  value={customColName}
+                  onChange={(e) => setCustomColName(e.target.value)}
+                  className="px-3 py-2 rounded-xl border border-amber-300 bg-white text-xs font-black"
+                />
                 <button
                   type="button"
-                  onClick={() => setNbForm(emptyNbForm)}
-                  className="text-xs font-black text-rose-600"
+                  onClick={handleScanSamplesCollection}
+                  disabled={scanningCol}
+                  className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-black"
                 >
-                  إلغاء التعديل
+                  {scanningCol ? 'جاري الفحص...' : 'فحص المجلد'}
                 </button>
-              )}
+              </div>
             </div>
 
-            <input
-              type="text"
-              required
-              placeholder="عنوان المذكرة"
-              value={nbForm.title}
-              onChange={(e) => setNbForm({ ...nbForm, title: e.target.value })}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
-            />
-            <input
-              type="text"
-              placeholder="وصف مختصر للمذكرة"
-              value={nbForm.subtitle}
-              onChange={(e) => setNbForm({ ...nbForm, subtitle: e.target.value })}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
-            />
+            {discoveredDocs.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                {discoveredDocs.map((docItem, idx) => (
+                  <div key={idx} className="bg-white rounded-2xl border border-amber-200 p-3 space-y-2">
+                    <div className="text-[11px] font-black text-slate-500">
+                      المصدر: {docItem.source} | المستند: {docItem.docId} ({docItem.images.length} صورة)
+                    </div>
+                    {docItem.images.length > 0 && (
+                      <div className="flex gap-1.5 overflow-x-auto py-1">
+                        {docItem.images.slice(0, 5).map((im, i) => (
+                          <img key={i} src={im} alt="" className="w-12 h-14 rounded-lg object-cover border" />
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <select
+                        value={docItem.targetNbId || docItem.notebookId}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setDiscoveredDocs((prev) =>
+                            prev.map((d, i) => (i === idx ? { ...d, targetNbId: val } : d))
+                          );
+                        }}
+                        className="flex-1 px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs font-bold"
+                      >
+                        <option value="">اختر المذكرة لربط العينات بها...</option>
+                        {notebooks.map((n) => (
+                          <option key={n.id} value={n.id}>
+                            {n.title}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const targetId = docItem.targetNbId || docItem.notebookId;
+                          if (!targetId || docItem.images.length === 0) return;
+                          setSamplesMap((prev) => ({
+                            ...prev,
+                            [targetId]: Array.from(new Set([...(prev[targetId] || []), ...docItem.images]))
+                          }));
+                          if (db && auth?.currentUser) {
+                            await setDoc(
+                              publicDoc('notebook_samples', targetId),
+                              { notebookId: targetId, pages: docItem.images },
+                              { merge: true }
+                            );
+                          }
+                          showToast('تم ربط صور العينات بالمذكرة بنجاح!');
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-black"
+                      >
+                        ربط وحفظ
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {/* نموذج إضافة / تعديل مذكرة */}
+          <form onSubmit={handleSaveNotebook} className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 space-y-4">
+            <h3 className="font-black text-slate-900 text-base">
+              {nbForm.id ? 'تعديل بيانات المذكرة' : 'إضافة مذكرة دراسية جديدة'}
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <input
+                type="text"
+                required
+                placeholder="عنوان المذكرة *"
+                value={nbForm.title}
+                onChange={(e) => setNbForm({ ...nbForm, title: e.target.value })}
+                className="px-3.5 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold"
+              />
+              <input
+                type="text"
+                placeholder="وصف مختصر للمذكرة"
+                value={nbForm.subtitle}
+                onChange={(e) => setNbForm({ ...nbForm, subtitle: e.target.value })}
+                className="px-3.5 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold"
+              />
+              <input
+                type="text"
+                placeholder="شارة مميزة (مثلاً: جديد / الأكثر طلبًا)"
+                value={nbForm.badge}
+                onChange={(e) => setNbForm({ ...nbForm, badge: e.target.value })}
+                className="px-3.5 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold"
+              />
               <select
                 value={nbForm.categoryId}
                 onChange={(e) => setNbForm({ ...nbForm, categoryId: e.target.value, stageId: '', gradeId: '' })}
-                className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold bg-white"
+                className="px-3.5 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold"
               >
-                <option value="">القسم الرئيسي</option>
+                <option value="">اختر القسم الرئيسي</option>
                 {(localSettings.categories || []).map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
                   </option>
                 ))}
               </select>
-
               <select
                 value={nbForm.stageId}
                 onChange={(e) => setNbForm({ ...nbForm, stageId: e.target.value, gradeId: '' })}
-                className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold bg-white"
+                className="px-3.5 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold"
               >
-                <option value="">المرحلة</option>
-                {(
-                  (localSettings.categories || []).find((c) => c.id === nbForm.categoryId)?.stages || []
-                ).map((s) => (
+                <option value="">اختر المرحلة</option>
+                {((localSettings.categories || []).find((c) => c.id === nbForm.categoryId)?.stages || []).map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
                   </option>
                 ))}
               </select>
-
               <select
                 value={nbForm.gradeId}
                 onChange={(e) => setNbForm({ ...nbForm, gradeId: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold bg-white"
+                className="px-3.5 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold"
               >
-                <option value="">الصف</option>
+                <option value="">اختر الصف الدراسي</option>
                 {(
-                  (
-                    (localSettings.categories || [])
-                      .find((c) => c.id === nbForm.categoryId)
-                      ?.stages || []
-                  ).find((s) => s.id === nbForm.stageId)?.grades || []
+                  ((localSettings.categories || []).find((c) => c.id === nbForm.categoryId)?.stages || []).find(
+                    (s) => s.id === nbForm.stageId
+                  )?.grades || []
                 ).map((g) => (
                   <option key={g.id} value={g.id}>
                     {g.name}
                   </option>
                 ))}
               </select>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
               <input
                 type="number"
                 required
-                placeholder="السعر (ج.م)"
+                placeholder="السعر الحالي (ج.م) *"
                 value={nbForm.price}
                 onChange={(e) => setNbForm({ ...nbForm, price: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                className="px-3.5 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold"
               />
               <input
                 type="number"
-                placeholder="السعر قبل الخصم"
+                placeholder="السعر قبل الخصم (اختياري)"
                 value={nbForm.oldPrice}
                 onChange={(e) => setNbForm({ ...nbForm, oldPrice: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                className="px-3.5 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold"
               />
               <input
-                type="text"
-                placeholder="شارة (مثال: جديد)"
-                value={nbForm.badge}
-                onChange={(e) => setNbForm({ ...nbForm, badge: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                type="url"
+                dir="ltr"
+                placeholder="رابط عينة Google Drive (اختياري)"
+                value={nbForm.driveUrl}
+                onChange={(e) => setNbForm({ ...nbForm, driveUrl: e.target.value })}
+                className="px-3.5 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold text-left"
               />
             </div>
 
             <input
-              type="url"
-              placeholder="رابط معاينة Google Drive (اختياري)"
-              dir="ltr"
-              value={nbForm.driveUrl}
-              onChange={(e) => setNbForm({ ...nbForm, driveUrl: e.target.value })}
-              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold text-left"
-            />
-            <input
               type="text"
-              placeholder="تنبيه يظهر داخل نافذة المعاينة (اختياري)"
+              placeholder="تنبيه يظهر داخل نافذة معاينة المذكرة (اختياري)"
               value={nbForm.noticeText}
               onChange={(e) => setNbForm({ ...nbForm, noticeText: e.target.value })}
-              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+              className="w-full px-3.5 py-2.5 rounded-2xl border border-slate-200 text-xs font-bold"
             />
 
-            <div className="grid grid-cols-2 gap-2">
-              <label className="p-3 rounded-xl border border-dashed border-blue-300 bg-blue-50/50 text-center cursor-pointer text-xs font-black text-blue-700 flex flex-col items-center gap-1">
-                <Upload className="w-4 h-4" />
-                <span>رفع صورة الغلاف</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="p-3.5 rounded-2xl border border-dashed border-slate-300 space-y-2">
+                <label className="block text-xs font-black text-slate-700">صورة غلاف المذكرة</label>
                 <input
                   type="file"
                   accept="image/*"
-                  className="hidden"
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
-                    if (file) {
-                      const compressed = await compressImageFile(file, 900, 0.8);
-                      setNbForm({ ...nbForm, coverImage: compressed });
-                    }
+                    if (!file) return;
+                    const dataUrl = await compressImageFile(file, 900, 0.8);
+                    setNbForm((prev) => ({ ...prev, coverImage: dataUrl }));
                   }}
+                  className="text-xs"
                 />
-              </label>
+                {nbForm.coverImage && (
+                  <img src={nbForm.coverImage} alt="غلاف" className="h-24 rounded-xl object-cover border" />
+                )}
+              </div>
 
-              <label className="p-3 rounded-xl border border-dashed border-emerald-300 bg-emerald-50/50 text-center cursor-pointer text-xs font-black text-emerald-700 flex flex-col items-center gap-1">
-                <ImageIcon className="w-4 h-4" />
-                <span>رفع صور العينات ({(nbForm.sampleImages || []).length})</span>
+              <div className="p-3.5 rounded-2xl border border-dashed border-slate-300 space-y-2">
+                <label className="block text-xs font-black text-slate-700">
+                  صور صفحات العينة ({nbForm.sampleImages.length} صفحة)
+                </label>
                 <input
                   type="file"
                   accept="image/*"
                   multiple
-                  className="hidden"
                   onChange={async (e) => {
                     const files = Array.from(e.target.files || []);
-                    if (files.length > 0) {
-                      const imgs = await Promise.all(files.map((f) => compressImageFile(f, 950, 0.78)));
-                      setNbForm({ ...nbForm, sampleImages: [...(nbForm.sampleImages || []), ...imgs] });
-                    }
+                    if (files.length === 0) return;
+                    const compressed = await Promise.all(files.map((f) => compressImageFile(f, 1000, 0.76)));
+                    setNbForm((prev) => ({
+                      ...prev,
+                      sampleImages: [...prev.sampleImages, ...compressed]
+                    }));
                   }}
+                  className="text-xs"
                 />
-              </label>
+                {nbForm.sampleImages.length > 0 && (
+                  <div className="flex gap-2 overflow-x-auto py-1">
+                    {nbForm.sampleImages.map((img, i) => (
+                      <div key={i} className="relative shrink-0">
+                        <img src={img} alt="" className="h-16 w-14 rounded-lg object-cover border" />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setNbForm((prev) => ({
+                              ...prev,
+                              sampleImages: prev.sampleImages.filter((_, idx) => idx !== i)
+                            }))
+                          }
+                          className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-600 text-white text-[10px] flex items-center justify-center"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={savingNb}
-              className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black"
-            >
-              {savingNb ? 'جاري الحفظ...' : nbForm.id ? 'حفظ التعديلات' : 'إضافة المذكرة للمنصة'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="submit"
+                disabled={savingNb}
+                className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black"
+              >
+                {savingNb ? 'جاري الحفظ...' : nbForm.id ? 'حفظ التعديلات' : 'إضافة المذكرة الآن'}
+              </button>
+              {nbForm.id && (
+                <button
+                  type="button"
+                  onClick={() => setNbForm(emptyNbForm)}
+                  className="px-4 py-3 rounded-2xl bg-slate-100 text-slate-700 text-xs font-black"
+                >
+                  إلغاء التعديل
+                </button>
+              )}
+            </div>
           </form>
 
           {/* قائمة المذكرات الحالية */}
-          <div className="lg:col-span-7 space-y-3">
-            {notebooks.map((nb) => (
-              <div
-                key={nb.id}
-                className="bg-white rounded-2xl border border-slate-200 p-3.5 flex items-center justify-between gap-3"
-              >
-                <div className="flex items-center gap-3 min-w-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {notebooks.map((nb) => {
+              const sCount = (samplesMap[nb.id] || nb.inlineSamples || []).length;
+              return (
+                <div key={nb.id} className="bg-white rounded-2xl border border-slate-200 p-4 flex gap-3 items-center">
                   {nb.coverImage ? (
-                    <img src={nb.coverImage} alt={nb.title} className="w-12 h-14 rounded-xl object-cover shrink-0" />
+                    <img src={nb.coverImage} alt="" className="w-16 h-20 rounded-xl object-cover border shrink-0" />
                   ) : (
-                    <div className="w-12 h-14 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
-                      <BookOpen className="w-5 h-5" />
+                    <div className="w-16 h-20 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                      <BookOpen className="w-6 h-6" />
                     </div>
                   )}
-                  <div className="min-w-0">
-                    <div className="font-black text-slate-900 text-xs sm:text-sm truncate">{nb.title}</div>
-                    <div className="text-[11px] font-bold text-blue-600">
-                      {nb.price} ج.م • {(samplesMap[nb.id] || nb.inlineSamples || []).length} صورة عينة
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="font-black text-slate-900 text-xs truncate">{nb.title}</div>
+                    <div className="text-[11px] text-blue-600 font-bold">
+                      {nb.price} ج.م • {sCount} صورة عينة
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setNbForm({
+                            id: nb.id,
+                            title: nb.title,
+                            subtitle: nb.subtitle,
+                            categoryId: nb.categoryId,
+                            stageId: nb.stageId,
+                            gradeId: nb.gradeId,
+                            price: String(nb.price),
+                            oldPrice: nb.oldPrice ? String(nb.oldPrice) : '',
+                            badge: nb.badge,
+                            driveUrl: nb.driveUrl,
+                            noticeText: nb.noticeText,
+                            coverImage: nb.coverImage,
+                            sampleImages: samplesMap[nb.id] || nb.inlineSamples || []
+                          })
+                        }
+                        className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 text-[11px] font-black"
+                      >
+                        تعديل
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteNotebook(nb.id)}
+                        className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 text-[11px] font-black"
+                      >
+                        حذف
+                      </button>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setNbForm({
-                        id: nb.id,
-                        title: nb.title,
-                        subtitle: nb.subtitle,
-                        categoryId: nb.categoryId,
-                        stageId: nb.stageId,
-                        gradeId: nb.gradeId,
-                        price: nb.price,
-                        oldPrice: nb.oldPrice,
-                        badge: nb.badge,
-                        driveUrl: nb.driveUrl,
-                        noticeText: nb.noticeText,
-                        coverImage: nb.coverImage,
-                        sampleImages: samplesMap[nb.id] || nb.inlineSamples || []
-                      })
-                    }
-                    className="p-2 rounded-xl bg-slate-100 hover:bg-blue-50 text-blue-600"
-                    title="تعديل"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteNotebook(nb.id)}
-                    className="p-2 rounded-xl bg-slate-100 hover:bg-rose-50 text-rose-600"
-                    title="حذف"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
 
       {/* 2. تبويب الأقسام والمراحل والصفوف */}
       {activeTab === 'categories' && (
-        <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 space-y-6 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="font-black text-slate-900 text-base">شجرة الأقسام الرئيسية والمراحل والصفوف</h3>
-              <p className="text-xs text-slate-500 font-bold">
-                يمكنك إعادة تسمية أي قسم أو ترتيب الأقسام بالأسهم أو رفع صورة غلاف خاصة به
-              </p>
-            </div>
+        <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 space-y-5">
+          <div className="flex items-center justify-between">
+            <h3 className="font-black text-slate-900 text-base">إدارة الأقسام الرئيسية والمراحل والصفوف</h3>
             <button
               type="button"
               onClick={() =>
-                setLocalSettings({
-                  ...localSettings,
+                setLocalSettings((prev) => ({
+                  ...prev,
                   categories: [
-                    ...(localSettings.categories || []),
-                    { id: `cat_${Date.now()}`, name: 'قسم رئيسي جديد', image: '', stages: [] }
+                    ...(prev.categories || []),
+                    { id: `cat_${Date.now()}`, name: 'قسم جديد', image: '', stages: [] }
                   ]
-                })
+                }))
               }
-              className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-black flex items-center gap-1.5"
+              className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-black flex items-center gap-1"
             >
               <Plus className="w-4 h-4" />
-              <span>إضافة قسم رئيسي</span>
+              <span>إضافة قسم</span>
             </button>
           </div>
 
           <div className="space-y-4">
             {(localSettings.categories || []).map((cat, cIdx) => (
-              <div key={cat.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
+              <div key={cat.id} className="p-4 rounded-2xl border border-slate-200 bg-slate-50 space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
                   <input
                     type="text"
                     value={cat.name}
                     onChange={(e) => {
-                      const arr = [...localSettings.categories];
-                      arr[cIdx] = { ...cat, name: e.target.value };
-                      setLocalSettings({ ...localSettings, categories: arr });
+                      const val = e.target.value;
+                      setLocalSettings((prev) => ({
+                        ...prev,
+                        categories: prev.categories.map((c, i) => (i === cIdx ? { ...c, name: val } : c))
+                      }));
                     }}
-                    className="flex-1 min-w-[200px] px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-black"
+                    className="flex-1 px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-black"
                   />
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={cIdx === 0}
-                      onClick={() => {
-                        const arr = [...localSettings.categories];
-                        [arr[cIdx - 1], arr[cIdx]] = [arr[cIdx], arr[cIdx - 1]];
-                        setLocalSettings({ ...localSettings, categories: arr });
+                  <label className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-black cursor-pointer">
+                    <span>صورة القسم</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const dataUrl = await compressImageFile(file, 900, 0.8);
+                        setLocalSettings((prev) => ({
+                          ...prev,
+                          categories: prev.categories.map((c, i) => (i === cIdx ? { ...c, image: dataUrl } : c))
+                        }));
                       }}
-                      className="p-2 rounded-xl bg-white border border-slate-200 text-slate-600 disabled:opacity-30"
-                      title="تحريك لأعلى"
-                    >
-                      <ChevronUp className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={cIdx === localSettings.categories.length - 1}
-                      onClick={() => {
-                        const arr = [...localSettings.categories];
-                        [arr[cIdx + 1], arr[cIdx]] = [arr[cIdx], arr[cIdx + 1]];
-                        setLocalSettings({ ...localSettings, categories: arr });
-                      }}
-                      className="p-2 rounded-xl bg-white border border-slate-200 text-slate-600 disabled:opacity-30"
-                      title="تحريك لأسفل"
-                    >
-                      <ChevronDown className="w-4 h-4" />
-                    </button>
-                    <label className="px-3 py-2 rounded-xl bg-white border border-slate-200 hover:border-blue-400 text-xs font-black cursor-pointer flex items-center gap-1.5">
-                      <ImageIcon className="w-4 h-4 text-blue-600" />
-                      <span>صورة القسم</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            const compressed = await compressImageFile(file, 900, 0.8);
-                            const arr = [...localSettings.categories];
-                            arr[cIdx] = { ...cat, image: compressed };
-                            setLocalSettings({ ...localSettings, categories: arr });
-                          }
-                        }}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const arr = [...localSettings.categories];
-                        arr[cIdx] = {
-                          ...cat,
-                          stages: [
-                            ...(cat.stages || []),
-                            { id: `stg_${Date.now()}`, name: 'مرحلة جديدة', grades: [] }
-                          ]
-                        };
-                        setLocalSettings({ ...localSettings, categories: arr });
-                      }}
-                      className="px-3 py-2 rounded-xl bg-slate-900 text-white text-xs font-black"
-                    >
-                      + مرحلة
-                    </button>
-                  </div>
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLocalSettings((prev) => ({
+                        ...prev,
+                        categories: prev.categories.map((c, i) =>
+                          i === cIdx
+                            ? {
+                                ...c,
+                                stages: [...(c.stages || []), { id: `stg_${Date.now()}`, name: 'مرحلة جديدة', grades: [] }]
+                              }
+                            : c
+                        )
+                      }))
+                    }
+                    className="px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-black"
+                  >
+                    + مرحلة
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLocalSettings((prev) => ({
+                        ...prev,
+                        categories: prev.categories.filter((_, i) => i !== cIdx)
+                      }))
+                    }
+                    className="p-2 rounded-xl bg-rose-100 text-rose-700"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
 
-                {/* المراحل والصفوف داخل القسم */}
-                <div className="pr-4 space-y-2 border-r-2 border-blue-200">
+                {cat.image && <img src={cat.image} alt="" className="h-20 rounded-xl object-cover border" />}
+
+                {/* المراحل داخل القسم */}
+                <div className="space-y-2 pr-4 border-r-2 border-blue-200">
                   {(cat.stages || []).map((st, sIdx) => (
                     <div key={st.id} className="p-3 rounded-xl bg-white border border-slate-200 space-y-2">
                       <div className="flex items-center gap-2">
@@ -2959,61 +3107,119 @@ function AdminDashboard({
                           type="text"
                           value={st.name}
                           onChange={(e) => {
-                            const cats = [...localSettings.categories];
-                            const stages = [...cat.stages];
-                            stages[sIdx] = { ...st, name: e.target.value };
-                            cats[cIdx] = { ...cat, stages };
-                            setLocalSettings({ ...localSettings, categories: cats });
+                            const val = e.target.value;
+                            setLocalSettings((prev) => ({
+                              ...prev,
+                              categories: prev.categories.map((c, i) =>
+                                i === cIdx
+                                  ? {
+                                      ...c,
+                                      stages: c.stages.map((s, j) => (j === sIdx ? { ...s, name: val } : s))
+                                    }
+                                  : c
+                              )
+                            }));
                           }}
-                          className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-black"
+                          className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold"
                         />
                         <button
                           type="button"
-                          onClick={() => {
-                            const cats = [...localSettings.categories];
-                            const stages = [...cat.stages];
-                            stages[sIdx] = {
-                              ...st,
-                              grades: [...(st.grades || []), { id: `grd_${Date.now()}`, name: 'صف جديد' }]
-                            };
-                            cats[cIdx] = { ...cat, stages };
-                            setLocalSettings({ ...localSettings, categories: cats });
-                          }}
+                          onClick={() =>
+                            setLocalSettings((prev) => ({
+                              ...prev,
+                              categories: prev.categories.map((c, i) =>
+                                i === cIdx
+                                  ? {
+                                      ...c,
+                                      stages: c.stages.map((s, j) =>
+                                        j === sIdx
+                                          ? {
+                                              ...s,
+                                              grades: [
+                                                ...(s.grades || []),
+                                                { id: `grd_${Date.now()}`, name: 'صف جديد' }
+                                              ]
+                                            }
+                                          : s
+                                      )
+                                    }
+                                  : c
+                              )
+                            }))
+                          }
                           className="px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-[11px] font-black"
                         >
                           + صف
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setLocalSettings((prev) => ({
+                              ...prev,
+                              categories: prev.categories.map((c, i) =>
+                                i === cIdx ? { ...c, stages: c.stages.filter((_, j) => j !== sIdx) } : c
+                              )
+                            }))
+                          }
+                          className="p-1.5 text-rose-600"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
 
                       <div className="flex flex-wrap gap-2">
                         {(st.grades || []).map((gr, gIdx) => (
-                          <div key={gr.id} className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg border border-slate-200">
+                          <div key={gr.id} className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg border">
                             <input
                               type="text"
                               value={gr.name}
                               onChange={(e) => {
-                                const cats = [...localSettings.categories];
-                                const stages = [...cat.stages];
-                                const grades = [...st.grades];
-                                grades[gIdx] = { ...gr, name: e.target.value };
-                                stages[sIdx] = { ...st, grades };
-                                cats[cIdx] = { ...cat, stages };
-                                setLocalSettings({ ...localSettings, categories: cats });
+                                const val = e.target.value;
+                                setLocalSettings((prev) => ({
+                                  ...prev,
+                                  categories: prev.categories.map((c, i) =>
+                                    i === cIdx
+                                      ? {
+                                          ...c,
+                                          stages: c.stages.map((s, j) =>
+                                            j === sIdx
+                                              ? {
+                                                  ...s,
+                                                  grades: s.grades.map((g, k) =>
+                                                    k === gIdx ? { ...g, name: val } : g
+                                                  )
+                                                }
+                                              : s
+                                          )
+                                        }
+                                      : c
+                                  )
+                                }));
                               }}
-                              className="bg-transparent text-[11px] font-bold w-32 focus:outline-none"
+                              className="bg-transparent text-xs font-bold w-36 focus:outline-none"
                             />
                             <button
                               type="button"
-                              onClick={() => {
-                                const cats = [...localSettings.categories];
-                                const stages = [...cat.stages];
-                                stages[sIdx] = { ...st, grades: st.grades.filter((_, i) => i !== gIdx) };
-                                cats[cIdx] = { ...cat, stages };
-                                setLocalSettings({ ...localSettings, categories: cats });
-                              }}
-                              className="text-rose-500"
+                              onClick={() =>
+                                setLocalSettings((prev) => ({
+                                  ...prev,
+                                  categories: prev.categories.map((c, i) =>
+                                    i === cIdx
+                                      ? {
+                                          ...c,
+                                          stages: c.stages.map((s, j) =>
+                                            j === sIdx
+                                              ? { ...s, grades: s.grades.filter((_, k) => k !== gIdx) }
+                                              : s
+                                          )
+                                        }
+                                      : c
+                                  )
+                                }))
+                              }
+                              className="text-rose-500 text-xs font-black"
                             >
-                              <X className="w-3 h-3" />
+                              ×
                             </button>
                           </div>
                         ))}
@@ -3029,65 +3235,62 @@ function AdminDashboard({
             type="button"
             onClick={handleSaveSettings}
             disabled={savingSettings}
-            className="px-6 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black"
+            className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black"
           >
-            {savingSettings ? 'جاري الحفظ...' : 'حفظ شجرة الأقسام والصور'}
+            {savingSettings ? 'جاري الحفظ...' : 'حفظ هيكل الأقسام والصور'}
           </button>
         </div>
       )}
 
-      {/* 3. تبويب العروض والكوبونات */}
+      {/* 3. تبويب الكوبونات والباقات */}
       {activeTab === 'offers' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* إدارة كوبونات الخصم بمدة صلاحية */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4 shadow-sm">
-            <h3 className="font-black text-slate-900 text-sm">إنشاء كوبون خصم (مع إمكانية تحديد المدة)</h3>
+          {/* إدارة الكوبونات */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4">
+            <h3 className="font-black text-slate-900 text-base">إنشاء كوبون خصم بمدة صلاحية</h3>
             <form onSubmit={handleCreateCoupon} className="space-y-3">
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2.5">
                 <input
                   type="text"
                   required
-                  placeholder="الكود (M20)"
+                  placeholder="كود الخصم (مثلاً M20)"
                   value={couponForm.code}
                   onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value })}
-                  className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-black uppercase"
+                  className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-black uppercase"
                 />
                 <select
                   value={couponForm.type}
                   onChange={(e) => setCouponForm({ ...couponForm, type: e.target.value })}
-                  className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold bg-white"
+                  className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
                 >
-                  <option value="percent">نسبة %</option>
-                  <option value="fixed">مبلغ ثابت ج.م</option>
+                  <option value="percent">نسبة مئوية (%)</option>
+                  <option value="fixed">مبلغ ثابت (ج.م)</option>
                 </select>
+              </div>
+              <div className="grid grid-cols-2 gap-2.5">
                 <input
                   type="number"
                   required
-                  placeholder="القيمة"
+                  placeholder="قيمة الخصم"
                   value={couponForm.value}
                   onChange={(e) => setCouponForm({ ...couponForm, value: e.target.value })}
-                  className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                  className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
                 />
+                <div>
+                  <input
+                    type="datetime-local"
+                    value={couponForm.expiresAt}
+                    onChange={(e) => setCouponForm({ ...couponForm, expiresAt: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
+                  />
+                </div>
               </div>
-
-              <div>
-                <label className="block text-[11px] font-black text-slate-600 mb-1">
-                  تاريخ ووقت انتهاء الصلاحية (اتركه فارغًا ليبقى مفتوحًا)
-                </label>
-                <input
-                  type="datetime-local"
-                  value={couponForm.expiresAt}
-                  onChange={(e) => setCouponForm({ ...couponForm, expiresAt: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
-                />
-              </div>
-
               <input
                 type="text"
-                placeholder="وصف الكوبون للعملاء (اختياري)"
+                placeholder="ملاحظة توضيحية للكوبون (اختياري)"
                 value={couponForm.note}
                 onChange={(e) => setCouponForm({ ...couponForm, note: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
               />
               <button
                 type="submit"
@@ -3103,12 +3306,12 @@ function AdminDashboard({
                 return (
                   <div
                     key={cp.id}
-                    className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2"
+                    className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between"
                   >
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-black text-xs text-blue-700">{cp.code}</span>
-                        <span className="text-xs font-bold text-slate-700">
+                        <span className="font-black text-xs text-slate-900">{cp.code}</span>
+                        <span className="text-[11px] font-bold text-blue-600">
                           ({cp.value} {cp.type === 'fixed' ? 'ج.م' : '%'})
                         </span>
                         {expired && (
@@ -3118,29 +3321,29 @@ function AdminDashboard({
                         )}
                       </div>
                       {cp.expiresAt && (
-                        <div className="text-[11px] text-slate-500 font-bold">
+                        <div className="text-[10px] text-slate-500 font-bold">
                           ينتهي: {formatExpiryAr(cp.expiresAt)}
                         </div>
                       )}
                     </div>
-                    {db && auth?.currentUser && (
-                      <button
-                        type="button"
-                        onClick={() => deleteDoc(publicDoc('coupons', cp.id))}
-                        className="p-1.5 text-rose-500"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (db && auth?.currentUser) await deleteDoc(publicDoc('coupons', cp.id));
+                      }}
+                      className="p-1.5 text-rose-600"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 );
               })}
             </div>
           </div>
 
-          {/* إدارة باقات التوفير */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4 shadow-sm">
-            <h3 className="font-black text-slate-900 text-sm">إضافة باقة توفير</h3>
+          {/* إدارة الباقات */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4">
+            <h3 className="font-black text-slate-900 text-base">إضافة باقة توفير</h3>
             <form onSubmit={handleCreateBundle} className="space-y-3">
               <input
                 type="text"
@@ -3148,37 +3351,37 @@ function AdminDashboard({
                 placeholder="اسم الباقة"
                 value={bundleForm.title}
                 onChange={(e) => setBundleForm({ ...bundleForm, title: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
               />
               <textarea
                 rows={2}
-                placeholder="محتويات الباقة ومميزاتها..."
+                placeholder="محتويات الباقة"
                 value={bundleForm.description}
                 onChange={(e) => setBundleForm({ ...bundleForm, description: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
               />
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2.5">
                 <input
                   type="number"
                   required
                   placeholder="سعر الباقة (ج.م)"
                   value={bundleForm.price}
                   onChange={(e) => setBundleForm({ ...bundleForm, price: e.target.value })}
-                  className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                  className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
                 />
                 <input
                   type="number"
                   placeholder="السعر قبل الخصم"
                   value={bundleForm.oldPrice}
                   onChange={(e) => setBundleForm({ ...bundleForm, oldPrice: e.target.value })}
-                  className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                  className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
                 />
               </div>
               <button
                 type="submit"
                 className="w-full py-2.5 rounded-xl bg-amber-500 text-slate-950 text-xs font-black"
               >
-                إضافة الباقة
+                حفظ الباقة
               </button>
             </form>
 
@@ -3186,21 +3389,21 @@ function AdminDashboard({
               {bundles.map((b) => (
                 <div
                   key={b.id}
-                  className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2"
+                  className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between"
                 >
                   <div>
                     <div className="font-black text-xs text-slate-900">{b.title}</div>
                     <div className="text-[11px] font-bold text-blue-600">{b.price} ج.م</div>
                   </div>
-                  {db && auth?.currentUser && (
-                    <button
-                      type="button"
-                      onClick={() => deleteDoc(publicDoc('bundles', b.id))}
-                      className="p-1.5 text-rose-500"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (db && auth?.currentUser) await deleteDoc(publicDoc('bundles', b.id));
+                    }}
+                    className="p-1.5 text-rose-600"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               ))}
             </div>
@@ -3208,379 +3411,199 @@ function AdminDashboard({
         </div>
       )}
 
-      {/* 4. تبويب الطلبات */}
+      {/* 4. تبويب الطلبات الواردة */}
       {activeTab === 'orders' && (
-        <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4 shadow-sm">
-          <h3 className="font-black text-slate-900 text-sm">سجل طلبات المعلمين ({orders.length})</h3>
+        <div className="space-y-3">
           {orders.length === 0 ? (
-            <p className="text-xs text-slate-500 font-bold">لا توجد طلبات مسجلة حاليًا.</p>
+            <div className="bg-white rounded-3xl border border-slate-200 p-10 text-center text-xs font-bold text-slate-500">
+              لا توجد طلبات مسجلة حتى الآن.
+            </div>
           ) : (
-            <div className="space-y-3">
-              {orders.map((ord) => (
-                <div key={ord.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-black text-xs text-blue-700">{ord.orderCode}</span>
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={ord.status || 'pending'}
-                        onChange={async (e) => {
-                          if (db && auth?.currentUser) {
-                            await updateDoc(publicDoc('orders', ord.id), { status: e.target.value });
-                            showToast('تم تحديث حالة الطلب');
-                          }
-                        }}
-                        className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-xs font-black"
-                      >
-                        <option value="pending">قيد المراجعة</option>
-                        <option value="processing">جاري التجهيز</option>
-                        <option value="completed">تم التسليم</option>
-                      </select>
-                      {db && auth?.currentUser && (
-                        <button
-                          type="button"
-                          onClick={() => deleteDoc(publicDoc('orders', ord.id))}
-                          className="p-1.5 text-rose-500"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="text-xs font-bold text-slate-700">
-                    الإجمالي: {ord.total} ج.م • العناصر: {(ord.items || []).map((i) => i.title).join('، ')}
+            orders.map((ord) => (
+              <div key={ord.id} className="bg-white rounded-2xl border border-slate-200 p-4 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-black text-blue-700 text-sm">{ord.orderCode}</span>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={ord.status || 'pending'}
+                      onChange={async (e) => {
+                        const st = e.target.value;
+                        if (db && auth?.currentUser) {
+                          await updateDoc(publicDoc('orders', ord.id), { status: st });
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-black"
+                    >
+                      <option value="pending">قيد المراجعة</option>
+                      <option value="processing">جاري التجهيز</option>
+                      <option value="completed">تم التسليم</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (db && auth?.currentUser) await deleteDoc(publicDoc('orders', ord.id));
+                      }}
+                      className="p-1.5 text-rose-600"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
-              ))}
-            </div>
+                <div className="text-xs text-slate-600 font-bold">
+                  الإجمالي: {ord.total} ج.م • العناصر: {(ord.items || []).map((i) => i.title).join(' ، ')}
+                </div>
+              </div>
+            ))
           )}
         </div>
       )}
 
       {/* 5. تبويب إعدادات الموقع والمظهر */}
       {activeTab === 'settings' && (
-        <div className="space-y-6">
-          <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 space-y-5 shadow-sm">
-            <h3 className="font-black text-slate-900 text-base">الهوية البصرية والنصوص الرئيسية</h3>
+        <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 space-y-5">
+          <h3 className="font-black text-slate-900 text-base">إعدادات الهوية والواجهة والتواصل</h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-black text-slate-700 mb-1">اسم المنصة</label>
-                <input
-                  type="text"
-                  value={localSettings.platformName}
-                  onChange={(e) => setLocalSettings({ ...localSettings, platformName: e.target.value })}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-black"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-black text-slate-700 mb-1">الوصف المختصر أسفل الاسم</label>
-                <input
-                  type="text"
-                  value={localSettings.platformTagline}
-                  onChange={(e) => setLocalSettings({ ...localSettings, platformTagline: e.target.value })}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-black text-slate-700 mb-1">رقم الواتساب لاستقبال الطلبات</label>
-                <input
-                  type="text"
-                  dir="ltr"
-                  value={localSettings.whatsappNumber}
-                  onChange={(e) => setLocalSettings({ ...localSettings, whatsappNumber: e.target.value })}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-black text-left"
-                />
-              </div>
-              <div className="flex items-end gap-2">
-                <label className="flex-1 py-2.5 px-3 rounded-xl border border-dashed border-blue-300 bg-blue-50 text-blue-700 text-xs font-black cursor-pointer text-center">
-                  رفع شعار المنصة (Logo)
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const img = await compressImageFile(file, 400, 0.85);
-                        setLocalSettings({ ...localSettings, logoUrl: img });
-                      }
-                    }}
-                  />
-                </label>
-                <label className="flex-1 py-2.5 px-3 rounded-xl border border-dashed border-indigo-300 bg-indigo-50 text-indigo-700 text-xs font-black cursor-pointer text-center">
-                  رفع خلفية الواجهة الرئيسية
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const img = await compressImageFile(file, 1400, 0.8);
-                        setLocalSettings({ ...localSettings, heroBgImage: img });
-                      }
-                    }}
-                  />
-                </label>
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-black text-slate-700 mb-1">اسم المنصة</label>
+              <input
+                type="text"
+                value={localSettings.platformName}
+                onChange={(e) => setLocalSettings({ ...localSettings, platformName: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
+              />
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-black text-slate-700 mb-1">العنوان الرئيسي في الواجهة</label>
-                <input
-                  type="text"
-                  value={localSettings.heroTitle}
-                  onChange={(e) => setLocalSettings({ ...localSettings, heroTitle: e.target.value })}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-black"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-black text-slate-700 mb-1">النص الترويجي العلوي</label>
-                <input
-                  type="text"
-                  value={localSettings.promoText}
-                  onChange={(e) => setLocalSettings({ ...localSettings, promoText: e.target.value })}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-xs font-black text-slate-700 mb-1">الوصف التفصيلي في الواجهة الرئيسية</label>
-                <textarea
-                  rows={2}
-                  value={localSettings.heroSubtitle}
-                  onChange={(e) => setLocalSettings({ ...localSettings, heroSubtitle: e.target.value })}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold"
-                />
-              </div>
+            <div>
+              <label className="block text-xs font-black text-slate-700 mb-1">الوصف المختصر تحت الاسم</label>
+              <input
+                type="text"
+                value={localSettings.platformTagline}
+                onChange={(e) => setLocalSettings({ ...localSettings, platformTagline: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
+              />
             </div>
-
-            {/* نقاط بطاقة لماذا يثق بنا المعلمون */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-slate-800">بطاقة «لماذا يثق بنا المعلمون؟»</span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setLocalSettings({
-                      ...localSettings,
-                      trustPoints: [...(localSettings.trustPoints || []), 'ميزة إضافية للمعلمين']
-                    })
-                  }
-                  className="px-3 py-1 rounded-lg bg-blue-600 text-white text-[11px] font-black"
-                >
-                  + إضافة نقطة
-                </button>
-              </div>
-              <div className="space-y-2">
-                {(localSettings.trustPoints || []).map((pt, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={pt}
-                      onChange={(e) => {
-                        const arr = [...localSettings.trustPoints];
-                        arr[idx] = e.target.value;
-                        setLocalSettings({ ...localSettings, trustPoints: arr });
-                      }}
-                      className="flex-1 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setLocalSettings({
-                          ...localSettings,
-                          trustPoints: localSettings.trustPoints.filter((_, i) => i !== idx)
-                        })
-                      }
-                      className="p-1.5 text-rose-500"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
+            <div>
+              <label className="block text-xs font-black text-slate-700 mb-1">رقم واتساب استقبال الطلبات</label>
+              <input
+                type="text"
+                dir="ltr"
+                value={localSettings.whatsappNumber}
+                onChange={(e) => setLocalSettings({ ...localSettings, whatsappNumber: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-left"
+              />
             </div>
-
-            {/* إدارة روابط التواصل الاجتماعي */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-slate-800">روابط التواصل الاجتماعي (داخل نافذة تواصل معنا)</span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setLocalSettings({
-                      ...localSettings,
-                      socialLinks: [
-                        ...(localSettings.socialLinks || []),
-                        { id: `soc_${Date.now()}`, label: 'رابط جديد', url: 'https://' }
-                      ]
-                    })
-                  }
-                  className="px-3 py-1 rounded-lg bg-slate-900 text-white text-[11px] font-black"
-                >
-                  + إضافة رابط
-                </button>
-              </div>
-              <div className="space-y-2">
-                {(localSettings.socialLinks || []).map((lnk, idx) => (
-                  <div key={lnk.id} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
-                    <input
-                      type="text"
-                      value={lnk.label}
-                      onChange={(e) => {
-                        const arr = [...localSettings.socialLinks];
-                        arr[idx] = { ...lnk, label: e.target.value };
-                        setLocalSettings({ ...localSettings, socialLinks: arr });
-                      }}
-                      placeholder="اسم المنصة (فيسبوك / تليجرام)"
-                      className="sm:col-span-5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
-                    />
-                    <input
-                      type="url"
-                      value={lnk.url}
-                      onChange={(e) => {
-                        const arr = [...localSettings.socialLinks];
-                        arr[idx] = { ...lnk, url: e.target.value };
-                        setLocalSettings({ ...localSettings, socialLinks: arr });
-                      }}
-                      placeholder="https://..."
-                      dir="ltr"
-                      className="sm:col-span-6 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-left"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setLocalSettings({
-                          ...localSettings,
-                          socialLinks: localSettings.socialLinks.filter((_, i) => i !== idx)
-                        })
-                      }
-                      className="sm:col-span-1 p-1.5 text-rose-500 justify-self-center"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
+            <div>
+              <label className="block text-xs font-black text-slate-700 mb-1">نص الشريط الترويجي العلوي</label>
+              <input
+                type="text"
+                value={localSettings.promoText}
+                onChange={(e) => setLocalSettings({ ...localSettings, promoText: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
+              />
             </div>
           </div>
 
-          {/* إعدادات قسم ما الجديد ومكافأة الطلب القادم */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-3 shadow-sm">
-              <div className="flex items-center justify-between">
-                <h4 className="font-black text-slate-900 text-sm">إعدادات قسم «ما الجديد؟»</h4>
-                <input
-                  type="checkbox"
-                  checked={Boolean(localSettings.whatsNewEnabled)}
-                  onChange={(e) => setLocalSettings({ ...localSettings, whatsNewEnabled: e.target.checked })}
-                />
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="p-3.5 rounded-2xl border border-slate-200 space-y-2">
+              <label className="block text-xs font-black text-slate-700">شعار المنصة (Logo)</label>
               <input
-                type="text"
-                value={localSettings.whatsNewTitle}
-                onChange={(e) => setLocalSettings({ ...localSettings, whatsNewTitle: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-black"
+                type="file"
+                accept="image/*"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const dataUrl = await compressImageFile(file, 400, 0.85);
+                  setLocalSettings({ ...localSettings, logoUrl: dataUrl });
+                }}
+                className="text-xs"
               />
-              <div className="grid grid-cols-2 gap-2">
-                <select
-                  value={localSettings.whatsNewMode || 'auto'}
-                  onChange={(e) => setLocalSettings({ ...localSettings, whatsNewMode: e.target.value })}
-                  className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold bg-white"
-                >
-                  <option value="auto">تلقائي (أحدث المذكرات)</option>
-                  <option value="manual">اختيار يدوي</option>
-                </select>
-                <input
-                  type="number"
-                  min="2"
-                  max="12"
-                  value={localSettings.whatsNewCount || 4}
-                  onChange={(e) => setLocalSettings({ ...localSettings, whatsNewCount: Number(e.target.value) })}
-                  className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
-                />
-              </div>
-              {localSettings.whatsNewMode === 'manual' && (
-                <div className="max-h-36 overflow-y-auto p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-                  <span className="block text-[11px] font-black text-slate-600 mb-1">
-                    حدد المذكرات المعروضة في قسم «ما الجديد؟»:
-                  </span>
-                  {notebooks.map((nb) => {
-                    const checked = (localSettings.whatsNewIds || []).includes(nb.id);
-                    return (
-                      <label key={nb.id} className="flex items-center gap-2 text-xs font-bold cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(e) => {
-                            const cur = localSettings.whatsNewIds || [];
-                            const next = e.target.checked ? [...cur, nb.id] : cur.filter((id) => id !== nb.id);
-                            setLocalSettings({ ...localSettings, whatsNewIds: next });
-                          }}
-                        />
-                        <span className="truncate">{nb.title}</span>
-                      </label>
-                    );
-                  })}
-                </div>
+              {localSettings.logoUrl && (
+                <img src={localSettings.logoUrl} alt="Logo" className="w-16 h-16 rounded-2xl object-cover border" />
               )}
             </div>
 
-            {/* كوبون مكافأة الطلب القادم بمدة صلاحية */}
-            <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-3 shadow-sm">
-              <div className="flex items-center justify-between">
-                <h4 className="font-black text-slate-900 text-sm">كوبون مكافأة الطلب القادم التلقائي</h4>
+            <div className="p-3.5 rounded-2xl border border-slate-200 space-y-2">
+              <label className="block text-xs font-black text-slate-700">صورة خلفية الواجهة الرئيسية (Hero)</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const dataUrl = await compressImageFile(file, 1400, 0.78);
+                  setLocalSettings({ ...localSettings, heroBgImage: dataUrl });
+                }}
+                className="text-xs"
+              />
+              {localSettings.heroBgImage && (
+                <img src={localSettings.heroBgImage} alt="Hero" className="h-20 rounded-xl object-cover border" />
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-black text-slate-700 mb-1">العنوان الرئيسي في الواجهة</label>
+              <input
+                type="text"
+                value={localSettings.heroTitle}
+                onChange={(e) => setLocalSettings({ ...localSettings, heroTitle: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-black text-slate-700 mb-1">النص التعريفي في الواجهة</label>
+              <textarea
+                rows={2}
+                value={localSettings.heroSubtitle}
+                onChange={(e) => setLocalSettings({ ...localSettings, heroSubtitle: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
+              />
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-slate-800">كوبون مكافأة الطلب القادم التلقائي</span>
+              <input
+                type="checkbox"
+                checked={!!localSettings.nextOrderReward?.enabled}
+                onChange={(e) =>
+                  setLocalSettings({
+                    ...localSettings,
+                    nextOrderReward: { ...localSettings.nextOrderReward, enabled: e.target.checked }
+                  })
+                }
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">نسبة الخصم (%)</label>
                 <input
-                  type="checkbox"
-                  checked={Boolean(localSettings.nextOrderReward?.enabled)}
+                  type="number"
+                  value={localSettings.nextOrderReward?.discountPercent ?? 15}
                   onChange={(e) =>
                     setLocalSettings({
                       ...localSettings,
-                      nextOrderReward: { ...localSettings.nextOrderReward, enabled: e.target.checked }
+                      nextOrderReward: { ...localSettings.nextOrderReward, discountPercent: Number(e.target.value) }
                     })
                   }
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[11px] font-black text-slate-600 mb-1">نسبة الخصم (%)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="90"
-                    value={localSettings.nextOrderReward?.discountPercent || 15}
-                    onChange={(e) =>
-                      setLocalSettings({
-                        ...localSettings,
-                        nextOrderReward: {
-                          ...localSettings.nextOrderReward,
-                          discountPercent: Number(e.target.value)
-                        }
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-black text-slate-600 mb-1">مدة الصلاحية بالأيام (0 = مفتوح)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="365"
-                    value={localSettings.nextOrderReward?.validDays ?? 7}
-                    onChange={(e) =>
-                      setLocalSettings({
-                        ...localSettings,
-                        nextOrderReward: {
-                          ...localSettings.nextOrderReward,
-                          validDays: Number(e.target.value)
-                        }
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
-                  />
-                </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">مدة الصلاحية بالأيام (0 = مفتوح)</label>
+                <input
+                  type="number"
+                  value={localSettings.nextOrderReward?.validDays ?? 7}
+                  onChange={(e) =>
+                    setLocalSettings({
+                      ...localSettings,
+                      nextOrderReward: { ...localSettings.nextOrderReward, validDays: Number(e.target.value) }
+                    })
+                  }
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                />
               </div>
             </div>
           </div>
@@ -3589,9 +3612,9 @@ function AdminDashboard({
             type="button"
             onClick={handleSaveSettings}
             disabled={savingSettings}
-            className="px-8 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-lg"
+            className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black"
           >
-            {savingSettings ? 'جاري حفظ الإعدادات...' : 'حفظ كافة إعدادات الموقع والمظهر'}
+            {savingSettings ? 'جاري حفظ الإعدادات...' : 'حفظ جميع الإعدادات'}
           </button>
         </div>
       )}
@@ -3599,6 +3622,9 @@ function AdminDashboard({
   );
 }
 
+// ============================================================================
+// 7. المكون الجذري المُصدَّر افتراضيًا (App)
+// ============================================================================
 export default function App() {
   return (
     <PlatformErrorBoundary>
