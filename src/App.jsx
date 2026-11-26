@@ -2002,12 +2002,20 @@ function OffersAndBundlesPage({ notebooks, settings, coupons, onOrderBundle, onN
 
       {/* قسم الباقات والمجموعات */}
       {activeBundles.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-extrabold text-slate-800 flex items-center gap-2">
-            <Layers className="w-5 h-5 text-blue-600" />
-            باقات المذكرات المحددة بخصم خاص
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-6">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+            <h3 className="text-xl sm:text-2xl font-black text-slate-900 flex items-center gap-2.5">
+              <span className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-600/20">
+                <Layers className="w-5 h-5" />
+              </span>
+              <span>باقات المذكرات المجمعة بخصم خاص</span>
+            </h3>
+            <span className="text-xs font-extrabold text-slate-500 hidden sm:inline">
+              {activeBundles.length} باقة متاحة للتوفير
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-7">
             {activeBundles.map((bundle) => {
               const includedNotebooks = notebooks.filter((n) => (bundle.notebookIds || []).includes(n.id));
               const itemsSum = includedNotebooks.reduce((s, n) => s + (Number(n.price) || 0), 0);
@@ -2025,55 +2033,118 @@ function OffersAndBundlesPage({ notebooks, settings, coupons, onOrderBundle, onN
               } else if (bundle.discountType === 'fixed') {
                 const disc = Math.min(itemsSum, Number(bundle.discountValue) || 0);
                 finalBundlePrice = Math.max(0, itemsSum - disc);
-                badgeText = `خصم ${bundle.discountValue} ج.م`;
+                badgeText = `وفّر ${disc} ج.م`;
               } else {
                 const disc = Math.round((itemsSum * (Number(bundle.discountValue) || 0)) / 100);
                 finalBundlePrice = Math.max(0, itemsSum - disc);
                 badgeText = `خصم ${bundle.discountValue}%`;
               }
 
+              const savedPercent =
+                originalSum > finalBundlePrice
+                  ? Math.round(((originalSum - finalBundlePrice) / originalSum) * 100)
+                  : 0;
+
               return (
                 <div
                   key={bundle.id}
-                  className="bg-white rounded-3xl p-6 border-2 border-blue-100 shadow-sm hover:shadow-xl transition flex flex-col justify-between space-y-5"
+                  className="bg-white rounded-3xl border border-slate-200/90 shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden flex flex-col justify-between group"
                 >
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <h4 className="text-lg font-black text-slate-900">{bundle.title}</h4>
-                      <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black shrink-0">
-                        {badgeText}
-                      </span>
-                    </div>
-                    {bundle.description && <p className="text-xs text-slate-500">{bundle.description}</p>}
-
-                    <div className="bg-slate-50 rounded-2xl p-3.5 space-y-2">
-                      <p className="text-xs font-extrabold text-slate-700">
-                        المذكرات المشمولة في الباقة ({includedNotebooks.length}):
-                      </p>
-                      {includedNotebooks.map((nb) => (
-                        <div key={nb.id} className="flex items-center justify-between text-xs text-slate-700">
-                          <span className="flex items-center gap-1.5">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                            {nb.title} ({nb.grade})
+                  <div>
+                    {/* رأس الباقة بتدرج فخم وشريط توفير ذهبي */}
+                    <div className="bg-gradient-to-l from-slate-950 via-slate-900 to-blue-950 text-white p-6 relative overflow-hidden">
+                      <div className="flex items-start justify-between gap-3 relative z-10">
+                        <div className="space-y-1.5 text-right">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-amber-300 text-[11px] font-black">
+                            <Sparkles className="w-3.5 h-3.5" />
+                            باقة توفير شاملة • {includedNotebooks.length} مذكرات
                           </span>
-                          <span className="font-bold text-slate-500">{nb.price} ج.م</span>
+                          <h4 className="text-xl sm:text-2xl font-black text-white leading-snug pt-1">
+                            {bundle.title}
+                          </h4>
+                          {bundle.description && (
+                            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                              {bundle.description}
+                            </p>
+                          )}
                         </div>
-                      ))}
+
+                        <div className="px-3.5 py-2 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-slate-950 text-center shrink-0 shadow-lg">
+                          <span className="block font-black text-xs sm:text-sm whitespace-nowrap">{badgeText}</span>
+                          {savedPercent > 0 && (
+                            <span className="block text-[10px] font-extrabold opacity-85">خصم {savedPercent}%</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* قائمة المذكرات المشمولة مع صور مصغرة وتنسيق نظيف */}
+                    <div className="p-5 sm:p-6 space-y-3 text-right">
+                      <div className="flex items-center justify-between text-xs font-black text-slate-700">
+                        <span>محتويات الباقة ({includedNotebooks.length} مذكرات):</span>
+                        <span className="text-slate-400 font-bold">السعر الفردي</span>
+                      </div>
+
+                      <div className="space-y-2 max-h-72 overflow-y-auto pl-1">
+                        {includedNotebooks.map((nb) => (
+                          <div
+                            key={nb.id}
+                            className="flex items-center justify-between gap-3 p-2.5 rounded-2xl bg-slate-50/90 hover:bg-blue-50/50 border border-slate-200/70 transition"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              {nb.coverUrl ? (
+                                <img
+                                  src={nb.coverUrl}
+                                  alt=""
+                                  className="w-10 h-12 rounded-xl object-cover shrink-0 border border-slate-200 shadow-2xs"
+                                />
+                              ) : (
+                                <div className="w-10 h-12 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                                  <BookOpen className="w-5 h-5" />
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <p className="font-extrabold text-xs sm:text-sm text-slate-900 truncate">
+                                  {nb.title}
+                                </p>
+                                <span className="inline-block text-[11px] font-bold text-slate-500">
+                                  {nb.grade} • {nb.subject}
+                                </span>
+                              </div>
+                            </div>
+
+                            <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-extrabold text-slate-600 shrink-0">
+                              {nb.price} ج.م
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-4">
-                    <div>
-                      <span className="text-xs text-slate-400 line-through block">{originalSum} ج.م</span>
-                      <span className="text-2xl font-black text-blue-600">{finalBundlePrice} ج.م</span>
+                  {/* شريط السعر النهائي وزر الطلب */}
+                  <div className="px-5 sm:px-6 py-4 bg-slate-50 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-4">
+                    <div className="text-right">
+                      <span className="text-[11px] font-bold text-slate-500 block">سعر الباقة كاملة بعد الخصم:</span>
+                      <div className="flex items-baseline gap-2.5 mt-0.5">
+                        <span className="text-2xl sm:text-3xl font-black text-blue-600">
+                          {finalBundlePrice} ج.م
+                        </span>
+                        {originalSum > finalBundlePrice && (
+                          <span className="text-sm text-slate-400 line-through font-extrabold">
+                            {originalSum} ج.م
+                          </span>
+                        )}
+                      </div>
                     </div>
+
                     <button
                       onClick={() => onOrderBundle(includedNotebooks)}
                       disabled={includedNotebooks.length === 0}
-                      className="px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-lg shadow-blue-600/20 transition flex items-center gap-2"
+                      className="px-6 py-3.5 rounded-2xl bg-gradient-to-l from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-xs sm:text-sm shadow-lg shadow-blue-600/25 hover:shadow-blue-600/40 hover:-translate-y-0.5 transition-all flex items-center gap-2 shrink-0"
                     >
                       <ShoppingCart className="w-4 h-4" />
-                      اطلب الباقة كاملة بالخصم
+                      <span>اطلب الباقة بالخصم الآن</span>
                     </button>
                   </div>
                 </div>
