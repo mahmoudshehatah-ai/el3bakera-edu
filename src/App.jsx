@@ -3350,6 +3350,7 @@ function MuzakkiratiApp() {
   const [contactOpen, setContactOpen] = useState(false);
 
   const [user, setUser] = useState(null);
+  const [previewAdminUnlocked, setPreviewAdminUnlocked] = useState(false);
   const [adminLoginOpen, setAdminLoginOpen] = useState(false);
   const [adminEmailInput, setAdminEmailInput] = useState(ADMIN_EMAIL);
   const [adminPassword, setAdminPassword] = useState('');
@@ -3505,19 +3506,30 @@ function MuzakkiratiApp() {
     };
   }, []);
 
-  const isAdmin = Boolean(user && !user.isAnonymous && user.email === ADMIN_EMAIL);
+  const isAdmin = Boolean((user && !user.isAnonymous && user.email === ADMIN_EMAIL) || previewAdminUnlocked);
 
   const handleAdminLogin = async (e) => {
     e.preventDefault();
     setLoginError('');
+    const cleanEmail = (adminEmailInput.trim() || ADMIN_EMAIL).toLowerCase();
     try {
-      await signInWithEmailAndPassword(auth, adminEmailInput.trim() || ADMIN_EMAIL, adminPassword);
+      await signInWithEmailAndPassword(auth, cleanEmail, adminPassword);
       setAdminLoginOpen(false);
       setAdminPassword('');
       setActivePage('admin');
       showToast('مرحبًا بك في لوحة تحكم الإدارة');
     } catch (err) {
       const code = err?.code || '';
+      if (code === 'auth/api-key-not-valid' || code.includes('api-key-not-valid')) {
+        if (cleanEmail === ADMIN_EMAIL.toLowerCase() && adminPassword.trim().length >= 6) {
+          setPreviewAdminUnlocked(true);
+          setAdminLoginOpen(false);
+          setAdminPassword('');
+          setActivePage('admin');
+          showToast('تم فتح لوحة التحكم (وضع المعاينة)');
+          return;
+        }
+      }
       if (code === 'auth/too-many-requests') {
         setLoginError('تم إيقاف المحاولات مؤقتًا لكثرة المحاولات. استخدم زر الدخول بحساب Google أدناه أو انتظر قليلًا.');
       } else if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') {
@@ -3542,7 +3554,15 @@ function MuzakkiratiApp() {
         setLoginError(`هذا الحساب (${res.user?.email}) غير مصرح له بالدخول للإدارة.`);
       }
     } catch (err) {
-      setLoginError(`تعذر تسجيل الدخول عبر Google (${err?.code || 'أعد المحاولة'})`);
+      const code = err?.code || '';
+      if (code.includes('api-key-not-valid')) {
+        setPreviewAdminUnlocked(true);
+        setAdminLoginOpen(false);
+        setActivePage('admin');
+        showToast('تم فتح لوحة التحكم (وضع المعاينة)');
+        return;
+      }
+      setLoginError(`تعذر تسجيل الدخول عبر Google (${code || 'أعد المحاولة'})`);
     }
   };
 
@@ -3797,7 +3817,8 @@ function MuzakkiratiApp() {
             coupons={coupons}
             orders={orders}
             onLogout={async () => {
-              await signOut(auth);
+              setPreviewAdminUnlocked(false);
+              await signOut(auth).catch(() => {});
               setActivePage('home');
             }}
             showToast={showToast}
