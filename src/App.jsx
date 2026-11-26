@@ -1931,13 +1931,9 @@ function AdminDashboard({
   const [activeTab, setActiveTab] = useState('notebooks');
   const [localSettings, setLocalSettings] = useState(() => normalizeSettings(settings));
   const [savingSettings, setSavingSettings] = useState(false);
-  const hasInitializedSettingsRef = useRef(false);
 
   useEffect(() => {
-    if (!hasInitializedSettingsRef.current) {
-      setLocalSettings(normalizeSettings(settings));
-      hasInitializedSettingsRef.current = true;
-    }
+    setLocalSettings(normalizeSettings(settings));
   }, [settings]);
 
   const emptyNbForm = {
@@ -2210,6 +2206,724 @@ function AdminDashboard({
             );
           })}
         </div>
+
+        {/* ================================================================= */}
+        {/* تبويب 1: إدارة المذكرات + التعديل السريع الجماعي                  */}
+        {/* ================================================================= */}
+        {activeTab === 'notebooks' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* نموذج إضافة أو تعديل مذكرة */}
+            <form
+              onSubmit={handleSaveNotebook}
+              className="lg:col-span-5 bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4"
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="font-black text-base text-slate-900">
+                  {nbForm.id ? 'تعديل بيانات المذكرة' : 'إضافة مذكرة جديدة'}
+                </h3>
+                {nbForm.id && (
+                  <button
+                    type="button"
+                    onClick={() => setNbForm(emptyNbForm)}
+                    className="text-xs font-bold text-rose-600 hover:underline"
+                  >
+                    إلغاء التعديل
+                  </button>
+                )}
+              </div>
+
+              <input
+                type="text"
+                required
+                value={nbForm.title}
+                onChange={(e) => setNbForm({ ...nbForm, title: e.target.value })}
+                placeholder="عنوان المذكرة (مثال: بنك مراجعة الصف الثالث الإعدادي)"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
+              />
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <select
+                  value={nbForm.category}
+                  onChange={(e) => setNbForm({ ...nbForm, category: e.target.value })}
+                  className="px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                >
+                  {(localSettings.categories || []).map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={nbForm.stage}
+                  onChange={(e) => {
+                    const nextStage = e.target.value;
+                    const nextGrades = localSettings.stageGrades?.[nextStage] || [];
+                    setNbForm({ ...nbForm, stage: nextStage, grade: nextGrades[0] || '' });
+                  }}
+                  className="px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                >
+                  {(localSettings.stages || []).map((st) => (
+                    <option key={st} value={st}>{st}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={nbForm.grade}
+                  onChange={(e) => setNbForm({ ...nbForm, grade: e.target.value })}
+                  className="px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                >
+                  {(localSettings.stageGrades?.[nbForm.stage] || []).map((gr) => (
+                    <option key={gr} value={gr}>{gr}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={nbForm.subject}
+                  onChange={(e) => setNbForm({ ...nbForm, subject: e.target.value })}
+                  className="px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                >
+                  {(localSettings.subjects || []).map((sub) => (
+                    <option key={sub} value={sub}>{sub}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">السعر الحالي</label>
+                  <input
+                    type="number"
+                    required
+                    value={nbForm.price}
+                    onChange={(e) => setNbForm({ ...nbForm, price: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-black text-blue-600"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">قبل الخصم</label>
+                  <input
+                    type="number"
+                    value={nbForm.oldPrice}
+                    onChange={(e) => setNbForm({ ...nbForm, oldPrice: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">عدد الصفحات</label>
+                  <input
+                    type="number"
+                    value={nbForm.pagesCount}
+                    onChange={(e) => setNbForm({ ...nbForm, pagesCount: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                  />
+                </div>
+              </div>
+
+              <input
+                type="text"
+                value={nbForm.badge}
+                onChange={(e) => setNbForm({ ...nbForm, badge: e.target.value })}
+                placeholder="شارة التميز على الغلاف (مثال: الأكثر طلبًا / محدث 2026)..."
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+              />
+
+              <textarea
+                rows={3}
+                value={nbForm.description}
+                onChange={(e) => setNbForm({ ...nbForm, description: e.target.value })}
+                placeholder="وصف ومحتوى المذكرة..."
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+              />
+
+              {/* التنبيه الخاص بالمذكرة وألوانه وشارته */}
+              <div className="bg-amber-50/70 p-3.5 rounded-2xl border border-amber-200 space-y-2.5">
+                <span className="text-xs font-black text-amber-950 block">تنبيه خاص بهذه المذكرة (اختياري):</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    value={nbForm.customNoticeTitle}
+                    onChange={(e) => setNbForm({ ...nbForm, customNoticeTitle: e.target.value })}
+                    placeholder="عنوان التنبيه..."
+                    className="px-3 py-1.5 rounded-xl border border-amber-300 bg-white text-xs font-bold"
+                  />
+                  <input
+                    type="text"
+                    value={nbForm.customNoticeBadge}
+                    onChange={(e) => setNbForm({ ...nbForm, customNoticeBadge: e.target.value })}
+                    placeholder="الشارة (هام جدًا!)"
+                    className="px-3 py-1.5 rounded-xl border border-amber-300 bg-white text-xs font-bold"
+                  />
+                </div>
+                <textarea
+                  rows={2}
+                  value={nbForm.customNotice}
+                  onChange={(e) => setNbForm({ ...nbForm, customNotice: e.target.value })}
+                  placeholder="نص التنبيه الخاص بهذه المذكرة..."
+                  className="w-full px-3 py-1.5 rounded-xl border border-amber-300 bg-white text-xs font-bold"
+                />
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold text-slate-600">لون صندوق التنبيه:</span>
+                  <select
+                    value={nbForm.customNoticeTheme}
+                    onChange={(e) => setNbForm({ ...nbForm, customNoticeTheme: e.target.value })}
+                    className="px-3 py-1.5 rounded-xl border border-amber-300 bg-white text-xs font-bold"
+                  >
+                    <option value="amber">ذهبي عنبري</option>
+                    <option value="rose">أحمر تنبيهي</option>
+                    <option value="blue">أزرق ملكي</option>
+                    <option value="emerald">أخضر زمردي</option>
+                    <option value="purple">بنفسجي</option>
+                  </select>
+                </div>
+              </div>
+
+              <input
+                type="url"
+                dir="ltr"
+                value={nbForm.driveLink}
+                onChange={(e) => setNbForm({ ...nbForm, driveLink: e.target.value })}
+                placeholder="رابط معاينة Google Drive (اختياري)..."
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-mono text-left"
+              />
+
+              <label className="flex items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs font-extrabold text-amber-950 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={Boolean(nbForm.isComingSoon)}
+                  onChange={(e) => setNbForm({ ...nbForm, isComingSoon: e.target.checked })}
+                />
+                <span>المذكرة قيد التجهيز (إعلان «قريبًا / حجز مسبق»)</span>
+              </label>
+
+              {/* رفع صورة الغلاف وصفحات العينة */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="p-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50 space-y-2 text-center">
+                  <span className="text-xs font-extrabold text-slate-700 block">صورة غلاف المذكرة</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const compressed = await compressImageFile(file, 850, 0.78);
+                      setNbForm((prev) => ({ ...prev, coverUrl: compressed }));
+                    }}
+                    className="w-full text-[11px]"
+                  />
+                  {nbForm.coverUrl && (
+                    <img src={nbForm.coverUrl} alt="" className="w-16 h-20 object-cover rounded-xl mx-auto border" />
+                  )}
+                </div>
+
+                <div className="p-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50 space-y-2 text-center">
+                  <span className="text-xs font-extrabold text-slate-700 block">صفحات العينة (حتى 15 صفحة)</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={async (e) => {
+                      const files = Array.from(e.target.files || []);
+                      if (!files.length) return;
+                      const remaining = Math.max(0, 15 - (nbForm.sampleUrls || []).length);
+                      const slice = files.slice(0, remaining);
+                      const compressedList = await Promise.all(
+                        slice.map((f) => compressImageFile(f, 950, 0.78))
+                      );
+                      setNbForm((prev) => ({
+                        ...prev,
+                        sampleUrls: [...(prev.sampleUrls || []), ...compressedList]
+                      }));
+                      e.target.value = '';
+                    }}
+                    className="w-full text-[11px]"
+                  />
+                  {(nbForm.sampleUrls || []).length > 0 && (
+                    <span className="text-[11px] font-black text-emerald-700 block">
+                      تم تجهيز {nbForm.sampleUrls.length} صفحة
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* مصغرات صفحات العينة المرفوعة */}
+              {(nbForm.sampleUrls || []).length > 0 && (
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-extrabold text-slate-700">
+                      صفحات العينة ({nbForm.sampleUrls.length} / 15):
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setNbForm((prev) => ({ ...prev, sampleUrls: [] }))}
+                      className="text-[11px] font-bold text-rose-600 hover:underline"
+                    >
+                      مسح الكل
+                    </button>
+                  </div>
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {nbForm.sampleUrls.map((url, idx) => (
+                      <div key={idx} className="relative w-14 h-18 shrink-0 rounded-xl overflow-hidden border bg-white">
+                        <img src={url} alt="" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setNbForm((prev) => ({
+                              ...prev,
+                              sampleUrls: prev.sampleUrls.filter((_, i) => i !== idx)
+                            }))
+                          }
+                          className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-rose-600 text-white text-[10px] font-black flex items-center justify-center"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={savingNb}
+                className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-lg transition"
+              >
+                {savingNb ? 'جاري حفظ المذكرة...' : nbForm.id ? 'حفظ تعديلات المذكرة' : '+ إضافة المذكرة'}
+              </button>
+            </form>
+
+            {/* قائمة المذكرات + التعديل السريع الجماعي */}
+            <div className="lg:col-span-7 bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-black text-base text-slate-900">المذكرات المنشورة ({notebooks.length})</h3>
+                  <p className="text-[11px] text-slate-500">يمكنك تعديل أكثر من مذكرة مباشرة ثم حفظها جميعًا دفعة واحدة</p>
+                </div>
+
+                {editedCount > 0 && (
+                  <button
+                    type="button"
+                    disabled={savingBulk}
+                    onClick={handleSaveAllBulkEdits}
+                    className="px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-md animate-pulse"
+                  >
+                    {savingBulk ? 'جاري الحفظ...' : `حفظ جميع التعديلات دفعة واحدة (${editedCount})`}
+                  </button>
+                )}
+              </div>
+
+              {notebooks.length === 0 ? (
+                <p className="text-sm text-slate-500 text-center py-10">لا توجد مذكرات مضافة بعد.</p>
+              ) : (
+                <div className="space-y-3 max-h-[820px] overflow-y-auto pl-1">
+                  {notebooks.map((nb) => {
+                    const patch = bulkEdits[nb.id] || {};
+                    const isDirty = Boolean(bulkEdits[nb.id]);
+                    const curTitle = patch.title !== undefined ? patch.title : nb.title;
+                    const curCategory = patch.category !== undefined ? patch.category : nb.category;
+                    const curStage = patch.stage !== undefined ? patch.stage : nb.stage;
+                    const curGrade = patch.grade !== undefined ? patch.grade : nb.grade;
+                    const curSubject = patch.subject !== undefined ? patch.subject : nb.subject;
+                    const curPrice = patch.price !== undefined ? patch.price : nb.price;
+                    const curOldPrice = patch.oldPrice !== undefined ? patch.oldPrice : nb.oldPrice;
+
+                    return (
+                      <div
+                        key={nb.id}
+                        className={`p-4 rounded-2xl border transition space-y-3 ${
+                          isDirty ? 'bg-amber-50/70 border-amber-400' : 'bg-slate-50 border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            {nb.coverUrl ? (
+                              <img src={nb.coverUrl} alt="" className="w-12 h-16 rounded-xl object-cover shrink-0 border" />
+                            ) : (
+                              <div className="w-12 h-16 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                                <BookOpen className="w-5 h-5" />
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0 space-y-1.5">
+                              <input
+                                type="text"
+                                value={curTitle}
+                                onChange={(e) => handleBulkFieldChange(nb.id, 'title', e.target.value)}
+                                className="w-full px-3 py-1.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm font-black"
+                              />
+                              <div className="flex flex-wrap gap-1.5">
+                                <select
+                                  value={curCategory}
+                                  onChange={(e) => handleBulkFieldChange(nb.id, 'category', e.target.value)}
+                                  className="px-2 py-1 rounded-lg border border-slate-300 bg-white text-[11px] font-bold"
+                                >
+                                  {(localSettings.categories || []).map((c) => (
+                                    <option key={c} value={c}>{c}</option>
+                                  ))}
+                                </select>
+                                <select
+                                  value={curStage}
+                                  onChange={(e) => handleBulkFieldChange(nb.id, 'stage', e.target.value)}
+                                  className="px-2 py-1 rounded-lg border border-slate-300 bg-white text-[11px] font-bold"
+                                >
+                                  {(localSettings.stages || []).map((s) => (
+                                    <option key={s} value={s}>{s}</option>
+                                  ))}
+                                </select>
+                                <select
+                                  value={curGrade}
+                                  onChange={(e) => handleBulkFieldChange(nb.id, 'grade', e.target.value)}
+                                  className="px-2 py-1 rounded-lg border border-slate-300 bg-white text-[11px] font-bold"
+                                >
+                                  {(localSettings.stageGrades?.[curStage] || []).map((g) => (
+                                    <option key={g} value={g}>{g}</option>
+                                  ))}
+                                </select>
+                                <select
+                                  value={curSubject}
+                                  onChange={(e) => handleBulkFieldChange(nb.id, 'subject', e.target.value)}
+                                  className="px-2 py-1 rounded-lg border border-slate-300 bg-white text-[11px] font-bold"
+                                >
+                                  {(localSettings.subjects || []).map((sub) => (
+                                    <option key={sub} value={sub}>{sub}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleEditNotebookClick(nb)}
+                              title="تعديل كامل (الصور والتنبيهات)"
+                              className="p-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteNotebook(nb.id)}
+                              title="حذف المذكرة"
+                              className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/80 text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-600">السعر:</span>
+                            <input
+                              type="number"
+                              value={curPrice}
+                              onChange={(e) => handleBulkFieldChange(nb.id, 'price', e.target.value)}
+                              className="w-20 px-2.5 py-1 rounded-lg border border-slate-300 bg-white font-black text-blue-600"
+                            />
+                            <span className="font-bold text-slate-600">قبل:</span>
+                            <input
+                              type="number"
+                              value={curOldPrice}
+                              onChange={(e) => handleBulkFieldChange(nb.id, 'oldPrice', e.target.value)}
+                              className="w-20 px-2.5 py-1 rounded-lg border border-slate-300 bg-white font-bold"
+                            />
+                          </div>
+                          {isDirty && (
+                            <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black">
+                              معدّلة (غير محفوظة)
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ================================================================= */}
+        {/* تبويب 2: إدارة الأقسام والمراحل والصفوف الدراسية والمواد            */}
+        {/* ================================================================= */}
+        {activeTab === 'categories' && (
+          <div className="space-y-6">
+            {/* 1. الأقسام الرئيسية */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
+              <h3 className="font-black text-base">1. الأقسام الرئيسية للمنصة (الترتيب والصور)</h3>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newCatInput}
+                  onChange={(e) => setNewCatInput(e.target.value)}
+                  placeholder="اسم القسم الجديد (مثال: مراجعات ليلة الامتحان)..."
+                  className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const name = newCatInput.trim();
+                    if (!name || localSettings.categories.includes(name)) return;
+                    setLocalSettings({ ...localSettings, categories: [...localSettings.categories, name] });
+                    setNewCatInput('');
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs"
+                >
+                  + إضافة قسم
+                </button>
+              </div>
+
+              <div className="space-y-2.5">
+                {(localSettings.categories || []).map((cat, idx, arr) => {
+                  const catImg = localSettings.categoryImages?.[cat];
+                  return (
+                    <div key={cat} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex flex-col gap-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setLocalSettings({ ...localSettings, categories: moveArrayItem(arr, idx, -1) })}
+                            className="p-1 rounded bg-white border"
+                          >
+                            <ChevronUp className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setLocalSettings({ ...localSettings, categories: moveArrayItem(arr, idx, 1) })}
+                            className="p-1 rounded bg-white border"
+                          >
+                            <ChevronDown className="w-3 h-3" />
+                          </button>
+                        </div>
+                        {catImg && <img src={catImg} alt="" className="w-12 h-10 rounded-xl object-cover border" />}
+                        <span className="font-black text-sm text-slate-900">{cat}</span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <label className="px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-[11px] font-extrabold cursor-pointer hover:bg-slate-100">
+                          <span>{catImg ? 'تغيير الصورة' : '+ صورة القسم'}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const compressed = await compressImageFile(file, 750, 0.75);
+                              setLocalSettings({
+                                ...localSettings,
+                                categoryImages: { ...(localSettings.categoryImages || {}), [cat]: compressed }
+                              });
+                            }}
+                          />
+                        </label>
+                        {catImg && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const copy = { ...(localSettings.categoryImages || {}) };
+                              delete copy[cat];
+                              setLocalSettings({ ...localSettings, categoryImages: copy });
+                            }}
+                            className="text-[11px] font-bold text-rose-600"
+                          >
+                            حذف الصورة
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setLocalSettings({
+                              ...localSettings,
+                              categories: arr.filter((c) => c !== cat)
+                            })
+                          }
+                          className="p-2 rounded-xl bg-rose-50 text-rose-600"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 2. المراحل والصفوف الدراسية */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
+                <h3 className="font-black text-base">2. المراحل الدراسية</h3>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newStageInput}
+                    onChange={(e) => setNewStageInput(e.target.value)}
+                    placeholder="اسم المرحلة (مثال: مرحلة رياض الأطفال)..."
+                    className="flex-1 px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const name = newStageInput.trim();
+                      if (!name || localSettings.stages.includes(name)) return;
+                      setLocalSettings({
+                        ...localSettings,
+                        stages: [...localSettings.stages, name],
+                        stageGrades: { ...(localSettings.stageGrades || {}), [name]: [] }
+                      });
+                      setNewStageInput('');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-slate-900 text-white font-extrabold text-xs"
+                  >
+                    + مرحلة
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {(localSettings.stages || []).map((st) => (
+                    <div key={st} className="p-3 rounded-xl bg-slate-50 border flex items-center justify-between text-xs font-black">
+                      <span>{st}</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLocalSettings({
+                            ...localSettings,
+                            stages: localSettings.stages.filter((s) => s !== st)
+                          })
+                        }
+                        className="text-rose-600"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
+                <h3 className="font-black text-base">3. الصفوف الدراسية داخل كل مرحلة</h3>
+                <select
+                  value={selectedStageForGrades}
+                  onChange={(e) => setSelectedStageForGrades(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-slate-50"
+                >
+                  {(localSettings.stages || []).map((st) => (
+                    <option key={st} value={st}>{st}</option>
+                  ))}
+                </select>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newGradeInput}
+                    onChange={(e) => setNewGradeInput(e.target.value)}
+                    placeholder="اسم الصف (مثال: الصف الأول الابتدائي)..."
+                    className="flex-1 px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const gr = newGradeInput.trim();
+                      if (!gr || !selectedStageForGrades) return;
+                      const currentGrades = localSettings.stageGrades?.[selectedStageForGrades] || [];
+                      if (currentGrades.includes(gr)) return;
+                      setLocalSettings({
+                        ...localSettings,
+                        stageGrades: {
+                          ...(localSettings.stageGrades || {}),
+                          [selectedStageForGrades]: [...currentGrades, gr]
+                        }
+                      });
+                      setNewGradeInput('');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-blue-600 text-white font-extrabold text-xs"
+                  >
+                    + صف
+                  </button>
+                </div>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {(localSettings.stageGrades?.[selectedStageForGrades] || []).map((gr) => (
+                    <div key={gr} className="p-2.5 rounded-xl bg-slate-50 border flex items-center justify-between text-xs font-bold">
+                      <span>{gr}</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLocalSettings({
+                            ...localSettings,
+                            stageGrades: {
+                              ...(localSettings.stageGrades || {}),
+                              [selectedStageForGrades]: (localSettings.stageGrades?.[selectedStageForGrades] || []).filter(
+                                (g) => g !== gr
+                              )
+                            }
+                          })
+                        }
+                        className="text-rose-600"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* 4. المواد الدراسية */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
+              <h3 className="font-black text-base">4. المواد الدراسية</h3>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newSubjectInput}
+                  onChange={(e) => setNewSubjectInput(e.target.value)}
+                  placeholder="اسم المادة (مثال: الفيزياء / الكيمياء / التاريخ)..."
+                  className="flex-1 px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const sub = newSubjectInput.trim();
+                    if (!sub || localSettings.subjects.includes(sub)) return;
+                    setLocalSettings({ ...localSettings, subjects: [...localSettings.subjects, sub] });
+                    setNewSubjectInput('');
+                  }}
+                  className="px-5 py-2 rounded-xl bg-slate-900 text-white font-extrabold text-xs"
+                >
+                  + إضافة مادة
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(localSettings.subjects || []).map((sub) => (
+                  <span
+                    key={sub}
+                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-extrabold"
+                  >
+                    <span>{sub}</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setLocalSettings({
+                          ...localSettings,
+                          subjects: localSettings.subjects.filter((s) => s !== sub)
+                        })
+                      }
+                      className="text-rose-600 font-black"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+
+              <div className="pt-4 border-t border-slate-200">
+                <button
+                  type="button"
+                  disabled={savingSettings}
+                  onClick={handlePersistAllSettings}
+                  className="px-8 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-lg"
+                >
+                  {savingSettings ? 'جاري الحفظ...' : 'حفظ الأقسام والمراحل والصفوف ومزامنتها'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ================================================================= */}
         {/* تبويب 3: الخصومات والعروض (التحكم الكامل في كل ما يخص الخصومات)    */}
@@ -3753,7 +4467,7 @@ function MuzakkiratiApp() {
 
   const handleSaveSettings = async (nextSettings) => {
     const normalized = normalizeSettings(nextSettings);
-    await setDoc(publicDoc('settings', 'main'), normalized, { merge: true });
+    await setDoc(publicDoc('settings', 'main'), normalized);
     setSettings(normalized);
     try {
       const lightCopy = { ...normalized, heroBgImage: '', categoryImages: {} };
