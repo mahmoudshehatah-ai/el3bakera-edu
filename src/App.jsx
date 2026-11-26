@@ -82,6 +82,7 @@ const db = getFirestore(app);
 const APP_ID = 'el3bakera-edu';
 const ADMIN_EMAIL = 'mahmoudelzaaty7@gmail.com';
 const LOCAL_SETTINGS_BACKUP_KEY = 'el3bakera_settings_backup_v2';
+const LEGACY_LOCAL_BACKUP_KEY = 'el3bakera_settings_backup_v1';
 
 const publicCol = (colName) => collection(db, 'artifacts', APP_ID, 'public', 'data', colName);
 const publicDoc = (colName, docId) => doc(db, 'artifacts', APP_ID, 'public', 'data', colName, docId);
@@ -233,8 +234,9 @@ function generateUniqueCouponCode(prefix = 'VIP') {
 }
 
 function mergeAndNormalizeSettings(prev, incoming = {}) {
+  if (!incoming || typeof incoming !== 'object') return prev;
   const merged = { ...prev, ...incoming };
-  // حماية الصور من الاستبدال بقيم فارغة
+  // حماية الصور من الاستبدال بقيم فارغة مهما كان مصدر المستند
   merged.logoUrl = incoming.logoUrl || prev.logoUrl || '';
   merged.heroBgImage = incoming.heroBgImage || prev.heroBgImage || '';
   merged.categoryImages = {
@@ -242,14 +244,27 @@ function mergeAndNormalizeSettings(prev, incoming = {}) {
     ...(incoming.categoryImages || {})
   };
 
-  // تطبيع أسماء الأقسام والمراحل والصفوف والمواد (دعم name أو title أو label)
-  const rawCats = Array.isArray(merged.categories) && merged.categories.length > 0 ? merged.categories : DEFAULT_CATEGORIES;
-  merged.categories = rawCats.map((c, idx) => ({
-    ...c,
-    id: c.id || `cat_${idx}`,
-    name: c.name || c.title || c.label || DEFAULT_CATEGORIES[idx]?.name || `قسم ${idx + 1}`,
-    order: c.order ?? idx + 1
-  }));
+  // دعم أسماء الحقول القديمة والجديدة للأقسام الرئيسية
+  const rawCats =
+    Array.isArray(incoming.categories) && incoming.categories.length > 0
+      ? incoming.categories
+      : Array.isArray(prev.categories) && prev.categories.length > 0
+      ? prev.categories
+      : DEFAULT_CATEGORIES;
+
+  merged.categories = rawCats.map((c, idx) => {
+    const id = c.id || DEFAULT_CATEGORIES[idx]?.id || `cat_${idx}`;
+    const imgFromObj = c.image || c.coverImage || c.img || '';
+    if (imgFromObj && !merged.categoryImages[id]) {
+      merged.categoryImages[id] = imgFromObj;
+    }
+    return {
+      ...c,
+      id,
+      name: c.name || c.title || c.label || DEFAULT_CATEGORIES[idx]?.name || `قسم ${idx + 1}`,
+      order: c.order ?? idx + 1
+    };
+  });
 
   if (Array.isArray(merged.stages)) {
     merged.stages = merged.stages.map((s, idx) => ({
@@ -1712,14 +1727,21 @@ function AdminDashboard({
         },
         { merge: true }
       );
+      await setDoc(publicDoc('settings', 'media_logo'), { logoUrl: logoUrl || '' }, { merge: true });
+      await setDoc(publicDoc('settings', 'media_hero'), { heroBgImage: heroBgImage || '' }, { merge: true });
+      await setDoc(publicDoc('settings', 'media_categories'), { categoryImages: categoryImages || {} }, { merge: true });
 
       setSettings(target);
       try {
-        localStorage.setItem(LOCAL_SETTINGS_BACKUP_KEY, JSON.stringify(lightSettings));
+        localStorage.setItem(LOCAL_SETTINGS_BACKUP_KEY, JSON.stringify(target));
       } catch {
-        // تجاهل امتلاء التخزين المحلي
+        try {
+          localStorage.setItem(LOCAL_SETTINGS_BACKUP_KEY, JSON.stringify(lightSettings));
+        } catch {
+          // تجاهل امتلاء التخزين المحلي
+        }
       }
-      showToast('تم حفظ جميع الإعدادات وتحديثها للعملاء بنجاح!');
+      showToast('تم حفظ جميع الإعدادات والصور وتحديثها للعملاء بنجاح!');
     } catch (err) {
       console.error(err);
       showToast('حدث خطأ أثناء الحفظ، تأكد من صلاحيات Firebase Rules', 'error');
@@ -3282,68 +3304,73 @@ function MuzakkiratiApp() {
 
   const [user, setUser] = useState(null);
   const [adminLoginOpen, setAdminLoginOpen] = useState(false);
+  const [adminEmailInput, setAdminEmailInput] = useState(ADMIN_EMAIL);
   const [adminPassword, setAdminPassword] = useState('');
+  const [showAdminPass, setShowAdminPass] = useState(false);
   const [loginError, setLoginError] = useState('');
 
   const [toast, setToast] = useState(null);
   const [promoDismissed, setPromoDismissed] = useState(false);
   const [promoCopied, setPromoCopied] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const logoClickCountRef = useRef(0);
 
   const [trackQuery, setTrackQuery] = useState('');
   const [trackedOrder, setTrackedOrder] = useState(null);
   const [trackNotFound, setTrackNotFound] = useState(false);
   const [trackingLoading, setTrackingLoading] = useState(false);
 
-  const logoClickCountRef = useRef(0);
-
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast(null), 3200);
   };
 
-  // مراقبة التمرير لتقليص الهيدر على الهاتف
-  useEffect(() => {
-    const onScroll = () => setIsScrolled(window.scrollY > 45);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
-  // إدارة زر الرجوع في المتصفح والهاتف
-  const navigateTo = (page, catId = '', stageId = '', gradeId = '') => {
+  const navigateTo = (page, catId = '') => {
     setActivePage(page);
-    setSelectedCategoryId(catId);
-    setSelectedStageId(stageId);
-    setSelectedGradeId(gradeId);
-    window.history.pushState({ page, catId, stageId, gradeId }, '', `#${page}`);
+    if (catId) {
+      setSelectedCategoryId(catId);
+      setSelectedStageId('');
+      setSelectedGradeId('');
+    }
+    try {
+      window.history.pushState({ page, catId }, '', `#${page}`);
+    } catch {
+      // تجاهل في بيئات العرض المقيدة
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   useEffect(() => {
-    const handlePopState = (e) => {
-      if (previewNotebook) {
-        setPreviewNotebook(null);
-        return;
-      }
-      if (cartOpen) {
-        setCartOpen(false);
-        return;
-      }
+    const onScroll = () => setIsScrolled(window.scrollY > 40);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    const onPopState = (e) => {
       if (e.state?.page) {
         setActivePage(e.state.page);
-        setSelectedCategoryId(e.state.catId || '');
-        setSelectedStageId(e.state.stageId || '');
-        setSelectedGradeId(e.state.gradeId || '');
       } else {
         setActivePage('home');
       }
     };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, [previewNotebook, cartOpen]);
+    window.addEventListener('popstate', onPopState);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('popstate', onPopState);
+    };
+  }, []);
 
-  // مراقبة تسجيل الدخول والمزامنة الفورية مع Firestore
+  // مراقبة تسجيل الدخول والمزامنة الفورية مع كافة مستندات Firestore
   useEffect(() => {
+    // 1. استعادة أي نسخة محلية محفوظة مسبقًا كخط دفاع أول
+    try {
+      const cached =
+        localStorage.getItem(LOCAL_SETTINGS_BACKUP_KEY) || localStorage.getItem(LEGACY_LOCAL_BACKUP_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        setSettings((prev) => mergeAndNormalizeSettings(prev, parsed));
+      }
+    } catch {
+      // تجاهل
+    }
+
     const unsubAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (!currentUser) {
@@ -3351,6 +3378,30 @@ function MuzakkiratiApp() {
       }
     });
 
+    // 2. قراءة فورية لجميع المستندات السحابية المحتملة (الجديدة والسابقة)
+    const loadAllCloudSettings = async () => {
+      const docRefs = [
+        publicDoc('config', 'main'),
+        publicDoc('settings', 'main'),
+        publicDoc('settings', 'media_assets'),
+        publicDoc('settings', 'media_logo'),
+        publicDoc('settings', 'media_hero'),
+        publicDoc('settings', 'media_categories')
+      ];
+      for (const ref of docRefs) {
+        try {
+          const snap = await getDoc(ref);
+          if (snap.exists()) {
+            setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
+          }
+        } catch {
+          // تجاهل في حال عدم وجود المستند
+        }
+      }
+    };
+    loadAllCloudSettings();
+
+    // 3. مستمعو التحديث الفوري
     const unsubMain = onSnapshot(publicDoc('settings', 'main'), (snap) => {
       if (snap.exists()) {
         setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
@@ -3358,6 +3409,24 @@ function MuzakkiratiApp() {
     });
 
     const unsubMedia = onSnapshot(publicDoc('settings', 'media_assets'), (snap) => {
+      if (snap.exists()) {
+        setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
+      }
+    });
+
+    const unsubLogo = onSnapshot(publicDoc('settings', 'media_logo'), (snap) => {
+      if (snap.exists()) {
+        setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
+      }
+    });
+
+    const unsubHero = onSnapshot(publicDoc('settings', 'media_hero'), (snap) => {
+      if (snap.exists()) {
+        setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
+      }
+    });
+
+    const unsubCats = onSnapshot(publicDoc('settings', 'media_categories'), (snap) => {
       if (snap.exists()) {
         setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
       }
@@ -3380,6 +3449,9 @@ function MuzakkiratiApp() {
       unsubAuth();
       unsubMain();
       unsubMedia();
+      unsubLogo();
+      unsubHero();
+      unsubCats();
       unsubNotebooks();
       unsubCoupons();
       unsubOrders();
@@ -3392,13 +3464,13 @@ function MuzakkiratiApp() {
     e.preventDefault();
     setLoginError('');
     try {
-      await signInWithEmailAndPassword(auth, ADMIN_EMAIL, adminPassword);
+      await signInWithEmailAndPassword(auth, adminEmailInput.trim() || ADMIN_EMAIL, adminPassword);
       setAdminLoginOpen(false);
       setAdminPassword('');
       setActivePage('admin');
       showToast('مرحبًا بك في لوحة تحكم الإدارة');
     } catch {
-      setLoginError('كلمة المرور غير صحيحة');
+      setLoginError('البريد الإلكتروني أو كلمة المرور غير صحيحة');
     }
   };
 
@@ -3764,10 +3836,10 @@ function MuzakkiratiApp() {
                       تصفح مكتبة المذكرات
                     </button>
                     <button
-                      onClick={() => navigateTo('offers')}
+                      onClick={() => setContactOpen(true)}
                       className="px-6 py-3.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-black text-sm transition"
                     >
-                      باقات التوفير والخصومات
+                      اطلب إعداد مذكرة خاصة
                     </button>
                   </div>
                 </div>
@@ -3794,6 +3866,10 @@ function MuzakkiratiApp() {
                       <li className="flex items-center gap-2">
                         <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                         <span>تسليم سريع بصيغة PDF عالية الدقة جاهزة للطباعة.</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span>خدمة عملاء حقيقية لحل أي مشكلة.</span>
                       </li>
                     </ul>
                   </div>
@@ -4012,29 +4088,74 @@ function MuzakkiratiApp() {
         >
           <form
             onSubmit={handleAdminLogin}
-            className="bg-white w-full max-w-sm rounded-3xl p-6 border border-slate-200 shadow-2xl space-y-4"
+            className="bg-white w-full max-w-md rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-2xl space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-black text-slate-900">تسجيل دخول الإدارة</h3>
-              <button type="button" onClick={() => setAdminLoginOpen(false)} className="p-1.5 rounded-xl hover:bg-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">دخول لوحة تحكم الإدارة</h3>
+                  <p className="text-xs text-slate-500 font-bold">مخصص لإدارة {settings.siteName}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAdminLoginOpen(false)}
+                className="p-2 rounded-xl hover:bg-slate-100 text-slate-500"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <input
-              type="password"
-              required
-              placeholder="كلمة المرور الإدارية..."
-              value={adminPassword}
-              onChange={(e) => setAdminPassword(e.target.value)}
-              className="w-full px-4 py-3 rounded-2xl border border-slate-300 text-sm font-bold"
-            />
-            {loginError && <p className="text-xs font-bold text-red-600">{loginError}</p>}
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">البريد الإلكتروني الإداري</label>
+                <input
+                  type="email"
+                  required
+                  value={adminEmailInput}
+                  onChange={(e) => setAdminEmailInput(e.target.value)}
+                  className="w-full px-4 py-3 rounded-2xl border border-slate-300 text-sm font-bold text-left"
+                  dir="ltr"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">كلمة المرور</label>
+                <div className="relative">
+                  <input
+                    type={showAdminPass ? 'text' : 'password'}
+                    required
+                    placeholder="••••••••"
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-300 text-sm font-bold"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPass((p) => !p)}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500 hover:text-slate-800"
+                  >
+                    {showAdminPass ? 'إخفاء' : 'إظهار'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {loginError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-bold text-red-700">
+                {loginError}
+              </div>
+            )}
+
             <button
               type="submit"
-              className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm"
+              className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-md transition"
             >
-              دخول لوحة التحكم
+              تسجيل الدخول للوحة التحكم
             </button>
           </form>
         </div>
