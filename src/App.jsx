@@ -79,10 +79,51 @@ const db = getFirestore(firebaseApp);
 const APP_ID = 'el3bakera-edu';
 const ADMIN_EMAIL = 'mahmoudelzaaty7@gmail.com';
 const LOCAL_SETTINGS_KEY = 'el3bakera_settings_cache_v3';
+const LOCAL_NOTEBOOKS_KEY = 'el3bakera_notebooks_cache_v1';
+const LOCAL_SAMPLES_KEY = 'el3bakera_samples_cache_v1';
 
 const publicCol = (colName) => collection(db, 'artifacts', APP_ID, 'public', 'data', colName);
 const publicDoc = (colName, docId) => doc(db, 'artifacts', APP_ID, 'public', 'data', colName, docId);
 const legacyPublicDoc = (colName, docId) => doc(db, 'artifacts', 'default-app-id', 'public', 'data', colName, docId);
+
+// ==========================================
+// حاجز حماية لمنع الشاشة البيضاء عند أي خطأ
+// ==========================================
+class PlatformErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, errorMsg: '' };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, errorMsg: error?.message || 'حدث خطأ غير متوقع' };
+  }
+  componentDidCatch(error) {
+    console.warn('Recovered UI Error:', error);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div dir="rtl" className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full border border-slate-200 shadow-xl text-center space-y-4">
+            <AlertCircle className="w-12 h-12 text-amber-500 mx-auto" />
+            <h2 className="font-black text-lg text-slate-900">تم استعادة الجلسة بأمان</h2>
+            <p className="text-xs text-slate-600 font-bold">
+              حدث انقطاع مؤقت في الاتصال بالسحابة ({this.state.errorMsg}). اضغط لإعادة تحميل الواجهة دون فقد بياناتك:
+            </p>
+            <button
+              type="button"
+              onClick={() => this.setState({ hasError: false, errorMsg: '' })}
+              className="w-full py-3 rounded-2xl bg-blue-600 text-white text-xs font-black"
+            >
+              إعادة عرض المنصة الآن
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ==========================================
 // 2. البيانات الافتراضية والهياكل الأساسية
@@ -1349,6 +1390,21 @@ function AdminDashboard({
           { pages: nbForm.samplePages || [] },
           { merge: true }
         );
+      }
+
+      // تحديث النسخة الاحتياطية المحلية للمذكرات والعينات فورًا
+      try {
+        const updatedList = editingNotebookId
+          ? notebooks.map((item) => (item.id === editingNotebookId ? normalizeNotebook({ id: targetId, ...payload }) : item))
+          : [normalizeNotebook({ id: targetId || `local_${Date.now()}`, ...payload }), ...notebooks];
+        localStorage.setItem(LOCAL_NOTEBOOKS_KEY, JSON.stringify(updatedList));
+        if (targetId) {
+          const cachedSamples = JSON.parse(localStorage.getItem(LOCAL_SAMPLES_KEY) || '{}');
+          cachedSamples[targetId] = nbForm.samplePages || [];
+          localStorage.setItem(LOCAL_SAMPLES_KEY, JSON.stringify(cachedSamples));
+        }
+      } catch {
+        // تجاهل امتلاء التخزين المحلي
       }
 
       showToast(editingNotebookId ? 'تم تحديث المذكرة بنجاح!' : 'تمت إضافة المذكرة بنجاح!');
@@ -3095,59 +3151,122 @@ function MuzakkiratiApp() {
       if (cached) {
         setSettings((prev) => mergeAndNormalizeSettings(prev, JSON.parse(cached)));
       }
+      const cachedNbs = localStorage.getItem(LOCAL_NOTEBOOKS_KEY);
+      if (cachedNbs) {
+        const parsedNbs = JSON.parse(cachedNbs);
+        if (Array.isArray(parsedNbs) && parsedNbs.length > 0) {
+          setNotebooks(parsedNbs.map(normalizeNotebook));
+        }
+      }
+      const cachedSmp = localStorage.getItem(LOCAL_SAMPLES_KEY);
+      if (cachedSmp) {
+        const parsedSmp = JSON.parse(cachedSmp);
+        if (parsedSmp && typeof parsedSmp === 'object') {
+          setSamplesMap(parsedSmp);
+        }
+      }
     } catch {
       // تجاهل
     }
 
-    const unsubMain = onSnapshot(publicDoc('settings', 'main'), (snap) => {
-      if (snap.exists()) {
-        setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
-      }
-    });
+    const handleSnapError = (err) => {
+      console.warn('Firestore listener notice:', err?.code || err?.message);
+    };
 
-    const unsubMedia = onSnapshot(publicDoc('settings', 'media_assets'), (snap) => {
-      if (snap.exists()) {
-        setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
-      }
-    });
-
-    const unsubNotebooks = onSnapshot(publicCol('notebooks'), (snap) => {
-      const list = snap.docs.map((d) => normalizeNotebook({ id: d.id, ...d.data() }));
-      setNotebooks(list);
-    });
-
-    const unsubSamples = onSnapshot(publicCol('notebook_samples'), (snap) => {
-      const map = {};
-      snap.docs.forEach((d) => {
-        const data = d.data() || {};
-        const arr =
-          (Array.isArray(data.pages) && data.pages) ||
-          (Array.isArray(data.samples) && data.samples) ||
-          (Array.isArray(data.images) && data.images) ||
-          [];
-        const cleaned = arr.map((it) => (typeof it === 'string' ? it : it?.url || it?.src || '')).filter(Boolean);
-        if (cleaned.length > 0) {
-          map[d.id] = cleaned;
+    const unsubMain = onSnapshot(
+      publicDoc('settings', 'main'),
+      (snap) => {
+        if (snap.exists()) {
+          setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
         }
-      });
-      setSamplesMap(map);
-    });
+      },
+      handleSnapError
+    );
 
-    const unsubCoupons = onSnapshot(publicCol('coupons'), (snap) => {
-      setCoupons(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
+    const unsubMedia = onSnapshot(
+      publicDoc('settings', 'media_assets'),
+      (snap) => {
+        if (snap.exists()) {
+          setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
+        }
+      },
+      handleSnapError
+    );
 
-    const unsubOrders = onSnapshot(publicCol('orders'), (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-      setOrders(list);
-    });
+    const unsubNotebooks = onSnapshot(
+      publicCol('notebooks'),
+      (snap) => {
+        const list = snap.docs.map((d) => normalizeNotebook({ id: d.id, ...d.data() }));
+        if (list.length > 0 || !snap.metadata.fromCache) {
+          setNotebooks(list);
+          try {
+            localStorage.setItem(LOCAL_NOTEBOOKS_KEY, JSON.stringify(list));
+          } catch {
+            // تجاهل
+          }
+        }
+      },
+      handleSnapError
+    );
 
-    const unsubAuth = onAuthStateChanged(auth, (user) => {
-      if (user && user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
-        setIsAdmin(true);
-      }
-    });
+    const unsubSamples = onSnapshot(
+      publicCol('notebook_samples'),
+      (snap) => {
+        const map = {};
+        snap.docs.forEach((d) => {
+          const data = d.data() || {};
+          const arr =
+            (Array.isArray(data.pages) && data.pages) ||
+            (Array.isArray(data.samples) && data.samples) ||
+            (Array.isArray(data.images) && data.images) ||
+            [];
+          const cleaned = arr.map((it) => (typeof it === 'string' ? it : it?.url || it?.src || '')).filter(Boolean);
+          if (cleaned.length > 0) {
+            map[d.id] = cleaned;
+          }
+        });
+        if (Object.keys(map).length > 0) {
+          setSamplesMap((prev) => {
+            const merged = { ...prev, ...map };
+            try {
+              localStorage.setItem(LOCAL_SAMPLES_KEY, JSON.stringify(merged));
+            } catch {
+              // تجاهل
+            }
+            return merged;
+          });
+        }
+      },
+      handleSnapError
+    );
+
+    const unsubCoupons = onSnapshot(
+      publicCol('coupons'),
+      (snap) => {
+        setCoupons(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      },
+      handleSnapError
+    );
+
+    const unsubOrders = onSnapshot(
+      publicCol('orders'),
+      (snap) => {
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        setOrders(list);
+      },
+      handleSnapError
+    );
+
+    const unsubAuth = onAuthStateChanged(
+      auth,
+      (user) => {
+        if (user && user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+          setIsAdmin(true);
+        }
+      },
+      handleSnapError
+    );
 
     return () => {
       unsubMain();
@@ -4140,5 +4259,9 @@ function MuzakkiratiApp() {
 }
 
 export default function App() {
-  return <MuzakkiratiApp />;
+  return (
+    <PlatformErrorBoundary>
+      <MuzakkiratiApp />
+    </PlatformErrorBoundary>
+  );
 }
