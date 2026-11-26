@@ -2230,14 +2230,22 @@ function AdminPortal({
   const handleSamplesUpload = async (fileList) => {
     if (!fileList || fileList.length === 0) return;
     try {
-      const files = Array.from(fileList).slice(0, 15);
+      const remainingSlots = Math.max(0, 15 - nbForm.sampleUrls.length);
+      if (remainingSlots === 0) {
+        onNotify('لقد وصلت للحد الأقصى (15 صفحة عينة). احذف صفحة أولاً لإضافة غيرها.', 'info');
+        return;
+      }
+      const files = Array.from(fileList).slice(0, remainingSlots);
       const compressedList = [];
       for (const f of files) {
         const c = await compressImageFile(f, 820, 0.72);
         compressedList.push(c);
       }
-      setNbForm((prev) => ({ ...prev, sampleUrls: compressedList }));
-      onNotify(`تم تجهيز ${compressedList.length} صفحة عينة بنجاح`, 'success');
+      setNbForm((prev) => {
+        const combined = [...prev.sampleUrls, ...compressedList].slice(0, 15);
+        onNotify(`تمت إضافة ${compressedList.length} صفحة جديدة (الإجمالي الآن: ${combined.length} صفحة)`, 'success');
+        return { ...prev, sampleUrls: combined };
+      });
     } catch {
       onNotify('تعذر معالجة صور العينات', 'error');
     }
@@ -2804,19 +2812,56 @@ function AdminPortal({
 
                 <div className="border border-dashed border-slate-300 rounded-2xl p-3 text-center">
                   <label className="text-xs font-extrabold text-slate-700 block mb-1.5">
-                    صفحات العينة (حتى 15 صفحة)
+                    إضافة صفحات عينة ({nbForm.sampleUrls.length}/15)
                   </label>
                   <input
                     type="file"
                     accept="image/*"
                     multiple
-                    onChange={(e) => handleSamplesUpload(e.target.files)}
+                    onChange={(e) => {
+                      handleSamplesUpload(e.target.files);
+                      e.target.value = '';
+                    }}
                     className="text-[11px] w-full"
                   />
                   {nbForm.sampleUrls.length > 0 && (
-                    <span className="text-[11px] font-bold text-emerald-600 block mt-2">
-                      تم تجهيز {nbForm.sampleUrls.length} صفحة
-                    </span>
+                    <div className="mt-2 space-y-2">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-emerald-600">
+                          {nbForm.sampleUrls.length} صفحة محفوظة
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setNbForm((prev) => ({ ...prev, sampleUrls: [] }))}
+                          className="text-rose-600 hover:underline font-bold"
+                        >
+                          مسح الكل
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1.5 max-h-28 overflow-y-auto p-1 bg-slate-50 rounded-xl border border-slate-200">
+                        {nbForm.sampleUrls.map((url, idx) => (
+                          <div key={idx} className="relative group aspect-square rounded-lg overflow-hidden border bg-white">
+                            <img src={url} alt="" className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setNbForm((prev) => ({
+                                  ...prev,
+                                  sampleUrls: prev.sampleUrls.filter((_, i) => i !== idx)
+                                }))
+                              }
+                              title="حذف هذه الصفحة"
+                              className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-rose-600 text-white flex items-center justify-center text-[10px] font-black shadow"
+                            >
+                              ×
+                            </button>
+                            <span className="absolute bottom-0 inset-x-0 bg-slate-900/70 text-white text-[9px] font-bold">
+                              {idx + 1}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
