@@ -3931,7 +3931,7 @@ function MuzakkiratiApp() {
     return () => unsubOrders();
   }, [isAdminAuthenticated]);
 
-  // الطرق المخفية الثلاث للوصول إلى تسجيل دخول الإدارة (#admin، Alt+Shift+A، 5 نقرات على الشعار)
+  // الطرق المخفية للوصول إلى تسجيل دخول الإدارة (#admin، Ctrl+Shift+L، Alt+Shift+A، 5 نقرات على الشعار)
   useEffect(() => {
     const checkHash = () => {
       if (window.location.hash === '#admin') {
@@ -3943,7 +3943,16 @@ function MuzakkiratiApp() {
     window.addEventListener('hashchange', checkHash);
 
     const handleKeyDown = (e) => {
-      if (e.altKey && e.shiftKey && (e.key === 'A' || e.key === 'a' || e.key === 'ش')) {
+      const isCtrlShiftL =
+        (e.ctrlKey || e.metaKey) &&
+        e.shiftKey &&
+        (e.key === 'L' || e.key === 'l' || e.key === 'م' || e.code === 'KeyL');
+      const isAltShiftA =
+        e.altKey &&
+        e.shiftKey &&
+        (e.key === 'A' || e.key === 'a' || e.key === 'ش' || e.code === 'KeyA');
+
+      if (isCtrlShiftL || isAltShiftA) {
         e.preventDefault();
         if (isAdminAuthenticated) setShowAdminPortal(true);
         else setShowAdminLoginModal(true);
