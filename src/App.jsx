@@ -4028,18 +4028,29 @@ function MuzakkiratiApp() {
   const [cartToast, setCartToast] = useState('');
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [copiedPromo, setCopiedPromo] = useState(false);
+  const [promoDismissed, setPromoDismissed] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
+
   const [trackQuery, setTrackQuery] = useState('');
   const [trackedOrder, setTrackedOrder] = useState(null);
-  const [trackingLoading, setTrackingLoading] = useState(false);
   const [trackNotFound, setTrackNotFound] = useState(false);
+  const [trackingLoading, setTrackingLoading] = useState(false);
+
   const logoClickCountRef = useRef(0);
+
+  // مراقبة التمرير لتقليص الشريط العلوي على الهاتف
+  useEffect(() => {
+    const onScroll = () => setIsScrolled(window.scrollY > 50);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   // مراقبة حالة تسجيل الدخول
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      if (u && u.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
-        setShowAdminLogin(false);
+    const unsub = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      if (currentUser && currentUser.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        setAdminViewOpen(true);
       }
     });
     return () => unsub();
@@ -4390,44 +4401,57 @@ function MuzakkiratiApp() {
   return (
     <div dir="rtl" className="min-h-screen bg-slate-50 text-slate-900 overflow-x-clip flex flex-col justify-between">
       <div>
-        {/* شريط الرأس الموحد والمثبت دائمًا في أعلى الشاشة */}
+        {/* شريط الرأس الموحد والمثبت دائمًا في أعلى الشاشة (مدمج بذكاء للهاتف) */}
         <div className="sticky top-0 z-40 shadow-md">
-          {/* الشريط الترويجي العلوي */}
-          {settings.promoBannerEnabled && settings.promoBannerText && (
-            <div className={`${promoBgClass} text-white px-3 py-2 text-xs sm:text-sm font-bold`}>
-              <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-center gap-2 text-center">
-                <span>{settings.promoBannerText}</span>
-                {settings.promoBannerCoupon && (
+          {/* الشريط الترويجي العلوي — ينطوي تلقائيًا على الهاتف عند التمرير للأسفل لتوفير مساحة الشاشة */}
+          {settings.promoBannerEnabled && settings.promoBannerText && !promoDismissed && (
+            <div
+              className={`${promoBgClass} text-white px-2.5 py-1.5 text-[11px] sm:text-sm font-bold transition-all ${
+                isScrolled ? 'hidden sm:block' : 'block'
+              }`}
+            >
+              <div className="max-w-7xl mx-auto flex items-center justify-between sm:justify-center gap-1.5 text-right sm:text-center">
+                <span className="truncate flex-1 sm:flex-initial">{settings.promoBannerText}</span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {settings.promoBannerCoupon && (
+                    <button
+                      onClick={() => {
+                        navigator.clipboard?.writeText(settings.promoBannerCoupon);
+                        setCopiedPromo(true);
+                        setTimeout(() => setCopiedPromo(false), 2000);
+                      }}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-lg bg-white text-slate-950 font-black text-[10px] sm:text-xs shadow-sm hover:bg-amber-300 transition"
+                    >
+                      <Copy className="w-3 h-3" />
+                      <span>
+                        {copiedPromo
+                          ? 'نُسخ!'
+                          : settings.promoBannerCoupon}
+                      </span>
+                    </button>
+                  )}
                   <button
-                    onClick={() => {
-                      navigator.clipboard?.writeText(settings.promoBannerCoupon);
-                      setCopiedPromo(true);
-                      setTimeout(() => setCopiedPromo(false), 2000);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white text-slate-950 font-black text-xs shadow-sm hover:bg-amber-300 transition"
+                    onClick={() => navigateTo('offers')}
+                    className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-lg bg-amber-400 text-slate-950 font-black text-[10px] sm:text-xs hover:bg-amber-300"
                   >
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>
-                      {copiedPromo
-                        ? 'تم النسخ!'
-                        : `${settings.promoBannerCopyText || 'انسخ الكوبون'}: ${settings.promoBannerCoupon}`}
-                    </span>
+                    العروض
                   </button>
-                )}
-                <button
-                  onClick={() => navigateTo('offers')}
-                  className="px-2.5 py-1 rounded-lg bg-amber-400 text-slate-950 font-black text-xs hover:bg-amber-300"
-                >
-                  العروض ←
-                </button>
+                  <button
+                    onClick={() => setPromoDismissed(true)}
+                    title="إخفاء الشريط"
+                    className="p-0.5 rounded hover:bg-white/20 text-white/80"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
           )}
 
           {/* الهيدر الرئيسي المتجاوب بالكامل للهاتف والكمبيوتر */}
           <header className="bg-white/95 backdrop-blur-md border-b border-slate-200">
-            <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3">
-              <div className="flex flex-wrap lg:flex-nowrap items-center justify-between gap-3">
+            <div className="max-w-7xl mx-auto px-2.5 sm:px-6 py-2 sm:py-3">
+              <div className="flex flex-wrap lg:flex-nowrap items-center justify-between gap-2 sm:gap-3">
                 {/* اليمين: الشعار واسم المنصة */}
                 <div
                   onClick={() => {
@@ -4439,25 +4463,25 @@ function MuzakkiratiApp() {
                     }
                     navigateTo('home');
                   }}
-                  className="flex items-center gap-3 cursor-pointer min-w-0 shrink-0 max-w-[65%] sm:max-w-none"
+                  className="flex items-center gap-2 sm:gap-3 cursor-pointer min-w-0 flex-1 lg:flex-initial"
                 >
                   {settings.logoUrl ? (
                     <img
                       src={settings.logoUrl}
                       alt={settings.siteName}
                       style={{
-                        width: `${Math.min(64, Math.max(44, settings.logoSize || 54))}px`,
-                        height: `${Math.min(64, Math.max(44, settings.logoSize || 54))}px`
+                        width: `${Math.min(58, Math.max(38, settings.logoSize || 48))}px`,
+                        height: `${Math.min(58, Math.max(38, settings.logoSize || 48))}px`
                       }}
-                      className="rounded-2xl object-cover border-2 border-slate-900 shadow-sm shrink-0"
+                      className="rounded-xl sm:rounded-2xl object-cover border-2 border-slate-900 shadow-sm shrink-0"
                     />
                   ) : (
-                    <div className="w-12 h-12 rounded-2xl bg-slate-950 text-amber-400 flex items-center justify-center font-black text-xl shrink-0 shadow-sm">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-slate-950 text-amber-400 flex items-center justify-center font-black text-lg sm:text-xl shrink-0 shadow-sm">
                       ع
                     </div>
                   )}
                   <div className="text-right min-w-0">
-                    <h1 className="text-sm sm:text-lg xl:text-xl font-black bg-gradient-to-l from-slate-950 via-blue-900 to-blue-700 bg-clip-text text-transparent leading-snug">
+                    <h1 className="text-xs sm:text-lg xl:text-xl font-black bg-gradient-to-l from-slate-950 via-blue-900 to-blue-700 bg-clip-text text-transparent leading-tight truncate">
                       {settings.siteName}
                     </h1>
                     <p className="hidden md:block text-[11px] text-slate-500 font-semibold truncate max-w-[290px]">
@@ -4467,7 +4491,7 @@ function MuzakkiratiApp() {
                 </div>
 
                 {/* المنتصف (على الشاشات الكبيرة): روابط التنقل */}
-                <nav className="order-3 lg:order-2 w-full lg:w-auto grid grid-cols-4 lg:flex items-center gap-1 bg-slate-100/90 p-1 rounded-2xl border border-slate-200/70">
+                <nav className="order-3 lg:order-2 w-full lg:w-auto grid grid-cols-4 lg:flex items-center gap-1 bg-slate-100/90 p-1 rounded-xl sm:rounded-2xl border border-slate-200/70">
                   {[
                     { id: 'home', label: 'الرئيسية', icon: Home },
                     { id: 'catalog', label: 'المذكرات', icon: BookOpen },
@@ -4480,11 +4504,11 @@ function MuzakkiratiApp() {
                       <button
                         key={navItem.id}
                         onClick={() => navigateTo(navItem.id)}
-                        className={`py-2 px-2 sm:px-3.5 rounded-xl font-black text-[11px] sm:text-xs xl:text-sm flex items-center justify-center gap-1.5 transition whitespace-nowrap ${
+                        className={`py-1.5 sm:py-2 px-1.5 sm:px-3.5 rounded-lg sm:rounded-xl font-black text-[11px] sm:text-xs xl:text-sm flex items-center justify-center gap-1 sm:gap-1.5 transition whitespace-nowrap ${
                           active ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-700 hover:bg-white'
                         }`}
                       >
-                        <Icon className="w-4 h-4 shrink-0" />
+                        <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
                         <span>{navItem.label}</span>
                       </button>
                     );
@@ -4492,11 +4516,11 @@ function MuzakkiratiApp() {
                 </nav>
 
                 {/* اليسار: أزرار الإجراءات (الإدارة، السلة، تواصل معنا) */}
-                <div className="order-2 lg:order-3 flex items-center gap-1.5 sm:gap-2 shrink-0">
+                <div className="order-2 lg:order-3 flex items-center gap-1 sm:gap-2 shrink-0">
                   {isAdmin && (
                     <button
                       onClick={() => setAdminViewOpen(true)}
-                      className="px-2.5 sm:px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition"
+                      className="p-2 sm:px-3 sm:py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition"
                     >
                       <ShieldCheck className="w-4 h-4 text-blue-400 shrink-0" />
                       <span className="hidden sm:inline">الإدارة</span>
@@ -4505,10 +4529,10 @@ function MuzakkiratiApp() {
 
                   <button
                     onClick={() => setCartOpen(true)}
-                    className="relative px-2.5 sm:px-3.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-black text-xs sm:text-sm flex items-center gap-1.5 transition"
+                    className="relative px-2 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-black text-[11px] sm:text-sm flex items-center gap-1 transition"
                   >
-                    <ShoppingCart className="w-4 h-4 shrink-0" />
-                    <span>السلة</span>
+                    <ShoppingCart className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                    <span className="hidden xs:inline sm:inline">السلة</span>
                     {cart.length > 0 && (
                       <span className="px-1.5 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-black leading-none">
                         {cart.length}
@@ -4518,9 +4542,9 @@ function MuzakkiratiApp() {
 
                   <button
                     onClick={() => setContactModalOpen(true)}
-                    className="px-3 sm:px-4 py-2 rounded-xl bg-gradient-to-l from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-xs sm:text-sm flex items-center gap-1.5 shadow-sm transition whitespace-nowrap"
+                    className="px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-gradient-to-l from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-[11px] sm:text-sm flex items-center gap-1 shadow-sm transition whitespace-nowrap"
                   >
-                    <MessageCircle className="w-4 h-4 shrink-0" />
+                    <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
                     <span>تواصل معنا</span>
                   </button>
                 </div>
