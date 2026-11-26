@@ -270,6 +270,16 @@ const DEFAULT_SETTINGS = {
 // ==========================================
 // 3. دوال مساعدة للتطبيع وضغط الصور
 // ==========================================
+function safeText(val, fallback = '') {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+  if (typeof val === 'object') {
+    return val.name || val.title || val.label || val.text || fallback;
+  }
+  return fallback;
+}
+
 function normalizeNotebook(nb) {
   if (!nb || typeof nb !== 'object') return nb;
   const cover =
@@ -288,8 +298,14 @@ function normalizeNotebook(nb) {
     : [];
   return {
     ...nb,
-    coverImage: cover,
-    samplePages: samples,
+    title: safeText(nb.title, 'مذكرة دراسية'),
+    gradeName: safeText(nb.gradeName, ''),
+    subject: safeText(nb.subject, ''),
+    description: safeText(nb.description, ''),
+    alertBadge: safeText(nb.alertBadge, ''),
+    alertText: safeText(nb.alertText, ''),
+    coverImage: typeof cover === 'string' ? cover : '',
+    samplePages: samples.filter((s) => typeof s === 'string'),
     price: Number(nb.price) || 0,
     oldPrice: Number(nb.oldPrice) || 0
   };
@@ -307,23 +323,55 @@ function mergeAndNormalizeSettings(base, incoming) {
 
   const normalizedCats = rawCats.map((c, idx) => {
     const id = c.id || `cat_${idx + 1}`;
-    const name = c.name || c.title || c.label || `قسم ${idx + 1}`;
-    if (c.image && !mergedCatImages[id]) {
+    const name = safeText(c.name || c.title || c.label, `قسم ${idx + 1}`);
+    if (c.image && typeof c.image === 'string' && !mergedCatImages[id]) {
       mergedCatImages[id] = c.image;
     }
     return {
       ...c,
       id,
       name,
-      stages: Array.isArray(c.stages) ? c.stages : []
+      stages: Array.isArray(c.stages)
+        ? c.stages.map((st, sIdx) => ({
+            ...st,
+            id: st.id || `stg_${sIdx + 1}`,
+            name: safeText(st.name || st.title, `مرحلة ${sIdx + 1}`),
+            grades: Array.isArray(st.grades)
+              ? st.grades.map((gr, gIdx) => ({
+                  ...gr,
+                  id: gr.id || `grd_${gIdx + 1}`,
+                  name: safeText(gr.name || gr.title, `صف ${gIdx + 1}`)
+                }))
+              : []
+          }))
+        : []
     };
   });
+
+  const normalizedNews = Array.isArray(incoming.newsItems)
+    ? incoming.newsItems.map((nw, i) => ({
+        id: nw.id || `news_${i}`,
+        badge: safeText(nw.badge, 'تحديث'),
+        title: safeText(nw.title, ''),
+        body: safeText(nw.body, '')
+      }))
+    : base.newsItems;
+
+  const normalizedTrust =
+    Array.isArray(incoming.trustPoints) && incoming.trustPoints.length > 0
+      ? incoming.trustPoints.map((pt) => safeText(pt)).filter(Boolean)
+      : base.trustPoints;
 
   return {
     ...base,
     ...incoming,
-    logoUrl: incoming.logoUrl ? incoming.logoUrl : base.logoUrl,
-    heroBgImage: incoming.heroBgImage ? incoming.heroBgImage : base.heroBgImage,
+    siteName: safeText(incoming.siteName, base.siteName),
+    siteTagline: safeText(incoming.siteTagline, base.siteTagline),
+    heroBadge: safeText(incoming.heroBadge, base.heroBadge),
+    heroTitle: safeText(incoming.heroTitle, base.heroTitle),
+    heroSubtitle: safeText(incoming.heroSubtitle, base.heroSubtitle),
+    logoUrl: typeof incoming.logoUrl === 'string' && incoming.logoUrl ? incoming.logoUrl : base.logoUrl,
+    heroBgImage: typeof incoming.heroBgImage === 'string' && incoming.heroBgImage ? incoming.heroBgImage : base.heroBgImage,
     categories: normalizedCats,
     categoryImages: mergedCatImages,
     bundles: Array.isArray(incoming.bundles) ? incoming.bundles : base.bundles,
@@ -332,11 +380,8 @@ function mergeAndNormalizeSettings(base, incoming) {
         ? incoming.customerFields
         : base.customerFields,
     socialLinks: Array.isArray(incoming.socialLinks) ? incoming.socialLinks : base.socialLinks,
-    newsItems: Array.isArray(incoming.newsItems) ? incoming.newsItems : base.newsItems,
-    trustPoints:
-      Array.isArray(incoming.trustPoints) && incoming.trustPoints.length > 0
-        ? incoming.trustPoints
-        : base.trustPoints
+    newsItems: normalizedNews,
+    trustPoints: normalizedTrust
   };
 }
 
@@ -3316,6 +3361,49 @@ function MuzakkiratiApp() {
           handleSnapError
         )
       );
+
+      // جلب احتياطي من المسار السابق (muzakkirati-edu-app) ودمجه في حال وجود بيانات غير منقولة
+      (async () => {
+        try {
+          const [legMain, legMedia, legNbs, legSamples] = await Promise.all([
+            getDoc(legacyPublicDoc('settings', 'main')).catch(() => null),
+            getDoc(legacyPublicDoc('settings', 'media_assets')).catch(() => null),
+            getDocs(legacyPublicCol('notebooks')).catch(() => null),
+            getDocs(legacyPublicCol('notebook_samples')).catch(() => null)
+          ]);
+
+          if (legMain?.exists()) {
+            setSettings((prev) => mergeAndNormalizeSettings(legMain.data(), prev));
+          }
+          if (legMedia?.exists()) {
+            setSettings((prev) => mergeAndNormalizeSettings(legMedia.data(), prev));
+          }
+          if (legNbs && !legNbs.empty) {
+            const legacyList = legNbs.docs.map((d) => normalizeNotebook({ id: d.id, ...d.data() }));
+            setNotebooks((prev) => {
+              const existingIds = new Set(prev.map((x) => x.id));
+              const merged = [...prev, ...legacyList.filter((x) => !existingIds.has(x.id))];
+              return merged;
+            });
+          }
+          if (legSamples && !legSamples.empty) {
+            const legacyMap = {};
+            legSamples.docs.forEach((d) => {
+              const data = d.data() || {};
+              const arr = data.pages || data.samples || data.images || [];
+              const cleaned = Array.isArray(arr)
+                ? arr.map((it) => (typeof it === 'string' ? it : it?.url || it?.src || '')).filter(Boolean)
+                : [];
+              if (cleaned.length > 0) legacyMap[d.id] = cleaned;
+            });
+            if (Object.keys(legacyMap).length > 0) {
+              setSamplesMap((prev) => ({ ...legacyMap, ...prev }));
+            }
+          }
+        } catch {
+          // تجاهل في حال عدم وجود بيانات قديمة
+        }
+      })();
     } catch (subErr) {
       console.warn('Firestore subscription setup skipped:', subErr);
     }
