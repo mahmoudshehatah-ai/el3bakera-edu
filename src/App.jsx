@@ -126,11 +126,29 @@ const DEFAULT_SETTINGS = {
   brandName: 'منصة العباقرة للمذكرات التعليمية',
   brandTagline: 'مذكرات دراسية احترافية مخصصة باسمك وبياناتك الخاصة',
   logoUrl: '',
+  logoSize: 56,
   heroBgImage: '',
+  heroBgOpacity: 35,
+  heroBgFit: 'cover',
+  heroOverlayColor: '#020617',
+  heroOverlayOpacity: 65,
+  heroHeight: 540,
   heroBadge: 'تخصيص كامل باسم المعلم ورقم هاتفه وشعاره',
   heroTitle: 'مذكرتك التعليمية الجاهزة... باسمك وشعارك وهويتك الاحترافية',
   heroSubtitle:
     'نوفر للمعلمين مذكرات دراسية منسقة ومحدّثة وفق أحدث المناهج بصيغة PDF عالية الدقة، مع إضافة اسم المعلم، رقم الهاتف، والشعار الخاص به على الغلاف وجميع الصفحات.',
+  trustCardTitle: 'لماذا يثق بنا المعلمون؟',
+  trustPoints: [
+    'محتوى علمي منقح ومطابق لأحدث مواصفات الوزارة',
+    'وضع اسم المعلم ورقم الهاتف والشعار على جميع الصفحات',
+    'معاينة حقيقية لصفحات المذكرة قبل تأكيد الطلب',
+    'تسليم سريع بصيغة PDF عالية الدقة جاهزة للطباعة'
+  ],
+  emptyCategoryTitle: 'جاري تجهيز أحدث المذكرات لهذا القسم قريبًا!',
+  emptyCategorySubtitle:
+    'نعمل حاليًا على تنسيق ومراجعة مذكرات هذا القسم بأعلى جودة. يمكنك حجز مذكرتك مسبقًا أو التواصل معنا.',
+  emptyCategoryButtonText: 'اطلب تجهيز مذكرتك الآن',
+  emptyCategoryImage: '',
   promoBannerEnabled: true,
   promoBannerText:
     '🎉 عرض خاص للمعلمين: خصم 15% على جميع مذكرات الترم الأول + إضافة الشعار مجانًا لفترة محدودة!',
@@ -280,7 +298,18 @@ const normalizeSettings = (raw) => {
     ...DEFAULT_SETTINGS,
     ...src,
     logoUrl: detectedLogo,
+    logoSize: Number(src.logoSize) || DEFAULT_SETTINGS.logoSize,
     heroBgImage: detectedHeroBg,
+    heroBgOpacity:
+      src.heroBgOpacity !== undefined ? Number(src.heroBgOpacity) : DEFAULT_SETTINGS.heroBgOpacity,
+    heroBgFit: src.heroBgFit || DEFAULT_SETTINGS.heroBgFit,
+    heroOverlayColor: src.heroOverlayColor || DEFAULT_SETTINGS.heroOverlayColor,
+    heroOverlayOpacity:
+      src.heroOverlayOpacity !== undefined
+        ? Number(src.heroOverlayOpacity)
+        : DEFAULT_SETTINGS.heroOverlayOpacity,
+    heroHeight: Number(src.heroHeight) || DEFAULT_SETTINGS.heroHeight,
+    trustPoints: normalizeStringArray(src.trustPoints, DEFAULT_SETTINGS.trustPoints),
     categories: normalizeStringArray(src.categories, DEFAULT_SETTINGS.categories),
     stages,
     stageGrades,
@@ -755,7 +784,7 @@ function MuzakkiratiApp() {
         showToast(`تم فحص السحابة واسترجاع ${recoveredCount} عنصر بنجاح!`);
       } else {
         showToast(
-          'تم فحص جميع مسارات السحابة — لا توجد بيانات سابقة أخرى مخزنة (أعد رفع الشعار والخلفية واحفظ نسخة احتياطية)',
+          'تم فحص جميع مسارات السحابة — لا توجد بيانات سابقة أخرى مخزنة',
           'error'
         );
       }
@@ -967,6 +996,8 @@ function MuzakkiratiApp() {
     }
   };
 
+  const logoSizePx = Number(settings.logoSize) || 56;
+
   return (
     <div dir="rtl" className="min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans">
       {/* Toast Notification */}
@@ -1013,7 +1044,8 @@ function MuzakkiratiApp() {
               <img
                 src={settings.logoUrl}
                 alt={settings.brandName}
-                className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl object-cover border border-slate-200 shadow-sm group-hover:scale-105 transition"
+                style={{ width: `${logoSizePx}px`, height: `${logoSizePx}px` }}
+                className="rounded-2xl object-cover border border-slate-200 shadow-sm group-hover:scale-105 transition"
               />
             ) : (
               <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition">
@@ -1121,6 +1153,7 @@ function MuzakkiratiApp() {
             onPreview={setPreviewNotebook}
             onOrder={(nb) => addToCart(nb, true)}
             onAddToCart={(nb) => addToCart(nb, false)}
+            onNavigate={navigateTo}
           />
         )}
 
@@ -1315,28 +1348,52 @@ function HomePage({
   onAddToCart
 }) {
   const featured = notebooks.slice(0, 6);
+  const bgOpacity = Math.max(0, Math.min(100, Number(settings.heroBgOpacity ?? 35))) / 100;
+  const overlayOpacity =
+    Math.max(0, Math.min(100, Number(settings.heroOverlayOpacity ?? 65))) / 100;
+  const minHeightPx = Number(settings.heroHeight) || 540;
 
   return (
     <div>
       {/* Hero Section */}
-      <section className="relative bg-slate-950 text-white overflow-hidden">
+      <section
+        style={{
+          backgroundColor: settings.heroOverlayColor || '#020617',
+          minHeight: `${minHeightPx}px`
+        }}
+        className="relative text-white overflow-hidden flex items-center"
+      >
         {settings.heroBgImage && (
           <img
             src={settings.heroBgImage}
             alt="خلفية المنصة"
-            className="absolute inset-0 w-full h-full object-cover opacity-25 pointer-events-none"
+            style={{
+              opacity: bgOpacity,
+              objectFit: settings.heroBgFit === 'contain' ? 'contain' : 'cover'
+            }}
+            className="absolute inset-0 w-full h-full pointer-events-none"
           />
         )}
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-16 sm:py-24 grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+        <div
+          style={{
+            backgroundColor: settings.heroOverlayColor || '#020617',
+            opacity: overlayOpacity * 0.55
+          }}
+          className="absolute inset-0 pointer-events-none"
+        />
+
+        <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 py-16 sm:py-20 grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
           <div className="lg:col-span-7 space-y-6">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-400/15 border border-amber-400/30 text-amber-300 text-xs sm:text-sm font-black">
-              <Sparkles className="w-4 h-4" />
-              <span>{settings.heroBadge}</span>
-            </div>
+            {settings.heroBadge && (
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-400/15 border border-amber-400/30 text-amber-300 text-xs sm:text-sm font-black">
+                <Sparkles className="w-4 h-4" />
+                <span>{settings.heroBadge}</span>
+              </div>
+            )}
             <h2 className="text-3xl sm:text-5xl font-black leading-tight">
               {settings.heroTitle}
             </h2>
-            <p className="text-slate-300 text-sm sm:text-lg leading-relaxed max-w-2xl">
+            <p className="text-slate-200 text-sm sm:text-lg leading-relaxed max-w-2xl">
               {settings.heroSubtitle}
             </p>
             <div className="flex flex-wrap items-center gap-3 pt-2">
@@ -1361,25 +1418,15 @@ function HomePage({
             <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-4 shadow-2xl">
               <div className="flex items-center gap-2.5 text-amber-400 font-black text-base">
                 <Shield className="w-5 h-5" />
-                <span>لماذا يثق بنا المعلمون؟</span>
+                <span>{settings.trustCardTitle || 'لماذا يثق بنا المعلمون؟'}</span>
               </div>
               <ul className="space-y-3 text-sm text-slate-200 font-semibold">
-                <li className="flex items-center gap-2.5">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                  <span>محتوى علمي منقح ومطابق لأحدث مواصفات الوزارة</span>
-                </li>
-                <li className="flex items-center gap-2.5">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                  <span>وضع اسم المعلم ورقم الهاتف والشعار على جميع الصفحات</span>
-                </li>
-                <li className="flex items-center gap-2.5">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                  <span>معاينة حقيقية لصفحات المذكرة قبل تأكيد الطلب</span>
-                </li>
-                <li className="flex items-center gap-2.5">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                  <span>تسليم سريع بصيغة PDF عالية الدقة جاهزة للطباعة</span>
-                </li>
+                {(settings.trustPoints || []).map((pt, idx) => (
+                  <li key={idx} className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                    <span>{pt}</span>
+                  </li>
+                ))}
               </ul>
             </div>
           </div>
@@ -1474,7 +1521,8 @@ function CatalogPage({
   setCatalogPath,
   onPreview,
   onOrder,
-  onAddToCart
+  onAddToCart,
+  onNavigate
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('');
@@ -1482,7 +1530,6 @@ function CatalogPage({
   const { category, stage, grade } = catalogPath;
   const isSearching = searchQuery.trim().length > 0 || selectedSubject !== '';
 
-  // Filtered notebooks when searching or at the final grade folder
   const matchingNotebooks = useMemo(() => {
     return notebooks.filter((nb) => {
       if (category && nb.category !== category) return false;
@@ -1603,7 +1650,7 @@ function CatalogPage({
         )}
       </div>
 
-      {/* Folder Hierarchy Views (when not actively typing a search query) */}
+      {/* Folder Hierarchy Views */}
       {!isSearching && !category && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {settings.categories.map((cat, idx) => {
@@ -1692,18 +1739,36 @@ function CatalogPage({
         </div>
       )}
 
-      {/* Notebooks Grid (when inside a Grade folder OR when actively searching) */}
+      {/* Notebooks Grid or Custom Empty State */}
       {(isSearching || (category && stage && grade)) && (
         <div className="space-y-6">
           {matchingNotebooks.length === 0 ? (
-            <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center space-y-3">
-              <BookOpen className="w-12 h-12 text-slate-300 mx-auto" />
-              <h3 className="text-lg font-black text-slate-800">
-                لا توجد مذكرات في هذا المجلد حاليًا
+            <div className="bg-white rounded-3xl border border-slate-200 p-10 sm:p-14 text-center space-y-5 max-w-2xl mx-auto">
+              {settings.emptyCategoryImage ? (
+                <img
+                  src={settings.emptyCategoryImage}
+                  alt="قريبًا"
+                  className="max-h-52 mx-auto rounded-2xl object-contain"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
+                  <Clock className="w-8 h-8" />
+                </div>
+              )}
+              <h3 className="text-xl font-black text-slate-900">
+                {settings.emptyCategoryTitle || 'جاري تجهيز أحدث المذكرات لهذا القسم قريبًا!'}
               </h3>
-              <p className="text-xs text-slate-500">
-                جرب العودة لاختيار صف آخر أو ابحث باسم المادة
+              <p className="text-sm text-slate-500 leading-relaxed">
+                {settings.emptyCategorySubtitle ||
+                  'نعمل حاليًا على تنسيق ومراجعة مذكرات هذا القسم بأعلى جودة. يمكنك حجز مذكرتك مسبقًا أو التواصل معنا.'}
               </p>
+              <button
+                type="button"
+                onClick={() => onNavigate('contact')}
+                className="px-6 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs sm:text-sm shadow-md transition cursor-pointer"
+              >
+                {settings.emptyCategoryButtonText || 'اطلب تجهيز مذكرتك الآن'}
+              </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1895,7 +1960,10 @@ function ProtectedPreviewerModal({ notebook, brandName, onClose, onOrder }) {
         </div>
 
         {/* Viewer Stage */}
-        <div className="flex-1 overflow-auto p-4 sm:p-6 flex items-center justify-center relative select-none bg-slate-950">
+        <div
+          style={{ touchAction: 'pan-y pinch-zoom' }}
+          className="flex-1 overflow-auto p-4 sm:p-6 flex items-center justify-center relative select-none bg-slate-950"
+        >
           {pages.length === 0 ? (
             <div className="text-center text-slate-400 space-y-2 py-12">
               <FileText className="w-12 h-12 mx-auto opacity-40" />
@@ -1908,7 +1976,7 @@ function ProtectedPreviewerModal({ notebook, brandName, onClose, onOrder }) {
                 alt={`صفحة ${currentIdx + 1}`}
                 draggable={false}
                 style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}
-                className="max-h-[68vh] w-auto rounded-xl shadow-2xl transition-transform pointer-events-none"
+                className="max-h-[65vh] w-auto rounded-xl shadow-2xl transition-transform pointer-events-none"
               />
               {/* Diagonal Watermark Overlay */}
               <div className="inset-0 absolute flex items-center justify-center pointer-events-none overflow-hidden">
@@ -2019,7 +2087,6 @@ function OrderCheckoutModal({
     const orderCode = generateOrderCode();
     let generatedNextCoupon = null;
 
-    // Generate a unique single-use coupon for the customer's next order if enabled
     if (settings.nextOrderRewardEnabled && Number(settings.nextOrderDiscountPercent) > 0) {
       const nextCode = generatePersonalCouponCode();
       generatedNextCoupon = {
@@ -2036,7 +2103,6 @@ function OrderCheckoutModal({
       await onSaveCoupon(generatedNextCoupon);
     }
 
-    // Mark applied single-use coupon as used
     if (appliedCoupon && appliedCoupon.singleUse) {
       await onSaveCoupon({
         ...appliedCoupon,
@@ -2144,7 +2210,6 @@ function OrderCheckoutModal({
           </div>
         ) : (
           <form onSubmit={handleSubmitOrder} className="space-y-5">
-            {/* Selected Notebooks in Cart */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-black text-slate-800">
@@ -2189,7 +2254,6 @@ function OrderCheckoutModal({
                 </div>
               )}
 
-              {/* Add Another Notebook Directly inside Modal */}
               {availableToAdd.length > 0 && (
                 <div className="flex gap-2">
                   <select
@@ -2221,7 +2285,6 @@ function OrderCheckoutModal({
               )}
             </div>
 
-            {/* Teacher Personalization Details */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-black text-slate-700 mb-1">
@@ -2277,7 +2340,6 @@ function OrderCheckoutModal({
               />
             </div>
 
-            {/* Coupon Code Input */}
             <div className="flex gap-2">
               <input
                 type="text"
@@ -2295,7 +2357,6 @@ function OrderCheckoutModal({
               </button>
             </div>
 
-            {/* Price Summary */}
             <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2 text-sm">
               <div className="flex justify-between text-slate-600 font-bold">
                 <span>المجموع الفرعي:</span>
@@ -2751,6 +2812,7 @@ function AdminPortal({
   const [draftSettings, setDraftSettings] = useState(settings);
   const [newSocLabel, setNewSocLabel] = useState('');
   const [newSocUrl, setNewSocUrl] = useState('');
+  const [newTrustPoint, setNewTrustPoint] = useState('');
 
   useEffect(() => {
     setDraftSettings(settings);
@@ -2838,7 +2900,6 @@ function AdminPortal({
     );
   }
 
-  // Helper to move items up/down in an array
   const moveArrayItem = (arr, index, direction) => {
     const targetIdx = index + direction;
     if (targetIdx < 0 || targetIdx >= arr.length) return arr;
@@ -2945,7 +3006,7 @@ function AdminPortal({
             { id: 'notebooks', label: `المذكرات (${notebooks.length})` },
             { id: 'taxonomy', label: 'الأقسام والمراحل والصفوف' },
             { id: 'coupons', label: 'العروض والكوبونات' },
-            { id: 'settings', label: 'إعدادات الموقع والنسخ الاحتياطي' }
+            { id: 'settings', label: 'إعدادات الموقع والمظهر' }
           ].map((t) => (
             <button
               key={t.id}
@@ -3035,7 +3096,6 @@ function AdminPortal({
         {/* TAB 2: NOTEBOOKS */}
         {adminTab === 'notebooks' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Add / Edit Notebook Form */}
             <form
               onSubmit={handleNotebookSubmit}
               className="lg:col-span-6 bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4"
@@ -3252,7 +3312,6 @@ function AdminPortal({
               </div>
             </form>
 
-            {/* Existing Notebooks List with Show/Hide Toggle */}
             <div className="lg:col-span-6 space-y-3">
               {notebooks.map((nb) => (
                 <div
@@ -3316,10 +3375,9 @@ function AdminPortal({
           </div>
         )}
 
-        {/* TAB 3: FULL TAXONOMY CONTROL (Categories, Stages, Stage-Specific Grades, Subjects) */}
+        {/* TAB 3: FULL TAXONOMY CONTROL */}
         {adminTab === 'taxonomy' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* 1. Categories */}
             <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
               <h3 className="text-base font-black text-slate-900">
                 1. الأقسام الرئيسية (الترتيب والإضافة والإزالة)
@@ -3397,7 +3455,6 @@ function AdminPortal({
               </div>
             </div>
 
-            {/* 2. Stages */}
             <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
               <h3 className="text-base font-black text-slate-900">
                 2. المراحل الدراسية (الترتيب والإضافة والإزالة)
@@ -3477,7 +3534,6 @@ function AdminPortal({
               </div>
             </div>
 
-            {/* 3. Stage-Specific Grades */}
             <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
               <h3 className="text-base font-black text-slate-900">
                 3. تخصيص الصفوف الدراسية لكل مرحلة
@@ -3596,7 +3652,6 @@ function AdminPortal({
               </div>
             </div>
 
-            {/* 4. Subjects */}
             <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
               <h3 className="text-base font-black text-slate-900">
                 4. المواد الدراسية
@@ -3747,125 +3802,542 @@ function AdminPortal({
           </div>
         )}
 
-        {/* TAB 5: SITE SETTINGS & CLOUD BACKUP */}
+        {/* TAB 5: FULL COMPREHENSIVE SITE SETTINGS */}
         {adminTab === 'settings' && (
-          <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-6">
-            <h3 className="text-lg font-black text-slate-900">
-              إعدادات الهوية والتواصل والنسخ الاحتياطي
-            </h3>
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-8">
+            <div className="border-b border-slate-100 pb-4">
+              <h3 className="text-xl font-black text-slate-900">
+                الإعدادات الشاملة للمنصة والمظهر والواجهة الرئيسية
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                تحكم في كل تفصيلة من الهوية البصرية، مقاسات الشعار والخلفية، نصوص الصفحة الرئيسية، ورسائل الأقسام الفارغة
+              </p>
+            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-black text-slate-700 mb-1">
-                  اسم المنصة
-                </label>
-                <input
-                  type="text"
-                  value={draftSettings.brandName}
-                  onChange={(e) =>
-                    setDraftSettings({ ...draftSettings, brandName: e.target.value })
-                  }
-                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold"
-                />
+            {/* 1. Brand Identity & Contact */}
+            <div className="space-y-4">
+              <h4 className="text-sm font-black text-blue-600">
+                1. الهوية الأساسية وأرقام التواصل والدفع
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-black text-slate-700 mb-1">
+                    اسم المنصة
+                  </label>
+                  <input
+                    type="text"
+                    value={draftSettings.brandName}
+                    onChange={(e) =>
+                      setDraftSettings({ ...draftSettings, brandName: e.target.value })
+                    }
+                    className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black text-slate-700 mb-1">
+                    الوصف المختصر أسفل الاسم
+                  </label>
+                  <input
+                    type="text"
+                    value={draftSettings.brandTagline}
+                    onChange={(e) =>
+                      setDraftSettings({ ...draftSettings, brandTagline: e.target.value })
+                    }
+                    className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black text-slate-700 mb-1">
+                    رقم الواتساب (مع كود الدولة مثل 2010...)
+                  </label>
+                  <input
+                    type="text"
+                    value={draftSettings.whatsappNumber}
+                    onChange={(e) =>
+                      setDraftSettings({ ...draftSettings, whatsappNumber: e.target.value })
+                    }
+                    className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black text-slate-700 mb-1">
+                    رقم الهاتف / التحويل المالي
+                  </label>
+                  <input
+                    type="text"
+                    value={draftSettings.supportPhone}
+                    onChange={(e) =>
+                      setDraftSettings({ ...draftSettings, supportPhone: e.target.value })
+                    }
+                    className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold"
+                  />
+                </div>
               </div>
 
               <div>
                 <label className="block text-xs font-black text-slate-700 mb-1">
-                  الوصف المختصر أسفل الاسم
+                  تعليمات الدفع والتحويل (فودافون كاش / إنستا باي)
                 </label>
-                <input
-                  type="text"
-                  value={draftSettings.brandTagline}
+                <textarea
+                  rows={2}
+                  value={draftSettings.paymentInstructions}
                   onChange={(e) =>
-                    setDraftSettings({ ...draftSettings, brandTagline: e.target.value })
+                    setDraftSettings({
+                      ...draftSettings,
+                      paymentInstructions: e.target.value
+                    })
                   }
-                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-black text-slate-700 mb-1">
-                  رقم الواتساب (بالصيغة الدولية مثل 2010...)
-                </label>
-                <input
-                  type="text"
-                  value={draftSettings.whatsappNumber}
-                  onChange={(e) =>
-                    setDraftSettings({ ...draftSettings, whatsappNumber: e.target.value })
-                  }
-                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-black text-slate-700 mb-1">
-                  رقم الهاتف / التحويل
-                </label>
-                <input
-                  type="text"
-                  value={draftSettings.supportPhone}
-                  onChange={(e) =>
-                    setDraftSettings({ ...draftSettings, supportPhone: e.target.value })
-                  }
-                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
                 />
               </div>
             </div>
 
-            {/* Logo & Hero Background Upload */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                <label className="block text-xs font-black text-slate-800">
-                  شعار المنصة (Logo)
-                </label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    const img = await compressImageFile(file, 400, 0.9);
-                    setDraftSettings((prev) => ({ ...prev, logoUrl: img }));
-                    showToast('تم رفع الشعار — اضغط حفظ الإعدادات بالأسفل');
-                  }}
-                  className="text-xs"
-                />
-                {draftSettings.logoUrl && (
-                  <img
-                    src={draftSettings.logoUrl}
-                    alt="Logo preview"
-                    className="w-16 h-16 rounded-xl object-cover border"
+            {/* 2. Logo, Hero Background & Visual Sizing Sliders */}
+            <div className="space-y-4 pt-4 border-t border-slate-100">
+              <h4 className="text-sm font-black text-blue-600">
+                2. الشعار وصورة الخلفية وضبط المقاسات والشفافية
+              </h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                  <label className="block text-xs font-black text-slate-800">
+                    صورة شعار المنصة (Logo)
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const img = await compressImageFile(file, 450, 0.9);
+                      setDraftSettings((prev) => ({ ...prev, logoUrl: img }));
+                      showToast('تم رفع الشعار — اضغط حفظ الإعدادات بالأسفل');
+                    }}
+                    className="text-xs"
                   />
-                )}
+                  {draftSettings.logoUrl && (
+                    <div className="flex items-center gap-3 pt-1">
+                      <img
+                        src={draftSettings.logoUrl}
+                        alt="Logo preview"
+                        className="w-16 h-16 rounded-xl object-cover border"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDraftSettings((prev) => ({ ...prev, logoUrl: '' }))
+                        }
+                        className="text-xs text-rose-600 font-black cursor-pointer"
+                      >
+                        إزالة الشعار
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                  <label className="block text-xs font-black text-slate-800">
+                    صورة خلفية الواجهة الرئيسية
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const img = await compressImageFile(file, 1400, 0.85);
+                      setDraftSettings((prev) => ({ ...prev, heroBgImage: img }));
+                      showToast('تم رفع الخلفية — اضغط حفظ الإعدادات بالأسفل');
+                    }}
+                    className="text-xs"
+                  />
+                  {draftSettings.heroBgImage && (
+                    <div className="space-y-1 pt-1">
+                      <img
+                        src={draftSettings.heroBgImage}
+                        alt="Hero preview"
+                        className="w-full h-16 rounded-xl object-cover border"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDraftSettings((prev) => ({ ...prev, heroBgImage: '' }))
+                        }
+                        className="text-xs text-rose-600 font-black cursor-pointer"
+                      >
+                        إزالة الخلفية
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                <label className="block text-xs font-black text-slate-800">
-                  صورة خلفية الواجهة الرئيسية
+              {/* Visual Controls Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                  <div className="flex justify-between text-xs font-black">
+                    <span>حجم الشعار (Logo)</span>
+                    <span className="text-blue-600">{draftSettings.logoSize}px</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={40}
+                    max={140}
+                    value={draftSettings.logoSize}
+                    onChange={(e) =>
+                      setDraftSettings({
+                        ...draftSettings,
+                        logoSize: Number(e.target.value)
+                      })
+                    }
+                    className="w-full accent-blue-600"
+                  />
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                  <div className="flex justify-between text-xs font-black">
+                    <span>وضوح صورة الخلفية</span>
+                    <span className="text-blue-600">{draftSettings.heroBgOpacity}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={draftSettings.heroBgOpacity}
+                    onChange={(e) =>
+                      setDraftSettings({
+                        ...draftSettings,
+                        heroBgOpacity: Number(e.target.value)
+                      })
+                    }
+                    className="w-full accent-blue-600"
+                  />
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                  <div className="flex justify-between items-center text-xs font-black">
+                    <span>لون التغطية ودرجته</span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={draftSettings.heroOverlayColor}
+                        onChange={(e) =>
+                          setDraftSettings({
+                            ...draftSettings,
+                            heroOverlayColor: e.target.value
+                          })
+                        }
+                        className="w-6 h-6 rounded cursor-pointer"
+                      />
+                      <span className="text-blue-600">
+                        {draftSettings.heroOverlayOpacity}%
+                      </span>
+                    </div>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={draftSettings.heroOverlayOpacity}
+                    onChange={(e) =>
+                      setDraftSettings({
+                        ...draftSettings,
+                        heroOverlayOpacity: Number(e.target.value)
+                      })
+                    }
+                    className="w-full accent-blue-600"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-4">
+                  <span className="text-xs font-black text-slate-800">
+                    طريقة احتواء صورة الخلفية
+                  </span>
+                  <select
+                    value={draftSettings.heroBgFit}
+                    onChange={(e) =>
+                      setDraftSettings({ ...draftSettings, heroBgFit: e.target.value })
+                    }
+                    className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold"
+                  >
+                    <option value="cover">ملء الإطار بالكامل (Cover)</option>
+                    <option value="contain">احتواء كامل الصورة (Contain)</option>
+                  </select>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                  <div className="flex justify-between text-xs font-black">
+                    <span>ارتفاع الواجهة الترحيبية</span>
+                    <span className="text-blue-600">{draftSettings.heroHeight}px</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={380}
+                    max={760}
+                    value={draftSettings.heroHeight}
+                    onChange={(e) =>
+                      setDraftSettings({
+                        ...draftSettings,
+                        heroHeight: Number(e.target.value)
+                      })
+                    }
+                    className="w-full accent-blue-600"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Hero Texts & Promo Banner */}
+            <div className="space-y-4 pt-4 border-t border-slate-100">
+              <h4 className="text-sm font-black text-blue-600">
+                3. نصوص الواجهة الرئيسية والشريط الترويجي العلوي
+              </h4>
+
+              <label className="flex items-center gap-2 text-xs font-black text-slate-800 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={draftSettings.promoBannerEnabled}
+                  onChange={(e) =>
+                    setDraftSettings({
+                      ...draftSettings,
+                      promoBannerEnabled: e.target.checked
+                    })
+                  }
+                />
+                <span>إظهار الشريط الترويجي العلوي</span>
+              </label>
+
+              <div>
+                <label className="block text-xs font-black text-slate-700 mb-1">
+                  نص الشريط الترويجي العلوي
                 </label>
                 <input
-                  type="file"
-                  accept="image/*"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    const img = await compressImageFile(file, 1400, 0.82);
-                    setDraftSettings((prev) => ({ ...prev, heroBgImage: img }));
-                    showToast('تم رفع الخلفية — اضغط حفظ الإعدادات بالأسفل');
-                  }}
-                  className="text-xs"
+                  type="text"
+                  value={draftSettings.promoBannerText}
+                  onChange={(e) =>
+                    setDraftSettings({ ...draftSettings, promoBannerText: e.target.value })
+                  }
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
                 />
-                {draftSettings.heroBgImage && (
-                  <img
-                    src={draftSettings.heroBgImage}
-                    alt="Hero preview"
-                    className="w-full h-16 rounded-xl object-cover border"
+              </div>
+
+              <div>
+                <label className="block text-xs font-black text-slate-700 mb-1">
+                  الشارة العلوية في الواجهة (Badge)
+                </label>
+                <input
+                  type="text"
+                  value={draftSettings.heroBadge}
+                  onChange={(e) =>
+                    setDraftSettings({ ...draftSettings, heroBadge: e.target.value })
+                  }
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-black text-slate-700 mb-1">
+                  العنوان الرئيسي في الواجهة
+                </label>
+                <input
+                  type="text"
+                  value={draftSettings.heroTitle}
+                  onChange={(e) =>
+                    setDraftSettings({ ...draftSettings, heroTitle: e.target.value })
+                  }
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-black text-slate-700 mb-1">
+                  النص الفرعي للواجهة
+                </label>
+                <textarea
+                  rows={2}
+                  value={draftSettings.heroSubtitle}
+                  onChange={(e) =>
+                    setDraftSettings({ ...draftSettings, heroSubtitle: e.target.value })
+                  }
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
+                />
+              </div>
+            </div>
+
+            {/* 4. Trust Card Editor */}
+            <div className="space-y-3 pt-4 border-t border-slate-100">
+              <h4 className="text-sm font-black text-blue-600">
+                4. تخصيص بطاقة «لماذا يثق بنا المعلمون؟»
+              </h4>
+              <input
+                type="text"
+                value={draftSettings.trustCardTitle}
+                onChange={(e) =>
+                  setDraftSettings({ ...draftSettings, trustCardTitle: e.target.value })
+                }
+                placeholder="عنوان البطاقة..."
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-black"
+              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newTrustPoint}
+                  onChange={(e) => setNewTrustPoint(e.target.value)}
+                  placeholder="أضف ميزة جديدة للبطاقة..."
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!newTrustPoint.trim()) return;
+                    setDraftSettings({
+                      ...draftSettings,
+                      trustPoints: [
+                        ...(draftSettings.trustPoints || []),
+                        newTrustPoint.trim()
+                      ]
+                    });
+                    setNewTrustPoint('');
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-black cursor-pointer"
+                >
+                  + إضافة نقطة
+                </button>
+              </div>
+              <div className="space-y-2">
+                {(draftSettings.trustPoints || []).map((pt, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                  >
+                    <span>{pt}</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDraftSettings({
+                          ...draftSettings,
+                          trustPoints: draftSettings.trustPoints.filter((_, idx) => idx !== i)
+                        })
+                      }
+                      className="text-rose-600 p-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 5. Empty Section Message & Banner */}
+            <div className="space-y-4 pt-4 border-t border-slate-100">
+              <h4 className="text-sm font-black text-blue-600">
+                5. تخصيص رسالة وصورة القسم الفارغ (عند عدم وجود مذكرات في القسم بعد)
+              </h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-black text-slate-700 mb-1">
+                    العنوان الرئيسي عند خلو القسم
+                  </label>
+                  <input
+                    type="text"
+                    value={draftSettings.emptyCategoryTitle}
+                    onChange={(e) =>
+                      setDraftSettings({
+                        ...draftSettings,
+                        emptyCategoryTitle: e.target.value
+                      })
+                    }
+                    className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black text-slate-700 mb-1">
+                    نص زر الحجز أو الطلب المسبق
+                  </label>
+                  <input
+                    type="text"
+                    value={draftSettings.emptyCategoryButtonText}
+                    onChange={(e) =>
+                      setDraftSettings({
+                        ...draftSettings,
+                        emptyCategoryButtonText: e.target.value
+                      })
+                    }
+                    className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-black text-slate-700 mb-1">
+                  النص التوضيحي أو الإعلاني
+                </label>
+                <textarea
+                  rows={2}
+                  value={draftSettings.emptyCategorySubtitle}
+                  onChange={(e) =>
+                    setDraftSettings({
+                      ...draftSettings,
+                      emptyCategorySubtitle: e.target.value
+                    })
+                  }
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
+                />
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <label className="block text-xs font-black text-slate-800 mb-1">
+                    صورة أو بانر يظهر عند خلو القسم (اختياري)
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const img = await compressImageFile(file, 900, 0.85);
+                      setDraftSettings((prev) => ({
+                        ...prev,
+                        emptyCategoryImage: img
+                      }));
+                      showToast('تم رفع صورة القسم الفارغ');
+                    }}
+                    className="text-xs"
+                  />
+                </div>
+                {draftSettings.emptyCategoryImage && (
+                  <div className="flex items-center gap-2">
+                    <img
+                      src={draftSettings.emptyCategoryImage}
+                      alt="Empty section"
+                      className="h-14 rounded-xl border"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDraftSettings((prev) => ({
+                          ...prev,
+                          emptyCategoryImage: ''
+                        }))
+                      }
+                      className="text-xs text-rose-600 font-black cursor-pointer"
+                    >
+                      حذف الصورة
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
 
-            {/* Automatic Next-Order Personal Coupon Settings */}
+            {/* 6. Automatic Next-Order Personal Coupon Settings */}
             <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 space-y-3">
               <label className="flex items-center gap-2 text-xs font-black text-amber-900 cursor-pointer">
                 <input
@@ -3902,17 +4374,17 @@ function AdminPortal({
               )}
             </div>
 
-            {/* Social Media Links */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-black text-slate-800">
-                روابط التواصل الاجتماعي (تظهر في نافذة «تواصل معنا» وفي التذييل)
+            {/* 7. Social Media Links */}
+            <div className="space-y-3 pt-4 border-t border-slate-100">
+              <h4 className="text-sm font-black text-blue-600">
+                6. روابط التواصل الاجتماعي (تظهر بأيقوناتها الرسمية في نافذة «تواصل معنا» وفي التذييل)
               </h4>
               <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="text"
                   value={newSocLabel}
                   onChange={(e) => setNewSocLabel(e.target.value)}
-                  placeholder="الاسم (مثال: جروب التليجرام)"
+                  placeholder="الاسم (مثال: جروب التليجرام / قناة اليوتيوب)"
                   className="px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
                 />
                 <input
