@@ -621,6 +621,7 @@ function MuzakkiratiApp() {
   const [previewPageIdx, setPreviewPageIdx] = useState(0);
   const [previewZoom, setPreviewZoom] = useState(1);
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
+  const swipeStartXRef = useRef(null);
 
   const [cart, setCart] = useState(() => {
     try {
@@ -1247,10 +1248,10 @@ function MuzakkiratiApp() {
 
       {/* الشريط الترويجي العلوي */}
       {settings.promoEnabled && !promoDismissed && (
-        <div className="bg-slate-900 text-slate-100 border-b border-slate-800 px-3 py-2 text-[11px] sm:text-xs font-bold">
-          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-center gap-2 sm:gap-3 text-center">
+        <div className="bg-slate-900 text-slate-100 border-b border-slate-800 px-3 py-2.5 text-xs sm:text-sm font-bold">
+          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-center gap-2.5 sm:gap-3.5 text-center">
             <span className="inline-flex items-center gap-1.5 text-amber-300 font-black">
-              <Sparkles className="w-3.5 h-3.5 shrink-0" />
+              <Sparkles className="w-4 h-4 shrink-0" />
               <span>{settings.promoText}</span>
             </span>
             {settings.promoCouponCode && (
@@ -1262,17 +1263,17 @@ function MuzakkiratiApp() {
                   setTimeout(() => setPromoCopied(false), 2000);
                   showToast(`تم نسخ الكوبون: ${settings.promoCouponCode}`);
                 }}
-                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 text-white font-black transition"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 text-white text-xs font-black transition"
               >
-                <Copy className="w-3 h-3 text-amber-300" />
+                <Copy className="w-3.5 h-3.5 text-amber-300" />
                 <span>الكوبون: {settings.promoCouponCode}</span>
-                {promoCopied && <Check className="w-3 h-3 text-emerald-400" />}
+                {promoCopied && <Check className="w-3.5 h-3.5 text-emerald-400" />}
               </button>
             )}
             <button
               type="button"
               onClick={() => setActiveView('offers')}
-              className="px-2.5 py-0.5 rounded-lg bg-amber-400 text-slate-950 font-black hover:bg-amber-300 transition"
+              className="px-3 py-1 rounded-lg bg-amber-400 text-slate-950 text-xs font-black hover:bg-amber-300 transition"
             >
               تصفح العروض ←
             </button>
@@ -1282,7 +1283,7 @@ function MuzakkiratiApp() {
               className="p-1 text-slate-400 hover:text-white"
               aria-label="إغلاق الشريط"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -1309,18 +1310,18 @@ function MuzakkiratiApp() {
               <img
                 src={settings.logoUrl}
                 alt={settings.platformName}
-                className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl object-cover border border-slate-200 shadow-sm"
+                className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl object-cover border border-slate-200 shadow-sm"
               />
             ) : (
-              <div className={`w-11 h-11 sm:w-14 sm:h-14 rounded-2xl ${theme.primaryBtn} flex items-center justify-center shadow-md`}>
+              <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl ${theme.primaryBtn} flex items-center justify-center shadow-md`}>
                 <BookOpen className="w-6 h-6 sm:w-7 sm:h-7" />
               </div>
             )}
             <div>
-              <div className="text-base sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
+              <div className="text-lg sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
                 {settings.platformName}
               </div>
-              <div className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-500 mt-0.5">
+              <div className="hidden sm:flex items-center gap-1.5 text-xs sm:text-sm font-bold text-slate-600 mt-0.5">
                 <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
                 <span>{settings.platformTagline}</span>
               </div>
@@ -1328,7 +1329,7 @@ function MuzakkiratiApp() {
           </button>
 
           {/* روابط التنقل لسطح المكتب */}
-          <nav className="hidden md:flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl">
+          <nav className="hidden md:flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl">
             {[
               { id: 'home', label: 'الرئيسية', icon: Sparkles },
               { id: 'library', label: 'المذكرات', icon: BookOpen },
@@ -1342,11 +1343,11 @@ function MuzakkiratiApp() {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveView(tab.id)}
-                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black transition ${
-                    active ? `${theme.primaryBtn} shadow-sm` : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition ${
+                    active ? `${theme.primaryBtn} shadow-sm` : 'text-slate-700 hover:text-slate-900 hover:bg-white/80'
                   }`}
                 >
-                  <Icon className="w-3.5 h-3.5" />
+                  <Icon className="w-4 h-4" />
                   <span>{tab.label}</span>
                 </button>
               );
@@ -1354,16 +1355,16 @@ function MuzakkiratiApp() {
           </nav>
 
           {/* أزرار السلة والتواصل والإدارة */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setCartOpen(true)}
-              className="relative flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white hover:border-blue-400 text-xs font-black text-slate-800 transition"
+              className="relative flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white hover:border-blue-400 text-xs sm:text-sm font-black text-slate-800 transition"
             >
               <ShoppingCart className={`w-4 h-4 ${theme.primaryText}`} />
               <span className="hidden sm:inline">السلة</span>
               {cart.length > 0 && (
-                <span className={`px-1.5 py-0.5 rounded-full ${theme.primaryBtn} text-[10px] font-black`}>
+                <span className={`px-2 py-0.5 rounded-full ${theme.primaryBtn} text-xs font-black`}>
                   {cart.length}
                 </span>
               )}
@@ -1372,9 +1373,9 @@ function MuzakkiratiApp() {
             <button
               type="button"
               onClick={() => setContactModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-sm transition"
+              className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-black shadow-sm transition"
             >
-              <Phone className="w-3.5 h-3.5" />
+              <Phone className="w-4 h-4" />
               <span className="hidden sm:inline">تواصل معنا</span>
             </button>
 
@@ -1382,7 +1383,7 @@ function MuzakkiratiApp() {
               <button
                 type="button"
                 onClick={() => setActiveView(activeView === 'admin' ? 'home' : 'admin')}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-400 text-xs font-black transition"
+                className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-400 text-xs sm:text-sm font-black transition"
               >
                 <ShieldCheck className="w-4 h-4" />
                 <span className="hidden sm:inline">{activeView === 'admin' ? 'واجهة الزوار' : 'الإدارة'}</span>
@@ -1392,7 +1393,7 @@ function MuzakkiratiApp() {
         </div>
 
         {/* شريط التنقل المدمج للهواتف */}
-        <div className="md:hidden border-t border-slate-100 px-2 py-1.5 flex items-center justify-around bg-slate-50/90">
+        <div className="md:hidden border-t border-slate-100 px-2 py-2 flex items-center justify-around bg-slate-50/95">
           {[
             { id: 'home', label: 'الرئيسية', icon: Sparkles },
             { id: 'library', label: 'المذكرات', icon: BookOpen },
@@ -1406,11 +1407,11 @@ function MuzakkiratiApp() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveView(tab.id)}
-                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-black transition ${
-                  active ? theme.primaryBtn : 'text-slate-600'
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition ${
+                  active ? theme.primaryBtn : 'text-slate-700'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5" />
+                <Icon className="w-4 h-4" />
                 <span>{tab.label}</span>
               </button>
             );
@@ -1538,16 +1539,16 @@ function MuzakkiratiApp() {
                         ) : (
                           <BookOpen className="w-12 h-12 text-white/80" />
                         )}
-                        <span className="absolute top-3 left-3 px-3 py-1 rounded-full bg-slate-950/80 text-white text-[11px] font-black backdrop-blur-sm">
+                        <span className="absolute top-3 left-3 px-3.5 py-1.5 rounded-full bg-slate-950/85 text-white text-xs font-black backdrop-blur-sm">
                           {count} مذكرة متاحة
                         </span>
                       </div>
                       <div className="p-4 sm:p-5 flex items-center justify-between gap-2 w-full">
                         <div>
-                          <h3 className={`font-black text-slate-900 text-sm sm:text-base group-hover:${theme.primaryText}`}>
+                          <h3 className={`font-black text-slate-900 text-base sm:text-lg group-hover:${theme.primaryText}`}>
                             {cat.name}
                           </h3>
-                          <p className={`text-xs ${theme.primaryText} font-bold mt-0.5`}>
+                          <p className={`text-xs sm:text-sm ${theme.primaryText} font-bold mt-1`}>
                             {cat.browseMode === 'direct' ? 'عرض جميع المذكرات مباشرة' : 'تصفح المراحل والصفوف الدراسية'}
                           </p>
                         </div>
@@ -1985,16 +1986,16 @@ function MuzakkiratiApp() {
             }`}
           >
             {/* رأس نافذة المعاينة + شريط التكبير وملء الشاشة */}
-            <div className="bg-white px-4 sm:px-6 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
+            <div className="bg-white px-4 sm:px-6 py-3.5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
               <div className="min-w-0 flex-1">
-                <h3 className="font-black text-slate-900 text-sm sm:text-base truncate">{previewNotebook.title}</h3>
+                <h3 className="font-black text-slate-900 text-base sm:text-lg truncate">{previewNotebook.title}</h3>
                 {previewNotebook.subtitle && (
-                  <p className="text-[11px] text-slate-500 font-bold truncate">{previewNotebook.subtitle}</p>
+                  <p className="text-xs text-slate-500 font-bold truncate">{previewNotebook.subtitle}</p>
                 )}
               </div>
 
               {/* أدوات التكبير والشاشة الكاملة */}
-              <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl border border-slate-200">
+              <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
                 <button
                   type="button"
                   onClick={() => setPreviewZoom((z) => Math.max(0.75, +(z - 0.25).toFixed(2)))}
@@ -2003,7 +2004,7 @@ function MuzakkiratiApp() {
                 >
                   <ZoomOut className="w-4 h-4" />
                 </button>
-                <span className="px-2 text-[11px] font-black text-slate-800 min-w-[46px] text-center">
+                <span className="px-2.5 text-xs font-black text-slate-800 min-w-[52px] text-center">
                   {Math.round(previewZoom * 100)}%
                 </span>
                 <button
@@ -2028,9 +2029,9 @@ function MuzakkiratiApp() {
                   type="button"
                   onClick={() => setPreviewFullscreen((f) => !f)}
                   title={previewFullscreen ? 'إنهاء ملء الشاشة' : 'ملء الشاشة الكاملة'}
-                  className="px-2.5 py-2 rounded-xl bg-slate-900 text-white hover:bg-blue-600 text-[11px] font-black flex items-center gap-1 transition"
+                  className="px-3 py-2 rounded-xl bg-slate-900 text-white hover:bg-blue-600 text-xs font-black flex items-center gap-1.5 transition"
                 >
-                  {previewFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                  {previewFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
                   <span className="hidden sm:inline">{previewFullscreen ? 'تصغير النافذة' : 'ملء الشاشة'}</span>
                 </button>
               </div>
@@ -2042,17 +2043,17 @@ function MuzakkiratiApp() {
                   setPreviewFullscreen(false);
                   setPreviewZoom(1);
                 }}
-                className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600"
+                className="p-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* جسم المعاينة القابل للتمرير */}
+            {/* جسم المعاينة القابل للتمرير والتبديل بالسحب */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
               {previewNotebook.noticeText && previewNotebook.noticePosition !== 'bottom' && (
-                <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs sm:text-sm font-bold flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                   <span>{previewNotebook.noticeText}</span>
                 </div>
               )}
@@ -2061,14 +2062,40 @@ function MuzakkiratiApp() {
                 const pages = getNotebookSamples(previewNotebook);
                 const safeIdx = Math.min(previewPageIdx, Math.max(0, pages.length - 1));
                 const currentImg = pages[safeIdx] || pages[0] || '';
+                const goPrevPage = () => {
+                  setPreviewZoom(1);
+                  setPreviewPageIdx((i) => (i > 0 ? i - 1 : pages.length - 1));
+                };
+                const goNextPage = () => {
+                  setPreviewZoom(1);
+                  setPreviewPageIdx((i) => (i < pages.length - 1 ? i + 1 : 0));
+                };
                 return (
                   <div className="space-y-3">
-                    <div className="relative bg-slate-900/5 rounded-2xl border border-slate-200 overflow-auto flex items-center justify-center min-h-[340px] sm:min-h-[480px] max-h-[68vh]">
+                    <div
+                      onTouchStart={(e) => {
+                        if (previewZoom === 1 && e.touches?.[0]) {
+                          swipeStartXRef.current = e.touches[0].clientX;
+                        }
+                      }}
+                      onTouchEnd={(e) => {
+                        if (previewZoom !== 1 || swipeStartXRef.current === null || pages.length <= 1) return;
+                        const endX = e.changedTouches?.[0]?.clientX ?? swipeStartXRef.current;
+                        const deltaX = endX - swipeStartXRef.current;
+                        swipeStartXRef.current = null;
+                        if (Math.abs(deltaX) > 45) {
+                          if (deltaX > 0) goNextPage();
+                          else goPrevPage();
+                        }
+                      }}
+                      className="relative bg-slate-900/5 rounded-2xl border border-slate-200 overflow-auto flex items-center justify-center min-h-[360px] sm:min-h-[480px] max-h-[68vh] select-none"
+                    >
                       {currentImg ? (
                         <div className="p-3 flex items-center justify-center min-w-full min-h-full">
                           <img
                             src={currentImg}
                             alt={`عينة ${safeIdx + 1}`}
+                            draggable={false}
                             onDoubleClick={() => setPreviewZoom((z) => (z > 1 ? 1 : 1.75))}
                             style={{
                               transform: `scale(${previewZoom})`,
@@ -2080,35 +2107,31 @@ function MuzakkiratiApp() {
                       ) : (
                         <div className="text-center p-8 text-slate-400 space-y-2">
                           <BookOpen className="w-12 h-12 mx-auto" />
-                          <p className="text-xs font-bold">لا توجد صور عينة مرفوعة لهذه المذكرة حاليًا</p>
+                          <p className="text-sm font-bold">لا توجد صور عينة مرفوعة لهذه المذكرة حاليًا</p>
                         </div>
                       )}
 
                       {pages.length > 0 && (
-                        <span className="sticky bottom-3 left-3 px-3 py-1 rounded-full bg-slate-900/80 text-white text-[11px] font-black backdrop-blur-sm">
-                          صفحة {safeIdx + 1} من {pages.length}
-                        </span>
+                        <div className="absolute bottom-3 inset-x-0 flex items-center justify-center pointer-events-none">
+                          <span className="px-4 py-1.5 rounded-full bg-slate-900/85 text-white text-xs font-black backdrop-blur-sm shadow">
+                            صفحة {safeIdx + 1} من {pages.length} {pages.length > 1 ? '• اسحب يمينًا أو يسارًا للتقليب' : ''}
+                          </span>
+                        </div>
                       )}
 
                       {pages.length > 1 && (
                         <>
                           <button
                             type="button"
-                            onClick={() => {
-                              setPreviewZoom(1);
-                              setPreviewPageIdx((i) => (i > 0 ? i - 1 : pages.length - 1));
-                            }}
-                            className="fixed sm:absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/95 shadow-lg border border-slate-200 text-slate-800 hover:bg-blue-600 hover:text-white transition"
+                            onClick={goPrevPage}
+                            className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/95 shadow-lg border border-slate-200 text-slate-800 hover:bg-blue-600 hover:text-white transition"
                           >
                             <ChevronRight className="w-5 h-5" />
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              setPreviewZoom(1);
-                              setPreviewPageIdx((i) => (i < pages.length - 1 ? i + 1 : 0));
-                            }}
-                            className="fixed sm:absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/95 shadow-lg border border-slate-200 text-slate-800 hover:bg-blue-600 hover:text-white transition"
+                            onClick={goNextPage}
+                            className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/95 shadow-lg border border-slate-200 text-slate-800 hover:bg-blue-600 hover:text-white transition"
                           >
                             <ChevronLeft className="w-5 h-5" />
                           </button>
@@ -2117,7 +2140,7 @@ function MuzakkiratiApp() {
                     </div>
 
                     {pages.length > 1 && (
-                      <div className="flex items-center justify-center gap-2 overflow-x-auto py-1">
+                      <div className="flex items-center justify-center gap-2.5 overflow-x-auto py-1">
                         {pages.map((pg, idx) => (
                           <button
                             key={idx}
@@ -2126,7 +2149,7 @@ function MuzakkiratiApp() {
                               setPreviewZoom(1);
                               setPreviewPageIdx(idx);
                             }}
-                            className={`w-14 h-16 rounded-xl overflow-hidden border-2 shrink-0 transition ${
+                            className={`w-16 h-20 rounded-xl overflow-hidden border-2 shrink-0 transition ${
                               safeIdx === idx ? 'border-blue-600 scale-105 shadow' : 'border-slate-200 opacity-70 hover:opacity-100'
                             }`}
                           >
@@ -2148,11 +2171,11 @@ function MuzakkiratiApp() {
             </div>
 
             {/* تذييل نافذة المعاينة */}
-            <div className="bg-slate-50 px-5 py-3.5 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 shrink-0">
+            <div className="bg-slate-50 px-5 py-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 shrink-0">
               <div className="flex items-center gap-3">
-                <span className={`text-xl font-black ${theme.primaryText}`}>{previewNotebook.price} ج.م</span>
+                <span className={`text-xl sm:text-2xl font-black ${theme.primaryText}`}>{previewNotebook.price} ج.م</span>
                 {Number(previewNotebook.oldPrice) > Number(previewNotebook.price) && (
-                  <span className="text-xs text-slate-400 line-through font-bold">
+                  <span className="text-xs sm:text-sm text-slate-400 line-through font-bold">
                     {previewNotebook.oldPrice} ج.م
                   </span>
                 )}
@@ -2163,7 +2186,7 @@ function MuzakkiratiApp() {
                     href={previewNotebook.driveUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-4 py-2.5 rounded-xl bg-white border border-slate-300 hover:border-blue-500 text-xs font-black text-slate-800 flex items-center gap-1.5"
+                    className="px-4 py-3 rounded-xl bg-white border border-slate-300 hover:border-blue-500 text-xs sm:text-sm font-black text-slate-800 flex items-center gap-1.5"
                   >
                     <ExternalLink className={`w-4 h-4 ${theme.primaryText}`} />
                     <span>معاينة PDF على Drive</span>
@@ -2176,7 +2199,7 @@ function MuzakkiratiApp() {
                     setPreviewNotebook(null);
                     setPreviewFullscreen(false);
                   }}
-                  className={`px-5 py-2.5 rounded-xl ${theme.primaryBtn} text-xs font-black flex items-center gap-1.5 shadow`}
+                  className={`px-6 py-3 rounded-xl ${theme.primaryBtn} text-xs sm:text-sm font-black flex items-center gap-2 shadow`}
                 >
                   <ShoppingCart className="w-4 h-4" />
                   <span>أضف إلى السلة</span>
@@ -2622,13 +2645,13 @@ function NotebookCard({ nb, theme, onPreview, onAdd }) {
           )}
 
           {nb.badge && (
-            <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black shadow">
+            <span className="absolute top-3 right-3 px-3 py-1 rounded-full bg-amber-400 text-slate-950 text-xs font-black shadow">
               {nb.badge}
             </span>
           )}
 
           {hasDiscount && (
-            <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-rose-600 text-white text-[10px] font-black shadow">
+            <span className="absolute top-3 left-3 px-3 py-1 rounded-full bg-rose-600 text-white text-xs font-black shadow">
               وفر {savedAmount} ج.م
             </span>
           )}
@@ -2637,13 +2660,13 @@ function NotebookCard({ nb, theme, onPreview, onAdd }) {
         <div className="p-4 space-y-1.5">
           <h3
             onClick={onPreview}
-            className="font-black text-slate-900 text-sm line-clamp-2 cursor-pointer"
+            className="font-black text-slate-900 text-sm sm:text-base line-clamp-2 cursor-pointer"
           >
             {nb.title}
           </h3>
-          {nb.subtitle && <p className="text-xs text-slate-500 font-bold line-clamp-2">{nb.subtitle}</p>}
+          {nb.subtitle && <p className="text-xs sm:text-sm text-slate-500 font-bold line-clamp-2">{nb.subtitle}</p>}
           {(nb.subject || nb.pagesCount > 0) && (
-            <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-slate-500 font-bold">
+            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-slate-600 font-bold">
               {nb.subject && <span>• {nb.subject}</span>}
               {nb.pagesCount > 0 && <span>• {nb.pagesCount} صفحة</span>}
             </div>
@@ -2653,24 +2676,24 @@ function NotebookCard({ nb, theme, onPreview, onAdd }) {
 
       <div className="p-4 pt-2 border-t border-slate-100 space-y-3">
         <div className="flex items-baseline gap-2">
-          <span className={`text-base font-black ${theme.primaryText}`}>{nb.price} ج.م</span>
-          {hasDiscount && <span className="text-xs text-slate-400 line-through font-bold">{nb.oldPrice} ج.م</span>}
+          <span className={`text-lg font-black ${theme.primaryText}`}>{nb.price} ج.م</span>
+          {hasDiscount && <span className="text-xs sm:text-sm text-slate-400 line-through font-bold">{nb.oldPrice} ج.م</span>}
         </div>
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={onPreview}
-            className="py-2 px-3 rounded-xl border border-slate-200 hover:border-blue-500 text-slate-800 text-xs font-black flex items-center justify-center gap-1 transition"
+            className="py-2.5 px-3 rounded-xl border border-slate-200 hover:border-blue-500 text-slate-800 text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 transition"
           >
-            <Eye className={`w-3.5 h-3.5 ${theme.primaryText}`} />
+            <Eye className={`w-4 h-4 ${theme.primaryText}`} />
             <span>معاينة</span>
           </button>
           <button
             type="button"
             onClick={onAdd}
-            className={`py-2 px-3 rounded-xl ${theme.primaryBtn} text-xs font-black flex items-center justify-center gap-1 transition`}
+            className={`py-2.5 px-3 rounded-xl ${theme.primaryBtn} text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 transition`}
           >
-            <ShoppingCart className="w-3.5 h-3.5" />
+            <ShoppingCart className="w-4 h-4" />
             <span>اطلب الآن</span>
           </button>
         </div>
@@ -2908,25 +2931,27 @@ function AdminDashboard({
       } catch {
         // تجاهل
       }
-      if (db && auth?.currentUser) {
-        const { logoUrl, heroBgImage, categories, ...lightSettings } = normalized;
-        const catImages = {};
-        const lightCategories = (categories || []).map((c) => {
-          if (c.image) catImages[c.id] = c.image;
-          return { ...c, image: '' };
-        });
-        await setDoc(
-          publicDoc('settings', 'main'),
-          { ...lightSettings, categories: lightCategories },
-          { merge: true }
-        );
-        await setDoc(
+      if (!db || !auth?.currentUser) {
+        showToast('تم الحفظ محليًا في المعاينة (يرجى النشر والتسجيل بالحساب الحقيقي لتعميمها على جميع العملاء)', 'info');
+        return;
+      }
+      const { logoUrl, heroBgImage, categories, ...lightSettings } = normalized;
+      const catImages = {};
+      const lightCategories = (categories || []).map((c) => {
+        if (c.image) catImages[c.id] = c.image;
+        return { ...c, image: '' };
+      });
+      // تحديث كلٍ من settings و config معًا حتى لا تطغى البيانات القديمة في config على التعديلات الجديدة
+      await Promise.all([
+        setDoc(publicDoc('settings', 'main'), { ...lightSettings, categories: lightCategories }, { merge: true }),
+        setDoc(
           publicDoc('settings', 'media_assets'),
           { logoUrl: logoUrl || '', heroBgImage: heroBgImage || '', categoryImages: catImages },
           { merge: true }
-        );
-      }
-      showToast('تم حفظ جميع الإعدادات بنجاح!');
+        ),
+        setDoc(publicDoc('config', 'main'), { ...lightSettings, categories: lightCategories }, { merge: true })
+      ]);
+      showToast('تم حفظ جميع الإعدادات وتعميمها للعملاء في السحابة بنجاح!');
     } catch (err) {
       showToast(`تعذر الحفظ السحابي: ${err?.message}`, 'error');
     } finally {
@@ -2965,7 +2990,7 @@ function AdminDashboard({
       </div>
 
       {/* شريط تبويبات الإدارة المطور */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
           { id: 'notebooks', label: 'المذكرات والعينات', count: notebooks.length, icon: BookOpen, desc: 'إضافة وتعديل ورفع العينات' },
           { id: 'categories', label: 'الأقسام والمراحل', count: (settings.categories || []).length, icon: Layers, desc: 'هيكلة الأقسام والصفوف' },
@@ -2980,25 +3005,25 @@ function AdminDashboard({
               key={t.id}
               type="button"
               onClick={() => setActiveTab(t.id)}
-              className={`text-right p-3.5 rounded-2xl border transition flex flex-col justify-between gap-2 ${
+              className={`text-right p-4 rounded-2xl border transition flex flex-col justify-between gap-2.5 ${
                 active
                   ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-600/20'
                   : 'bg-white text-slate-800 border-slate-200 hover:border-blue-400 hover:bg-blue-50/30'
               }`}
             >
               <div className="flex items-center justify-between w-full">
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${active ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-600'}`}>
-                  <Icon className="w-4 h-4" />
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${active ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-600'}`}>
+                  <Icon className="w-5 h-5" />
                 </div>
                 {t.count !== null && (
-                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-black ${active ? 'bg-white text-blue-700' : 'bg-slate-100 text-slate-700'}`}>
+                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-black ${active ? 'bg-white text-blue-700' : 'bg-slate-100 text-slate-700'}`}>
                     {t.count}
                   </span>
                 )}
               </div>
               <div>
-                <div className="text-xs font-black leading-tight">{t.label}</div>
-                <div className={`text-[10px] font-bold mt-0.5 ${active ? 'text-blue-100' : 'text-slate-400'}`}>
+                <div className="text-sm font-black leading-tight">{t.label}</div>
+                <div className={`text-xs font-bold mt-1 ${active ? 'text-blue-100' : 'text-slate-500'}`}>
                   {t.desc}
                 </div>
               </div>
