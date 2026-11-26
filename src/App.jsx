@@ -82,74 +82,88 @@ const LOCAL_NOTEBOOKS_KEY = 'el3bakera_notebooks_backup_v4';
 const LOCAL_SAMPLES_KEY = 'el3bakera_samples_backup_v4';
 const LOCAL_CART_KEY = 'el3bakera_cart_v4';
 
+const LEGACY_NOTEBOOK_KEYS = [
+  'el3bakera_notebooks_backup_v4',
+  'el3bakera_notebooks_backup_v3',
+  'el3bakera_notebooks_backup_v2',
+  'el3bakera_notebooks_backup_v1',
+  'muzakkirati_notebooks_backup'
+];
+
 let app = null;
 let auth = null;
 let db = null;
 
 try {
-  const runtimeConfig =
+  const cfg =
     typeof window !== 'undefined' && window.__firebase_config
-      ? window.__firebase_config
+      ? typeof window.__firebase_config === 'string'
+        ? JSON.parse(window.__firebase_config)
+        : window.__firebase_config
       : FALLBACK_FIREBASE_CONFIG;
-  app = getApps().length ? getApp() : initializeApp(runtimeConfig);
+  app = getApps().length > 0 ? getApp() : initializeApp(cfg);
   auth = getAuth(app);
   db = getFirestore(app);
-} catch (err) {
-  console.warn('Firebase init fallback:', err);
+} catch (e) {
+  console.warn('Firebase init fallback:', e);
 }
 
 const publicCol = (colName) => collection(db, 'artifacts', APP_ID, 'public', 'data', colName);
 const publicDoc = (colName, docId) => doc(db, 'artifacts', APP_ID, 'public', 'data', colName, docId);
 const legacyPublicCol = (colName) => collection(db, 'artifacts', LEGACY_APP_ID, 'public', 'data', colName);
 
-// ============================================================================
-// 2. ثيمات الألوان ودوال تطبيع البيانات والصور والتواريخ
-// ============================================================================
 const THEME_PALETTES = {
   blue: {
     label: 'الأزرق الملكي (الافتراضي)',
     primaryBtn: 'bg-blue-600 hover:bg-blue-700 text-white',
-    primaryText: 'text-blue-700',
+    primaryText: 'text-blue-600',
     primarySoft: 'bg-blue-50 text-blue-700 border-blue-200',
-    heroGradient: 'from-slate-950 via-blue-950 to-slate-900',
-    cardGradient: 'from-blue-600 to-indigo-800',
+    heroGradient: 'from-slate-950 via-blue-950/90 to-slate-900/75',
+    cardGradient: 'from-blue-600 to-indigo-700',
     accentBorder: 'hover:border-blue-400'
   },
   emerald: {
-    label: 'الأخضر الزمردي التعليمي',
+    label: 'الزمردي التعليمي',
     primaryBtn: 'bg-emerald-600 hover:bg-emerald-700 text-white',
-    primaryText: 'text-emerald-700',
+    primaryText: 'text-emerald-600',
     primarySoft: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    heroGradient: 'from-slate-950 via-emerald-950 to-slate-900',
-    cardGradient: 'from-emerald-600 to-teal-800',
+    heroGradient: 'from-slate-950 via-emerald-950/90 to-slate-900/75',
+    cardGradient: 'from-emerald-600 to-teal-700',
     accentBorder: 'hover:border-emerald-400'
   },
   indigo: {
-    label: 'البنفسجي النيلي الأكاديمي',
+    label: 'البنفسجي النيلي الحديث',
     primaryBtn: 'bg-indigo-600 hover:bg-indigo-700 text-white',
-    primaryText: 'text-indigo-700',
+    primaryText: 'text-indigo-600',
     primarySoft: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-    heroGradient: 'from-slate-950 via-indigo-950 to-slate-900',
-    cardGradient: 'from-indigo-600 to-purple-800',
+    heroGradient: 'from-slate-950 via-indigo-950/90 to-slate-900/75',
+    cardGradient: 'from-indigo-600 to-violet-700',
     accentBorder: 'hover:border-indigo-400'
   },
   slate: {
-    label: 'الكحلي الداكن والذهبي',
-    primaryBtn: 'bg-slate-900 hover:bg-slate-800 text-amber-400',
+    label: 'الكلاسيكي الداكن الفاخر',
+    primaryBtn: 'bg-slate-900 hover:bg-slate-800 text-white',
     primaryText: 'text-slate-900',
-    primarySoft: 'bg-amber-50 text-amber-900 border-amber-200',
-    heroGradient: 'from-slate-950 via-slate-900 to-zinc-900',
+    primarySoft: 'bg-slate-100 text-slate-800 border-slate-300',
+    heroGradient: 'from-slate-950 via-slate-900/95 to-slate-800/80',
     cardGradient: 'from-slate-800 to-slate-950',
-    accentBorder: 'hover:border-amber-400'
+    accentBorder: 'hover:border-slate-500'
   }
 };
 
+// ============================================================================
+// 2. دوال المساعدة وتطبيع البيانات لحماية الواجهة من أي صيغة غير متوقعة
+// ============================================================================
 const safeText = (val, fallback = '') => {
   if (val === null || val === undefined) return fallback;
   if (typeof val === 'string') return val;
   if (typeof val === 'number' || typeof val === 'boolean') return String(val);
   if (typeof val === 'object') {
-    return val.ar || val.name || val.title || val.label || fallback;
+    if (typeof val.ar === 'string') return val.ar;
+    if (typeof val.text === 'string') return val.text;
+    if (typeof val.label === 'string') return val.label;
+    if (typeof val.name === 'string') return val.name;
+    if (typeof val.title === 'string') return val.title;
   }
   return fallback;
 };
@@ -158,8 +172,8 @@ const toTimeMs = (val) => {
   if (!val) return 0;
   if (typeof val === 'number') return val;
   if (typeof val === 'string') {
-    const parsed = Date.parse(val);
-    return Number.isNaN(parsed) ? 0 : parsed;
+    const t = Date.parse(val);
+    return Number.isNaN(t) ? 0 : t;
   }
   if (typeof val === 'object') {
     if (typeof val.toMillis === 'function') return val.toMillis();
@@ -168,19 +182,15 @@ const toTimeMs = (val) => {
   return 0;
 };
 
-const extractImageFromValue = (val) => {
-  if (!val) return '';
-  if (typeof val === 'string' && (val.startsWith('data:image') || val.startsWith('http'))) {
-    return val;
-  }
-  if (typeof val === 'object') {
-    return (
-      extractImageFromValue(val.url) ||
-      extractImageFromValue(val.src) ||
-      extractImageFromValue(val.image) ||
-      extractImageFromValue(val.dataUrl) ||
-      ''
-    );
+const extractImageFromValue = (v) => {
+  if (!v) return '';
+  if (typeof v === 'string' && (v.startsWith('data:image') || v.startsWith('http'))) return v;
+  if (typeof v === 'object') {
+    for (const key of ['url', 'src', 'image', 'dataUrl', 'base64', 'data', 'content', 'file', 'path', 'img']) {
+      if (typeof v[key] === 'string' && (v[key].startsWith('data:image') || v[key].startsWith('http'))) {
+        return v[key];
+      }
+    }
   }
   return '';
 };
@@ -591,8 +601,16 @@ function MuzakkiratiApp() {
 
   const [notebooks, setNotebooks] = useState(() => {
     try {
-      const saved = localStorage.getItem(LOCAL_NOTEBOOKS_KEY);
-      return saved ? JSON.parse(saved) : [];
+      for (const k of LEGACY_NOTEBOOK_KEYS) {
+        const saved = localStorage.getItem(k);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.map((n, idx) => normalizeNotebook(n, n?.id || `local_${idx}`));
+          }
+        }
+      }
+      return [];
     } catch {
       return [];
     }
@@ -772,69 +790,52 @@ function MuzakkiratiApp() {
           (snap) => {
             if (!snap.empty) {
               const list = snap.docs.map((d) => normalizeNotebook({ ...d.data(), id: d.id }, d.id));
-              setNotebooks(list);
-              try {
-                localStorage.setItem(LOCAL_NOTEBOOKS_KEY, JSON.stringify(list));
-              } catch {
-                // تجاهل
-              }
+              setNotebooks((prev) => {
+                const map = new Map();
+                prev.forEach((item) => map.set(item.id, item));
+                list.forEach((item) => map.set(item.id, item));
+                const merged = Array.from(map.values());
+                try {
+                  localStorage.setItem(LOCAL_NOTEBOOKS_KEY, JSON.stringify(merged));
+                } catch {
+                  // تجاهل
+                }
+                return merged;
+              });
             }
-          },
-          handleSnapError
-        )
-      );
-
-      unsubscribers.push(
-        onSnapshot(
-          publicCol('notebook_samples'),
-          (snap) => {
-            if (!snap.empty) mapSampleDocsToState(snap.docs);
           },
           handleSnapError
         )
       );
 
       (async () => {
-        const candidateCols = [
-          'notebook_samples',
-          'notebook_media',
-          'notebook_images',
-          'notebook_pages',
-          'samples',
-          'sample_pages',
-          'pages',
-          'media_assets',
-          'images'
+        const extraNotebookSources = [
+          () => getDocs(legacyPublicCol('notebooks')),
+          () => getDocs(collection(db, 'notebooks'))
         ];
-        for (const extraCol of candidateCols) {
+        for (const fetchFn of extraNotebookSources) {
           try {
-            const extraSnap = await getDocs(publicCol(extraCol));
-            if (!extraSnap.empty) mapSampleDocsToState(extraSnap.docs);
-          } catch {
-            // تجاهل
-          }
-          try {
-            const legacySnap = await getDocs(legacyPublicCol(extraCol));
-            if (!legacySnap.empty) mapSampleDocsToState(legacySnap.docs);
-          } catch {
-            // تجاهل
-          }
-        }
-        try {
-          for (const legacyColName of ['settings', 'config']) {
-            const legacySettings = await getDocs(legacyPublicCol(legacyColName));
-            if (!legacySettings.empty) {
-              setSettings((prev) => {
-                let merged = { ...prev };
-                legacySettings.docs.forEach((d) => {
-                  merged = mergeAndNormalizeSettings(merged, d.data());
+            const extraNbSnap = await fetchFn();
+            if (!extraNbSnap.empty) {
+              const extraList = extraNbSnap.docs.map((d) => normalizeNotebook({ ...d.data(), id: d.id }, d.id));
+              setNotebooks((prev) => {
+                const map = new Map();
+                prev.forEach((item) => map.set(item.id, item));
+                extraList.forEach((item) => {
+                  if (!map.has(item.id)) map.set(item.id, item);
                 });
+                const merged = Array.from(map.values());
+                try {
+                  localStorage.setItem(LOCAL_NOTEBOOKS_KEY, JSON.stringify(merged));
+                } catch {
+                  // تجاهل
+                }
                 return merged;
               });
             }
+          } catch {
+            // تجاهل
           }
-        } catch {
-          // تجاهل
         }
       })();
 
