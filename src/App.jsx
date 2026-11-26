@@ -3177,11 +3177,21 @@ function AdminDashboard({ settings, notebooks, coupons, orders, onSaveSettings, 
                       const file = e.target.files?.[0];
                       if (!file) return;
                       explicitlyClearedRef.current.logo = false;
-                      const c = await compressImageFile(file, 400, 0.85);
+                      const c = await compressImageFile(file, 260, 0.75);
                       setLocalSettings((p) => ({ ...p, logoUrl: c }));
                     }}
                     className="text-xs"
                   />
+                  <div className="flex items-center gap-3 text-xs pt-1">
+                    <span>حجم الشعار: {localSettings.logoSize || 64}px</span>
+                    <input
+                      type="range"
+                      min={40}
+                      max={96}
+                      value={localSettings.logoSize || 64}
+                      onChange={(e) => setLocalSettings((p) => ({ ...p, logoSize: Number(e.target.value) }))}
+                    />
+                  </div>
                   {localSettings.logoUrl && (
                     <img src={localSettings.logoUrl} alt="" className="w-16 h-16 rounded-2xl object-cover border" />
                   )}
@@ -3211,7 +3221,7 @@ function AdminDashboard({ settings, notebooks, coupons, orders, onSaveSettings, 
                       const file = e.target.files?.[0];
                       if (!file) return;
                       explicitlyClearedRef.current.heroBg = false;
-                      const c = await compressImageFile(file, 1280, 0.78);
+                      const c = await compressImageFile(file, 960, 0.68);
                       setLocalSettings((p) => ({ ...p, heroBgImage: c }));
                     }}
                     className="text-xs"
@@ -3224,6 +3234,17 @@ function AdminDashboard({ settings, notebooks, coupons, orders, onSaveSettings, 
                       max={95}
                       value={localSettings.heroOverlayOpacity}
                       onChange={(e) => setLocalSettings((p) => ({ ...p, heroOverlayOpacity: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div className="flex items-center gap-3 text-xs">
+                    <span>ارتفاع الواجهة: {localSettings.heroMinHeight || 460}px</span>
+                    <input
+                      type="range"
+                      min={320}
+                      max={680}
+                      step={10}
+                      value={localSettings.heroMinHeight || 460}
+                      onChange={(e) => setLocalSettings((p) => ({ ...p, heroMinHeight: Number(e.target.value) }))}
                     />
                   </div>
                 </div>
@@ -3708,29 +3729,47 @@ function MuzakkiratiApp() {
 
   // مزامنة الإعدادات والمذكرات والكوبونات من Firestore في الوقت الفعلي
   useEffect(() => {
-    const mergeSettingsWithMedia = async (baseData) => {
+    const mergeSettingsWithMedia = async (baseData, fallbackPrev = {}) => {
       try {
         const mediaSnap = await getDoc(publicDoc('settings', 'media_assets'));
         const mediaData = mediaSnap.exists() ? mediaSnap.data() : {};
         return normalizeSettings({
           ...baseData,
-          logoUrl: mediaData.logoUrl !== undefined ? mediaData.logoUrl : baseData.logoUrl,
-          heroBgImage: mediaData.heroBgImage !== undefined ? mediaData.heroBgImage : baseData.heroBgImage,
+          logoUrl:
+            mediaData.logoUrl !== undefined && mediaData.logoUrl !== ''
+              ? mediaData.logoUrl
+              : fallbackPrev.logoUrl || baseData.logoUrl || '',
+          heroBgImage:
+            mediaData.heroBgImage !== undefined && mediaData.heroBgImage !== ''
+              ? mediaData.heroBgImage
+              : fallbackPrev.heroBgImage || baseData.heroBgImage || '',
           categoryImages:
             mediaData.categoryImages && Object.keys(mediaData.categoryImages).length > 0
               ? mediaData.categoryImages
-              : baseData.categoryImages
+              : Object.keys(fallbackPrev.categoryImages || {}).length > 0
+              ? fallbackPrev.categoryImages
+              : baseData.categoryImages || {}
         });
       } catch {
-        return normalizeSettings(baseData);
+        return normalizeSettings({
+          ...baseData,
+          logoUrl: fallbackPrev.logoUrl || baseData.logoUrl || '',
+          heroBgImage: fallbackPrev.heroBgImage || baseData.heroBgImage || '',
+          categoryImages:
+            Object.keys(fallbackPrev.categoryImages || {}).length > 0
+              ? fallbackPrev.categoryImages
+              : baseData.categoryImages || {}
+        });
       }
     };
 
     getDoc(publicDoc('settings', 'main'))
       .then(async (snap) => {
         if (snap.exists()) {
-          const full = await mergeSettingsWithMedia(snap.data());
-          setSettings(full);
+          setSettings((prev) => {
+            mergeSettingsWithMedia(snap.data(), prev).then((full) => setSettings(full));
+            return normalizeSettings({ ...prev, ...snap.data() });
+          });
         }
       })
       .catch(() => {});
@@ -3739,12 +3778,26 @@ function MuzakkiratiApp() {
       publicDoc('settings', 'main'),
       async (snap) => {
         if (snap.exists()) {
-          const full = await mergeSettingsWithMedia(snap.data());
-          setSettings(full);
-          try {
-            const lightCopy = { ...full, heroBgImage: '', categoryImages: {} };
-            localStorage.setItem(LS_SETTINGS_KEY, JSON.stringify(lightCopy));
-          } catch {}
+          const rawMain = snap.data();
+          setSettings((prev) => {
+            const immediate = normalizeSettings({
+              ...rawMain,
+              logoUrl: rawMain.logoUrl || prev.logoUrl || '',
+              heroBgImage: rawMain.heroBgImage || prev.heroBgImage || '',
+              categoryImages:
+                rawMain.categoryImages && Object.keys(rawMain.categoryImages).length > 0
+                  ? rawMain.categoryImages
+                  : prev.categoryImages || {}
+            });
+            mergeSettingsWithMedia(rawMain, immediate).then((full) => {
+              setSettings(full);
+              try {
+                const lightCopy = { ...full, heroBgImage: '', categoryImages: {} };
+                localStorage.setItem(LS_SETTINGS_KEY, JSON.stringify(lightCopy));
+              } catch {}
+            });
+            return immediate;
+          });
         }
       },
       (err) => console.warn('Settings snapshot:', err)
@@ -3760,7 +3813,10 @@ function MuzakkiratiApp() {
               ...prev,
               logoUrl: m.logoUrl !== undefined ? m.logoUrl : prev.logoUrl,
               heroBgImage: m.heroBgImage !== undefined ? m.heroBgImage : prev.heroBgImage,
-              categoryImages: m.categoryImages || prev.categoryImages
+              categoryImages:
+                m.categoryImages && Object.keys(m.categoryImages).length > 0
+                  ? m.categoryImages
+                  : prev.categoryImages
             })
           );
         }
@@ -3828,8 +3884,21 @@ function MuzakkiratiApp() {
       updatedAt: serverTimestamp()
     };
 
-    await setDoc(publicDoc('settings', 'media_assets'), mediaPayload);
+    // حفظ إعدادات الموقع أولاً حتى لا تعيق أحجام الصور الكبيرة وصول التعديلات للعملاء
     await setDoc(publicDoc('settings', 'main'), lightSettingsPayload);
+
+    try {
+      await setDoc(publicDoc('settings', 'media_assets'), mediaPayload);
+    } catch (mediaErr) {
+      console.warn('Media assets size/save warning:', mediaErr);
+      // محاولة حفظ الشعار والغلاف فقط إذا كانت صور الأقسام كبيرة
+      await setDoc(publicDoc('settings', 'media_assets'), {
+        logoUrl: normalized.logoUrl || '',
+        heroBgImage: normalized.heroBgImage || '',
+        categoryImages: {},
+        updatedAt: serverTimestamp()
+      }).catch(() => {});
+    }
 
     setSettings(normalized);
     try {
