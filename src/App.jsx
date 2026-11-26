@@ -217,6 +217,7 @@ const DEFAULT_SETTINGS = {
   whatsappNumber: '201000000000',
   facebookUrl: '',
   whatsappGroupUrl: '',
+  telegramUrl: '',
   paymentInstructions: 'يتم تأكيد الطلب عبر واتساب وتحويل قيمة المذكرات عبر فودافون كاش أو إنستا باي قبل بدء التجهيز.',
   emptyStateTitle: 'لا توجد مذكرات منشورة في هذا القسم حاليًا',
   emptyStateDesc: 'نعمل حاليًا على تجهيز ومراجعة أحدث المذكرات لهذا الصف، يمكنك طلب حجز مسبق وسنتواصل معك فور جاهزيتها.',
@@ -3711,7 +3712,7 @@ function AdminPortal({
             {/* 5. بيانات التواصل والنسخ الاحتياطي */}
             <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
               <h3 className="text-lg font-black text-slate-900">التواصل الاجتماعي والدفع والنسخ الاحتياطي</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
                   <label className="text-xs font-bold text-slate-600 block mb-1">رقم الواتساب (بالكود الدولي 20)</label>
                   <input
@@ -3719,6 +3720,15 @@ function AdminPortal({
                     value={localSettings.whatsappNumber}
                     onChange={(e) => setLocalSettings({ ...localSettings, whatsappNumber: e.target.value })}
                     className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">رابط جروب الواتساب</label>
+                  <input
+                    type="url"
+                    value={localSettings.whatsappGroupUrl}
+                    onChange={(e) => setLocalSettings({ ...localSettings, whatsappGroupUrl: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs"
                   />
                 </div>
                 <div>
@@ -3731,11 +3741,11 @@ function AdminPortal({
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">رابط جروب الواتساب</label>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">رابط قناة / جروب تليجرام</label>
                   <input
                     type="url"
-                    value={localSettings.whatsappGroupUrl}
-                    onChange={(e) => setLocalSettings({ ...localSettings, whatsappGroupUrl: e.target.value })}
+                    value={localSettings.telegramUrl || ''}
+                    onChange={(e) => setLocalSettings({ ...localSettings, telegramUrl: e.target.value })}
                     className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs"
                   />
                 </div>
@@ -3813,6 +3823,7 @@ function MuzakkiratiApp() {
   const [previewNotebook, setPreviewNotebook] = useState(null);
   const [cart, setCart] = useState([]);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [showAdminLoginModal, setShowAdminLoginModal] = useState(false);
   const [showAdminPortal, setShowAdminPortal] = useState(false);
   const [loginEmail, setLoginEmail] = useState(ADMIN_EMAIL);
@@ -4182,27 +4193,12 @@ function MuzakkiratiApp() {
             )}
 
             <button
-              onClick={() => setIsCheckoutOpen(true)}
-              className="relative px-4 py-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200/70 text-blue-700 font-extrabold text-xs sm:text-sm flex items-center gap-2 transition"
-            >
-              <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span>السلة</span>
-              {cart.length > 0 && (
-                <span className="px-2 py-0.5 rounded-full bg-blue-600 text-white text-xs font-black">
-                  {cart.length}
-                </span>
-              )}
-            </button>
-
-            <a
-              href={`https://wa.me/${String(settings.whatsappNumber || '').replace(/[^\d]/g, '')}`}
-              target="_blank"
-              rel="noopener noreferrer"
+              onClick={() => setIsContactModalOpen(true)}
               className="px-4 sm:px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-md shadow-emerald-600/20 transition"
             >
               <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="hidden sm:inline">تواصل معنا</span>
-            </a>
+              <span>تواصل معنا</span>
+            </button>
           </div>
         </div>
       </header>
@@ -4587,6 +4583,141 @@ function MuzakkiratiApp() {
           onClearCart={() => setCart([])}
           onNotify={notify}
         />
+      )}
+
+      {/* نافذة وسائل التواصل المنبثقة */}
+      {isContactModalOpen && (
+        <div
+          dir="rtl"
+          onClick={() => setIsContactModalOpen(false)}
+          className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl border border-slate-200 space-y-5 animate-in fade-in zoom-in-95 duration-200"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                  <MessageCircle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base sm:text-lg text-slate-900">تواصل معنا مباشرة</h3>
+                  <p className="text-xs text-slate-500">اختر وسيلة التواصل المناسبة لك</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsContactModalOpen(false)}
+                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {/* واتساب مباشر */}
+              <a
+                href={`https://wa.me/${String(settings.whatsappNumber || '').replace(/[^\d]/g, '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between p-4 rounded-2xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                    <MessageCircle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-slate-900">محادثة واتساب مباشرة</h4>
+                    <p className="text-xs text-emerald-700 font-bold" dir="ltr">
+                      +{String(settings.whatsappNumber || '').replace(/[^\d]/g, '')}
+                    </p>
+                  </div>
+                </div>
+                <ExternalLink className="w-4 h-4 text-emerald-600 group-hover:-translate-x-1 transition-transform" />
+              </a>
+
+              {/* جروب الواتساب */}
+              {sanitizeUrl(settings.whatsappGroupUrl) && (
+                <a
+                  href={sanitizeUrl(settings.whatsappGroupUrl)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between p-4 rounded-2xl bg-teal-50 hover:bg-teal-100 border border-teal-200 transition group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0">
+                      <Layers className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-extrabold text-sm text-slate-900">انضم لجروب المعلمين على واتساب</h4>
+                      <p className="text-xs text-teal-700">متابعة أحدث المذكرات والعروض الحصرية</p>
+                    </div>
+                  </div>
+                  <ExternalLink className="w-4 h-4 text-teal-600 group-hover:-translate-x-1 transition-transform" />
+                </a>
+              )}
+
+              {/* صفحة الفيسبوك */}
+              {sanitizeUrl(settings.facebookUrl) && (
+                <a
+                  href={sanitizeUrl(settings.facebookUrl)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between p-4 rounded-2xl bg-blue-50 hover:bg-blue-100 border border-blue-200 transition group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-lg shrink-0">
+                      f
+                    </div>
+                    <div>
+                      <h4 className="font-extrabold text-sm text-slate-900">صفحتنا الرسمية على فيسبوك</h4>
+                      <p className="text-xs text-blue-700">تواصل عبر ماسنجر وتابع المنشورات</p>
+                    </div>
+                  </div>
+                  <ExternalLink className="w-4 h-4 text-blue-600 group-hover:-translate-x-1 transition-transform" />
+                </a>
+              )}
+
+              {/* قناة / جروب تليجرام */}
+              {sanitizeUrl(settings.telegramUrl) && (
+                <a
+                  href={sanitizeUrl(settings.telegramUrl)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between p-4 rounded-2xl bg-sky-50 hover:bg-sky-100 border border-sky-200 transition group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-sky-500 text-white flex items-center justify-center shrink-0">
+                      <ExternalLink className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-extrabold text-sm text-slate-900">قناتنا على تليجرام</h4>
+                      <p className="text-xs text-sky-700">عينات مجانية وإشعارات الإصدارات الجديدة</p>
+                    </div>
+                  </div>
+                  <ExternalLink className="w-4 h-4 text-sky-600 group-hover:-translate-x-1 transition-transform" />
+                </a>
+              )}
+
+              {/* اتصال هاتفي مباشر */}
+              <a
+                href={`tel:+${String(settings.whatsappNumber || '').replace(/[^\d]/g, '')}`}
+                className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-slate-800 text-white flex items-center justify-center shrink-0">
+                    <Phone className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-slate-900">اتصال هاتفي مباشر</h4>
+                    <p className="text-xs text-slate-500">للاستفسارات العاجلة والدعم الفني</p>
+                  </div>
+                </div>
+                <ArrowLeft className="w-4 h-4 text-slate-500 group-hover:-translate-x-1 transition-transform" />
+              </a>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* نافذة تسجيل دخول المدير المخفية */}
