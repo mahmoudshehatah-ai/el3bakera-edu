@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  BookOpen, Search, ShoppingCart, CheckCircle2, ShieldCheck,
-  MessageCircle, Phone, Sparkles, ArrowLeft, ArrowRight, X, Plus, Trash2,
-  Edit3, Lock, LogOut, Eye, EyeOff, Maximize2, Minimize2, FileText,
-  Tag, Clock, PackageCheck, RefreshCw, AlertTriangle, HelpCircle,
-  ExternalLink, Download, Upload, Settings, Layers, Percent, Check,
   ChevronLeft, ChevronRight, Home, Folder, FolderOpen, ArrowUp, ArrowDown,
-  ShoppingBag, Ticket, Image as ImageIcon, Sliders
+  ShoppingBag, Ticket, Image as ImageIcon, Sliders, Bell, Megaphone,
+  BookOpen, Eye, EyeOff, Trash2, Edit3, Plus, X, Search, ShoppingCart,
+  CheckCircle2, AlertTriangle, RefreshCw, Maximize2, Minimize2, ExternalLink,
+  MessageCircle, ArrowLeft, ArrowRight, Lock, LogOut, ShieldCheck, Layers,
+  Percent, Settings, Sparkles, Clock, PackageCheck, Download, Upload
 } from 'lucide-react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
@@ -145,6 +144,24 @@ const DEFAULT_SETTINGS = {
   whatsNewMode: 'auto', // 'auto' (أحدث المذكرات تلقائيًا) | 'manual' (اختيار يدوي من لوحة التحكم)
   whatsNewLimit: 6,
   whatsNewSelectedIds: [],
+  notebookNoticeEnabled: true,
+  notebookNoticeTitle: 'تنبيه هام قبل تأكيد الطلب',
+  notebookNoticeText: 'يتم تسليم المذكرة بصيغة PDF عالية الدقة جاهزة للطباعة خلال 24 ساعة من تأكيد الطلب، شاملة وضع اسم المعلم ورقم هاتفه وشعاره على الغلاف وجميع الصفحات.',
+  newsSectionEnabled: true,
+  newsSectionTitle: 'أخبار المنصة والمذكرات قيد التجهيز',
+  newsSectionSubtitle: 'تابع أحدث الأخبار والمذكرات التي نعمل على تجهيزها حاليًا لتكون متاحة قريبًا',
+  newsShowComingSoonAuto: true,
+  newsItems: [
+    {
+      id: 'news-1',
+      badge: 'قيد التجهيز حاليًا',
+      title: 'جاري الانتهاء من تنسيق ومراجعة مذكرات المراجعة النهائية وبنوك الأسئلة',
+      details: 'نعمل حاليًا على تجهيز أحدث المذكرات وفق آخر تعديلات ومواصفات الوزارة، ويمكنكم حجز نسختكم مسبقًا من الآن.',
+      dateText: 'تحديث مستمر',
+      color: 'amber',
+      visible: true
+    }
+  ],
   nextOrderRewardEnabled: true,
   nextOrderDiscountPercent: 15,
   categories: ['مذكرات الترم الأول', 'مذكرات الترم الثاني', 'كورسات التأسيس'],
@@ -197,6 +214,10 @@ const normalizeSettings = (raw) => {
   merged.whatsNewSelectedIds = Array.isArray(raw.whatsNewSelectedIds)
     ? raw.whatsNewSelectedIds
     : [];
+
+  merged.newsItems = Array.isArray(raw.newsItems)
+    ? raw.newsItems.filter((item) => item && typeof item === 'object' && item.title)
+    : DEFAULT_SETTINGS.newsItems;
 
   return merged;
 };
@@ -559,6 +580,29 @@ const ProtectedPreviewModal = ({ notebook, settings, onClose, onAddToCart, onOrd
             <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
               <h4 className="font-bold text-slate-800 text-sm mb-1.5">تفاصيل ومحتوى المذكرة:</h4>
               <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">{notebook.description}</p>
+            </div>
+          )}
+
+          {settings.notebookNoticeEnabled !== false && (settings.notebookNoticeText || notebook.customNotice) && (
+            <div className="bg-amber-50/90 rounded-2xl p-4 border border-amber-200 flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                <Bell size={18} />
+              </div>
+              <div className="space-y-1">
+                <h4 className="font-black text-amber-950 text-xs sm:text-sm">
+                  {settings.notebookNoticeTitle || 'تنبيه هام قبل تأكيد الطلب'}
+                </h4>
+                {settings.notebookNoticeText && (
+                  <p className="text-xs text-amber-900 leading-relaxed whitespace-pre-line">
+                    {settings.notebookNoticeText}
+                  </p>
+                )}
+                {notebook.customNotice && (
+                  <p className="text-xs font-bold text-amber-950 pt-1 border-t border-amber-200/70">
+                    {notebook.customNotice}
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
@@ -1446,6 +1490,12 @@ const AdminPortal = ({
   const [newOrderFieldPlaceholder, setNewOrderFieldPlaceholder] = useState('');
   const [newOrderFieldType, setNewOrderFieldType] = useState('text');
   const [newOrderFieldOptions, setNewOrderFieldOptions] = useState('');
+
+  // تبويب الأخبار والمذكرات قيد التجهيز
+  const [newNewsBadge, setNewNewsBadge] = useState('قيد التجهيز حاليًا');
+  const [newNewsTitle, setNewNewsTitle] = useState('');
+  const [newNewsDetails, setNewNewsDetails] = useState('');
+  const [newNewsColor, setNewNewsColor] = useState('amber');
 
   useEffect(() => {
     setLocalSettings(settings);
@@ -2541,6 +2591,255 @@ const AdminPortal = ({
                   onChange={(e) => setLocalSettings({ ...localSettings, promoBannerText: e.target.value })}
                   className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-sm"
                 />
+              </div>
+            </div>
+
+            {/* التحكم في التنبيه الثابت داخل صفحة كل مذكرة */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <h3 className="font-black text-slate-900 text-lg flex items-center gap-2">
+                  <Bell size={18} className="text-amber-600" />
+                  <span>التنبيهات والملاحظات داخل صفحة كل مذكرة</span>
+                </h3>
+                <label className="flex items-center gap-2 text-xs font-black text-slate-800 cursor-pointer bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">
+                  <input
+                    type="checkbox"
+                    checked={localSettings.notebookNoticeEnabled !== false}
+                    onChange={(e) => setLocalSettings({ ...localSettings, notebookNoticeEnabled: e.target.checked })}
+                  />
+                  <span>إظهار التنبيه في جميع المذكرات</span>
+                </label>
+              </div>
+              <div className="grid grid-cols-1 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">عنوان التنبيه</label>
+                  <input
+                    type="text"
+                    value={localSettings.notebookNoticeTitle || ''}
+                    onChange={(e) => setLocalSettings({ ...localSettings, notebookNoticeTitle: e.target.value })}
+                    placeholder="مثال: تنبيه هام قبل تأكيد الطلب"
+                    className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-sm font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">نص التنبيه الذي يظهر للعميل داخل صفحة كل مذكرة</label>
+                  <textarea
+                    rows={3}
+                    value={localSettings.notebookNoticeText || ''}
+                    onChange={(e) => setLocalSettings({ ...localSettings, notebookNoticeText: e.target.value })}
+                    placeholder="اكتب هنا التنبيهات والتعليمات الخاصة بالتسليم أو الطباعة أو التعديل..."
+                    className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* التحكم الكامل في قسم الأخبار والمذكرات قيد التجهيز بالصفحة الرئيسية */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <h3 className="font-black text-slate-900 text-lg flex items-center gap-2">
+                  <Megaphone size={18} className="text-blue-600" />
+                  <span>التحكم في قسم «الأخبار والإعلان عن المذكرات قيد التجهيز»</span>
+                </h3>
+                <label className="flex items-center gap-2 text-xs font-black text-slate-800 cursor-pointer bg-blue-50 px-3 py-1.5 rounded-xl border border-blue-200">
+                  <input
+                    type="checkbox"
+                    checked={localSettings.newsSectionEnabled !== false}
+                    onChange={(e) => setLocalSettings({ ...localSettings, newsSectionEnabled: e.target.checked })}
+                  />
+                  <span>إظهار القسم في الرئيسية</span>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">عنوان قسم الأخبار</label>
+                  <input
+                    type="text"
+                    value={localSettings.newsSectionTitle || ''}
+                    onChange={(e) => setLocalSettings({ ...localSettings, newsSectionTitle: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-sm font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">الوصف المختصر للقسم</label>
+                  <input
+                    type="text"
+                    value={localSettings.newsSectionSubtitle || ''}
+                    onChange={(e) => setLocalSettings({ ...localSettings, newsSectionSubtitle: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-sm"
+                  />
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 text-xs font-bold text-slate-800 cursor-pointer bg-amber-50/70 p-3 rounded-2xl border border-amber-200">
+                <input
+                  type="checkbox"
+                  checked={localSettings.newsShowComingSoonAuto !== false}
+                  onChange={(e) => setLocalSettings({ ...localSettings, newsShowComingSoonAuto: e.target.checked })}
+                />
+                <span>عرض المذكرات المحددة كـ «قريبًا / قيد التجهيز» تلقائيًا داخل هذا القسم مع زر حجز مسبق</span>
+              </label>
+
+              {/* قائمة بطاقات الأخبار والإعلانات */}
+              <div className="space-y-2.5">
+                {(localSettings.newsItems || []).map((item, idx) => (
+                  <div key={item.id} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-col gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setLocalSettings({ ...localSettings, newsItems: moveArrayItem(localSettings.newsItems, idx, -1) })}
+                          className="p-1 rounded bg-white border border-slate-200 hover:bg-slate-100"
+                        >
+                          <ArrowUp size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLocalSettings({ ...localSettings, newsItems: moveArrayItem(localSettings.newsItems, idx, 1) })}
+                          className="p-1 rounded bg-white border border-slate-200 hover:bg-slate-100"
+                        >
+                          <ArrowDown size={12} />
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        value={item.badge || ''}
+                        placeholder="الشارة (مثال: قيد التجهيز)"
+                        onChange={(e) => {
+                          const updated = [...localSettings.newsItems];
+                          updated[idx] = { ...item, badge: e.target.value };
+                          setLocalSettings({ ...localSettings, newsItems: updated });
+                        }}
+                        className="w-36 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                      />
+                      <input
+                        type="text"
+                        value={item.title}
+                        placeholder="عنوان الخبر أو الإعلان..."
+                        onChange={(e) => {
+                          const updated = [...localSettings.newsItems];
+                          updated[idx] = { ...item, title: e.target.value };
+                          setLocalSettings({ ...localSettings, newsItems: updated });
+                        }}
+                        className="flex-1 min-w-[200px] px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                      />
+                      <select
+                        value={item.color || 'amber'}
+                        onChange={(e) => {
+                          const updated = [...localSettings.newsItems];
+                          updated[idx] = { ...item, color: e.target.value };
+                          setLocalSettings({ ...localSettings, newsItems: updated });
+                        }}
+                        className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                      >
+                        <option value="amber">لون ذهبي / تنبيه</option>
+                        <option value="blue">لون أزرق / إعلان</option>
+                        <option value="emerald">لون أخضر / خبر سار</option>
+                      </select>
+                    </div>
+                    <textarea
+                      rows={2}
+                      value={item.details || ''}
+                      placeholder="تفاصيل الخبر أو موعد توفر المذكرة..."
+                      onChange={(e) => {
+                        const updated = [...localSettings.newsItems];
+                        updated[idx] = { ...item, details: e.target.value };
+                        setLocalSettings({ ...localSettings, newsItems: updated });
+                      }}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs"
+                    />
+                    <div className="flex items-center justify-between pt-1">
+                      <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={item.visible !== false}
+                          onChange={(e) => {
+                            const updated = [...localSettings.newsItems];
+                            updated[idx] = { ...item, visible: e.target.checked };
+                            setLocalSettings({ ...localSettings, newsItems: updated });
+                          }}
+                        />
+                        <span>{item.visible !== false ? 'ظاهر للزوار' : 'مخفي'}</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLocalSettings({
+                            ...localSettings,
+                            newsItems: localSettings.newsItems.filter((n) => n.id !== item.id)
+                          })
+                        }
+                        className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-600 text-xs font-bold flex items-center gap-1"
+                      >
+                        <Trash2 size={13} />
+                        <span>حذف الخبر</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* إضافة خبر أو إعلان جديد */}
+              <div className="p-4 rounded-2xl bg-slate-100/80 border border-dashed border-slate-300 space-y-2.5">
+                <div className="text-xs font-black text-slate-800">+ إضافة خبر جديد أو إعلان عن مذكرة قيد التجهيز:</div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <input
+                    type="text"
+                    placeholder="الشارة (مثال: قيد التجهيز / خبر هام)..."
+                    value={newNewsBadge}
+                    onChange={(e) => setNewNewsBadge(e.target.value)}
+                    className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                  />
+                  <input
+                    type="text"
+                    placeholder="عنوان الخبر أو اسم المذكرة قيد التجهيز..."
+                    value={newNewsTitle}
+                    onChange={(e) => setNewNewsTitle(e.target.value)}
+                    className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                  />
+                  <select
+                    value={newNewsColor}
+                    onChange={(e) => setNewNewsColor(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                  >
+                    <option value="amber">لون ذهبي (قيد التجهيز)</option>
+                    <option value="blue">لون أزرق (إعلان جديد)</option>
+                    <option value="emerald">لون أخضر (تحديث متاح)</option>
+                  </select>
+                </div>
+                <textarea
+                  rows={2}
+                  placeholder="تفاصيل الخبر أو مواصفات المذكرة التي يتم تجهيزها حاليًا..."
+                  value={newNewsDetails}
+                  onChange={(e) => setNewNewsDetails(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!newNewsTitle.trim()) return;
+                    setLocalSettings({
+                      ...localSettings,
+                      newsItems: [
+                        ...(localSettings.newsItems || []),
+                        {
+                          id: `news_${Date.now()}`,
+                          badge: newNewsBadge.trim() || 'خبر جديد',
+                          title: newNewsTitle.trim(),
+                          details: newNewsDetails.trim(),
+                          color: newNewsColor,
+                          visible: true
+                        }
+                      ]
+                    });
+                    setNewNewsTitle('');
+                    setNewNewsDetails('');
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs"
+                >
+                  + نشر الخبر / الإعلان
+                </button>
               </div>
             </div>
 
@@ -3777,6 +4076,115 @@ function MuzakkiratiApp() {
                       </div>
                     ))}
                   </div>
+                </section>
+              );
+            })()}
+
+            {/* قسم «أخبار المنصة والمذكرات قيد التجهيز» في الصفحة الرئيسية */}
+            {settings.newsSectionEnabled !== false && (() => {
+              const activeNews = (settings.newsItems || []).filter((item) => item.visible !== false);
+              const comingSoonNotebooks = settings.newsShowComingSoonAuto !== false
+                ? visibleNotebooks.filter((n) => n.comingSoon)
+                : [];
+
+              if (activeNews.length === 0 && comingSoonNotebooks.length === 0) return null;
+
+              const colorStyles = {
+                amber: 'bg-amber-50/80 border-amber-200 text-amber-900',
+                blue: 'bg-blue-50/80 border-blue-200 text-blue-900',
+                emerald: 'bg-emerald-50/80 border-emerald-200 text-emerald-900'
+              };
+              const badgeStyles = {
+                amber: 'bg-amber-500 text-slate-950',
+                blue: 'bg-blue-600 text-white',
+                emerald: 'bg-emerald-600 text-white'
+              };
+
+              return (
+                <section className="max-w-7xl mx-auto px-4 sm:px-6 pb-16 space-y-8">
+                  <div className="space-y-1.5 border-b border-slate-200/80 pb-5">
+                    <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-black">
+                      <Megaphone size={14} />
+                      <span>أخبار وتجهيزات المنصة</span>
+                    </span>
+                    <h2 className="text-2xl sm:text-3xl font-black text-slate-900">
+                      {settings.newsSectionTitle || 'أخبار المنصة والمذكرات قيد التجهيز'}
+                    </h2>
+                    {settings.newsSectionSubtitle && (
+                      <p className="text-sm text-slate-500">{settings.newsSectionSubtitle}</p>
+                    )}
+                  </div>
+
+                  {/* بطاقات الأخبار والإعلانات المخصصة */}
+                  {activeNews.length > 0 && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      {activeNews.map((item) => {
+                        const styleKey = colorStyles[item.color] ? item.color : 'amber';
+                        return (
+                          <div
+                            key={item.id}
+                            className={`rounded-3xl p-6 border shadow-sm space-y-3 ${colorStyles[styleKey]}`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className={`px-3 py-1 rounded-full text-xs font-black ${badgeStyles[styleKey]}`}>
+                                {item.badge || 'إعلان'}
+                              </span>
+                              <Clock size={16} className="opacity-60" />
+                            </div>
+                            <h3 className="font-black text-lg text-slate-900 leading-snug">{item.title}</h3>
+                            {item.details && (
+                              <p className="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-line">
+                                {item.details}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* المذكرات قيد التجهيز (المفعّل عليها قريبًا / حجز مسبق) */}
+                  {comingSoonNotebooks.length > 0 && (
+                    <div className="space-y-4">
+                      <h3 className="font-black text-slate-800 text-base flex items-center gap-2">
+                        <Clock size={18} className="text-amber-600" />
+                        <span>مذكرات قيد التجهيز حاليًا (متاح الحجز المسبق):</span>
+                      </h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                        {comingSoonNotebooks.map((nb) => (
+                          <div
+                            key={nb.id}
+                            className="bg-white rounded-3xl p-5 border border-amber-200 shadow-sm flex flex-col justify-between gap-4"
+                          >
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-black">
+                                  قيد التجهيز ⏳
+                                </span>
+                                <span className="text-xs font-bold text-slate-400">{nb.grade}</span>
+                              </div>
+                              <h4 className="font-black text-slate-900 text-base">{nb.title}</h4>
+                              {nb.description && (
+                                <p className="text-xs text-slate-500 line-clamp-2">{nb.description}</p>
+                              )}
+                            </div>
+                            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                              <span className="font-black text-blue-600 text-base">{nb.price} ج.م</span>
+                              <button
+                                onClick={() => {
+                                  if (!cart.some((c) => c.id === nb.id)) setCart([...cart, nb]);
+                                  setOrderModalOpen(true);
+                                }}
+                                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs transition"
+                              >
+                                احجز نسختك مسبقًا
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </section>
               );
             })()}
