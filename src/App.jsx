@@ -96,7 +96,7 @@ const firebaseConfig = (() => {
     }
   } catch {}
 
-  // 2. قراءة مفاتيح مشروعك الحقيقية من متغيرات البيئة في Vercel / Vite (تعمل تلقائيًا لكل الزوار والهواتف)
+  // 2. قراءة متغيرات البيئة في Vercel / Vite إن وجدت
   const envApiKey = getEnvVar('VITE_FIREBASE_API_KEY') || getEnvVar('REACT_APP_FIREBASE_API_KEY');
   if (envApiKey && envApiKey.startsWith('AIza')) {
     return {
@@ -104,33 +104,23 @@ const firebaseConfig = (() => {
       authDomain: getEnvVar('VITE_FIREBASE_AUTH_DOMAIN') || getEnvVar('REACT_APP_FIREBASE_AUTH_DOMAIN') || 'el3bakera-edu.firebaseapp.com',
       projectId: getEnvVar('VITE_FIREBASE_PROJECT_ID') || getEnvVar('REACT_APP_FIREBASE_PROJECT_ID') || 'el3bakera-edu',
       storageBucket: getEnvVar('VITE_FIREBASE_STORAGE_BUCKET') || getEnvVar('REACT_APP_FIREBASE_STORAGE_BUCKET') || 'el3bakera-edu.firebasestorage.app',
-      messagingSenderId: getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID') || getEnvVar('REACT_APP_FIREBASE_MESSAGING_SENDER_ID') || '',
-      appId: getEnvVar('VITE_FIREBASE_APP_ID') || getEnvVar('REACT_APP_FIREBASE_APP_ID') || ''
+      messagingSenderId: getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID') || getEnvVar('REACT_APP_FIREBASE_MESSAGING_SENDER_ID') || '74663879858',
+      appId: getEnvVar('VITE_FIREBASE_APP_ID') || getEnvVar('REACT_APP_FIREBASE_APP_ID') || '1:74663879858:web:4327c0ea1b825dd6c615ab'
     };
   }
 
-  // 3. قراءة الإعداد المحفوظ محليًا إن تم إدخاله يدويًا
-  try {
-    const savedCfg = localStorage.getItem(LS_FIREBASE_CFG_KEY);
-    if (savedCfg) {
-      const parsed = JSON.parse(savedCfg);
-      if (parsed && parsed.apiKey && parsed.apiKey.startsWith('AIza')) return parsed;
-    }
-  } catch {}
-
+  // 3. الإعدادات الرسمية الثابتة لمشروع el3bakera-edu (تعمل تلقائيًا على كل الأجهزة والهواتف)
   return {
-    apiKey: '',
+    apiKey: 'AIzaSyD_du5VY8nJGDJ169Fof9EALI9x2W2d-14',
     authDomain: 'el3bakera-edu.firebaseapp.com',
     projectId: 'el3bakera-edu',
     storageBucket: 'el3bakera-edu.firebasestorage.app',
-    messagingSenderId: '',
-    appId: ''
+    messagingSenderId: '74663879858',
+    appId: '1:74663879858:web:4327c0ea1b825dd6c615ab'
   };
 })();
 
-const isUsingEnvConfig = Boolean(
-  (getEnvVar('VITE_FIREBASE_API_KEY') || getEnvVar('REACT_APP_FIREBASE_API_KEY') || '').startsWith('AIza')
-);
+const isUsingEnvConfig = true;
 const hasValidFirebaseKey = Boolean(firebaseConfig.apiKey && firebaseConfig.apiKey.startsWith('AIza'));
 
 const appId = typeof __app_id !== 'undefined' && __app_id ? __app_id : 'el3bakera-edu';
