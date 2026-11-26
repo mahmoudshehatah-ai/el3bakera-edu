@@ -176,32 +176,75 @@ function normalizeTaxonomyList(list, fallback) {
   return cleaned.length > 0 ? cleaned : fallback;
 }
 
+function buildDefaultStageGrades(stages, allGrades) {
+  const map = {};
+  (stages || []).forEach((st) => {
+    if (st.includes('ابتدائ')) {
+      const matched = allGrades.filter((g) => g.includes('ابتدائ'));
+      map[st] = matched.length > 0 ? matched : [...allGrades];
+    } else if (st.includes('إعداد')) {
+      const matched = allGrades.filter((g) => g.includes('إعداد'));
+      map[st] = matched.length > 0 ? matched : [...allGrades];
+    } else if (st.includes('ثانو')) {
+      const matched = allGrades.filter((g) => g.includes('ثانو'));
+      map[st] = matched.length > 0 ? matched : [...allGrades];
+    } else {
+      map[st] = [...allGrades];
+    }
+  });
+  return map;
+}
+
+function normalizeStageGrades(rawMap, stages, fallbackGrades) {
+  const defaultMap = buildDefaultStageGrades(stages, fallbackGrades);
+  const result = {};
+  (stages || []).forEach((st) => {
+    if (rawMap && Array.isArray(rawMap[st])) {
+      result[st] = rawMap[st].map(toTextItem).filter(Boolean);
+    } else {
+      result[st] = defaultMap[st] || [];
+    }
+  });
+  return result;
+}
+
+function getGradesForStage(settings, stageName) {
+  if (!stageName || stageName === 'all') return settings.grades || [];
+  if (settings.stageGrades && Array.isArray(settings.stageGrades[stageName])) {
+    return settings.stageGrades[stageName];
+  }
+  return settings.grades || [];
+}
+
 function normalizeSettings(raw) {
   const merged = { ...DEFAULT_SETTINGS, ...(raw || {}) };
   // البحث التلقائي عن أي صورة شعار أو خلفية مخزنة في السحابة بأي اسم حقل سابق
   const detectedLogo =
-    merged.logoUrl ||
-    merged.logoData ||
-    merged.brandLogo ||
-    merged.logo ||
-    merged.siteLogo ||
-    '';
+    merged.logoUrl || merged.brandLogo || merged.logoData || merged.logo || '';
   const detectedHeroBg =
-    merged.heroBgImage ||
-    merged.heroBg ||
-    merged.heroBgUrl ||
-    merged.heroImage ||
-    merged.heroBackground ||
-    merged.bgImage ||
-    '';
+    merged.heroBgImage || merged.heroBgUrl || merged.heroBg || merged.heroImage || '';
+  const normalizedStages = normalizeTaxonomyList(merged.stages, DEFAULT_SETTINGS.stages);
+  const normalizedGrades = normalizeTaxonomyList(merged.grades, DEFAULT_SETTINGS.grades);
+  const normalizedStageGrades = normalizeStageGrades(
+    merged.stageGrades,
+    normalizedStages,
+    normalizedGrades
+  );
+  const flattenedGrades = Array.from(
+    new Set([
+      ...Object.values(normalizedStageGrades).flat(),
+      ...normalizedGrades
+    ])
+  );
 
   return {
     ...merged,
     logoUrl: detectedLogo,
     heroBgImage: detectedHeroBg,
     categories: normalizeTaxonomyList(merged.categories, DEFAULT_SETTINGS.categories),
-    stages: normalizeTaxonomyList(merged.stages, DEFAULT_SETTINGS.stages),
-    grades: normalizeTaxonomyList(merged.grades, DEFAULT_SETTINGS.grades),
+    stages: normalizedStages,
+    grades: flattenedGrades.length > 0 ? flattenedGrades : normalizedGrades,
+    stageGrades: normalizedStageGrades,
     subjects: normalizeTaxonomyList(merged.subjects, DEFAULT_SETTINGS.subjects),
     heroCards: Array.isArray(merged.heroCards)
       ? merged.heroCards.map((c, i) => ({
@@ -414,6 +457,11 @@ const DEFAULT_SETTINGS = {
     'الصف الثاني الثانوي',
     'الصف الثالث الثانوي'
   ],
+  stageGrades: {
+    'المرحلة الابتدائية': ['الصف الرابع الابتدائي', 'الصف الخامس الابتدائي', 'الصف السادس الابتدائي'],
+    'المرحلة الإعدادية': ['الصف الأول الإعدادي', 'الصف الثاني الإعدادي', 'الصف الثالث الإعدادي'],
+    'المرحلة الثانوية': ['الصف الأول الثانوي', 'الصف الثاني الثانوي', 'الصف الثالث الثانوي']
+  },
   subjects: ['اللغة العربية', 'الرياضيات', 'اللغة الإنجليزية', 'العلوم', 'الدراسات الاجتماعية', 'الفيزياء', 'الكيمياء']
 };
 
@@ -1902,45 +1950,51 @@ function CatalogPage({
           <h3 className="text-lg font-black text-slate-900">
             اختر الصف الدراسي داخل «{selectedStage}»
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {settings.grades.map((gr) => {
-              const count = visibleNotebooks.filter(
-                (n) =>
-                  n.category === selectedCategory &&
-                  n.stage === selectedStage &&
-                  n.grade === gr
-              ).length;
-              return (
-                <div
-                  key={gr}
-                  onClick={() =>
-                    onUpdateNavState({
-                      category: selectedCategory,
-                      stage: selectedStage,
-                      grade: gr,
-                      subject: 'all'
-                    })
-                  }
-                  className="bg-white rounded-3xl p-6 border border-slate-200 hover:border-amber-400 shadow-xs hover:shadow-lg transition-all cursor-pointer flex items-center justify-between gap-4 group"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 group-hover:bg-amber-500 group-hover:text-white transition flex items-center justify-center shrink-0">
-                      <Folder className="w-7 h-7" />
+          {getGradesForStage(settings, selectedStage).length === 0 ? (
+            <div className="bg-white rounded-3xl p-8 border border-slate-200 text-center text-xs text-slate-500">
+              لم يتم تخصيص صفوف دراسية لهذه المرحلة بعد.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {getGradesForStage(settings, selectedStage).map((gr) => {
+                const count = visibleNotebooks.filter(
+                  (n) =>
+                    n.category === selectedCategory &&
+                    n.stage === selectedStage &&
+                    n.grade === gr
+                ).length;
+                return (
+                  <div
+                    key={gr}
+                    onClick={() =>
+                      onUpdateNavState({
+                        category: selectedCategory,
+                        stage: selectedStage,
+                        grade: gr,
+                        subject: 'all'
+                      })
+                    }
+                    className="bg-white rounded-3xl p-6 border border-slate-200 hover:border-amber-400 shadow-xs hover:shadow-lg transition-all cursor-pointer flex items-center justify-between gap-4 group"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 group-hover:bg-amber-500 group-hover:text-white transition flex items-center justify-center shrink-0">
+                        <Folder className="w-7 h-7" />
+                      </div>
+                      <div>
+                        <h4 className="text-base font-black text-slate-900 group-hover:text-amber-700 transition">
+                          {gr}
+                        </h4>
+                        <p className="text-xs text-slate-500 mt-1">
+                          {count > 0 ? `${count} مذكرة جاهزة` : 'افتح المجلد'}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="text-base font-black text-slate-900 group-hover:text-amber-700 transition">
-                        {gr}
-                      </h4>
-                      <p className="text-xs text-slate-500 mt-1">
-                        {count > 0 ? `${count} مذكرة جاهزة` : 'افتح المجلد'}
-                      </p>
-                    </div>
+                    <ChevronLeft className="w-5 h-5 text-slate-400 group-hover:text-amber-600" />
                   </div>
-                  <ChevronLeft className="w-5 h-5 text-slate-400 group-hover:text-amber-600" />
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -2300,6 +2354,8 @@ function AdminPortal({
   // Settings Local Draft
   const [draftSettings, setDraftSettings] = useState(settings);
   const [newSocial, setNewSocial] = useState({ label: '', url: '', color: 'blue' });
+  const [selectedStageForGrades, setSelectedStageForGrades] = useState(settings.stages[0] || '');
+  const [newStageGradeInput, setNewStageGradeInput] = useState('');
   const [newTaxItem, setNewTaxItem] = useState({
     categories: '',
     stages: '',
@@ -2309,6 +2365,9 @@ function AdminPortal({
 
   useEffect(() => {
     setDraftSettings(settings);
+    if (settings.stages.length > 0 && !settings.stages.includes(selectedStageForGrades)) {
+      setSelectedStageForGrades(settings.stages[0]);
+    }
   }, [settings]);
 
   const handleLogin = async (e) => {
@@ -2521,23 +2580,109 @@ function AdminPortal({
       showToast('هذا العنصر موجود بالفعل', 'error');
       return;
     }
-    const updated = { ...draftSettings, [listKey]: [...arr, val] };
+    const nextStageGrades = { ...(draftSettings.stageGrades || {}) };
+    if (listKey === 'stages' && !nextStageGrades[val]) {
+      nextStageGrades[val] = [];
+    }
+    const updated = {
+      ...draftSettings,
+      [listKey]: [...arr, val],
+      stageGrades: nextStageGrades
+    };
     setDraftSettings(updated);
     setNewTaxItem((prev) => ({ ...prev, [listKey]: '' }));
+    if (listKey === 'stages') setSelectedStageForGrades(val);
     onSaveSettings(updated);
   };
 
   const removeTaxonomyItem = (listKey, index) => {
+    const removedVal = (draftSettings[listKey] || [])[index];
     const arr = (draftSettings[listKey] || []).filter((_, i) => i !== index);
-    const updated = { ...draftSettings, [listKey]: arr };
+    const nextStageGrades = { ...(draftSettings.stageGrades || {}) };
+    if (listKey === 'stages' && removedVal) {
+      delete nextStageGrades[removedVal];
+    }
+    const updated = {
+      ...draftSettings,
+      [listKey]: arr,
+      stageGrades: nextStageGrades
+    };
     setDraftSettings(updated);
+    if (listKey === 'stages' && selectedStageForGrades === removedVal) {
+      setSelectedStageForGrades(arr[0] || '');
+    }
     onSaveSettings(updated);
   };
 
   const renameTaxonomyItem = (listKey, index, newName) => {
+    const oldName = (draftSettings[listKey] || [])[index];
     const arr = [...(draftSettings[listKey] || [])];
     arr[index] = newName;
-    setDraftSettings({ ...draftSettings, [listKey]: arr });
+    const nextStageGrades = { ...(draftSettings.stageGrades || {}) };
+    if (listKey === 'stages' && oldName && oldName !== newName) {
+      nextStageGrades[newName] = nextStageGrades[oldName] || [];
+      delete nextStageGrades[oldName];
+      if (selectedStageForGrades === oldName) setSelectedStageForGrades(newName);
+    }
+    setDraftSettings({
+      ...draftSettings,
+      [listKey]: arr,
+      stageGrades: nextStageGrades
+    });
+  };
+
+  // Stage-Specific Grades Management Helpers
+  const moveStageGrade = (stageName, index, direction) => {
+    const currentList = [...((draftSettings.stageGrades || {})[stageName] || [])];
+    const target = index + direction;
+    if (target < 0 || target >= currentList.length) return;
+    const temp = currentList[index];
+    currentList[index] = currentList[target];
+    currentList[target] = temp;
+    const updated = {
+      ...draftSettings,
+      stageGrades: { ...(draftSettings.stageGrades || {}), [stageName]: currentList }
+    };
+    setDraftSettings(updated);
+    onSaveSettings(updated);
+  };
+
+  const addStageGrade = (stageName) => {
+    const val = newStageGradeInput.trim();
+    if (!val || !stageName) return;
+    const currentList = [...((draftSettings.stageGrades || {})[stageName] || [])];
+    if (currentList.includes(val)) {
+      showToast('هذا الصف مضاف بالفعل لهذه المرحلة', 'error');
+      return;
+    }
+    const updated = {
+      ...draftSettings,
+      stageGrades: { ...(draftSettings.stageGrades || {}), [stageName]: [...currentList, val] }
+    };
+    setDraftSettings(updated);
+    setNewStageGradeInput('');
+    onSaveSettings(updated);
+  };
+
+  const removeStageGrade = (stageName, index) => {
+    const currentList = ((draftSettings.stageGrades || {})[stageName] || []).filter(
+      (_, i) => i !== index
+    );
+    const updated = {
+      ...draftSettings,
+      stageGrades: { ...(draftSettings.stageGrades || {}), [stageName]: currentList }
+    };
+    setDraftSettings(updated);
+    onSaveSettings(updated);
+  };
+
+  const renameStageGrade = (stageName, index, newName) => {
+    const currentList = [...((draftSettings.stageGrades || {})[stageName] || [])];
+    currentList[index] = newName;
+    setDraftSettings({
+      ...draftSettings,
+      stageGrades: { ...(draftSettings.stageGrades || {}), [stageName]: currentList }
+    });
   };
 
   return (
@@ -2705,7 +2850,15 @@ function AdminPortal({
                   </select>
                   <select
                     value={nbForm.stage}
-                    onChange={(e) => setNbForm({ ...nbForm, stage: e.target.value })}
+                    onChange={(e) => {
+                      const nextStage = e.target.value;
+                      const stageGradesList = getGradesForStage(settings, nextStage);
+                      setNbForm({
+                        ...nbForm,
+                        stage: nextStage,
+                        grade: stageGradesList[0] || nbForm.grade
+                      });
+                    }}
                     className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
                   >
                     {settings.stages.map((s) => (
@@ -2720,7 +2873,7 @@ function AdminPortal({
                     onChange={(e) => setNbForm({ ...nbForm, grade: e.target.value })}
                     className="px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
                   >
-                    {settings.grades.map((g) => (
+                    {getGradesForStage(settings, nbForm.stage).map((g) => (
                       <option key={g} value={g}>{g}</option>
                     ))}
                   </select>
@@ -2882,12 +3035,12 @@ function AdminPortal({
                       onClick={() => onSaveNotebook({ ...nb, isHidden: !nb.isHidden })}
                       className={`px-3 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1 cursor-pointer ${
                         nb.isHidden
-                          ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                          : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                          ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
+                          : 'bg-amber-50 hover:bg-amber-100 text-amber-800'
                       }`}
-                      title={nb.isHidden ? 'إظهار للزوار' : 'إخفاء مؤقت'}
+                      title={nb.isHidden ? 'إظهار للزوار' : 'إخفاء عن الزوار'}
                     >
-                      {nb.isHidden ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                      {nb.isHidden ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
                       <span>{nb.isHidden ? 'إظهار' : 'إخفاء'}</span>
                     </button>
                     <button
@@ -2915,18 +3068,18 @@ function AdminPortal({
 
         {/* TAB 3: COUPONS */}
         {activeTab === 'coupons' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <div className="lg:col-span-5 bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
               <h3 className="text-base font-black text-slate-900">إضافة كوبون خصم جديد</h3>
               <form
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault();
                   if (!cpForm.code.trim()) return;
-                  onSaveCoupon({
+                  await onSaveCoupon({
                     id: 'cp-' + Date.now(),
                     code: cpForm.code.trim().toUpperCase(),
                     discountPercent: Number(cpForm.discountPercent) || 10,
-                    description: cpForm.description || 'خصم خاص للمعلمين',
+                    description: cpForm.description || `خصم ${cpForm.discountPercent}%`,
                     active: true
                   });
                   setCpForm({ code: '', discountPercent: 15, description: '' });
@@ -2936,7 +3089,7 @@ function AdminPortal({
                 <input
                   type="text"
                   required
-                  placeholder="كود الخصم (مثال: TEACHER20)"
+                  placeholder="كود الخصم (مثال: SAVE20)"
                   value={cpForm.code}
                   onChange={(e) => setCpForm({ ...cpForm, code: e.target.value })}
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold uppercase"
@@ -2944,7 +3097,9 @@ function AdminPortal({
                 <input
                   type="number"
                   min={1}
-                  max={90}
+                  max={95}
+                  required
+                  placeholder="نسبة الخصم %"
                   value={cpForm.discountPercent}
                   onChange={(e) => setCpForm({ ...cpForm, discountPercent: e.target.value })}
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
@@ -2958,29 +3113,32 @@ function AdminPortal({
                 />
                 <button
                   type="submit"
-                  className="w-full py-3 rounded-2xl bg-blue-600 text-white text-xs font-black cursor-pointer"
+                  className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black cursor-pointer"
                 >
                   + إضافة الكوبون
                 </button>
               </form>
             </div>
 
-            <div className="space-y-3">
+            <div className="lg:col-span-7 space-y-3">
               {coupons.map((cp) => (
                 <div
                   key={cp.id}
-                  className="bg-white rounded-2xl p-4 border border-slate-200 flex items-center justify-between"
+                  className="bg-white rounded-2xl p-4 border border-slate-200 flex items-center justify-between gap-3"
                 >
                   <div>
-                    <div className="font-mono text-sm font-black text-blue-700">
-                      {cp.code} ({cp.discountPercent}%)
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-sm font-black text-blue-700">{cp.code}</span>
+                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-black">
+                        خصم {cp.discountPercent}%
+                      </span>
                     </div>
-                    <div className="text-xs text-slate-500">{cp.description}</div>
+                    <p className="text-xs text-slate-500 mt-1">{cp.description}</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => onDeleteCoupon(cp.id)}
-                    className="p-2 rounded-xl bg-rose-50 text-rose-600 cursor-pointer"
+                    className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -2990,27 +3148,139 @@ function AdminPortal({
           </div>
         )}
 
-        {/* TAB 4: TAXONOMY (FULL REORDER + ADD + RENAME + REMOVE) */}
+        {/* TAB 4: TAXONOMY (FULL REORDER + ADD + RENAME + REMOVE + STAGE-SPECIFIC GRADES) */}
         {activeTab === 'taxonomy' && (
           <div className="space-y-6">
             <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
               <p className="text-xs font-bold text-blue-950">
-                يمكنك إعادة ترتيب الأقسام والمراحل والصفوف والمواد بالأسهم (أعلى / أسفل) أو تعديل أسمائها أو إضافة وإزالة أي عنصر، وسيظهر الترتيب للزوار فور الحفظ.
+                يمكنك إعادة ترتيب الأقسام والمراحل والمواد، وتخصيص الصفوف التابعة لكل مرحلة دراسية على حدة (إضافة، حذف، تعديل الاسم، أو إعادة الترتيب).
               </p>
               <button
                 type="button"
                 onClick={() => onSaveSettings(draftSettings)}
                 className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black cursor-pointer"
               >
-                حفظ التغييرات والترتيب
+                حفظ جميع التغييرات والترتيب
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Dedicated Stage -> Grades Customizer Card */}
+            <div className="bg-white rounded-3xl p-6 border-2 border-amber-200 shadow-xs space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                <div>
+                  <h4 className="text-base font-black text-slate-900">
+                    تخصيص الصفوف الدراسية الخاصة بكل مرحلة
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    اختر المرحلة الدراسية للتحكم في الصفوف التي تظهر بداخلها للزوار وعند إضافة مذكرة
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(draftSettings.stages || []).map((st) => (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => setSelectedStageForGrades(st)}
+                      className={`px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer ${
+                        selectedStageForGrades === st
+                          ? 'bg-amber-500 text-white shadow-xs'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {st} ({((draftSettings.stageGrades || {})[st] || []).length})
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {selectedStageForGrades && (
+                <div className="space-y-4">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder={`أضف صفًا جديدًا داخل «${selectedStageForGrades}» (مثال: الصف الأول الابتدائي)...`}
+                      value={newStageGradeInput}
+                      onChange={(e) => setNewStageGradeInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addStageGrade(selectedStageForGrades);
+                        }
+                      }}
+                      className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => addStageGrade(selectedStageForGrades)}
+                      className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-black cursor-pointer"
+                    >
+                      + إضافة صف للمرحلة
+                    </button>
+                  </div>
+
+                  {((draftSettings.stageGrades || {})[selectedStageForGrades] || []).length === 0 ? (
+                    <p className="text-xs text-slate-400 text-center py-4 bg-slate-50 rounded-2xl">
+                      لا توجد صفوف مضافة داخل «{selectedStageForGrades}» بعد — أضف الصفوف من الحقل أعلاه.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                      {((draftSettings.stageGrades || {})[selectedStageForGrades] || []).map(
+                        (gr, idx, arr) => (
+                          <div
+                            key={idx}
+                            className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-50/40 border border-amber-200/80"
+                          >
+                            <div className="flex flex-col gap-0.5">
+                              <button
+                                type="button"
+                                disabled={idx === 0}
+                                onClick={() => moveStageGrade(selectedStageForGrades, idx, -1)}
+                                className="p-1 rounded bg-white border border-slate-200 text-slate-700 disabled:opacity-30 cursor-pointer"
+                                title="تحريك لأعلى"
+                              >
+                                <ArrowUp className="w-3 h-3" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={idx === arr.length - 1}
+                                onClick={() => moveStageGrade(selectedStageForGrades, idx, 1)}
+                                className="p-1 rounded bg-white border border-slate-200 text-slate-700 disabled:opacity-30 cursor-pointer"
+                                title="تحريك لأسفل"
+                              >
+                                <ArrowDown className="w-3 h-3" />
+                              </button>
+                            </div>
+
+                            <input
+                              type="text"
+                              value={gr}
+                              onChange={(e) =>
+                                renameStageGrade(selectedStageForGrades, idx, e.target.value)
+                              }
+                              className="flex-1 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-bold text-slate-800"
+                            />
+
+                            <button
+                              type="button"
+                              onClick={() => removeStageGrade(selectedStageForGrades, idx)}
+                              className="p-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer"
+                              title="إزالة الصف من هذه المرحلة"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {[
-                { key: 'categories', title: 'الأقسام الرئيسية (الترم الأول، الترم الثاني، الكورسات...)' },
-                { key: 'stages', title: 'المراحل الدراسية (الابتدائية، الإعدادية، الثانوية...)' },
-                { key: 'grades', title: 'الصفوف الدراسية' },
+                { key: 'categories', title: 'الأقسام الرئيسية (الترم الأول، الثاني...)' },
+                { key: 'stages', title: 'المراحل الدراسية (الابتدائية، الإعدادية...)' },
                 { key: 'subjects', title: 'المواد الدراسية' }
               ].map((group) => (
                 <div key={group.key} className="bg-white rounded-3xl p-5 border border-slate-200 space-y-4">
