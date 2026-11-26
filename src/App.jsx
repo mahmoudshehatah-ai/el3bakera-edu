@@ -397,10 +397,13 @@ function mergeAndNormalizeSettings(base, incoming) {
 
   const normalizedCats = rawCats.map((c, idx) => {
     const id = c.id || `cat_${idx + 1}`;
-    const name = safeText(
+    const rawName = safeText(
       c.name || c.title || c.label || c.categoryName || c.arName || c.text,
-      base.categories?.[idx]?.name || `قسم ${idx + 1}`
+      ''
     );
+    const isGenericName = !rawName || /^قسم\s*\d+$/.test(rawName.trim());
+    const existingMatchingCat = (base.categories || []).find((bc) => bc.id === id) || base.categories?.[idx];
+    const name = !isGenericName ? rawName : existingMatchingCat?.name || `قسم ${idx + 1}`;
     const possibleImg = c.image || c.imageUrl || c.cover || c.coverImage || c.img || c.iconUrl;
     if (possibleImg && typeof possibleImg === 'string' && !mergedCatImages[id]) {
       mergedCatImages[id] = possibleImg;
@@ -462,12 +465,18 @@ function mergeAndNormalizeSettings(base, incoming) {
     heroBgImage: resolvedHero,
     categories: normalizedCats,
     categoryImages: mergedCatImages,
-    bundles: Array.isArray(incoming.bundles) ? incoming.bundles : base.bundles,
+    bundles:
+      Array.isArray(incoming.bundles) && incoming.bundles.length > 0
+        ? incoming.bundles
+        : base.bundles,
     customerFields:
       Array.isArray(incoming.customerFields) && incoming.customerFields.length > 0
         ? incoming.customerFields
         : base.customerFields,
-    socialLinks: Array.isArray(incoming.socialLinks) ? incoming.socialLinks : base.socialLinks,
+    socialLinks:
+      Array.isArray(incoming.socialLinks) && incoming.socialLinks.length > 0
+        ? incoming.socialLinks
+        : base.socialLinks,
     newsItems: normalizedNews,
     trustPoints: normalizedTrust
   };
@@ -2488,6 +2497,14 @@ function MuzakkiratiApp() {
                 setSettings((prev) => mergeAndNormalizeSettings(prev, { heroBgImage: docData.dataUrl }));
               } else if (d.id === 'media_categories') {
                 setSettings((prev) => mergeAndNormalizeSettings(prev, { categoryImages: docData.images || docData }));
+              } else if (d.id === 'media_assets') {
+                setSettings((prev) =>
+                  mergeAndNormalizeSettings(prev, {
+                    logoUrl: docData.logoUrl || docData.logo || '',
+                    heroBgImage: docData.heroBgImage || docData.heroBg || '',
+                    categoryImages: docData.categoryImages || {}
+                  })
+                );
               } else {
                 setSettings((prev) => mergeAndNormalizeSettings(prev, docData));
               }
@@ -2526,64 +2543,104 @@ function MuzakkiratiApp() {
         )
       );
 
-      // 3. قراءة صور العينات والأغلفة المنفصلة من كافة المجموعات المحتملة
-      for (const sampleColName of ['notebook_samples', 'notebook_media', 'samples']) {
-        unsubscribers.push(
-          onSnapshot(
-            publicCol(sampleColName),
-            (snap) => {
-              const map = {};
-              const coversFound = {};
-              snap.docs.forEach((d) => {
-                const data = d.data() || {};
-                const possibleCover = data.coverImage || data.cover || data.coverUrl || data.coverDataUrl;
-                if (typeof possibleCover === 'string' && possibleCover.length > 10) {
-                  coversFound[d.id] = possibleCover;
+      // 3. قراءة صور العينات من المسار الأساسي
+      unsubscribers.push(
+        onSnapshot(
+          publicCol('notebook_samples'),
+          (snap) => {
+            const nextSamples = {};
+            snap.docs.forEach((d) => {
+              const imgs = extractAnyImagesFromDoc(d.data());
+              if (imgs.length > 0) nextSamples[d.id] = imgs;
+            });
+            if (Object.keys(nextSamples).length > 0) {
+              setSamplesMap((prev) => {
+                const merged = { ...prev, ...nextSamples };
+                try {
+                  localStorage.setItem(LOCAL_SAMPLES_KEY, JSON.stringify(merged));
+                } catch {
+                  // تجاهل
                 }
-                const cleaned = extractAnyImagesFromDoc(data);
-                if (cleaned.length > 0) {
-                  map[d.id] = cleaned;
-                }
+                return merged;
               });
-              if (Object.keys(coversFound).length > 0) {
-                setNotebooks((prev) =>
-                  prev.map((nb) => ({
-                    ...nb,
-                    coverImage: nb.coverImage || coversFound[nb.id] || ''
-                  }))
-                );
-              }
-              if (Object.keys(map).length > 0) {
-                setSamplesMap((prev) => {
-                  const merged = { ...prev, ...map };
-                  try {
-                    localStorage.setItem(LOCAL_SAMPLES_KEY, JSON.stringify(merged));
-                  } catch {
-                    // تجاهل
-                  }
-                  return merged;
-                });
-              }
-            },
-            handleSnapError
-          )
-        );
-      }
+            }
+          },
+          handleSnapError
+        )
+      );
 
-      // 4. استرجاع احتياطي من المسار القديم legacyPublicCol إن وُجدت به بيانات
+      // 4. استرجاع شامل من المسار القديم legacyPublicCol (muzakkirati-edu-app) ولكل المجموعات المحتملة
       (async () => {
         try {
           const legacySettingsSnap = await getDocs(legacyPublicCol('settings'));
           legacySettingsSnap.docs.forEach((d) => {
-            setSettings((prev) => mergeAndNormalizeSettings(prev, d.data() || {}));
+            const docData = d.data() || {};
+            if (d.id === 'media_logo' && typeof docData.dataUrl === 'string') {
+              setSettings((prev) => mergeAndNormalizeSettings(prev, { logoUrl: docData.dataUrl }));
+            } else if (d.id === 'media_hero' && typeof docData.dataUrl === 'string') {
+              setSettings((prev) => mergeAndNormalizeSettings(prev, { heroBgImage: docData.dataUrl }));
+            } else if (d.id === 'media_categories') {
+              setSettings((prev) => mergeAndNormalizeSettings(prev, { categoryImages: docData.images || docData }));
+            } else {
+              setSettings((prev) => mergeAndNormalizeSettings(prev, docData));
+            }
           });
+
           const legacyNbSnap = await getDocs(legacyPublicCol('notebooks'));
           if (!legacyNbSnap.empty) {
             const legacyList = legacyNbSnap.docs.map((d) => normalizeNotebook({ id: d.id, ...d.data() }));
             setNotebooks((prev) => {
-              const existingIds = new Set(prev.map((x) => x.id));
-              const extras = legacyList.filter((x) => !existingIds.has(x.id));
-              return extras.length > 0 ? [...prev, ...extras] : prev;
+              const prevMap = new Map(prev.map((x) => [x.id, x]));
+              legacyList.forEach((legNb) => {
+                const cur = prevMap.get(legNb.id);
+                if (!cur) {
+                  prevMap.set(legNb.id, legNb);
+                } else {
+                  prevMap.set(legNb.id, {
+                    ...legNb,
+                    ...cur,
+                    coverImage: cur.coverImage || legNb.coverImage || '',
+                    samplePages:
+                      cur.samplePages?.length > 0 ? cur.samplePages : legNb.samplePages || []
+                  });
+                }
+              });
+              return Array.from(prevMap.values());
+            });
+          }
+
+          for (const legSampleCol of ['notebook_samples', 'notebook_media', 'samples']) {
+            const legSamplesSnap = await getDocs(legacyPublicCol(legSampleCol));
+            if (!legSamplesSnap.empty) {
+              const extraMap = {};
+              const extraCovers = {};
+              legSamplesSnap.docs.forEach((d) => {
+                const data = d.data() || {};
+                const cov = data.coverImage || data.cover || data.coverUrl || data.coverDataUrl;
+                if (typeof cov === 'string' && cov.length > 10) extraCovers[d.id] = cov;
+                const imgs = extractAnyImagesFromDoc(data);
+                if (imgs.length > 0) extraMap[d.id] = imgs;
+              });
+              if (Object.keys(extraCovers).length > 0) {
+                setNotebooks((prev) =>
+                  prev.map((nb) => ({
+                    ...nb,
+                    coverImage: nb.coverImage || extraCovers[nb.id] || ''
+                  }))
+                );
+              }
+              if (Object.keys(extraMap).length > 0) {
+                setSamplesMap((prev) => ({ ...extraMap, ...prev }));
+              }
+            }
+          }
+
+          const legCouponsSnap = await getDocs(legacyPublicCol('coupons'));
+          if (!legCouponsSnap.empty) {
+            const legCps = legCouponsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+            setCoupons((prev) => {
+              const ids = new Set(prev.map((c) => c.id));
+              return [...prev, ...legCps.filter((c) => !ids.has(c.id))];
             });
           }
         } catch {
