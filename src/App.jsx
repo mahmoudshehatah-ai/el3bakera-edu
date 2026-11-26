@@ -1301,30 +1301,30 @@ function OrderCheckoutModal({
               )}
 
               {settings.paymentInstructions && (
-                <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-xs text-blue-900 max-w-lg mx-auto leading-relaxed">
-                  <strong>تعليمات الدفع والتأكيد:</strong> {settings.paymentInstructions}
+                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-xs text-blue-900 max-w-md mx-auto leading-relaxed">
+                  {settings.paymentInstructions}
                 </div>
               )}
 
-              <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
                 <button
                   onClick={() => openWhatsAppWithOrder(completedOrder)}
-                  className="px-6 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition"
+                  className="px-6 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition"
                 >
                   <MessageCircle className="w-5 h-5" />
                   إرسال تفاصيل الطلب على واتساب الآن
                 </button>
                 <button
                   onClick={onClose}
-                  className="px-6 py-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition"
+                  className="px-5 py-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition"
                 >
-                  العودة للمنصة
+                  إغلاق النافذة
                 </button>
               </div>
             </div>
           ) : (
             <form onSubmit={handleSubmitOrder} className="space-y-6">
-              {/* قائمة المذكرات في السلة */}
+              {/* قسم السلة والمذكرات المختارة */}
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="font-extrabold text-sm text-slate-800 flex items-center gap-2">
@@ -1589,23 +1589,34 @@ function NotebookCard({ notebook, onPreview, onOrderNow, onAddToCart, isInCart, 
         )}
       </div>
 
-      <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-        <div>
-          <p className="text-[11px] font-bold text-slate-400 mb-1">
-            {notebook.category} • {notebook.grade}
-          </p>
+      <div className="p-5 flex-1 flex flex-col justify-between space-y-4 text-right">
+        <div className="space-y-2.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="px-2.5 py-0.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-100 text-[11px] font-extrabold">
+              {notebook.category}
+            </span>
+            {notebook.grade && (
+              <span className="px-2.5 py-0.5 rounded-lg bg-slate-100 text-slate-700 text-[11px] font-extrabold">
+                {notebook.grade}
+              </span>
+            )}
+          </div>
+
           <h3
             onClick={() => onPreview(notebook)}
-            className="font-extrabold text-base text-slate-900 hover:text-blue-600 cursor-pointer line-clamp-2 transition"
+            className="font-black text-lg sm:text-xl text-slate-950 group-hover:text-blue-700 cursor-pointer line-clamp-2 leading-snug tracking-tight border-r-4 border-blue-600 pr-2.5 transition-colors"
           >
             {notebook.title}
           </h3>
+
           {notebook.description && (
-            <p className="text-xs text-slate-500 mt-1.5 line-clamp-2 leading-relaxed">{notebook.description}</p>
+            <p className="text-xs sm:text-[13px] text-slate-600 line-clamp-2 leading-relaxed pt-0.5">
+              {notebook.description}
+            </p>
           )}
         </div>
 
-        <div className="space-y-3 pt-2 border-t border-slate-100">
+        <div className="space-y-3 pt-3 border-t border-slate-100">
           <div className="flex items-center justify-between">
             <div className="flex items-baseline gap-2">
               <span className="text-xl font-black text-blue-600">{notebook.price} ج.م</span>
@@ -5027,29 +5038,32 @@ function MuzakkiratiApp() {
           {/* الشعار واسم المنصة (النقر 5 مرات يفتح شاشة الإدارة) */}
           <div
             onClick={handleSecretLogoClick}
-            className="flex items-center gap-3.5 cursor-pointer select-none group"
+            className="flex items-center gap-3.5 sm:gap-4 cursor-pointer select-none group text-right"
           >
             {settings.logoUrl ? (
-              <div className="rounded-2xl overflow-hidden border border-slate-200/80 shadow-xs bg-slate-900 p-1 shrink-0">
+              <div className="rounded-2xl overflow-hidden border-2 border-amber-400/50 shadow-md bg-slate-950 p-1 shrink-0 ring-2 ring-slate-900/5">
                 <img
                   src={settings.logoUrl}
                   alt={settings.siteName}
-                  style={{ height: `${Math.min(Math.max(settings.logoSize || 56, 44), 84)}px` }}
+                  style={{ height: `${Math.min(Math.max(settings.logoSize || 62, 50), 90)}px` }}
                   className="w-auto object-contain rounded-xl transition-transform duration-300 group-hover:scale-105"
                 />
               </div>
             ) : (
-              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-600/20 shrink-0">
+              <div className="w-13 h-13 sm:w-15 sm:h-15 rounded-2xl bg-gradient-to-br from-blue-700 to-slate-900 text-white flex items-center justify-center shadow-lg shadow-blue-600/20 shrink-0">
                 <BookOpen className="w-7 h-7" />
               </div>
             )}
-            <div>
-              <h1 className="font-black text-lg sm:text-xl text-slate-900 leading-snug tracking-tight">
+            <div className="space-y-1">
+              <h1 className="font-black text-xl sm:text-2xl lg:text-[26px] bg-gradient-to-l from-slate-950 via-blue-900 to-blue-700 bg-clip-text text-transparent leading-tight tracking-tight">
                 {settings.siteName}
               </h1>
-              <p className="text-xs sm:text-sm text-slate-500 font-medium hidden sm:block mt-0.5">
-                {settings.siteSubtitle}
-              </p>
+              {settings.siteSubtitle && (
+                <p className="text-xs sm:text-[13px] text-slate-600 font-bold hidden sm:flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span>
+                  <span>{settings.siteSubtitle}</span>
+                </p>
+              )}
             </div>
           </div>
 
