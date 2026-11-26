@@ -1931,9 +1931,21 @@ function AdminDashboard({
   const [activeTab, setActiveTab] = useState('notebooks');
   const [localSettings, setLocalSettings] = useState(() => normalizeSettings(settings));
   const [savingSettings, setSavingSettings] = useState(false);
+  const explicitlyClearedRef = useRef({ heroBg: false, logo: false, clearedCats: {} });
 
   useEffect(() => {
-    setLocalSettings(normalizeSettings(settings));
+    setLocalSettings((prev) => {
+      const next = normalizeSettings(settings);
+      return {
+        ...next,
+        heroBgImage: next.heroBgImage || (!explicitlyClearedRef.current.heroBg ? prev.heroBgImage : ''),
+        logoUrl: next.logoUrl || (!explicitlyClearedRef.current.logo ? prev.logoUrl : ''),
+        categoryImages: {
+          ...(prev.categoryImages || {}),
+          ...(next.categoryImages || {})
+        }
+      };
+    });
   }, [settings]);
 
   const emptyNbForm = {
@@ -3505,7 +3517,10 @@ function AdminDashboard({
                     {localSettings.logoUrl && (
                       <button
                         type="button"
-                        onClick={() => setLocalSettings({ ...localSettings, logoUrl: '' })}
+                        onClick={() => {
+                          explicitlyClearedRef.current.logo = true;
+                          setLocalSettings({ ...localSettings, logoUrl: '' });
+                        }}
                         className="text-[11px] font-bold text-rose-600"
                       >
                         حذف الشعار
@@ -3518,6 +3533,7 @@ function AdminDashboard({
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
+                      explicitlyClearedRef.current.logo = false;
                       const compressed = await compressImageFile(file, 400, 0.85);
                       setLocalSettings({ ...localSettings, logoUrl: compressed });
                     }}
@@ -3543,7 +3559,10 @@ function AdminDashboard({
                     {localSettings.heroBgImage && (
                       <button
                         type="button"
-                        onClick={() => setLocalSettings({ ...localSettings, heroBgImage: '' })}
+                        onClick={() => {
+                          explicitlyClearedRef.current.heroBg = true;
+                          setLocalSettings({ ...localSettings, heroBgImage: '' });
+                        }}
                         className="text-[11px] font-bold text-rose-600"
                       >
                         حذف الخلفية
@@ -3556,6 +3575,7 @@ function AdminDashboard({
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
+                      explicitlyClearedRef.current.heroBg = false;
                       const compressed = await compressImageFile(file, 1100, 0.72);
                       setLocalSettings({ ...localSettings, heroBgImage: compressed });
                     }}
@@ -4467,7 +4487,18 @@ function MuzakkiratiApp() {
 
   const handleSaveSettings = async (nextSettings) => {
     const normalized = normalizeSettings(nextSettings);
-    await setDoc(publicDoc('settings', 'main'), normalized);
+    // حماية الصور الموجودة من المسح العرضي عند الحفظ من تبويب آخر
+    if (!normalized.heroBgImage && settings.heroBgImage && !nextSettings._clearHeroBg) {
+      normalized.heroBgImage = settings.heroBgImage;
+    }
+    if (!normalized.logoUrl && settings.logoUrl && !nextSettings._clearLogo) {
+      normalized.logoUrl = settings.logoUrl;
+    }
+    normalized.categoryImages = {
+      ...(settings.categoryImages || {}),
+      ...(normalized.categoryImages || {})
+    };
+    await setDoc(publicDoc('settings', 'main'), normalized, { merge: true });
     setSettings(normalized);
     try {
       const lightCopy = { ...normalized, heroBgImage: '', categoryImages: {} };
