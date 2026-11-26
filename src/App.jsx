@@ -1070,10 +1070,15 @@ function OrderCheckoutModal({
         const bundleItemsSum = cart
           .filter((c) => b.notebookIds.includes(c.id))
           .reduce((s, c) => s + (Number(c.price) || 0), 0);
-        const disc =
-          b.discountType === 'fixed'
-            ? Math.min(bundleItemsSum, Number(b.discountValue) || 0)
-            : Math.round((bundleItemsSum * (Number(b.discountValue) || 0)) / 100);
+        let disc = 0;
+        if (b.discountType === 'before_after') {
+          const targetFinal = Number(b.finalPrice) || 0;
+          disc = Math.max(0, bundleItemsSum - targetFinal);
+        } else if (b.discountType === 'fixed') {
+          disc = Math.min(bundleItemsSum, Number(b.discountValue) || 0);
+        } else {
+          disc = Math.round((bundleItemsSum * (Number(b.discountValue) || 0)) / 100);
+        }
         if (disc > bestDiscount) {
           bestDiscount = disc;
           matchedBundle = b;
@@ -2005,12 +2010,27 @@ function OffersAndBundlesPage({ notebooks, settings, coupons, onOrderBundle, onN
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {activeBundles.map((bundle) => {
               const includedNotebooks = notebooks.filter((n) => (bundle.notebookIds || []).includes(n.id));
-              const originalSum = includedNotebooks.reduce((s, n) => s + (Number(n.price) || 0), 0);
-              const discountAmount =
-                bundle.discountType === 'fixed'
-                  ? Math.min(originalSum, Number(bundle.discountValue) || 0)
-                  : Math.round((originalSum * (Number(bundle.discountValue) || 0)) / 100);
-              const finalBundlePrice = Math.max(0, originalSum - discountAmount);
+              const itemsSum = includedNotebooks.reduce((s, n) => s + (Number(n.price) || 0), 0);
+              const originalSum =
+                bundle.discountType === 'before_after' && Number(bundle.originalPrice) > 0
+                  ? Number(bundle.originalPrice)
+                  : itemsSum;
+              let finalBundlePrice = itemsSum;
+              let badgeText = '';
+
+              if (bundle.discountType === 'before_after') {
+                finalBundlePrice = Math.max(0, Number(bundle.finalPrice) || 0);
+                const saved = Math.max(0, originalSum - finalBundlePrice);
+                badgeText = saved > 0 ? `وفّر ${saved} ج.م` : 'عرض خاص';
+              } else if (bundle.discountType === 'fixed') {
+                const disc = Math.min(itemsSum, Number(bundle.discountValue) || 0);
+                finalBundlePrice = Math.max(0, itemsSum - disc);
+                badgeText = `خصم ${bundle.discountValue} ج.م`;
+              } else {
+                const disc = Math.round((itemsSum * (Number(bundle.discountValue) || 0)) / 100);
+                finalBundlePrice = Math.max(0, itemsSum - disc);
+                badgeText = `خصم ${bundle.discountValue}%`;
+              }
 
               return (
                 <div
@@ -2021,10 +2041,7 @@ function OffersAndBundlesPage({ notebooks, settings, coupons, onOrderBundle, onN
                     <div className="flex items-center justify-between gap-2">
                       <h4 className="text-lg font-black text-slate-900">{bundle.title}</h4>
                       <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black shrink-0">
-                        خصم{' '}
-                        {bundle.discountType === 'fixed'
-                          ? `${bundle.discountValue} ج.م`
-                          : `${bundle.discountValue}%`}
+                        {badgeText}
                       </span>
                     </div>
                     {bundle.description && <p className="text-xs text-slate-500">{bundle.description}</p>}
@@ -2173,8 +2190,10 @@ function AdminPortal({
   const [bundleForm, setBundleForm] = useState({
     title: '',
     description: '',
-    discountType: 'percent',
+    discountType: 'percent', // 'percent' | 'fixed' | 'before_after'
     discountValue: 20,
+    originalPrice: '',
+    finalPrice: '',
     notebookIds: []
   });
 
@@ -2444,18 +2463,43 @@ function AdminPortal({
       onNotify('اكتب اسم الباقة واختر مذكرتين على الأقل لتطبيق خصم المجموعة', 'error');
       return;
     }
+    const selectedSum = notebooks
+      .filter((n) => bundleForm.notebookIds.includes(n.id))
+      .reduce((s, n) => s + (Number(n.price) || 0), 0);
+
+    if (bundleForm.discountType === 'before_after' && (!bundleForm.finalPrice || Number(bundleForm.finalPrice) <= 0)) {
+      onNotify('يرجى إدخال السعر النهائي بعد الخصم للباقة', 'error');
+      return;
+    }
+
     const newBundle = {
       id: `bnd-${Date.now()}`,
       title: bundleForm.title.trim(),
       description: bundleForm.description.trim(),
       discountType: bundleForm.discountType,
       discountValue: Number(bundleForm.discountValue) || 15,
+      originalPrice:
+        bundleForm.discountType === 'before_after'
+          ? Number(bundleForm.originalPrice) || selectedSum
+          : selectedSum,
+      finalPrice:
+        bundleForm.discountType === 'before_after'
+          ? Number(bundleForm.finalPrice) || 0
+          : 0,
       notebookIds: bundleForm.notebookIds,
       active: true
     };
     const updatedBundles = [...(localSettings.bundles || []), newBundle];
     persistSettings({ ...localSettings, bundles: updatedBundles });
-    setBundleForm({ title: '', description: '', discountType: 'percent', discountValue: 20, notebookIds: [] });
+    setBundleForm({
+      title: '',
+      description: '',
+      discountType: 'percent',
+      discountValue: 20,
+      originalPrice: '',
+      finalPrice: '',
+      notebookIds: []
+    });
   };
 
   // تحريك عنصر في مصفوفة لأعلى أو لأسفل
@@ -3309,23 +3353,107 @@ function AdminPortal({
                     onChange={(e) => setBundleForm({ ...bundleForm, description: e.target.value })}
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-xs"
                   />
-                  <div className="grid grid-cols-2 gap-3">
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">طريقة تحديد السعر والخصم</label>
                     <select
                       value={bundleForm.discountType}
-                      onChange={(e) => setBundleForm({ ...bundleForm, discountType: e.target.value })}
-                      className="px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                      onChange={(e) => {
+                        const nextType = e.target.value;
+                        const currentSum = notebooks
+                          .filter((n) => bundleForm.notebookIds.includes(n.id))
+                          .reduce((s, n) => s + (Number(n.price) || 0), 0);
+                        setBundleForm({
+                          ...bundleForm,
+                          discountType: nextType,
+                          originalPrice: nextType === 'before_after' && !bundleForm.originalPrice ? currentSum : bundleForm.originalPrice
+                        });
+                      }}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-extrabold bg-white"
                     >
+                      <option value="before_after">تحديد السعر قبل وبعد الخصم (ج.م)</option>
                       <option value="percent">خصم نسبة مئوية (%)</option>
-                      <option value="fixed">خصم مبلغ ثابت (ج.م)</option>
+                      <option value="fixed">خصم مبلغ ثابت من المجموع (ج.م)</option>
                     </select>
-                    <input
-                      type="number"
-                      min={1}
-                      value={bundleForm.discountValue}
-                      onChange={(e) => setBundleForm({ ...bundleForm, discountValue: Number(e.target.value) })}
-                      className="px-3 py-2.5 rounded-xl border border-slate-300 text-sm font-black"
-                    />
                   </div>
+
+                  {bundleForm.discountType === 'before_after' ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-600 block mb-1">السعر قبل الخصم (ج.م)</label>
+                        <input
+                          type="number"
+                          min={1}
+                          placeholder="تلقائي من المجموع"
+                          value={bundleForm.originalPrice}
+                          onChange={(e) => setBundleForm({ ...bundleForm, originalPrice: e.target.value })}
+                          className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm font-black text-slate-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-emerald-700 block mb-1">السعر بعد الخصم (ج.م)</label>
+                        <input
+                          type="number"
+                          min={1}
+                          required
+                          placeholder="السعر النهائي..."
+                          value={bundleForm.finalPrice}
+                          onChange={(e) => setBundleForm({ ...bundleForm, finalPrice: e.target.value })}
+                          className="w-full px-3 py-2.5 rounded-xl border-2 border-emerald-400 bg-emerald-50/40 text-sm font-black text-emerald-900"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                        {bundleForm.discountType === 'fixed' ? 'قيمة الخصم الثابت (ج.م)' : 'نسبة الخصم (%)'}
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={bundleForm.discountValue}
+                        onChange={(e) => setBundleForm({ ...bundleForm, discountValue: Number(e.target.value) })}
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm font-black"
+                      />
+                    </div>
+                  )}
+
+                  {/* معاينة حية لحساب السعر قبل وبعد للباقة */}
+                  {(() => {
+                    const selectedSum = notebooks
+                      .filter((n) => bundleForm.notebookIds.includes(n.id))
+                      .reduce((s, n) => s + (Number(n.price) || 0), 0);
+                    if (selectedSum <= 0) return null;
+                    const beforeVal =
+                      bundleForm.discountType === 'before_after' && Number(bundleForm.originalPrice) > 0
+                        ? Number(bundleForm.originalPrice)
+                        : selectedSum;
+                    const afterVal =
+                      bundleForm.discountType === 'before_after'
+                        ? Number(bundleForm.finalPrice) || selectedSum
+                        : bundleForm.discountType === 'fixed'
+                        ? Math.max(0, selectedSum - (Number(bundleForm.discountValue) || 0))
+                        : Math.max(0, selectedSum - Math.round((selectedSum * (Number(bundleForm.discountValue) || 0)) / 100));
+                    const savedVal = Math.max(0, beforeVal - afterVal);
+
+                    return (
+                      <div className="bg-blue-50/80 border border-blue-200 rounded-2xl p-3 flex items-center justify-between text-xs">
+                        <div>
+                          <span className="text-slate-600 font-bold block">معاينة تسعير الباقة للعميل:</span>
+                          <div className="flex items-baseline gap-2 mt-0.5">
+                            <span className="line-through text-slate-400 font-bold">{beforeVal} ج.م</span>
+                            <span className="text-base font-black text-blue-700">{afterVal} ج.م</span>
+                          </div>
+                        </div>
+                        {savedVal > 0 && (
+                          <span className="px-2.5 py-1 rounded-full bg-emerald-600 text-white font-black text-[11px]">
+                            توفير {savedVal} ج.م
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   <button
                     type="submit"
                     className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs transition"
@@ -3356,7 +3484,16 @@ function AdminPortal({
                                 const set = new Set(bundleForm.notebookIds);
                                 if (set.has(nb.id)) set.delete(nb.id);
                                 else set.add(nb.id);
-                                setBundleForm({ ...bundleForm, notebookIds: Array.from(set) });
+                                const nextIds = Array.from(set);
+                                const nextSum = notebooks
+                                  .filter((item) => nextIds.includes(item.id))
+                                  .reduce((s, item) => s + (Number(item.price) || 0), 0);
+                                setBundleForm({
+                                  ...bundleForm,
+                                  notebookIds: nextIds,
+                                  originalPrice:
+                                    bundleForm.discountType === 'before_after' ? nextSum : bundleForm.originalPrice
+                                });
                               }}
                               className="w-4 h-4 accent-blue-600"
                             />
@@ -3383,8 +3520,10 @@ function AdminPortal({
                       <div>
                         <h4 className="font-extrabold text-sm text-slate-900">{b.title}</h4>
                         <p className="text-xs text-slate-500">
-                          تشمل {(b.notebookIds || []).length} مذكرات • خصم{' '}
-                          {b.discountType === 'fixed' ? `${b.discountValue} ج.م` : `${b.discountValue}%`}
+                          تشمل {(b.notebookIds || []).length} مذكرات •{' '}
+                          {b.discountType === 'before_after'
+                            ? `السعر: ${b.finalPrice} ج.م بدلاً من ${b.originalPrice} ج.م`
+                            : `خصم ${b.discountType === 'fixed' ? `${b.discountValue} ج.م` : `${b.discountValue}%`}`}
                         </p>
                       </div>
                       <button
