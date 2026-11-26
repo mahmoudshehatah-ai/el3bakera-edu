@@ -385,6 +385,20 @@ function formatExpiryArabic(expiresAt) {
   });
 }
 
+function toTimeMs(val) {
+  if (!val) return 0;
+  if (typeof val === 'number') return val;
+  if (typeof val === 'string') {
+    const t = Date.parse(val);
+    return Number.isNaN(t) ? 0 : t;
+  }
+  if (typeof val === 'object') {
+    if (typeof val.toMillis === 'function') return val.toMillis();
+    if (typeof val.seconds === 'number') return val.seconds * 1000;
+  }
+  return 0;
+}
+
 // ==========================================
 // 4. مكون معاينة المذكرة المحمية
 // ==========================================
@@ -3284,7 +3298,7 @@ function MuzakkiratiApp() {
           publicCol('orders'),
           (snap) => {
             const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-            list.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+            list.sort((a, b) => toTimeMs(b.createdAt) - toTimeMs(a.createdAt));
             setOrders(list);
           },
           handleSnapError
@@ -3434,7 +3448,7 @@ function MuzakkiratiApp() {
       return settings.whatsNewManualIds.map((id) => notebooks.find((n) => n.id === id)).filter(Boolean);
     }
     return [...notebooks]
-      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+      .sort((a, b) => toTimeMs(b.createdAt) - toTimeMs(a.createdAt))
       .slice(0, Number(settings.whatsNewCount) || 4);
   }, [notebooks, settings]);
 
