@@ -1635,20 +1635,48 @@ function OrderCheckoutModal({
     }
   };
 
-  const buildWhatsappUrl = (ord) => {
-    const cleanWa = String(settings.whatsappNumber || '201068481536').replace(/[^\d]/g, '');
-    const itemsText = (ord.items || []).map((it, idx) => `${idx + 1}- ${it.title} (${it.price} ج.م)`).join('\n');
-    const msg = `مرحبًا ${settings.siteName}،\nأرغب في تأكيد طلبي رقم: *${ord.orderNumber}*\n\n*بيانات المعلم:*\nالاسم: ${ord.teacherName}\nالهاتف: ${ord.phone}\n\n*المذكرات المطلوبة:*\n${itemsText || 'طلب مذكرة مخصصة'}\n\n*الإجمالي النهائي:* ${ord.totalPrice} ج.م`;
+  const buildWhatsAppOrderUrl = (orderObj) => {
+    const cleanWa = String(settings.whatsappNumber || '201000000000').replace(/[^\d]/g, '');
+    const itemsText = (orderObj.items || [])
+      .map((it, idx) => `${idx + 1}. ${it.title} (${it.grade || ''}) - ${it.price} ج.م`)
+      .join('\n');
+    const detailsText = Object.entries(orderObj.formDetails || {})
+      .filter(([, v]) => v && typeof v === 'string')
+      .map(([k, v]) => {
+        const fieldDef = (settings.orderFormFields || []).find((f) => f.id === k);
+        return `• ${fieldDef?.label || k}: ${v}`;
+      })
+      .join('\n');
+
+    const msg = [
+      `*طلب جديد من ${settings.siteName}*`,
+      `رقم الطلب: *${orderObj.orderNumber}*`,
+      `------------------`,
+      detailsText,
+      `------------------`,
+      `*المذكرات المطلوبة:*`,
+      itemsText || 'طلب مخصص',
+      `------------------`,
+      `الإجمالي النهائي: *${orderObj.totalPrice} ج.م*`
+    ].join('\n');
+
     return `https://wa.me/${cleanWa}?text=${encodeURIComponent(msg)}`;
   };
 
   return (
-    <div dir="rtl" onClick={onClose} className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col text-right">
-        <div className="bg-slate-950 text-white px-6 py-4 flex items-center justify-between shrink-0">
+    <div
+      dir="rtl"
+      onClick={onClose}
+      className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col text-right"
+      >
+        <div className="bg-slate-950 text-white px-5 py-4 flex items-center justify-between">
           <div>
             <h3 className="font-black text-base sm:text-lg">{settings.orderModalTitle}</h3>
-            <p className="text-xs text-slate-300">{settings.orderModalSubtitle}</p>
+            <p className="text-xs text-slate-300 mt-0.5">{settings.orderModalSubtitle}</p>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl bg-white/10 hover:bg-rose-600 text-white">
             <X className="w-5 h-5" />
@@ -1657,100 +1685,100 @@ function OrderCheckoutModal({
 
         <div className="p-5 sm:p-6 overflow-y-auto space-y-5">
           {submittedOrder ? (
-            <div className="text-center space-y-5 py-4">
+            <div className="text-center space-y-4 py-4">
               <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
-                <CheckCircle2 className="w-10 h-10" />
+                <CheckCircle2 className="w-9 h-9" />
               </div>
-              <div className="space-y-1.5">
-                <h4 className="text-xl font-black text-slate-900">{settings.orderSuccessMessage}</h4>
-                <p className="text-sm font-bold text-blue-600">رقم الطلب: {submittedOrder.orderNumber}</p>
+              <h4 className="text-xl font-black text-slate-900">{settings.orderSuccessMessage}</h4>
+              <div className="bg-slate-100 rounded-2xl p-4 max-w-sm mx-auto space-y-1">
+                <span className="text-xs text-slate-500 block">رقم تتبع الطلب الخاص بك:</span>
+                <span className="text-2xl font-black text-blue-600 tracking-wider">{submittedOrder.orderNumber}</span>
               </div>
 
               {submittedOrder.nextRewardCode && (
                 <div className="bg-amber-50 border-2 border-dashed border-amber-400 rounded-2xl p-4 max-w-md mx-auto space-y-1">
                   <span className="text-xs font-black text-amber-900 flex items-center justify-center gap-1">
                     <Gift className="w-4 h-4" />
-                    {settings.nextOrderRewardTitle} (خصم {settings.nextOrderRewardPercent}%)
+                    <span>{settings.nextOrderRewardTitle}</span>
                   </span>
-                  <p className="text-lg font-black text-slate-950 tracking-widest">{submittedOrder.nextRewardCode}</p>
-                  <p className="text-[11px] text-amber-800">احتفظ بهذا الكود لخصم فوري على طلبك القادم (صالح لمرة واحدة)</p>
+                  <p className="text-xs text-amber-800">
+                    كود خصم {settings.nextOrderRewardPercent}% لطلبك القادم (يُستخدم لمرة واحدة):
+                  </p>
+                  <span className="inline-block px-4 py-1.5 rounded-xl bg-amber-400 text-slate-950 font-black text-base">
+                    {submittedOrder.nextRewardCode}
+                  </span>
                 </div>
               )}
 
               {settings.paymentInstructions && (
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs text-slate-700 font-bold leading-relaxed">
+                <p className="text-xs text-slate-600 bg-blue-50 p-3.5 rounded-2xl border border-blue-200">
                   {settings.paymentInstructions}
-                </div>
+                </p>
               )}
 
               <a
-                href={buildWhatsappUrl(submittedOrder)}
+                href={buildWhatsAppOrderUrl(submittedOrder)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg"
+                className="w-full py-3.5 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm shadow-lg flex items-center justify-center gap-2"
               >
                 <MessageCircle className="w-5 h-5" />
                 <span>إرسال تفاصيل الطلب على واتساب الآن</span>
               </a>
             </div>
           ) : (
-            <form onSubmit={handleSubmitOrder} className="space-y-5">
-              {/* عناصر السلة */}
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-black text-sm text-slate-900">المذكرات المختارة ({cart.length})</h4>
-                  {settings.orderEnableMultiCart && allNotebooks.length > 0 && (
-                    <select
-                      value=""
-                      onChange={(e) => {
-                        const found = allNotebooks.find((n) => n.id === e.target.value);
-                        if (found) onAddNotebookToCart(found);
-                      }}
-                      className="text-xs font-bold px-3 py-1.5 rounded-xl border border-slate-300 bg-slate-50 max-w-[200px]"
-                    >
-                      <option value="">+ إضافة مذكرة أخرى...</option>
-                      {allNotebooks.map((n) => (
-                        <option key={n.id} value={n.id}>
-                          {n.title} ({n.price} ج.م)
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
+            <form onSubmit={handleSubmitOrder} className="space-y-4">
+              {/* محتويات السلة */}
+              {cart.length > 0 && (
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-slate-800">المذكرات المختارة ({cart.length}):</span>
+                    {settings.orderEnableMultiCart && allNotebooks.length > cart.length && (
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          const found = allNotebooks.find((n) => n.id === e.target.value);
+                          if (found) onAddNotebookToCart(found);
+                        }}
+                        className="px-2.5 py-1 rounded-xl border border-slate-300 bg-white text-[11px] font-bold"
+                      >
+                        <option value="">+ أضف مذكرة أخرى للسلة...</option>
+                        {allNotebooks
+                          .filter((n) => !cart.some((c) => c.id === n.id))
+                          .map((n) => (
+                            <option key={n.id} value={n.id}>
+                              {n.title} ({n.price} ج.م)
+                            </option>
+                          ))}
+                      </select>
+                    )}
+                  </div>
 
-                {cart.length === 0 ? (
-                  <p className="text-xs text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                    لم يتم اختيار مذكرة محددة (طلب إعداد مذكرة خاصة)
-                  </p>
-                ) : (
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto">
                     {cart.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
-                        <div className="min-w-0">
-                          <p className="text-xs font-black text-slate-900 truncate">{item.title}</p>
-                          <p className="text-[11px] text-slate-500">{item.grade}</p>
-                        </div>
+                      <div key={item.id} className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-slate-200 text-xs">
+                        <span className="font-bold truncate">{item.title}</span>
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-xs font-black text-blue-600">{item.price} ج.م</span>
+                          <span className="font-black text-blue-600">{item.price} ج.م</span>
                           <button
                             type="button"
                             onClick={() => onRemoveFromCart(item.id)}
-                            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50"
+                            className="text-rose-600 hover:bg-rose-50 p-1 rounded-lg"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <X className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
-              {/* حقول نموذج العميل */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* حقول بيانات المعلم */}
+              <div className="space-y-3">
                 {visibleFields.map((field) => (
-                  <div key={field.id} className={field.type === 'textarea' || field.type === 'file' ? 'sm:col-span-2' : ''}>
-                    <label className="block text-xs font-extrabold text-slate-700 mb-1">
+                  <div key={field.id}>
+                    <label className="text-xs font-extrabold text-slate-700 block mb-1">
                       {field.label} {field.required && <span className="text-rose-600">*</span>}
                     </label>
                     {field.type === 'textarea' ? (
@@ -1759,18 +1787,19 @@ function OrderCheckoutModal({
                         required={field.required}
                         placeholder={field.placeholder}
                         value={formValues[field.id] || ''}
-                        onChange={(e) => setFormValues((prev) => ({ ...prev, [field.id]: e.target.value }))}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm font-bold"
+                        onChange={(e) => setFormValues({ ...formValues, [field.id]: e.target.value })}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
                       />
                     ) : field.type === 'file' ? (
                       <input
                         type="file"
                         accept="image/*"
+                        required={field.required}
                         onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) setFormValues((prev) => ({ ...prev, [field.id]: `مرفق شعار: ${file.name}` }));
+                          const f = e.target.files?.[0];
+                          setFormValues({ ...formValues, [field.id]: f ? `مرفق شعار: ${f.name}` : '' });
                         }}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-slate-50"
+                        className="w-full text-xs border border-slate-300 rounded-xl p-2"
                       />
                     ) : (
                       <input
@@ -1778,28 +1807,28 @@ function OrderCheckoutModal({
                         required={field.required}
                         placeholder={field.placeholder}
                         value={formValues[field.id] || ''}
-                        onChange={(e) => setFormValues((prev) => ({ ...prev, [field.id]: e.target.value }))}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm font-bold"
+                        onChange={(e) => setFormValues({ ...formValues, [field.id]: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
                       />
                     )}
                   </div>
                 ))}
               </div>
 
-              {/* كوبون الخصم */}
-              {settings.orderEnableCoupons && (
+              {/* كود الخصم */}
+              {settings.orderEnableCoupons && cart.length > 0 && (
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={couponInput}
                     onChange={(e) => setCouponInput(e.target.value)}
                     placeholder="لديك كود خصم؟ اكتبه هنا..."
-                    className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold uppercase"
+                    className="flex-1 px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-black uppercase"
                   />
                   <button
                     type="button"
                     onClick={handleApplyCoupon}
-                    className="px-4 py-2.5 rounded-xl bg-slate-900 text-white font-extrabold text-xs"
+                    className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-extrabold"
                   >
                     تطبيق
                   </button>
@@ -1808,25 +1837,25 @@ function OrderCheckoutModal({
 
               {/* ملخص الحساب */}
               {cart.length > 0 && (
-                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-1.5 text-xs font-bold">
-                  <div className="flex justify-between text-slate-600">
+                <div className="bg-blue-50/70 rounded-2xl p-4 border border-blue-200 space-y-1 text-xs">
+                  <div className="flex justify-between text-slate-600 font-bold">
                     <span>المجموع الفرعي:</span>
                     <span>{pricingSummary.subtotal} ج.م</span>
                   </div>
                   {pricingSummary.bundleDiscount > 0 && (
-                    <div className="flex justify-between text-emerald-700">
-                      <span>خصم الباقة المجمعة:</span>
+                    <div className="flex justify-between text-emerald-700 font-extrabold">
+                      <span>خصم باقة التوفير:</span>
                       <span>- {pricingSummary.bundleDiscount} ج.م</span>
                     </div>
                   )}
                   {pricingSummary.couponDiscount > 0 && (
-                    <div className="flex justify-between text-emerald-700">
+                    <div className="flex justify-between text-emerald-700 font-extrabold">
                       <span>خصم الكوبون ({appliedCoupon?.code}):</span>
                       <span>- {pricingSummary.couponDiscount} ج.م</span>
                     </div>
                   )}
-                  <div className="flex justify-between text-base font-black text-blue-600 pt-2 border-t border-slate-200">
-                    <span>الإجمالي المستحق:</span>
+                  <div className="flex justify-between text-base font-black text-blue-700 pt-1.5 border-t border-blue-200">
+                    <span>الإجمالي النهائي:</span>
                     <span>{pricingSummary.total} ج.م</span>
                   </div>
                 </div>
@@ -1835,7 +1864,7 @@ function OrderCheckoutModal({
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full py-4 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-lg shadow-blue-600/25 transition"
+                className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-lg transition"
               >
                 {submitting ? 'جاري تسجيل الطلب...' : settings.orderSubmitText}
               </button>
@@ -1848,7 +1877,7 @@ function OrderCheckoutModal({
 }
 
 // ============================================================================
-// 10. لوحة تحكم الإدارة الكاملة (AdminDashboard)
+// 10. لوحة تحكم الإدارة الشاملة (AdminDashboard)
 // ============================================================================
 function AdminDashboard({
   notebooks,
@@ -1865,16 +1894,19 @@ function AdminDashboard({
   const [localSettings, setLocalSettings] = useState(() => normalizeSettings(settings));
   const [savingSettings, setSavingSettings] = useState(false);
 
-  // نموذج إضافة / تعديل مذكرة فردية
+  useEffect(() => {
+    setLocalSettings(normalizeSettings(settings));
+  }, [settings]);
+
   const emptyNbForm = {
     id: '',
     title: '',
     category: localSettings.categories?.[0] || 'مذكرات الترم الأول',
-    stage: localSettings.stages?.[0] || 'المرحلة الإعدادية',
-    grade: (localSettings.stageGrades?.[localSettings.stages?.[0]] || [])[0] || '',
+    stage: localSettings.stages?.[0] || 'المرحلة الابتدائية',
+    grade: (localSettings.stageGrades?.[localSettings.stages?.[0] || 'المرحلة الابتدائية'] || [])[0] || '',
     subject: localSettings.subjects?.[0] || 'اللغة العربية',
-    price: 99,
-    oldPrice: 150,
+    price: 100,
+    oldPrice: 0,
     pagesCount: 60,
     badge: '',
     description: '',
@@ -1888,35 +1920,14 @@ function AdminDashboard({
     isComingSoon: false,
     visible: true
   };
+
   const [nbForm, setNbForm] = useState(emptyNbForm);
   const [savingNb, setSavingNb] = useState(false);
 
-  // التعديل السريع الجماعي والحفظ دفعة واحدة
+  // التعديل السريع الجماعي للمذكرات
   const [bulkEdits, setBulkEdits] = useState({});
   const [savingBulk, setSavingBulk] = useState(false);
-
-  // إدارة الباقات والكوبونات والأقسام
-  const [newCatInput, setNewCatInput] = useState('');
-  const [newStageInput, setNewStageInput] = useState('');
-  const [newSubjectInput, setNewSubjectInput] = useState('');
-  const [newGradeInput, setNewGradeInput] = useState('');
-  const [selectedStageForGrades, setSelectedStageForGrades] = useState(localSettings.stages?.[0] || 'المرحلة الإعدادية');
-  const [newNewsForm, setNewNewsForm] = useState({ badge: 'قريبًا جدًا', title: '', content: '', color: 'amber' });
-  const [bundleForm, setBundleForm] = useState({
-    title: '',
-    description: '',
-    discountType: 'fixed_prices',
-    discountValue: 15,
-    beforePrice: 0,
-    afterPrice: 0,
-    notebookIds: []
-  });
-  const [couponForm, setCouponForm] = useState({ code: '', discountType: 'percent', discountValue: 15 });
-  const restoreInputRef = useRef(null);
-
-  useEffect(() => {
-    setLocalSettings(normalizeSettings(settings));
-  }, [settings]);
+  const editedCount = Object.keys(bulkEdits).length;
 
   const handleBulkFieldChange = (id, field, value) => {
     setBulkEdits((prev) => ({
@@ -1929,20 +1940,18 @@ function AdminDashboard({
   };
 
   const handleSaveAllBulkEdits = async () => {
-    const editedIds = Object.keys(bulkEdits);
-    if (editedIds.length === 0) return;
+    const entries = Object.entries(bulkEdits);
+    if (!entries.length) return;
     setSavingBulk(true);
     try {
-      for (const id of editedIds) {
-        const changes = bulkEdits[id];
-        await updateDoc(publicDoc('notebooks', id), {
-          ...changes,
-          ...(changes.price !== undefined ? { price: Number(changes.price) || 0 } : {}),
-          ...(changes.oldPrice !== undefined ? { oldPrice: Number(changes.oldPrice) || 0 } : {})
-        });
+      for (const [id, changes] of entries) {
+        const cleanPatch = { ...changes };
+        if (cleanPatch.price !== undefined) cleanPatch.price = Number(cleanPatch.price) || 0;
+        if (cleanPatch.oldPrice !== undefined) cleanPatch.oldPrice = Number(cleanPatch.oldPrice) || 0;
+        await updateDoc(publicDoc('notebooks', id), cleanPatch);
       }
       setBulkEdits({});
-      notify(`تم حفظ تعديلات ${editedIds.length} مذكرة دفعة واحدة بنجاح!`, 'success');
+      notify(`تم حفظ التعديلات على ${entries.length} مذكرة بنجاح!`, 'success');
     } catch (err) {
       notify(`تعذر حفظ التعديلات الجماعية: ${err?.message || ''}`, 'error');
     } finally {
@@ -1952,21 +1961,12 @@ function AdminDashboard({
 
   const handleSaveNotebook = async (e) => {
     e.preventDefault();
-    if (!nbForm.title.trim()) {
-      notify('يرجى إدخال عنوان المذكرة', 'error');
-      return;
-    }
+    if (!nbForm.title.trim()) return;
     setSavingNb(true);
     try {
-      const nbId = nbForm.id || doc(publicCol('notebooks')).id;
-      const samples = Array.isArray(nbForm.sampleUrls) ? nbForm.sampleUrls.slice(0, 15) : [];
+      const samples = Array.isArray(nbForm.sampleUrls) ? nbForm.sampleUrls : [];
       const chunkSize = 3;
       const chunksCount = Math.ceil(samples.length / chunkSize);
-
-      for (let i = 0; i < chunksCount; i++) {
-        const slice = samples.slice(i * chunkSize, (i + 1) * chunkSize);
-        await setDoc(publicDoc('notebook_samples', `${nbId}_chunk_${i}`), { urls: slice });
-      }
 
       const payload = {
         title: nbForm.title.trim(),
@@ -1988,14 +1988,32 @@ function AdminDashboard({
         sampleUrls: [],
         samplesChunksCount: chunksCount,
         isComingSoon: Boolean(nbForm.isComingSoon),
-        visible: nbForm.visible !== false,
-        updatedAt: serverTimestamp(),
-        ...(nbForm.id ? {} : { createdAt: serverTimestamp() })
+        visible: nbForm.visible !== false
       };
 
-      await setDoc(publicDoc('notebooks', nbId), payload, { merge: true });
+      let targetId = nbForm.id;
+      if (targetId) {
+        await updateDoc(publicDoc('notebooks', targetId), payload);
+      } else {
+        const docRef = await addDoc(publicCol('notebooks'), {
+          ...payload,
+          createdAt: serverTimestamp()
+        });
+        targetId = docRef.id;
+      }
+
+      if (targetId && samples.length > 0) {
+        await setDoc(publicDoc('notebook_samples', targetId), { urls: [] });
+        for (let i = 0; i < chunksCount; i++) {
+          const chunkUrls = samples.slice(i * chunkSize, (i + 1) * chunkSize);
+          await setDoc(publicDoc('notebook_samples', `${targetId}_chunk_${i}`), {
+            urls: chunkUrls
+          });
+        }
+      }
+
       setNbForm(emptyNbForm);
-      notify(nbForm.id ? 'تم تحديث المذكرة بنجاح!' : 'تمت إضافة المذكرة الجديدة بنجاح!', 'success');
+      notify('تم حفظ المذكرة بنجاح!', 'success');
     } catch (err) {
       notify(`تعذر حفظ المذكرة: ${err?.message || ''}`, 'error');
     } finally {
@@ -2004,25 +2022,26 @@ function AdminDashboard({
   };
 
   const handleEditNotebookClick = async (nb) => {
-    let loadedSamples = Array.isArray(nb.sampleUrls) ? [...nb.sampleUrls] : [];
+    let existingSamples = Array.isArray(nb.sampleUrls) ? [...nb.sampleUrls] : [];
     try {
+      const baseSnap = await getDoc(publicDoc('notebook_samples', nb.id));
+      if (baseSnap.exists() && Array.isArray(baseSnap.data()?.urls)) {
+        existingSamples.push(...baseSnap.data().urls);
+      }
       const chunksCount = Number(nb.samplesChunksCount) || 5;
-      const collected = [];
       for (let i = 0; i < chunksCount; i++) {
-        const snap = await getDoc(publicDoc('notebook_samples', `${nb.id}_chunk_${i}`));
-        if (snap.exists() && Array.isArray(snap.data()?.urls)) {
-          collected.push(...snap.data().urls);
-        } else if (i > 0 && !snap.exists()) {
+        const chunkSnap = await getDoc(publicDoc('notebook_samples', `${nb.id}_chunk_${i}`));
+        if (chunkSnap.exists() && Array.isArray(chunkSnap.data()?.urls)) {
+          existingSamples.push(...chunkSnap.data().urls);
+        } else if (i > 0 && !chunkSnap.exists()) {
           break;
         }
       }
-      if (collected.length > 0) loadedSamples = collected;
     } catch {}
-
     setNbForm({
       ...emptyNbForm,
       ...nb,
-      sampleUrls: loadedSamples
+      sampleUrls: Array.from(new Set(existingSamples))
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -2030,17 +2049,59 @@ function AdminDashboard({
   const handleDeleteNotebook = async (id) => {
     try {
       await deleteDoc(publicDoc('notebooks', id));
-      notify('تم حذف المذكرة بنجاح', 'success');
+      notify('تم حذف المذكرة', 'success');
     } catch (err) {
       notify(`تعذر الحذف: ${err?.message || ''}`, 'error');
     }
+  };
+
+  // حالات إدارة الأقسام والمراحل والصفوف والمواد
+  const [newCatInput, setNewCatInput] = useState('');
+  const [newStageInput, setNewStageInput] = useState('');
+  const [selectedStageForGrades, setSelectedStageForGrades] = useState(
+    localSettings.stages?.[0] || 'المرحلة الابتدائية'
+  );
+  const [newGradeInput, setNewGradeInput] = useState('');
+  const [newSubjectInput, setNewSubjectInput] = useState('');
+
+  // حالات إدارة الباقات والكوبونات والأخبار
+  const [bundleForm, setBundleForm] = useState({
+    title: '',
+    description: '',
+    discountType: 'fixed_prices',
+    discountValue: 15,
+    beforePrice: 0,
+    afterPrice: 0,
+    notebookIds: []
+  });
+  const [couponForm, setCouponForm] = useState({
+    code: '',
+    discountType: 'percent',
+    discountValue: 15
+  });
+  const [newNewsForm, setNewNewsForm] = useState({
+    badge: 'قريبًا جدًا',
+    title: '',
+    content: '',
+    color: 'amber'
+  });
+  const restoreInputRef = useRef(null);
+
+  const moveArrayItem = (arr, index, direction) => {
+    const newArr = [...arr];
+    const targetIdx = index + direction;
+    if (targetIdx < 0 || targetIdx >= newArr.length) return newArr;
+    const temp = newArr[index];
+    newArr[index] = newArr[targetIdx];
+    newArr[targetIdx] = temp;
+    return newArr;
   };
 
   const handlePersistAllSettings = async () => {
     setSavingSettings(true);
     try {
       await onSaveSettings(localSettings);
-      notify('تم حفظ جميع الإعدادات ومزامنتها سحابيًا بنجاح!', 'success');
+      notify('تم حفظ جميع الإعدادات ومزامنتها مع السحابة بنجاح!', 'success');
     } catch (err) {
       notify(`تعذر حفظ الإعدادات: ${err?.message || ''}`, 'error');
     } finally {
@@ -2048,28 +2109,17 @@ function AdminDashboard({
     }
   };
 
-  const moveArrayItem = (arr, index, direction) => {
-    const target = index + direction;
-    if (target < 0 || target >= arr.length) return arr;
-    const copy = [...arr];
-    const [removed] = copy.splice(index, 1);
-    copy.splice(target, 0, removed);
-    return copy;
-  };
-
-  const editedCount = Object.keys(bulkEdits).length;
-
   return (
     <div dir="rtl" className="min-h-screen bg-slate-100 text-slate-900 pb-16 text-right">
-      {/* شريط الإدارة العلوي */}
-      <header className="bg-slate-950 text-white px-4 sm:px-6 py-4 sticky top-0 z-30 border-b border-white/10">
+      {/* شريط لوحة التحكم العلوي */}
+      <header className="sticky top-0 z-30 bg-slate-950 text-white px-4 sm:px-6 py-4 shadow-lg">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center">
-              <ShieldCheck className="w-6 h-6 text-white" />
+              <ShieldCheck className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="font-black text-base sm:text-lg">لوحة تحكم {localSettings.siteName}</h1>
+              <h1 className="font-black text-base sm:text-lg">لوحة تحكم {settings.siteName}</h1>
               <p className="text-[11px] text-slate-400">{ADMIN_EMAIL}</p>
             </div>
           </div>
@@ -2077,14 +2127,14 @@ function AdminDashboard({
           <div className="flex items-center gap-2">
             <button
               onClick={onExitToSite}
-              className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-extrabold flex items-center gap-1.5"
+              className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-extrabold flex items-center gap-1.5"
             >
               <Eye className="w-4 h-4" />
               <span>معاينة الموقع</span>
             </button>
             <button
               onClick={onLogout}
-              className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-extrabold flex items-center gap-1.5"
+              className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-xs font-extrabold flex items-center gap-1.5"
             >
               <LogOut className="w-4 h-4" />
               <span>خروج</span>
@@ -2093,8 +2143,8 @@ function AdminDashboard({
         </div>
       </header>
 
-      {/* تبويبات لوحة التحكم */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-6 space-y-6">
+        {/* تبويبات لوحة التحكم */}
         <div className="flex flex-wrap gap-2 bg-white p-2 rounded-2xl border border-slate-200 shadow-xs">
           {[
             { id: 'notebooks', label: `المذكرات (${notebooks.length})`, icon: BookOpen },
@@ -2118,6 +2168,486 @@ function AdminDashboard({
             );
           })}
         </div>
+
+        {/* ================================================================= */}
+        {/* تبويب 1: إدارة المذكرات + التعديل السريع الجماعي                  */}
+        {/* ================================================================= */}
+        {activeTab === 'notebooks' && (
+          <div className="space-y-6">
+            {/* شريط الحفظ الجماعي السريع عند وجود تعديلات غير محفوظة */}
+            {editedCount > 0 && (
+              <div className="sticky top-20 z-20 bg-amber-500 text-slate-950 px-5 py-3.5 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-3 border border-amber-600">
+                <span className="font-black text-xs sm:text-sm">
+                  لديك تعديلات غير محفوظة على {editedCount} مذكرة
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBulkEdits({})}
+                    className="px-4 py-2 rounded-xl bg-white/80 hover:bg-white text-slate-900 font-extrabold text-xs"
+                  >
+                    إلغاء التعديلات
+                  </button>
+                  <button
+                    type="button"
+                    disabled={savingBulk}
+                    onClick={handleSaveAllBulkEdits}
+                    className="px-5 py-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-white font-black text-xs shadow-md"
+                  >
+                    {savingBulk ? 'جاري الحفظ...' : `حفظ جميع التعديلات دفعة واحدة (${editedCount})`}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* العمود الأيمن: نموذج إضافة / تعديل مذكرة */}
+              <form
+                onSubmit={handleSaveNotebook}
+                className="lg:col-span-5 bg-white rounded-3xl p-6 border border-slate-200 space-y-4 shadow-xs"
+              >
+                <div className="flex items-center justify-between">
+                  <h3 className="font-black text-base text-slate-900">
+                    {nbForm.id ? 'تعديل بيانات المذكرة' : 'إضافة مذكرة جديدة'}
+                  </h3>
+                  {nbForm.id && (
+                    <button
+                      type="button"
+                      onClick={() => setNbForm(emptyNbForm)}
+                      className="text-xs font-extrabold text-rose-600 hover:underline"
+                    >
+                      إلغاء التعديل
+                    </button>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">اسم المذكرة *</label>
+                  <input
+                    type="text"
+                    required
+                    value={nbForm.title}
+                    onChange={(e) => setNbForm({ ...nbForm, title: e.target.value })}
+                    placeholder="مثال: مذكرة الشرح المتكاملة - الصف الثالث الإعدادي"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 block mb-1">القسم</label>
+                    <select
+                      value={nbForm.category}
+                      onChange={(e) => setNbForm({ ...nbForm, category: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                    >
+                      {(localSettings.categories || []).map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 block mb-1">المرحلة</label>
+                    <select
+                      value={nbForm.stage}
+                      onChange={(e) => {
+                        const newSt = e.target.value;
+                        const firstGr = (localSettings.stageGrades?.[newSt] || [])[0] || '';
+                        setNbForm({ ...nbForm, stage: newSt, grade: firstGr });
+                      }}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                    >
+                      {(localSettings.stages || []).map((st) => (
+                        <option key={st} value={st}>{st}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 block mb-1">الصف الدراسي</label>
+                    <select
+                      value={nbForm.grade}
+                      onChange={(e) => setNbForm({ ...nbForm, grade: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                    >
+                      {(localSettings.stageGrades?.[nbForm.stage] || []).map((gr) => (
+                        <option key={gr} value={gr}>{gr}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 block mb-1">المادة الدراسية</label>
+                    <select
+                      value={nbForm.subject}
+                      onChange={(e) => setNbForm({ ...nbForm, subject: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                    >
+                      {(localSettings.subjects || []).map((sub) => (
+                        <option key={sub} value={sub}>{sub}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 block mb-1">السعر الحالي</label>
+                    <input
+                      type="number"
+                      value={nbForm.price}
+                      onChange={(e) => setNbForm({ ...nbForm, price: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-black"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 block mb-1">قبل الخصم</label>
+                    <input
+                      type="number"
+                      value={nbForm.oldPrice}
+                      onChange={(e) => setNbForm({ ...nbForm, oldPrice: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 block mb-1">الصفحات</label>
+                    <input
+                      type="number"
+                      value={nbForm.pagesCount}
+                      onChange={(e) => setNbForm({ ...nbForm, pagesCount: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">شارة التميز (اختياري)</label>
+                  <input
+                    type="text"
+                    value={nbForm.badge}
+                    onChange={(e) => setNbForm({ ...nbForm, badge: e.target.value })}
+                    placeholder="مثال: الأكثر طلبًا / مطابق لأحدث المواصفات"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">وصف ومواصفات المذكرة</label>
+                  <textarea
+                    rows={3}
+                    value={nbForm.description}
+                    onChange={(e) => setNbForm({ ...nbForm, description: e.target.value })}
+                    placeholder="اكتب محتوى ومميزات المذكرة..."
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                  />
+                </div>
+
+                {/* التنبيه الخاص بهذه المذكرة */}
+                <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200 space-y-2">
+                  <p className="text-xs font-black text-amber-950">تنبيه خاص يظهر داخل هذه المذكرة (اختياري):</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={nbForm.customNoticeTitle}
+                      onChange={(e) => setNbForm({ ...nbForm, customNoticeTitle: e.target.value })}
+                      placeholder="عنوان التنبيه..."
+                      className="px-2.5 py-1.5 rounded-xl border border-amber-300 bg-white text-xs font-bold"
+                    />
+                    <input
+                      type="text"
+                      value={nbForm.customNoticeBadge}
+                      onChange={(e) => setNbForm({ ...nbForm, customNoticeBadge: e.target.value })}
+                      placeholder="شارة الأهمية (هام جدًا!)"
+                      className="px-2.5 py-1.5 rounded-xl border border-amber-300 bg-white text-xs font-bold"
+                    />
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={nbForm.customNotice}
+                    onChange={(e) => setNbForm({ ...nbForm, customNotice: e.target.value })}
+                    placeholder="نص التنبيه الخاص بهذه المذكرة..."
+                    className="w-full px-2.5 py-1.5 rounded-xl border border-amber-300 bg-white text-xs font-bold"
+                  />
+                  <select
+                    value={nbForm.customNoticeTheme}
+                    onChange={(e) => setNbForm({ ...nbForm, customNoticeTheme: e.target.value })}
+                    className="w-full px-2.5 py-1.5 rounded-xl border border-amber-300 bg-white text-xs font-bold"
+                  >
+                    <option value="amber">لون الصندوق: ذهبي عنبري</option>
+                    <option value="rose">لون الصندوق: أحمر تنبيهي</option>
+                    <option value="blue">لون الصندوق: أزرق ملكي</option>
+                    <option value="emerald">لون الصندوق: أخضر زمردي</option>
+                    <option value="purple">لون الصندوق: بنفسجي</option>
+                  </select>
+                </div>
+
+                <label className="flex items-center gap-2 p-3 rounded-2xl bg-amber-50 border border-amber-200 text-xs font-extrabold text-amber-950 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(nbForm.isComingSoon)}
+                    onChange={(e) => setNbForm({ ...nbForm, isComingSoon: e.target.checked })}
+                  />
+                  <span>المذكرة قيد التجهيز (وضع إعلان «قريبًا / حجز مسبق»)</span>
+                </label>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">رابط معاينة Google Drive (اختياري)</label>
+                  <input
+                    type="url"
+                    dir="ltr"
+                    value={nbForm.driveLink}
+                    onChange={(e) => setNbForm({ ...nbForm, driveLink: e.target.value })}
+                    placeholder="https://drive.google.com/..."
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-mono text-left"
+                  />
+                </div>
+
+                {/* رفع الغلاف وصفحات العينة */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 rounded-2xl border border-dashed border-slate-300 text-center space-y-1.5">
+                    <span className="text-xs font-extrabold text-slate-700 block">صورة غلاف المذكرة</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const compressed = await compressImageFile(file, 850, 0.78);
+                        setNbForm((prev) => ({ ...prev, coverUrl: compressed }));
+                      }}
+                      className="w-full text-[11px]"
+                    />
+                    {nbForm.coverUrl && (
+                      <img src={nbForm.coverUrl} alt="" className="w-16 h-20 object-cover rounded-xl mx-auto border" />
+                    )}
+                  </div>
+
+                  <div className="p-3 rounded-2xl border border-dashed border-slate-300 text-center space-y-1.5">
+                    <span className="text-xs font-extrabold text-slate-700 block">صفحات العينة (حتى 15 صفحة)</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={async (e) => {
+                        const files = Array.from(e.target.files || []);
+                        if (!files.length) return;
+                        const compressedList = [];
+                        for (const f of files) {
+                          compressedList.push(await compressImageFile(f, 950, 0.78));
+                        }
+                        setNbForm((prev) => ({
+                          ...prev,
+                          sampleUrls: [...(prev.sampleUrls || []), ...compressedList].slice(0, 15)
+                        }));
+                        e.target.value = '';
+                      }}
+                      className="w-full text-[11px]"
+                    />
+                    {(nbForm.sampleUrls || []).length > 0 && (
+                      <p className="text-[11px] font-black text-emerald-700">
+                        تم تجهيز {nbForm.sampleUrls.length} صفحة
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* مصغرات صفحات العينة مع إمكانية حذف أي صفحة */}
+                {(nbForm.sampleUrls || []).length > 0 && (
+                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-extrabold text-slate-600">
+                        صفحات العينة المرفوعة ({nbForm.sampleUrls.length}/15):
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setNbForm((prev) => ({ ...prev, sampleUrls: [] }))}
+                        className="text-[11px] font-bold text-rose-600 hover:underline"
+                      >
+                        مسح الكل
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {nbForm.sampleUrls.map((u, idx) => (
+                        <div key={idx} className="relative w-12 h-16 rounded-lg overflow-hidden border border-slate-300">
+                          <img src={u} alt="" className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setNbForm((prev) => ({
+                                ...prev,
+                                sampleUrls: prev.sampleUrls.filter((_, i) => i !== idx)
+                              }))
+                            }
+                            className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-rose-600 text-white text-[10px] font-black flex items-center justify-center"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={savingNb}
+                  className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-lg transition"
+                >
+                  {savingNb ? 'جاري الحفظ...' : nbForm.id ? 'حفظ التعديلات على المذكرة' : '+ إضافة المذكرة'}
+                </button>
+              </form>
+
+              {/* العمود الأيسر: قائمة المذكرات مع التعديل السريع الجماعي */}
+              <div className="lg:col-span-7 space-y-3">
+                <div className="bg-white rounded-2xl p-4 border border-slate-200 flex items-center justify-between">
+                  <h3 className="font-black text-sm sm:text-base text-slate-900">
+                    قائمة المذكرات ({notebooks.length}) — عدّل أي عدد ثم احفظ دفعة واحدة
+                  </h3>
+                </div>
+
+                {notebooks.length === 0 ? (
+                  <div className="bg-white rounded-3xl p-10 border border-slate-200 text-center text-sm text-slate-500">
+                    لا توجد مذكرات مضافة بعد. ابدأ بإضافة أول مذكرة من النموذج الجانبي.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {notebooks.map((nb) => {
+                      const edits = bulkEdits[nb.id] || {};
+                      const currentTitle = edits.title !== undefined ? edits.title : nb.title;
+                      const currentCategory = edits.category !== undefined ? edits.category : nb.category;
+                      const currentStage = edits.stage !== undefined ? edits.stage : nb.stage;
+                      const currentGrade = edits.grade !== undefined ? edits.grade : nb.grade;
+                      const currentSubject = edits.subject !== undefined ? edits.subject : nb.subject;
+                      const currentPrice = edits.price !== undefined ? edits.price : nb.price;
+                      const currentOldPrice = edits.oldPrice !== undefined ? edits.oldPrice : nb.oldPrice;
+                      const isEdited = Boolean(bulkEdits[nb.id]);
+
+                      return (
+                        <div
+                          key={nb.id}
+                          className={`bg-white rounded-2xl p-4 border transition space-y-3 ${
+                            isEdited ? 'border-amber-500 ring-2 ring-amber-200' : 'border-slate-200'
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            {nb.coverUrl ? (
+                              <img src={nb.coverUrl} alt="" className="w-14 h-20 rounded-xl object-cover border shrink-0" />
+                            ) : (
+                              <div className="w-14 h-20 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                                <BookOpen className="w-6 h-6 text-slate-400" />
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0 space-y-2">
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={currentTitle}
+                                  onChange={(e) => handleBulkFieldChange(nb.id, 'title', e.target.value)}
+                                  className="flex-1 px-3 py-1.5 rounded-xl border border-slate-300 text-xs sm:text-sm font-black"
+                                />
+                                {isEdited && (
+                                  <span className="px-2 py-1 rounded-lg bg-amber-100 text-amber-900 text-[10px] font-black shrink-0">
+                                    معدّلة
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                <select
+                                  value={currentCategory}
+                                  onChange={(e) => handleBulkFieldChange(nb.id, 'category', e.target.value)}
+                                  className="px-2 py-1.5 rounded-lg border border-slate-200 text-[11px] font-bold bg-slate-50"
+                                >
+                                  {(localSettings.categories || []).map((c) => (
+                                    <option key={c} value={c}>{c}</option>
+                                  ))}
+                                </select>
+                                <select
+                                  value={currentStage}
+                                  onChange={(e) => {
+                                    const st = e.target.value;
+                                    const gr = (localSettings.stageGrades?.[st] || [])[0] || '';
+                                    handleBulkFieldChange(nb.id, 'stage', st);
+                                    handleBulkFieldChange(nb.id, 'grade', gr);
+                                  }}
+                                  className="px-2 py-1.5 rounded-lg border border-slate-200 text-[11px] font-bold bg-slate-50"
+                                >
+                                  {(localSettings.stages || []).map((st) => (
+                                    <option key={st} value={st}>{st}</option>
+                                  ))}
+                                </select>
+                                <select
+                                  value={currentGrade}
+                                  onChange={(e) => handleBulkFieldChange(nb.id, 'grade', e.target.value)}
+                                  className="px-2 py-1.5 rounded-lg border border-slate-200 text-[11px] font-bold bg-slate-50"
+                                >
+                                  {(localSettings.stageGrades?.[currentStage] || []).map((gr) => (
+                                    <option key={gr} value={gr}>{gr}</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                                <div className="flex items-center gap-2">
+                                  <select
+                                    value={currentSubject}
+                                    onChange={(e) => handleBulkFieldChange(nb.id, 'subject', e.target.value)}
+                                    className="px-2 py-1 rounded-lg border border-slate-200 text-[11px] font-bold bg-slate-50"
+                                  >
+                                    {(localSettings.subjects || []).map((sub) => (
+                                      <option key={sub} value={sub}>{sub}</option>
+                                    ))}
+                                  </select>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-slate-500">السعر:</span>
+                                    <input
+                                      type="number"
+                                      value={currentPrice}
+                                      onChange={(e) => handleBulkFieldChange(nb.id, 'price', e.target.value)}
+                                      className="w-16 px-2 py-1 rounded-lg border border-slate-300 text-xs font-black text-blue-600"
+                                    />
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-slate-500">قبل:</span>
+                                    <input
+                                      type="number"
+                                      value={currentOldPrice}
+                                      onChange={(e) => handleBulkFieldChange(nb.id, 'oldPrice', e.target.value)}
+                                      className="w-16 px-2 py-1 rounded-lg border border-slate-300 text-xs font-bold text-slate-500"
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditNotebookClick(nb)}
+                                    className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-extrabold flex items-center gap-1"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                    <span>تعديل كامل</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteNotebook(nb.id)}
+                                    className="p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ================================================================= */}
         {/* تبويب 2: الأقسام والمراحل والصفوف والمواد                          */}
@@ -2397,6 +2927,372 @@ function AdminDashboard({
                   {savingSettings ? 'جاري الحفظ...' : 'حفظ جميع الأقسام والمراحل والصفوف والمواد'}
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ================================================================= */}
+        {/* تبويب 3: الباقات وكوبونات الخصم                                   */}
+        {/* ================================================================= */}
+        {activeTab === 'offers' && (
+          <div className="space-y-6">
+            {/* إعداد باقة توفير جديدة */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
+              <h3 className="font-black text-base flex items-center gap-2">
+                <Layers className="w-5 h-5 text-blue-600" />
+                <span>إعداد خصم عند طلب مجموعة مذكرات محددة (باقات التوفير)</span>
+              </h3>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                <div className="lg:col-span-5 space-y-3">
+                  <input
+                    type="text"
+                    value={bundleForm.title}
+                    onChange={(e) => setBundleForm({ ...bundleForm, title: e.target.value })}
+                    placeholder="اسم الباقة (مثال: باقة مراجعات المرحلة الإعدادية)"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
+                  />
+                  <input
+                    type="text"
+                    value={bundleForm.description}
+                    onChange={(e) => setBundleForm({ ...bundleForm, description: e.target.value })}
+                    placeholder="وصف قصير للباقة..."
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
+                  />
+
+                  <select
+                    value={bundleForm.discountType}
+                    onChange={(e) => setBundleForm({ ...bundleForm, discountType: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                  >
+                    <option value="fixed_prices">تحديد السعر قبل وبعد الخصم (ج.م)</option>
+                    <option value="percent">خصم نسبة مئوية (%)</option>
+                    <option value="amount">خصم مبلغ ثابت (ج.م)</option>
+                  </select>
+
+                  {bundleForm.discountType === 'fixed_prices' ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-600 block mb-1">السعر قبل الخصم</label>
+                        <input
+                          type="number"
+                          value={bundleForm.beforePrice}
+                          onChange={(e) => setBundleForm({ ...bundleForm, beforePrice: Number(e.target.value) })}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-600 block mb-1">السعر بعد الخصم</label>
+                        <input
+                          type="number"
+                          value={bundleForm.afterPrice}
+                          onChange={(e) => setBundleForm({ ...bundleForm, afterPrice: Number(e.target.value) })}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-black text-emerald-700"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                        {bundleForm.discountType === 'percent' ? 'نسبة الخصم (%)' : 'قيمة الخصم (ج.م)'}
+                      </label>
+                      <input
+                        type="number"
+                        value={bundleForm.discountValue}
+                        onChange={(e) => setBundleForm({ ...bundleForm, discountValue: Number(e.target.value) })}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-black"
+                      />
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!bundleForm.title.trim() || bundleForm.notebookIds.length === 0) {
+                        notify('يرجى إدخال اسم الباقة واختيار مذكرة واحدة على الأقل', 'error');
+                        return;
+                      }
+                      const nextBundles = [
+                        ...(localSettings.bundles || []),
+                        { ...bundleForm, id: `bundle-${Date.now()}` }
+                      ];
+                      const updated = { ...localSettings, bundles: nextBundles };
+                      setLocalSettings(updated);
+                      await onSaveSettings(updated);
+                      setBundleForm({
+                        title: '',
+                        description: '',
+                        discountType: 'fixed_prices',
+                        discountValue: 15,
+                        beforePrice: 0,
+                        afterPrice: 0,
+                        notebookIds: []
+                      });
+                      notify('تم حفظ الباقة وتفعيلها بنجاح!', 'success');
+                    }}
+                    className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm shadow-md"
+                  >
+                    + حفظ الباقة وتفعيل خصم المجموعة
+                  </button>
+                </div>
+
+                <div className="lg:col-span-7 bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
+                  <p className="text-xs font-extrabold text-slate-700">
+                    حدد المذكرات المشمولة في هذه الباقة ({bundleForm.notebookIds.length} مختارة):
+                  </p>
+                  <div className="max-h-56 overflow-y-auto space-y-1.5">
+                    {notebooks.map((nb) => {
+                      const checked = bundleForm.notebookIds.includes(nb.id);
+                      return (
+                        <label
+                          key={nb.id}
+                          className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 text-xs font-bold cursor-pointer hover:border-blue-400"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                const nextIds = e.target.checked
+                                  ? [...bundleForm.notebookIds, nb.id]
+                                  : bundleForm.notebookIds.filter((id) => id !== nb.id);
+                                const rawSum = nextIds.reduce((s, id) => {
+                                  const f = notebooks.find((item) => item.id === id);
+                                  return s + (Number(f?.price) || 0);
+                                }, 0);
+                                setBundleForm((prev) => ({
+                                  ...prev,
+                                  notebookIds: nextIds,
+                                  beforePrice: rawSum
+                                }));
+                              }}
+                            />
+                            <span className="truncate">{nb.title} ({nb.grade})</span>
+                          </div>
+                          <span className="text-blue-600 font-black shrink-0">{nb.price} ج.م</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* الباقات المحفوظة حاليًا */}
+              {(localSettings.bundles || []).length > 0 && (
+                <div className="pt-4 border-t border-slate-200 space-y-2">
+                  <h4 className="text-xs font-extrabold text-slate-600">الباقات المفعّلة حاليًا ({localSettings.bundles.length}):</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {localSettings.bundles.map((b, idx) => (
+                      <div key={b.id} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3">
+                        <div>
+                          <h5 className="font-black text-xs sm:text-sm text-slate-900">{b.title}</h5>
+                          <p className="text-[11px] text-slate-500">
+                            {(b.notebookIds || []).length} مذكرات •{' '}
+                            {b.discountType === 'fixed_prices'
+                              ? `السعر: ${b.afterPrice} ج.م بدلاً من ${b.beforePrice} ج.م`
+                              : b.discountType === 'amount'
+                              ? `خصم ${b.discountValue} ج.م`
+                              : `خصم ${b.discountValue}%`}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const updated = {
+                              ...localSettings,
+                              bundles: localSettings.bundles.filter((_, i) => i !== idx)
+                            };
+                            setLocalSettings(updated);
+                            await onSaveSettings(updated);
+                            notify('تم حذف الباقة', 'success');
+                          }}
+                          className="p-2 rounded-xl bg-rose-50 text-rose-600"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* إدارة كوبونات الخصم */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
+              <h3 className="font-black text-base flex items-center gap-2">
+                <Tag className="w-5 h-5 text-amber-600" />
+                <span>كوبونات الخصم الترويجية</span>
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                <input
+                  type="text"
+                  value={couponForm.code}
+                  onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })}
+                  placeholder="كود الكوبون (مثال: EL3B20)"
+                  className="px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-black uppercase"
+                />
+                <select
+                  value={couponForm.discountType}
+                  onChange={(e) => setCouponForm({ ...couponForm, discountType: e.target.value })}
+                  className="px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                >
+                  <option value="percent">نسبة مئوية (%)</option>
+                  <option value="amount">مبلغ ثابت (ج.م)</option>
+                </select>
+                <input
+                  type="number"
+                  value={couponForm.discountValue}
+                  onChange={(e) => setCouponForm({ ...couponForm, discountValue: Number(e.target.value) })}
+                  placeholder="القيمة"
+                  className="w-24 px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-black"
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const code = (couponForm.code || generateUniqueCouponCode('OFFER')).trim().toUpperCase();
+                    await addDoc(publicCol('coupons'), {
+                      code,
+                      discountType: couponForm.discountType,
+                      discountValue: Number(couponForm.discountValue) || 10,
+                      active: true,
+                      used: false,
+                      singleUse: false,
+                      createdAt: serverTimestamp()
+                    });
+                    setCouponForm({ code: '', discountType: 'percent', discountValue: 15 });
+                    notify(`تم إنشاء الكوبون (${code}) بنجاح!`, 'success');
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs"
+                >
+                  + إنشاء كوبون
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {coupons.map((c) => (
+                  <div key={c.id} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                    <div>
+                      <span className="font-black text-sm text-slate-900">{c.code}</span>
+                      <p className="text-[11px] font-bold text-emerald-700">
+                        خصم {c.discountType === 'amount' ? `${c.discountValue} ج.م` : `${c.discountValue}%`}
+                        {c.used ? ' • (مستخدم)' : ''}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await deleteDoc(publicDoc('coupons', c.id));
+                        notify('تم حذف الكوبون', 'success');
+                      }}
+                      className="p-1.5 text-rose-600"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ================================================================= */}
+        {/* تبويب 4: إدارة طلبات العملاء                                      */}
+        {/* ================================================================= */}
+        {activeTab === 'orders' && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
+              <h3 className="font-black text-base">طلبات المعلمين والعملاء ({orders.length})</h3>
+
+              {orders.length === 0 ? (
+                <p className="text-sm text-slate-500 text-center py-8">لا توجد طلبات مسجلة حتى الآن.</p>
+              ) : (
+                <div className="space-y-3">
+                  {orders.map((ord) => {
+                    const cleanPhone = String(ord.phone || '').replace(/[^\d]/g, '');
+                    const waPhone = cleanPhone.startsWith('0') ? `2${cleanPhone}` : cleanPhone;
+                    return (
+                      <div key={ord.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="px-3 py-1 rounded-xl bg-blue-600 text-white font-black text-xs">
+                              {ord.orderNumber || ord.id.slice(0, 6)}
+                            </span>
+                            <span className="font-black text-sm text-slate-900">{ord.teacherName}</span>
+                            {ord.phone && (
+                              <span dir="ltr" className="text-xs font-bold text-slate-600">
+                                ({ord.phone})
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={ord.status || 'pending'}
+                              onChange={async (e) => {
+                                await updateDoc(publicDoc('orders', ord.id), { status: e.target.value });
+                                notify('تم تحديث حالة الطلب', 'success');
+                              }}
+                              className="px-3 py-1.5 rounded-xl border border-slate-300 bg-white text-xs font-extrabold"
+                            >
+                              <option value="pending">تم استلام الطلب</option>
+                              <option value="processing">جاري التجهيز والطباعة</option>
+                              <option value="completed">مكتمل وتم التسليم</option>
+                            </select>
+
+                            {waPhone && (
+                              <a
+                                href={`https://wa.me/${waPhone}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-extrabold flex items-center gap-1"
+                              >
+                                <MessageCircle className="w-3.5 h-3.5" />
+                                <span>واتساب</span>
+                              </a>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await deleteDoc(publicDoc('orders', ord.id));
+                                notify('تم حذف الطلب', 'success');
+                              }}
+                              className="p-1.5 rounded-xl bg-rose-50 text-rose-600"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {Array.isArray(ord.items) && ord.items.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {ord.items.map((it, i) => (
+                              <span key={i} className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-bold">
+                                {it.title} ({it.price} ج.م)
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="flex flex-wrap items-center justify-between text-xs text-slate-600 pt-2 border-t border-slate-200">
+                          <span>
+                            الإجمالي المستحق: <strong className="text-blue-600">{ord.totalPrice || 0} ج.م</strong>
+                            {ord.couponCode ? ` • كوبون: ${ord.couponCode}` : ''}
+                          </span>
+                          {ord.formDetails && typeof ord.formDetails === 'object' && (
+                            <span className="text-[11px] text-slate-500">
+                              {Object.entries(ord.formDetails)
+                                .filter(([k, v]) => k !== 'teacherName' && k !== 'phone' && v)
+                                .map(([, v]) => String(v))
+                                .join(' | ')}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}
