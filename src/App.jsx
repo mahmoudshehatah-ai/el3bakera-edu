@@ -232,6 +232,46 @@ function generateUniqueCouponCode(prefix = 'VIP') {
   return `${prefix}-${rand}`;
 }
 
+function mergeAndNormalizeSettings(prev, incoming = {}) {
+  const merged = { ...prev, ...incoming };
+  // حماية الصور من الاستبدال بقيم فارغة
+  merged.logoUrl = incoming.logoUrl || prev.logoUrl || '';
+  merged.heroBgImage = incoming.heroBgImage || prev.heroBgImage || '';
+  merged.categoryImages = {
+    ...(prev.categoryImages || {}),
+    ...(incoming.categoryImages || {})
+  };
+
+  // تطبيع أسماء الأقسام والمراحل والصفوف والمواد (دعم name أو title أو label)
+  const rawCats = Array.isArray(merged.categories) && merged.categories.length > 0 ? merged.categories : DEFAULT_CATEGORIES;
+  merged.categories = rawCats.map((c, idx) => ({
+    ...c,
+    id: c.id || `cat_${idx}`,
+    name: c.name || c.title || c.label || DEFAULT_CATEGORIES[idx]?.name || `قسم ${idx + 1}`,
+    order: c.order ?? idx + 1
+  }));
+
+  if (Array.isArray(merged.stages)) {
+    merged.stages = merged.stages.map((s, idx) => ({
+      ...s,
+      name: s.name || s.title || s.label || `مرحلة ${idx + 1}`
+    }));
+  }
+  if (Array.isArray(merged.grades)) {
+    merged.grades = merged.grades.map((g, idx) => ({
+      ...g,
+      name: g.name || g.title || g.label || `صف ${idx + 1}`
+    }));
+  }
+  if (Array.isArray(merged.subjects)) {
+    merged.subjects = merged.subjects.map((sub, idx) => ({
+      ...sub,
+      name: sub.name || sub.title || sub.label || `مادة ${idx + 1}`
+    }));
+  }
+  return merged;
+}
+
 function SocialPlatformBadge({ url }) {
   const lower = (url || '').toLowerCase();
   if (lower.includes('wa.me') || lower.includes('whatsapp')) {
@@ -1590,16 +1630,11 @@ function AdminDashboard({
   showToast
 }) {
   const [activeTab, setActiveTab] = useState('notebooks');
-  const [localSettings, setLocalSettings] = useState(settings);
+  const [localSettings, setLocalSettings] = useState(() => mergeAndNormalizeSettings(DEFAULT_SETTINGS, settings));
   const [savingSettings, setSavingSettings] = useState(false);
 
   useEffect(() => {
-    setLocalSettings((prev) => ({
-      ...settings,
-      logoUrl: settings.logoUrl || prev.logoUrl || '',
-      heroBgImage: settings.heroBgImage || prev.heroBgImage || '',
-      categoryImages: { ...(prev.categoryImages || {}), ...(settings.categoryImages || {}) }
-    }));
+    setLocalSettings((prev) => mergeAndNormalizeSettings(prev, settings));
   }, [settings]);
 
   // حالة نموذج المذكرة
@@ -3318,19 +3353,13 @@ function MuzakkiratiApp() {
 
     const unsubMain = onSnapshot(publicDoc('settings', 'main'), (snap) => {
       if (snap.exists()) {
-        setSettings((prev) => ({ ...prev, ...snap.data() }));
+        setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
       }
     });
 
     const unsubMedia = onSnapshot(publicDoc('settings', 'media_assets'), (snap) => {
       if (snap.exists()) {
-        const m = snap.data();
-        setSettings((prev) => ({
-          ...prev,
-          logoUrl: m.logoUrl || prev.logoUrl || '',
-          heroBgImage: m.heroBgImage || prev.heroBgImage || '',
-          categoryImages: { ...(prev.categoryImages || {}), ...(m.categoryImages || {}) }
-        }));
+        setSettings((prev) => mergeAndNormalizeSettings(prev, snap.data()));
       }
     });
 
@@ -3781,7 +3810,7 @@ function MuzakkiratiApp() {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {(settings.categories || DEFAULT_CATEGORIES).map((cat) => {
-                  const catImg = settings.categoryImages?.[cat.id];
+                  const catImg = settings.categoryImages?.[cat.id] || cat.image || cat.coverImage || '';
                   const count = notebooks.filter((n) => n.categoryId === cat.id).length;
                   return (
                     <div
