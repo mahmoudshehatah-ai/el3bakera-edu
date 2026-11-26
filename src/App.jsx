@@ -2231,6 +2231,8 @@ function AdminPortal({
 
   // حالة نموذج المذكرة (إضافة / تعديل)
   const [editingNotebookId, setEditingNotebookId] = useState(null);
+  const [bulkEdits, setBulkEdits] = useState({});
+  const [savingBulkNotebooks, setSavingBulkNotebooks] = useState(false);
   const [nbForm, setNbForm] = useState({
     title: '',
     category: settings.categories[0] || 'مذكرات الترم الأول',
@@ -2500,6 +2502,57 @@ function AdminPortal({
     if (current.has(nbId)) current.delete(nbId);
     else current.add(nbId);
     persistSettings({ ...localSettings, whatsNewMode: 'manual', whatsNewSelectedIds: Array.from(current) });
+  };
+
+  // تحديث حقل لمذكرة ضمن وضع التعديل الجماعي قبل الحفظ دفعة واحدة
+  const handleBulkNotebookField = (nb, field, value) => {
+    setBulkEdits((prev) => {
+      const currentDraft = prev[nb.id] || {
+        title: nb.title,
+        category: nb.category,
+        stage: nb.stage,
+        grade: nb.grade,
+        subject: nb.subject,
+        price: nb.price,
+        oldPrice: nb.oldPrice,
+        isComingSoon: Boolean(nb.isComingSoon)
+      };
+      const updatedDraft = { ...currentDraft, [field]: value };
+      if (field === 'stage') {
+        updatedDraft.grade = (localSettings.stageGrades?.[value] || [])[0] || '';
+      }
+      return { ...prev, [nb.id]: updatedDraft };
+    });
+  };
+
+  // حفظ جميع المذكرات المعدّلة دفعة واحدة في السحابة
+  const handleSaveAllBulkNotebooks = async () => {
+    const editedEntries = Object.entries(bulkEdits);
+    if (editedEntries.length === 0) return;
+    setSavingBulkNotebooks(true);
+    try {
+      await Promise.all(
+        editedEntries.map(([id, draft]) =>
+          updateDoc(publicDoc('notebooks', id), {
+            title: String(draft.title || '').trim() || 'مذكرة دراسية',
+            category: draft.category,
+            stage: draft.stage,
+            grade: draft.grade,
+            subject: draft.subject,
+            price: Number(draft.price) || 0,
+            oldPrice: Number(draft.oldPrice) || 0,
+            isComingSoon: Boolean(draft.isComingSoon),
+            updatedAt: serverTimestamp()
+          })
+        )
+      );
+      setBulkEdits({});
+      onNotify(`تم حفظ تعديلات (${editedEntries.length}) مذكرة دفعة واحدة بنجاح!`, 'success');
+    } catch (err) {
+      onNotify(`تعذر حفظ بعض التعديلات: ${err?.message || 'حاول مرة أخرى'}`, 'error');
+    } finally {
+      setSavingBulkNotebooks(false);
+    }
   };
 
   // إنشاء كوبون جديد (عام أو شخصي لمرة واحدة)
@@ -2869,7 +2922,7 @@ function AdminPortal({
                   placeholder="اكتب نص التنبيه الخاص بهذه المذكرة هنا (اتركه فارغًا لإخفائه)..."
                   value={nbForm.customNotice}
                   onChange={(e) => setNbForm({ ...nbForm, customNotice: e.target.value })}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs"
                 />
 
                 <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
@@ -2880,25 +2933,25 @@ function AdminPortal({
                     { id: 'blue', label: 'أزرق', dot: 'bg-blue-600' },
                     { id: 'emerald', label: 'أخضر', dot: 'bg-emerald-600' },
                     { id: 'purple', label: 'بنفسجي', dot: 'bg-purple-600' }
-                  ].map((t) => (
+                  ].map((th) => (
                     <button
-                      key={t.id}
+                      key={th.id}
                       type="button"
-                      onClick={() => setNbForm({ ...nbForm, customNoticeTheme: t.id })}
+                      onClick={() => setNbForm({ ...nbForm, customNoticeTheme: th.id })}
                       className={`px-2.5 py-1 rounded-lg border text-[11px] font-extrabold flex items-center gap-1 transition ${
-                        (nbForm.customNoticeTheme || 'rose') === t.id
+                        (nbForm.customNoticeTheme || 'rose') === th.id
                           ? 'border-slate-900 bg-white shadow-2xs'
-                          : 'border-slate-200 bg-white/60 hover:bg-white'
+                          : 'border-slate-200 bg-white/70 hover:bg-white'
                       }`}
                     >
-                      <span className={`w-2.5 h-2.5 rounded-full ${t.dot}`}></span>
-                      <span>{t.label}</span>
+                      <span className={`w-2.5 h-2.5 rounded-full ${th.dot}`}></span>
+                      <span>{th.label}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
-              <label className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 px-4 py-3 rounded-2xl cursor-pointer">
+              <label className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 p-3 rounded-2xl cursor-pointer">
                 <input
                   type="checkbox"
                   checked={nbForm.isComingSoon}
@@ -2912,16 +2965,16 @@ function AdminPortal({
 
               <input
                 type="url"
-                placeholder="رابط Google Drive لمعاينة إضافية (اختياري)"
+                placeholder="رابط معاينة إضافي على Google Drive (اختياري)..."
                 value={nbForm.driveUrl}
                 onChange={(e) => setNbForm({ ...nbForm, driveUrl: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-2xl border border-slate-300 text-xs text-left"
+                className="w-full px-4 py-2.5 rounded-2xl border border-slate-300 text-xs font-mono text-left"
                 dir="ltr"
               />
 
-              <div className="grid grid-cols-2 gap-3 pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="border border-dashed border-slate-300 rounded-2xl p-3 text-center">
-                  <label className="text-xs font-extrabold text-slate-700 block mb-1.5">صورة غلاف المذكرة</label>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">صورة غلاف المذكرة</label>
                   <input
                     type="file"
                     accept="image/*"
@@ -2929,14 +2982,23 @@ function AdminPortal({
                     className="text-[11px] w-full"
                   />
                   {nbForm.coverUrl && (
-                    <img src={nbForm.coverUrl} alt="cover" className="h-16 mx-auto mt-2 rounded-lg object-cover" />
+                    <img src={nbForm.coverUrl} alt="cover" className="h-20 mx-auto mt-2 rounded-xl object-cover border" />
                   )}
                 </div>
 
-                <div className="border border-dashed border-slate-300 rounded-2xl p-3 text-center">
-                  <label className="text-xs font-extrabold text-slate-700 block mb-1.5">
-                    إضافة صفحات عينة ({nbForm.sampleUrls.length}/15)
-                  </label>
+                <div className="border border-dashed border-slate-300 rounded-2xl p-3 text-center space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700">صفحات العينة (حتى 15 صفحة)</label>
+                    {nbForm.sampleUrls.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setNbForm((prev) => ({ ...prev, sampleUrls: [] }))}
+                        className="text-[11px] font-bold text-rose-600 hover:underline"
+                      >
+                        مسح الكل
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="file"
                     accept="image/*"
@@ -2947,43 +3009,34 @@ function AdminPortal({
                     }}
                     className="text-[11px] w-full"
                   />
+                  <p className="text-[11px] font-bold text-emerald-700">
+                    {nbForm.sampleUrls.length > 0
+                      ? `تم تجهيز ${nbForm.sampleUrls.length} صفحة (يمكنك إضافة المزيد)`
+                      : 'اختر صور صفحات العينة'}
+                  </p>
                   {nbForm.sampleUrls.length > 0 && (
-                    <div className="mt-2 space-y-2">
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="font-bold text-emerald-600">
-                          {nbForm.sampleUrls.length} صفحة محفوظة
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setNbForm((prev) => ({ ...prev, sampleUrls: [] }))}
-                          className="text-rose-600 hover:underline font-bold"
-                        >
-                          مسح الكل
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-4 gap-1.5 max-h-28 overflow-y-auto p-1 bg-slate-50 rounded-xl border border-slate-200">
-                        {nbForm.sampleUrls.map((url, idx) => (
-                          <div key={idx} className="relative group aspect-square rounded-lg overflow-hidden border bg-white">
-                            <img src={url} alt="" className="w-full h-full object-cover" />
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setNbForm((prev) => ({
-                                  ...prev,
-                                  sampleUrls: prev.sampleUrls.filter((_, i) => i !== idx)
-                                }))
-                              }
-                              title="حذف هذه الصفحة"
-                              className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-rose-600 text-white flex items-center justify-center text-[10px] font-black shadow"
-                            >
-                              ×
-                            </button>
-                            <span className="absolute bottom-0 inset-x-0 bg-slate-900/70 text-white text-[9px] font-bold">
-                              {idx + 1}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
+                    <div className="grid grid-cols-4 gap-1.5 max-h-28 overflow-y-auto pt-1">
+                      {nbForm.sampleUrls.map((src, sIdx) => (
+                        <div key={sIdx} className="relative group rounded-lg overflow-hidden border border-slate-200 aspect-[3/4] bg-slate-100">
+                          <img src={src} alt="" className="w-full h-full object-cover" />
+                          <span className="absolute bottom-0.5 right-0.5 px-1 rounded bg-slate-900/75 text-white text-[9px] font-bold">
+                            {sIdx + 1}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setNbForm((prev) => ({
+                                ...prev,
+                                sampleUrls: prev.sampleUrls.filter((_, idx) => idx !== sIdx)
+                              }))
+                            }
+                            title="حذف هذه الصفحة"
+                            className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-rose-600 text-white flex items-center justify-center text-[10px] font-black shadow"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -2998,8 +3051,48 @@ function AdminPortal({
               </button>
             </form>
 
-            {/* قائمة المذكرات المنشورة والمخفية */}
+            {/* قائمة المذكرات المنشورة والمخفية مع التعديل السريع والحفظ دفعة واحدة */}
             <div className="lg:col-span-7 space-y-3">
+              {/* شريط الحفظ الجماعي يظهر تلقائيًا بمجرد تعديل أي مذكرة */}
+              {Object.keys(bulkEdits).length > 0 && (
+                <div className="sticky top-20 z-30 bg-gradient-to-l from-amber-500 to-amber-400 text-slate-950 rounded-3xl p-4 shadow-xl border border-amber-300 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <Sparkles className="w-5 h-5 shrink-0" />
+                    <span className="font-black text-xs sm:text-sm">
+                      لديك تعديلات غير محفوظة على ({Object.keys(bulkEdits).length}) مذكرة
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setBulkEdits({})}
+                      disabled={savingBulkNotebooks}
+                      className="px-3.5 py-2 rounded-xl bg-white/80 hover:bg-white text-slate-900 font-bold text-xs transition"
+                    >
+                      تراجع عن الكل
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveAllBulkNotebooks}
+                      disabled={savingBulkNotebooks}
+                      className="px-5 py-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 text-white font-black text-xs shadow-md flex items-center gap-1.5 transition"
+                    >
+                      {savingBulkNotebooks ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>جاري حفظ الكل...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          <span>حفظ جميع التعديلات دفعة واحدة</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {notebooks.length === 0 ? (
                 <div className="bg-white rounded-3xl p-10 text-center border border-slate-200 text-sm text-slate-500">
                   لم تقم بإضافة أي مذكرات بعد. أضف أول مذكرة من النموذج الجانبي!
@@ -3007,86 +3100,176 @@ function AdminPortal({
               ) : (
                 notebooks.map((nb) => {
                   const isPinnedNew = (localSettings.whatsNewSelectedIds || []).includes(nb.id);
+                  const draft = bulkEdits[nb.id];
+                  const isDirty = Boolean(draft);
+                  const currentVal = draft || nb;
+
                   return (
                     <div
                       key={nb.id}
-                      className={`bg-white rounded-3xl p-4 border shadow-sm flex flex-wrap items-center justify-between gap-4 ${
-                        nb.isHidden ? 'border-amber-300 bg-amber-50/30 opacity-80' : 'border-slate-200'
+                      className={`bg-white rounded-3xl p-4 border shadow-sm space-y-3 transition-all ${
+                        isDirty
+                          ? 'border-amber-400 ring-2 ring-amber-400/30 bg-amber-50/20'
+                          : nb.isHidden
+                          ? 'border-amber-300 bg-amber-50/30 opacity-80'
+                          : 'border-slate-200'
                       }`}
                     >
-                      <div className="flex items-center gap-3.5 min-w-0">
-                        {nb.coverUrl ? (
-                          <img src={nb.coverUrl} alt="" className="w-14 h-16 rounded-xl object-cover shrink-0 border" />
-                        ) : (
-                          <div className="w-14 h-16 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
-                            <BookOpen className="w-6 h-6 text-slate-400" />
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          {nb.coverUrl ? (
+                            <img src={nb.coverUrl} alt="" className="w-12 h-14 rounded-xl object-cover shrink-0 border" />
+                          ) : (
+                            <div className="w-12 h-14 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                              <BookOpen className="w-5 h-5 text-slate-400" />
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {isDirty && (
+                                <span className="px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 text-[10px] font-black">
+                                  معدّلة • بانتظار الحفظ الجماعي
+                                </span>
+                              )}
+                              {nb.isHidden && (
+                                <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 text-[10px] font-black">
+                                  مخفية عن الزوار
+                                </span>
+                              )}
+                            </div>
+                            <input
+                              type="text"
+                              value={currentVal.title}
+                              onChange={(e) => handleBulkNotebookField(nb, 'title', e.target.value)}
+                              className="w-full px-3 py-1.5 rounded-xl border border-slate-200 focus:border-blue-600 focus:outline-none text-xs sm:text-sm font-extrabold text-slate-900 bg-slate-50/70 focus:bg-white"
+                            />
                           </div>
-                        )}
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <h3 className="font-extrabold text-sm text-slate-900 truncate">{nb.title}</h3>
-                            {nb.isHidden && (
-                              <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 text-[10px] font-black">
-                                مخفية عن الزوار
-                              </span>
-                            )}
-                            {nb.isComingSoon && (
-                              <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-black">
-                                قيد التجهيز
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-slate-500 mt-0.5">
-                            {nb.category} • {nb.grade} • <strong className="text-blue-600">{nb.price} ج.م</strong>
-                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            onClick={() => toggleWhatsNewManual(nb.id)}
+                            title="تثبيت/إزالة في قسم ما الجديد بالصفحة الرئيسية"
+                            className={`px-2.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1 border transition ${
+                              isPinnedNew
+                                ? 'bg-amber-100 border-amber-300 text-amber-900'
+                                : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            <Star className="w-3.5 h-3.5" />
+                            ما الجديد
+                          </button>
+
+                          <button
+                            onClick={() => toggleNotebookVisibility(nb)}
+                            title={nb.isHidden ? 'إظهار للزوار' : 'إخفاء مؤقت عن الزوار'}
+                            className={`px-2.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1 transition ${
+                              nb.isHidden
+                                ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                            }`}
+                          >
+                            {nb.isHidden ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                            {nb.isHidden ? 'إظهار' : 'إخفاء'}
+                          </button>
+
+                          <button
+                            onClick={() => startEditNotebook(nb)}
+                            className="p-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition"
+                            title="تعديل كامل (الصور والعينات والوصف)"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            onClick={async () => {
+                              await deleteDoc(publicDoc('notebooks', nb.id));
+                              onNotify('تم حذف المذكرة نهائيًا', 'success');
+                            }}
+                            className="p-2 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 transition"
+                            title="حذف نهائي"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          onClick={() => toggleWhatsNewManual(nb.id)}
-                          title="تثبيت/إزالة في قسم ما الجديد بالصفحة الرئيسية"
-                          className={`px-2.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1 border transition ${
-                            isPinnedNew
-                              ? 'bg-amber-100 border-amber-300 text-amber-900'
-                              : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                          }`}
+                      {/* صف التعديل السريع المباشر (القسم + المرحلة + الصف + المادة + السعر قبل/بعد + قيد التجهيز) */}
+                      <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 pt-2 border-t border-slate-100 text-xs">
+                        <select
+                          value={currentVal.category}
+                          onChange={(e) => handleBulkNotebookField(nb, 'category', e.target.value)}
+                          className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 font-bold text-slate-700"
                         >
-                          <Star className="w-3.5 h-3.5" />
-                          ما الجديد
-                        </button>
+                          {localSettings.categories.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
 
-                        <button
-                          onClick={() => toggleNotebookVisibility(nb)}
-                          title={nb.isHidden ? 'إظهار للزوار' : 'إخفاء مؤقت عن الزوار'}
-                          className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 transition ${
-                            nb.isHidden
-                              ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                          }`}
+                        <select
+                          value={currentVal.stage}
+                          onChange={(e) => handleBulkNotebookField(nb, 'stage', e.target.value)}
+                          className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 font-bold text-slate-700"
                         >
-                          {nb.isHidden ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                          {nb.isHidden ? 'إظهار' : 'إخفاء'}
-                        </button>
+                          {localSettings.stages.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
 
-                        <button
-                          onClick={() => startEditNotebook(nb)}
-                          className="p-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition"
-                          title="تعديل"
+                        <select
+                          value={currentVal.grade}
+                          onChange={(e) => handleBulkNotebookField(nb, 'grade', e.target.value)}
+                          className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 font-bold text-slate-700"
                         >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
+                          {(localSettings.stageGrades?.[currentVal.stage] || []).map((g) => (
+                            <option key={g} value={g}>
+                              {g}
+                            </option>
+                          ))}
+                        </select>
 
-                        <button
-                          onClick={async () => {
-                            await deleteDoc(publicDoc('notebooks', nb.id));
-                            onNotify('تم حذف المذكرة نهائيًا', 'success');
-                          }}
-                          className="p-2 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 transition"
-                          title="حذف نهائي"
+                        <select
+                          value={currentVal.subject}
+                          onChange={(e) => handleBulkNotebookField(nb, 'subject', e.target.value)}
+                          className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 font-bold text-slate-700"
                         >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                          {localSettings.subjects.map((sub) => (
+                            <option key={sub} value={sub}>
+                              {sub}
+                            </option>
+                          ))}
+                        </select>
+
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            title="السعر الحالي"
+                            value={currentVal.price}
+                            onChange={(e) => handleBulkNotebookField(nb, 'price', e.target.value)}
+                            className="w-1/2 px-2 py-1.5 rounded-xl border border-blue-200 bg-blue-50/50 font-black text-blue-700 text-center"
+                          />
+                          <input
+                            type="number"
+                            title="السعر قبل الخصم"
+                            value={currentVal.oldPrice}
+                            onChange={(e) => handleBulkNotebookField(nb, 'oldPrice', e.target.value)}
+                            className="w-1/2 px-2 py-1.5 rounded-xl border border-slate-200 bg-slate-50 font-bold text-slate-400 text-center"
+                          />
+                        </div>
+
+                        <label className="flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer font-bold text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(currentVal.isComingSoon)}
+                            onChange={(e) => handleBulkNotebookField(nb, 'isComingSoon', e.target.checked)}
+                            className="accent-amber-600"
+                          />
+                          <span>قيد التجهيز</span>
+                        </label>
                       </div>
                     </div>
                   );
