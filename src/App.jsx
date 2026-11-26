@@ -163,6 +163,8 @@ const DEFAULT_SETTINGS = {
   heroHeight: 540,
   promoBarEnabled: true,
   promoBarText: '🎉 عرض خاص للمعلمين: خصم 15% على جميع مذكرات الترم الأول + إضافة الشعار مجانًا لفترة محدودة!',
+  promoBarCouponCode: 'EL3B15',
+  promoBarTheme: 'slate', // 'slate' | 'blue' | 'emerald' | 'rose' | 'purple'
   trustCardEnabled: true,
   trustCardTitle: 'لماذا يثق بنا المعلمون؟',
   trustCardPoints: [
@@ -216,8 +218,12 @@ const DEFAULT_SETTINGS = {
   orderFormFields: DEFAULT_ORDER_FIELDS,
   // مكافأة الطلب القادم (كوبون فريد لكل عميل لمرة واحدة)
   nextOrderRewardEnabled: true,
+  nextOrderRewardMode: 'auto', // 'auto' | 'custom'
+  nextOrderRewardCustomCode: '',
+  nextOrderRewardDiscountType: 'percent', // 'percent' | 'amount'
   nextOrderRewardPercent: 15,
   nextOrderRewardTitle: 'هدية خاصة لطلبك القادم!',
+  nextOrderRewardDesc: 'احتفظ بهذا الكوبون واستخدمه للحصول على خصم خاص عند طلبك القادم:',
   // مجموعات وباقات الخصم
   bundles: [],
   // التواصل والدفع
@@ -1592,16 +1598,20 @@ function OrderCheckoutModal({
 
       let nextRewardCode = '';
       if (settings.nextOrderRewardEnabled && Number(settings.nextOrderRewardPercent) > 0) {
-        nextRewardCode = generateUniqueCouponCode('NEXT');
-        await addDoc(publicCol('coupons'), {
-          code: nextRewardCode,
-          discountType: 'percent',
-          discountValue: Number(settings.nextOrderRewardPercent),
-          active: true,
-          used: false,
-          singleUse: true,
-          createdAt: serverTimestamp()
-        });
+        if (settings.nextOrderRewardMode === 'custom' && settings.nextOrderRewardCustomCode?.trim()) {
+          nextRewardCode = settings.nextOrderRewardCustomCode.trim().toUpperCase();
+        } else {
+          nextRewardCode = generateUniqueCouponCode('NEXT');
+          await addDoc(publicCol('coupons'), {
+            code: nextRewardCode,
+            discountType: settings.nextOrderRewardDiscountType || 'percent',
+            discountValue: Number(settings.nextOrderRewardPercent),
+            active: true,
+            used: false,
+            singleUse: true,
+            createdAt: serverTimestamp()
+          });
+        }
       }
 
       if (appliedCoupon?.id && appliedCoupon?.singleUse) {
@@ -1696,31 +1706,49 @@ function OrderCheckoutModal({
               </div>
 
               {submittedOrder.nextRewardCode && (
-                <div className="bg-amber-50 border-2 border-dashed border-amber-400 rounded-2xl p-4 max-w-md mx-auto space-y-1">
-                  <span className="text-xs font-black text-amber-900 flex items-center justify-center gap-1">
-                    <Gift className="w-4 h-4" />
-                    <span>{settings.nextOrderRewardTitle}</span>
+                <div className="bg-amber-50 border-2 border-dashed border-amber-400 rounded-2xl p-4 max-w-md mx-auto space-y-2">
+                  <span className="text-xs font-black text-amber-900 flex items-center justify-center gap-1.5">
+                    <Gift className="w-4 h-4 text-amber-600" />
+                    <span>{settings.nextOrderRewardTitle || 'هدية خاصة لطلبك القادم!'}</span>
                   </span>
                   <p className="text-xs text-amber-800">
-                    كود خصم {settings.nextOrderRewardPercent}% لطلبك القادم (يُستخدم لمرة واحدة):
+                    {settings.nextOrderRewardDesc || 'استخدم هذا الكود للحصول على خصم'}{' '}
+                    <strong>
+                      {settings.nextOrderRewardDiscountType === 'amount'
+                        ? `${settings.nextOrderRewardPercent} ج.م`
+                        : `${settings.nextOrderRewardPercent}%`}
+                    </strong>
                   </p>
-                  <span className="inline-block px-4 py-1.5 rounded-xl bg-amber-400 text-slate-950 font-black text-base">
-                    {submittedOrder.nextRewardCode}
-                  </span>
+                  <div className="flex items-center justify-center gap-2 pt-1">
+                    <span className="px-4 py-1.5 rounded-xl bg-amber-400 text-slate-950 font-black text-base tracking-wider">
+                      {submittedOrder.nextRewardCode}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        try {
+                          navigator.clipboard.writeText(submittedOrder.nextRewardCode);
+                          onNotify(`تم نسخ كوبون الطلب القادم: ${submittedOrder.nextRewardCode}`, 'success');
+                        } catch {}
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold flex items-center gap-1"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>انسخ الكوبون</span>
+                    </button>
+                  </div>
                 </div>
               )}
 
-              {settings.paymentInstructions && (
-                <p className="text-xs text-slate-600 bg-blue-50 p-3.5 rounded-2xl border border-blue-200">
-                  {settings.paymentInstructions}
-                </p>
-              )}
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-900 leading-relaxed max-w-md mx-auto">
+                {settings.paymentInstructions}
+              </div>
 
               <a
                 href={buildWhatsAppOrderUrl(submittedOrder)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full py-3.5 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm shadow-lg flex items-center justify-center gap-2"
+                className="inline-flex items-center justify-center gap-2 px-7 py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm shadow-lg"
               >
                 <MessageCircle className="w-5 h-5" />
                 <span>إرسال تفاصيل الطلب على واتساب الآن</span>
@@ -1728,36 +1756,45 @@ function OrderCheckoutModal({
             </div>
           ) : (
             <form onSubmit={handleSubmitOrder} className="space-y-4">
-              {/* محتويات السلة */}
-              {cart.length > 0 && (
-                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-slate-800">المذكرات المختارة ({cart.length}):</span>
-                    {settings.orderEnableMultiCart && allNotebooks.length > cart.length && (
-                      <select
-                        value=""
-                        onChange={(e) => {
-                          const found = allNotebooks.find((n) => n.id === e.target.value);
-                          if (found) onAddNotebookToCart(found);
-                        }}
-                        className="px-2.5 py-1 rounded-xl border border-slate-300 bg-white text-[11px] font-bold"
-                      >
-                        <option value="">+ أضف مذكرة أخرى للسلة...</option>
-                        {allNotebooks
-                          .filter((n) => !cart.some((c) => c.id === n.id))
-                          .map((n) => (
-                            <option key={n.id} value={n.id}>
-                              {n.title} ({n.price} ج.م)
-                            </option>
-                          ))}
-                      </select>
-                    )}
-                  </div>
+              {/* قائمة المذكرات المختارة في السلة */}
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-slate-800">
+                    المذكرات المختارة في السلة ({cart.length}):
+                  </span>
+                  {settings.orderEnableMultiCart && allNotebooks.length > cart.length && (
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        const found = allNotebooks.find((n) => n.id === e.target.value);
+                        if (found) onAddNotebookToCart(found);
+                      }}
+                      className="px-2.5 py-1 rounded-xl border border-blue-300 bg-blue-50 text-blue-800 text-[11px] font-extrabold max-w-[200px]"
+                    >
+                      <option value="">+ أضف مذكرة أخرى للسلة...</option>
+                      {allNotebooks
+                        .filter((n) => !cart.some((c) => c.id === n.id))
+                        .map((n) => (
+                          <option key={n.id} value={n.id}>
+                            {n.title} ({n.price} ج.م)
+                          </option>
+                        ))}
+                    </select>
+                  )}
+                </div>
 
-                  <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                {cart.length === 0 ? (
+                  <p className="text-xs text-slate-500 py-2">
+                    السلة فارغة حاليًا (يمكنك إرسال طلب إعداد مذكرة خاصة بكتابة التفاصيل في الملاحظات أو إضافة مذكرات من القائمة أعلاه).
+                  </p>
+                ) : (
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
                     {cart.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-slate-200 text-xs">
-                        <span className="font-bold truncate">{item.title}</span>
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-200 text-xs"
+                      >
+                        <span className="font-extrabold text-slate-800 truncate">{item.title}</span>
                         <div className="flex items-center gap-2 shrink-0">
                           <span className="font-black text-blue-600">{item.price} ج.م</span>
                           <button
@@ -1765,14 +1802,14 @@ function OrderCheckoutModal({
                             onClick={() => onRemoveFromCart(item.id)}
                             className="text-rose-600 hover:bg-rose-50 p-1 rounded-lg"
                           >
-                            <X className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
               {/* حقول بيانات المعلم */}
               <div className="space-y-3">
@@ -2824,47 +2861,81 @@ function AdminDashboard({
                       type="text"
                       value={newGradeInput}
                       onChange={(e) => setNewGradeInput(e.target.value)}
-                      placeholder="أضف صفًا دراسيًا لهذه المرحلة..."
+                      placeholder="اسم الصف الدراسي..."
                       className="flex-1 px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
                     />
                     <button
                       type="button"
                       onClick={() => {
-                        if (!newGradeInput.trim() || !selectedStageForGrades) return;
+                        const gr = newGradeInput.trim();
+                        if (!gr || !selectedStageForGrades) return;
                         setLocalSettings((prev) => ({
                           ...prev,
                           stageGrades: {
                             ...(prev.stageGrades || {}),
-                            [selectedStageForGrades]: [...(prev.stageGrades?.[selectedStageForGrades] || []), newGradeInput.trim()]
+                            [selectedStageForGrades]: [...(prev.stageGrades?.[selectedStageForGrades] || []), gr]
                           }
                         }));
                         setNewGradeInput('');
                       }}
-                      className="px-4 py-2 rounded-xl bg-slate-900 text-white font-extrabold text-xs"
+                      className="px-4 py-2 rounded-xl bg-blue-600 text-white font-extrabold text-xs"
                     >
                       + صف
                     </button>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {(localSettings.stageGrades?.[selectedStageForGrades] || []).map((gr, idx) => (
-                      <span key={gr} className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-800 text-xs font-bold flex items-center gap-1.5">
+
+                  <div className="space-y-1.5">
+                    {(localSettings.stageGrades?.[selectedStageForGrades] || []).map((gr, idx, arr) => (
+                      <div key={gr} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold">
                         <span>{gr}</span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setLocalSettings((prev) => ({
-                              ...prev,
-                              stageGrades: {
-                                ...prev.stageGrades,
-                                [selectedStageForGrades]: prev.stageGrades[selectedStageForGrades].filter((_, i) => i !== idx)
-                              }
-                            }))
-                          }
-                          className="text-rose-600 font-black"
-                        >
-                          ×
-                        </button>
-                      </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setLocalSettings({
+                                ...localSettings,
+                                stageGrades: {
+                                  ...localSettings.stageGrades,
+                                  [selectedStageForGrades]: moveArrayItem(arr, idx, -1)
+                                }
+                              })
+                            }
+                            className="p-1 rounded bg-white border"
+                          >
+                            <ChevronUp className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setLocalSettings({
+                                ...localSettings,
+                                stageGrades: {
+                                  ...localSettings.stageGrades,
+                                  [selectedStageForGrades]: moveArrayItem(arr, idx, 1)
+                                }
+                              })
+                            }
+                            className="p-1 rounded bg-white border"
+                          >
+                            <ChevronDown className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setLocalSettings({
+                                ...localSettings,
+                                stageGrades: {
+                                  ...localSettings.stageGrades,
+                                  [selectedStageForGrades]: arr.filter((_, i) => i !== idx)
+                                }
+                              })
+                            }
+                            className="p-1 text-rose-600"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -3350,21 +3421,22 @@ function AdminDashboard({
                     className="w-full text-xs"
                   />
                   <div className="flex items-center gap-3 pt-1">
-                    <span className="text-[11px] font-bold text-slate-600">حجم الشعار ({localSettings.logoSize || 54}px):</span>
+                    <span className="text-[11px] font-bold text-slate-600">حجم الشعار:</span>
                     <input
                       type="range"
-                      min="40"
-                      max="80"
+                      min="36"
+                      max="90"
                       value={localSettings.logoSize || 54}
                       onChange={(e) => setLocalSettings({ ...localSettings, logoSize: Number(e.target.value) })}
                       className="flex-1"
                     />
+                    <span className="text-xs font-black">{localSettings.logoSize || 54}px</span>
                   </div>
                 </div>
 
                 <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-extrabold text-slate-700">صورة خلفية الواجهة الرئيسية</label>
+                    <label className="text-xs font-extrabold text-slate-700">صورة خلفية الواجهة الرئيسية (Hero)</label>
                     {localSettings.heroBgImage && (
                       <button
                         type="button"
@@ -3381,49 +3453,27 @@ function AdminDashboard({
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      const compressed = await compressImageFile(file, 1200, 0.72);
+                      const compressed = await compressImageFile(file, 1100, 0.72);
                       setLocalSettings({ ...localSettings, heroBgImage: compressed });
                     }}
                     className="w-full text-xs"
                   />
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    <div>
-                      <span className="text-[10px] font-bold text-slate-600 block">وضوح الصورة ({localSettings.heroBgOpacity ?? 35}%):</span>
-                      <input
-                        type="range"
-                        min="5"
-                        max="100"
-                        value={localSettings.heroBgOpacity ?? 35}
-                        onChange={(e) => setLocalSettings({ ...localSettings, heroBgOpacity: Number(e.target.value) })}
-                        className="w-full"
-                      />
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-bold text-slate-600 block">ارتفاع الواجهة ({localSettings.heroHeight || 540}px):</span>
-                      <input
-                        type="range"
-                        min="380"
-                        max="700"
-                        step="20"
-                        value={localSettings.heroHeight || 540}
-                        onChange={(e) => setLocalSettings({ ...localSettings, heroHeight: Number(e.target.value) })}
-                        className="w-full"
-                      />
-                    </div>
+                  <div className="flex items-center gap-3 pt-1">
+                    <span className="text-[11px] font-bold text-slate-600">وضوح الصورة:</span>
+                    <input
+                      type="range"
+                      min="10"
+                      max="100"
+                      value={localSettings.heroBgOpacity ?? 35}
+                      onChange={(e) => setLocalSettings({ ...localSettings, heroBgOpacity: Number(e.target.value) })}
+                      className="flex-1"
+                    />
+                    <span className="text-xs font-black">{localSettings.heroBgOpacity ?? 35}%</span>
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">الشارة العلوية في الواجهة</label>
-                  <input
-                    type="text"
-                    value={localSettings.heroBadge}
-                    onChange={(e) => setLocalSettings({ ...localSettings, heroBadge: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">العنوان الترحيبي الكبير</label>
+                <div className="md:col-span-2">
+                  <label className="text-xs font-bold text-slate-600 block mb-1">العنوان الرئيسي للواجهة الترحيبية</label>
                   <input
                     type="text"
                     value={localSettings.heroTitle}
@@ -3431,8 +3481,9 @@ function AdminDashboard({
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
                   />
                 </div>
+
                 <div className="md:col-span-2">
-                  <label className="text-xs font-bold text-slate-600 block mb-1">الوصف الترحيبي في الواجهة</label>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">الوصف الترحيبي للواجهة</label>
                   <textarea
                     rows={2}
                     value={localSettings.heroDesc}
@@ -3440,9 +3491,10 @@ function AdminDashboard({
                     className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
                   />
                 </div>
-                <div className="md:col-span-2 space-y-2">
+
+                <div className="md:col-span-2 space-y-2.5 bg-slate-50 p-4 rounded-2xl border border-slate-200">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-600">الشريط الترويجي العلوي</label>
+                    <label className="text-xs font-black text-slate-800">الشريط الترويجي العلوي وكوبون الخصم</label>
                     <label className="flex items-center gap-1.5 text-xs font-bold">
                       <input
                         type="checkbox"
@@ -3456,8 +3508,39 @@ function AdminDashboard({
                     type="text"
                     value={localSettings.promoBarText}
                     onChange={(e) => setLocalSettings({ ...localSettings, promoBarText: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
+                    placeholder="اكتب نص العرض الترويجي..."
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-bold"
                   />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                        كود الكوبون داخل الشريط (يظهر بجانبه زر انسخ الكوبون)
+                      </label>
+                      <input
+                        type="text"
+                        value={localSettings.promoBarCouponCode || ''}
+                        onChange={(e) =>
+                          setLocalSettings({ ...localSettings, promoBarCouponCode: e.target.value.toUpperCase() })
+                        }
+                        placeholder="مثال: EL3B15 (اتركه فارغًا لإخفاء زر النسخ)"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-black uppercase"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">لون خلفية الشريط الترويجي</label>
+                      <select
+                        value={localSettings.promoBarTheme || 'slate'}
+                        onChange={(e) => setLocalSettings({ ...localSettings, promoBarTheme: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold"
+                      >
+                        <option value="slate">كحلي ملكي داكن (نص ذهبي)</option>
+                        <option value="blue">أزرق سماوي متدرج</option>
+                        <option value="emerald">أخضر زمردي متدرج</option>
+                        <option value="rose">أحمر ياقوتي لافت</option>
+                        <option value="purple">بنفسجي فاخر</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -4197,6 +4280,7 @@ function MuzakkiratiApp() {
   const [trackQuery, setTrackQuery] = useState('');
   const [trackedOrders, setTrackedOrders] = useState([]);
   const [trackSearched, setTrackSearched] = useState(false);
+  const [copiedPromoCode, setCopiedPromoCode] = useState(false);
 
   // إشعارات الواجهة
   const [toast, setToast] = useState(null);
@@ -4355,10 +4439,68 @@ function MuzakkiratiApp() {
     } catch {}
   };
 
+  // ربط التنقل وتصفح المجلدات والنوافذ بزر الرجوع للخلف في المتصفح والهاتف
+  useEffect(() => {
+    try {
+      window.history.replaceState({ page: 'home', catalog: { category: '', stage: '', grade: '' } }, '');
+    } catch {}
+
+    const handlePopState = (event) => {
+      if (previewNotebook) {
+        setPreviewNotebook(null);
+        return;
+      }
+      if (isCheckoutOpen) {
+        setIsCheckoutOpen(false);
+        return;
+      }
+      if (isContactModalOpen) {
+        setIsContactModalOpen(false);
+        return;
+      }
+      const state = event.state;
+      if (state && state.page) {
+        setActivePage(state.page);
+        if (state.catalog) setCatalogNav(state.catalog);
+      } else {
+        setActivePage('home');
+        setCatalogNav({ category: '', stage: '', grade: '' });
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [previewNotebook, isCheckoutOpen, isContactModalOpen]);
+
   const navigateTo = (page, catParams = null) => {
+    const nextCatalog = catParams || (page === 'catalog' ? catalogNav : { category: '', stage: '', grade: '' });
     setActivePage(page);
     if (catParams) setCatalogNav(catParams);
+    try {
+      window.history.pushState({ page, catalog: nextCatalog }, '');
+    } catch {}
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCatalogFolderNav = (nextCatalog) => {
+    setCatalogNav(nextCatalog);
+    try {
+      window.history.pushState({ page: 'catalog', catalog: nextCatalog }, '');
+    } catch {}
+  };
+
+  const openNotebookPreview = (nb) => {
+    setPreviewNotebook(nb);
+    try {
+      window.history.pushState({ page: activePage, catalog: catalogNav, modal: 'preview' }, '');
+    } catch {}
+  };
+
+  const openCheckoutCart = () => {
+    setIsCheckoutOpen(true);
+    try {
+      window.history.pushState({ page: activePage, catalog: catalogNav, modal: 'cart' }, '');
+    } catch {}
   };
 
   const visibleNotebooks = useMemo(() => notebooks.filter((n) => n.visible !== false), [notebooks]);
@@ -4389,7 +4531,7 @@ function MuzakkiratiApp() {
 
   const handleOrderNow = (nb) => {
     setCart((prev) => (prev.some((item) => item.id === nb.id) ? prev : [...prev, nb]));
-    setIsCheckoutOpen(true);
+    openCheckoutCart();
   };
 
   const handleOrderBundle = (bundle, includedNotebooks) => {
@@ -4398,7 +4540,7 @@ function MuzakkiratiApp() {
       includedNotebooks.forEach((n) => map.set(n.id, n));
       return Array.from(map.values());
     });
-    setIsCheckoutOpen(true);
+    openCheckoutCart();
   };
 
   const handleTrackOrder = async (e) => {
@@ -4445,23 +4587,54 @@ function MuzakkiratiApp() {
 
   return (
     <div dir="rtl" className="min-h-screen w-full overflow-x-hidden flex flex-col bg-slate-50 text-slate-900 font-sans">
-      {/* الشريط الترويجي العلوي */}
-      {settings.promoBarEnabled && settings.promoBarText && (
-        <div className="bg-gradient-to-l from-slate-950 via-slate-900 to-slate-950 text-amber-300 text-[11px] sm:text-sm font-extrabold py-2.5 px-3 sm:px-4 text-center border-b border-white/10 leading-relaxed">
-          <span>{settings.promoBarText}</span>
-          <button
-            onClick={() => navigateTo('offers')}
-            className="mt-1 sm:mt-0 mr-2 sm:mr-3 px-3 py-0.5 sm:py-1 rounded-full bg-amber-400 text-slate-950 hover:bg-amber-300 text-[11px] sm:text-sm font-black transition shadow-sm inline-block"
-          >
-            استفد من العرض ←
-          </button>
-        </div>
-      )}
+      {/* الشريط الترويجي العلوي مع التحكم الكامل باللون وزر نسخ الكوبون */}
+      {settings.promoBarEnabled && settings.promoBarText && (() => {
+        const promoThemes = {
+          slate: 'bg-gradient-to-l from-slate-950 via-slate-900 to-slate-950 text-amber-300 border-white/10',
+          blue: 'bg-gradient-to-l from-blue-900 via-blue-700 to-indigo-900 text-white border-blue-400/20',
+          emerald: 'bg-gradient-to-l from-emerald-950 via-emerald-800 to-teal-900 text-emerald-100 border-emerald-400/20',
+          rose: 'bg-gradient-to-l from-rose-950 via-rose-700 to-red-900 text-white border-rose-400/20',
+          purple: 'bg-gradient-to-l from-purple-950 via-indigo-900 to-purple-950 text-amber-200 border-purple-400/20'
+        };
+        const barCls = promoThemes[settings.promoBarTheme] || promoThemes.slate;
+        const promoCode = String(settings.promoBarCouponCode || '').trim().toUpperCase();
+
+        return (
+          <div className={`${barCls} text-[11px] sm:text-sm font-extrabold py-2.5 px-3 sm:px-4 text-center border-b leading-relaxed`}>
+            <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+              <span>{settings.promoBarText}</span>
+              {promoCode && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      navigator.clipboard.writeText(promoCode);
+                      setCopiedPromoCode(true);
+                      notify(`تم نسخ كود الخصم (${promoCode}) — الصقه في السلة عند الطلب!`, 'success');
+                      setTimeout(() => setCopiedPromoCode(false), 2500);
+                    } catch {}
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-0.5 sm:py-1 rounded-full bg-white text-slate-950 hover:bg-amber-300 text-[11px] sm:text-xs font-black transition shadow-sm"
+                >
+                  {copiedPromoCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-blue-600" />}
+                  <span>{copiedPromoCode ? `تم نسخ ${promoCode}` : `انسخ الكوبون: ${promoCode}`}</span>
+                </button>
+              )}
+              <button
+                onClick={() => navigateTo('offers')}
+                className="px-3 py-0.5 sm:py-1 rounded-full bg-amber-400 text-slate-950 hover:bg-amber-300 text-[11px] sm:text-xs font-black transition shadow-sm"
+              >
+                العروض ←
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* شريط التنقل الرئيسي (Header) متجاوب 100% مع الهاتف والكمبيوتر */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm w-full">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 sm:py-3.5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2.5 lg:gap-4">
-          {/* الصف العلوي: الشعار واسم المنصة + أزرار التواصل ولوحة الإدارة */}
+          {/* الصف العلوي: الشعار واسم المنصة + أزرار السلة والتواصل ولوحة الإدارة */}
           <div className="flex items-center justify-between gap-2 w-full lg:w-auto min-w-0">
             <div
               onClick={handleSecretLogoClick}
@@ -4494,25 +4667,38 @@ function MuzakkiratiApp() {
               </div>
             </div>
 
-            {/* أزرار التواصل ولوحة الإدارة (تظهر على الجوال بجانب الشعار، وعلى الكمبيوتر في أقصى اليسار) */}
-            <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 lg:hidden">
+            {/* أزرار السلة والتواصل ولوحة الإدارة على الهاتف والتابلت */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 lg:hidden">
               {isAdminAuthenticated && (
                 <button
                   onClick={() => setShowAdminPortal(true)}
-                  className="p-2 sm:px-3.5 sm:py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition"
+                  className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold flex items-center gap-1 shadow-sm transition"
                   title="لوحة التحكم"
                 >
                   <ShieldCheck className="w-4 h-4 text-blue-400" />
-                  <span className="hidden sm:inline">الإدارة</span>
                 </button>
               )}
 
               <button
-                onClick={() => setIsContactModalOpen(true)}
-                className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl bg-gradient-to-l from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-[11px] sm:text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition"
+                onClick={openCheckoutCart}
+                className="relative px-2.5 sm:px-3.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 font-extrabold text-[11px] sm:text-xs flex items-center gap-1 transition"
+                title="سلة الطلبات"
               >
-                <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                <span>تواصل معنا</span>
+                <ShoppingCart className="w-4 h-4 shrink-0" />
+                <span>السلة</span>
+                {cart.length > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-rose-600 text-white text-[10px] font-black">
+                    {cart.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => setIsContactModalOpen(true)}
+                className="px-2.5 sm:px-3.5 py-2 rounded-xl bg-gradient-to-l from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-[11px] sm:text-xs flex items-center gap-1 shadow-sm transition"
+              >
+                <MessageCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>تواصل</span>
               </button>
             </div>
           </div>
@@ -4545,7 +4731,7 @@ function MuzakkiratiApp() {
             })}
           </nav>
 
-          {/* أزرار التواصل ولوحة الإدارة لشاشات الكمبيوتر الكبيرة */}
+          {/* أزرار السلة والتواصل ولوحة الإدارة لشاشات الكمبيوتر الكبيرة */}
           <div className="hidden lg:flex items-center gap-2.5 shrink-0">
             {isAdminAuthenticated && (
               <button
@@ -4556,6 +4742,19 @@ function MuzakkiratiApp() {
                 <span>لوحة التحكم</span>
               </button>
             )}
+
+            <button
+              onClick={openCheckoutCart}
+              className="relative px-4 py-2.5 rounded-2xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 font-extrabold text-sm flex items-center gap-2 transition"
+            >
+              <ShoppingCart className="w-5 h-5" />
+              <span>سلة الطلبات</span>
+              {cart.length > 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-rose-600 text-white text-xs font-black">
+                  {cart.length}
+                </span>
+              )}
+            </button>
 
             <button
               onClick={() => setIsContactModalOpen(true)}
@@ -4614,7 +4813,7 @@ function MuzakkiratiApp() {
                       تصفح مكتبة المذكرات
                     </button>
                     <button
-                      onClick={() => setIsCheckoutOpen(true)}
+                      onClick={openCheckoutCart}
                       className="w-full sm:w-auto px-6 sm:px-7 py-3.5 sm:py-4 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 text-white font-extrabold text-xs sm:text-sm transition text-center"
                     >
                       اطلب إعداد مذكرة خاصة
@@ -4723,7 +4922,7 @@ function MuzakkiratiApp() {
                     <NotebookCard
                       key={nb.id}
                       notebook={nb}
-                      onPreview={setPreviewNotebook}
+                      onPreview={openNotebookPreview}
                       onOrderNow={handleOrderNow}
                       onAddToCart={handleAddToCart}
                       isInCart={cartIds.has(nb.id)}
@@ -4794,12 +4993,12 @@ function MuzakkiratiApp() {
             notebooks={notebooks}
             settings={settings}
             navState={catalogNav}
-            onNavigateCatalog={setCatalogNav}
-            onPreview={setPreviewNotebook}
+            onNavigateCatalog={handleCatalogFolderNav}
+            onPreview={openNotebookPreview}
             onOrderNow={handleOrderNow}
             onAddToCart={handleAddToCart}
             cartIds={cartIds}
-            onRequestPreOrder={() => setIsCheckoutOpen(true)}
+            onRequestPreOrder={openCheckoutCart}
           />
         )}
 
@@ -4808,7 +5007,7 @@ function MuzakkiratiApp() {
             notebooks={visibleNotebooks}
             settings={settings}
             coupons={coupons}
-            onPreview={setPreviewNotebook}
+            onPreview={openNotebookPreview}
             onOrderBundle={handleOrderBundle}
             onNotify={notify}
           />
@@ -4911,10 +5110,11 @@ function MuzakkiratiApp() {
                       href={href}
                       target={href.startsWith('tel:') ? undefined : '_blank'}
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition"
+                      title={s.title || plat}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition"
                     >
                       <SocialPlatformBadge platform={plat} size="sm" />
-                      <span>{s.title}</span>
+                      {s.title && <span>{s.title}</span>}
                     </a>
                   );
                 })}
@@ -4925,6 +5125,26 @@ function MuzakkiratiApp() {
           جميع الحقوق محفوظة © {new Date().getFullYear()} {settings.siteName}
         </div>
       </footer>
+
+      {/* شريط سلة الطلبات العائم أسفل الشاشة عند وجود مذكرات في السلة */}
+      {cart.length > 0 && !isCheckoutOpen && (
+        <div className="fixed bottom-4 inset-x-3 sm:inset-x-auto sm:right-6 z-40">
+          <button
+            onClick={openCheckoutCart}
+            className="w-full sm:w-auto px-5 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs sm:text-sm shadow-2xl shadow-blue-600/40 flex items-center justify-between sm:justify-center gap-4 border border-blue-400/30 transition"
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="w-7 h-7 rounded-xl bg-white text-blue-700 font-black text-xs flex items-center justify-center">
+                {cart.length}
+              </span>
+              <span>عرض سلة الطلبات وإتمام الطلب</span>
+            </div>
+            <span className="px-2.5 py-1 rounded-xl bg-blue-800 text-amber-300 text-xs font-black">
+              {cart.reduce((s, item) => s + (Number(item.price) || 0), 0)} ج.م ←
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* نافذة معاينة المذكرة */}
       {previewNotebook && (
