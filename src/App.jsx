@@ -200,6 +200,9 @@ const DEFAULT_SETTINGS = {
   notebookNoticeEnabled: true,
   notebookNoticeTitle: 'تنبيه هام قبل تأكيد الطلب',
   notebookNoticeText: 'يتم تجهيز المذكرة باسمك ورقم هاتفك وشعارك الخاص على الغلاف وجميع الصفحات خلال 24 ساعة من تأكيد الطلب، وتُسلَّم بصيغة PDF عالية الدقة جاهزة للطباعة فورًا.',
+  // إعدادات زر وأيقونة Google Drive داخل صفحة المذكرة
+  driveButtonText: 'معاينة نسخة إضافية على Google Drive',
+  driveButtonTheme: 'blue', // 'blue' | 'emerald' | 'amber' | 'rose' | 'purple' | 'slate'
   // إعدادات نموذج الطلب
   orderModalTitle: 'إتمام طلب تخصيص المذكرات',
   orderModalSubtitle: 'أدخل بياناتك ليتم طباعتها باحترافية على غلاف وصفحات المذكرة',
@@ -427,134 +430,120 @@ function SocialPlatformBadge({ platform, size = 'md' }) {
   switch (platform) {
     case 'whatsapp':
       return (
-        <div className={`${boxCls} bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs`}>
-          <svg viewBox="0 0 24 24" fill="currentColor" className={iconCls}>
-            <path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0012.04 2zm5.82 14.01c-.24.68-1.41 1.3-1.95 1.38-.5.08-1.13.11-1.82-.11-.42-.13-.96-.31-1.65-.61-2.9-1.25-4.79-4.18-4.94-4.37-.14-.19-1.18-1.57-1.18-3 0-1.43.75-2.13 1.01-2.42.27-.29.58-.36.77-.36.19 0 .39 0 .56.01.18.01.42-.07.66.5.24.58.82 2 .89 2.15.07.14.12.31.02.5-.1.19-.14.31-.29.48-.14.17-.3.38-.43.51-.14.14-.29.3-.13.58.17.29.74 1.22 1.59 1.98 1.09.97 2.01 1.27 2.3 1.42.29.14.46.12.63-.07.17-.19.72-.84.91-1.13.19-.29.39-.24.65-.14.27.1 1.69.8 1.98.94.29.14.48.22.55.34.07.12.07.69-.17 1.37z" />
-          </svg>
-        </div>
+        <span className={`${boxCls} bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs`}>
+          <MessageCircle className={iconCls} />
+        </span>
       );
     case 'whatsapp_group':
       return (
-        <div className={`${boxCls} bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs`}>
-          <Layers className={iconCls} />
-        </div>
+        <span className={`${boxCls} bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs`}>
+          <MessageCircle className={iconCls} />
+        </span>
       );
     case 'facebook':
       return (
-        <div className={`${boxCls} bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs`}>
-          <svg viewBox="0 0 24 24" fill="currentColor" className={iconCls}>
-            <path d="M14 13.5h2.5l1-4H14v-2c0-1.03 0-2 2-2h1.5V2.14c-.326-.043-1.557-.14-2.857-.14C11.928 2 10 3.657 10 6.7v2.8H7v4h3V22h4v-8.5z" />
-          </svg>
-        </div>
+        <span className={`${boxCls} bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs font-black text-base`}>
+          f
+        </span>
       );
     case 'telegram':
       return (
-        <div className={`${boxCls} bg-sky-500 text-white flex items-center justify-center shrink-0 shadow-xs`}>
-          <svg viewBox="0 0 24 24" fill="currentColor" className={iconCls}>
-            <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
-          </svg>
-        </div>
+        <span className={`${boxCls} bg-sky-500 text-white flex items-center justify-center shrink-0 shadow-xs`}>
+          <ExternalLink className={iconCls} />
+        </span>
       );
     case 'youtube':
       return (
-        <div className={`${boxCls} bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs`}>
-          <svg viewBox="0 0 24 24" fill="currentColor" className={iconCls}>
-            <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
-          </svg>
-        </div>
+        <span className={`${boxCls} bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs`}>
+          <Eye className={iconCls} />
+        </span>
       );
     case 'instagram':
       return (
-        <div className={`${boxCls} bg-gradient-to-tr from-amber-500 via-pink-600 to-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs`}>
-          <svg viewBox="0 0 24 24" fill="currentColor" className={iconCls}>
-            <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
-          </svg>
-        </div>
+        <span className={`${boxCls} bg-pink-600 text-white flex items-center justify-center shrink-0 shadow-xs`}>
+          <ImageIcon className={iconCls} />
+        </span>
       );
     case 'tiktok':
       return (
-        <div className={`${boxCls} bg-slate-900 text-white flex items-center justify-center shrink-0 shadow-xs`}>
-          <svg viewBox="0 0 24 24" fill="currentColor" className={iconCls}>
-            <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z" />
-          </svg>
-        </div>
+        <span className={`${boxCls} bg-slate-900 text-white flex items-center justify-center shrink-0 shadow-xs font-black text-xs`}>
+          TT
+        </span>
       );
     case 'phone':
       return (
-        <div className={`${boxCls} bg-slate-800 text-white flex items-center justify-center shrink-0 shadow-xs`}>
+        <span className={`${boxCls} bg-slate-800 text-white flex items-center justify-center shrink-0 shadow-xs`}>
           <Phone className={iconCls} />
-        </div>
+        </span>
       );
     default:
       return (
-        <div className={`${boxCls} bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs`}>
+        <span className={`${boxCls} bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs`}>
           <ExternalLink className={iconCls} />
-        </div>
+        </span>
       );
   }
 }
 
+const generateUniqueCouponCode = (prefix = 'VIP') => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let rand = '';
+  for (let i = 0; i < 6; i++) {
+    rand += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `${prefix}-${rand}`;
+};
+
 const normalizeNotebook = (id, raw = {}) => ({
   id,
-  title: toCleanString(raw.title) || 'مذكرة تعليمية',
-  category: toCleanString(raw.category) || 'مذكرات الترم الأول',
-  stage: toCleanString(raw.stage) || 'المرحلة الإعدادية',
-  grade: toCleanString(raw.grade) || 'الصف الأول الإعدادي',
-  subject: toCleanString(raw.subject) || 'اللغة العربية',
+  title: toCleanString(raw.title || 'مذكرة دراسية'),
+  category: toCleanString(raw.category || 'مذكرات الترم الأول'),
+  stage: toCleanString(raw.stage || 'المرحلة الابتدائية'),
+  grade: toCleanString(raw.grade || ''),
+  subject: toCleanString(raw.subject || ''),
   price: Number(raw.price) || 0,
   oldPrice: Number(raw.oldPrice) || 0,
   pages: Number(raw.pages) || 0,
-  badge: toCleanString(raw.badge),
-  description: toCleanString(raw.description),
-  customNotice: toCleanString(raw.customNotice),
-  driveUrl: toCleanString(raw.driveUrl),
-  coverUrl: toCleanString(raw.coverUrl),
-  sampleUrls: Array.isArray(raw.sampleUrls) ? raw.sampleUrls.filter(Boolean) : [],
+  badge: toCleanString(raw.badge || ''),
+  description: toCleanString(raw.description || ''),
+  customNotice: toCleanString(raw.customNotice || ''),
+  driveUrl: toCleanString(raw.driveUrl || ''),
+  coverUrl: toCleanString(raw.coverUrl || ''),
+  sampleUrls: Array.isArray(raw.sampleUrls) ? raw.sampleUrls : [],
+  samplesCount: Number(raw.samplesCount) || (Array.isArray(raw.sampleUrls) ? raw.sampleUrls.length : 0),
   isComingSoon: Boolean(raw.isComingSoon),
   isHidden: Boolean(raw.isHidden),
-  createdAt: raw.createdAt || Date.now()
+  createdAt: raw.createdAt || null
 });
 
-// ضغط الصور من الملفات للحفاظ على سرعة التحميل وعدم تجاوز حدود Firestore
-const compressImageFile = (file, maxWidth = 900, quality = 0.78) =>
+const compressImageFile = (file, maxWidth = 800, quality = 0.75) =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(new Error('فشل قراءة الملف'));
     reader.onload = (ev) => {
       const img = new Image();
-      img.onerror = () => reject(new Error('صيغة الصورة غير مدعومة'));
       img.onload = () => {
-        const scale = Math.min(1, maxWidth / img.width);
         const canvas = document.createElement('canvas');
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        canvas.width = width;
+        canvas.height = height;
         const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, width, height);
         resolve(canvas.toDataURL('image/jpeg', quality));
       };
+      img.onerror = reject;
       img.src = ev.target.result;
     };
+    reader.onerror = reject;
     reader.readAsDataURL(file);
   });
 
-const sanitizeUrl = (url) => {
-  if (!url || typeof url !== 'string') return '';
-  const trimmed = url.trim();
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  return '';
-};
-
-const generateUniqueCouponCode = (prefix = 'NEXT') => {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return `${prefix}-${code}`;
-};
-
 // ============================================================================
-// 3. مكون حماية الأخطاء (Error Boundary)
+// 3. حدود الأخطاء (ErrorBoundary)
 // ============================================================================
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -562,23 +551,21 @@ class ErrorBoundary extends React.Component {
     this.state = { hasError: false, errorMsg: '' };
   }
   static getDerivedStateFromError(error) {
-    return { hasError: true, errorMsg: error?.message || 'خطأ غير متوقع' };
+    return { hasError: true, errorMsg: error?.message || 'حدث خطأ غير متوقع' };
   }
   render() {
     if (this.state.hasError) {
       return (
-        <div dir="rtl" className="min-h-screen flex items-center justify-center bg-slate-100 p-4 font-sans">
-          <div className="bg-white rounded-3xl shadow-xl p-8 max-w-md w-full text-center border border-slate-200">
-            <div className="w-14 h-14 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <AlertTriangle className="w-7 h-7" />
-            </div>
-            <h2 className="text-xl font-extrabold text-slate-900 mb-2">حدث خطأ مؤقت في عرض الصفحة</h2>
-            <p className="text-xs text-slate-500 mb-6 break-words">{this.state.errorMsg}</p>
+        <div dir="rtl" className="min-h-screen flex items-center justify-center bg-slate-100 p-6">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full text-center shadow-xl border border-slate-200 space-y-4">
+            <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto" />
+            <h2 className="text-lg font-black text-slate-900">حدث خطأ مؤقت في العرض</h2>
+            <p className="text-xs text-slate-500">{this.state.errorMsg}</p>
             <button
-              onClick={() => this.setState({ hasError: false, errorMsg: '' })}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition"
+              onClick={() => window.location.reload()}
+              className="px-6 py-2.5 rounded-xl bg-blue-600 text-white font-bold text-xs"
             >
-              إعادة تحميل الواجهة بأمان
+              إعادة تحميل الصفحة
             </button>
           </div>
         </div>
@@ -589,92 +576,153 @@ class ErrorBoundary extends React.Component {
 }
 
 // ============================================================================
-// 4. نافذة معاينة المذكرة المحمية + التنبيهات الخاصة بكل مذكرة
+// 4. نافذة المعاينة المحمية للمذكرة + التنبيهات المنفصلة + زر Google Drive
 // ============================================================================
 function ProtectedPreviewModal({ notebook, settings, onClose, onAddToCart, onOrderNow, isInCart }) {
   const [samples, setSamples] = useState(notebook.sampleUrls || []);
+  const [loadingSamples, setLoadingSamples] = useState(true);
   const [activeIdx, setActiveIdx] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [loadingSamples, setLoadingSamples] = useState(false);
 
   useEffect(() => {
-    let active = true;
-    if ((!notebook.sampleUrls || notebook.sampleUrls.length === 0) && notebook.id) {
+    let mounted = true;
+    const fetchSamples = async () => {
       setLoadingSamples(true);
-      getDoc(publicDoc('notebook_samples', notebook.id))
-        .then(async (snap) => {
-          if (!active) return;
-          if (snap.exists()) {
-            const data = snap.data();
-            let collected = Array.isArray(data.sampleUrls) ? [...data.sampleUrls] : [];
-            const chunksCount = Number(data.chunksCount) || 0;
-            if (chunksCount > 0) {
-              for (let i = 0; i < chunksCount; i++) {
-                try {
-                  const chunkSnap = await getDoc(publicDoc('notebook_samples', `${notebook.id}_part_${i}`));
-                  if (chunkSnap.exists() && Array.isArray(chunkSnap.data().urls)) {
-                    collected = collected.concat(chunkSnap.data().urls);
-                  }
-                } catch {}
+      try {
+        const snap = await getDoc(publicDoc('notebook_samples', notebook.id));
+        if (snap.exists() && mounted) {
+          const data = snap.data();
+          let collected = Array.isArray(data.sampleUrls) ? [...data.sampleUrls] : [];
+          const chunksCount = Number(data.chunksCount) || 0;
+          for (let i = 0; i < chunksCount; i++) {
+            try {
+              const partSnap = await getDoc(publicDoc('notebook_samples', `${notebook.id}_part_${i}`));
+              if (partSnap.exists() && Array.isArray(partSnap.data().urls)) {
+                collected = collected.concat(partSnap.data().urls);
               }
-            }
-            if (active) setSamples(collected);
+            } catch {}
           }
-        })
-        .catch(() => {})
-        .finally(() => active && setLoadingSamples(false));
-    }
-    return () => { active = false; };
-  }, [notebook]);
+          if (collected.length > 0 && mounted) {
+            setSamples(collected);
+          }
+        }
+      } catch {}
+      if (mounted) setLoadingSamples(false);
+    };
+    fetchSamples();
+    return () => {
+      mounted = false;
+    };
+  }, [notebook.id]);
 
   const allPages = useMemo(() => {
-    const list = [];
-    if (notebook.coverUrl) list.push(notebook.coverUrl);
-    samples.forEach((s) => {
-      if (s && s !== notebook.coverUrl) list.push(s);
-    });
-    return list;
-  }, [notebook.coverUrl, samples]);
+    const pages = [...samples];
+    if (pages.length === 0 && notebook.coverUrl) {
+      pages.push(notebook.coverUrl);
+    }
+    return pages;
+  }, [samples, notebook.coverUrl]);
 
-  const safeDriveUrl = sanitizeUrl(notebook.driveUrl);
+  // تقسيم نص التنبيهات العامة إلى أسطر مستقلة ومنظمة
+  const noticeLines = useMemo(() => {
+    const raw = String(settings.notebookNoticeText || '').trim();
+    if (!raw) return [];
+    const byNewLine = raw
+      .split(/\n+/)
+      .map((s) => s.replace(/^[-•*]\s*/, '').trim())
+      .filter(Boolean);
+    if (byNewLine.length > 1) return byNewLine;
+    return raw
+      .split(/\s+-\s+/)
+      .map((s) => s.replace(/^[-•*]\s*/, '').trim())
+      .filter(Boolean);
+  }, [settings.notebookNoticeText]);
+
+  const safeDriveUrl = useMemo(() => {
+    const u = String(notebook.driveUrl || '').trim();
+    if (!u) return '';
+    return /^https?:\/\//i.test(u) ? u : `https://${u}`;
+  }, [notebook.driveUrl]);
+
+  const driveThemeStyles = useMemo(() => {
+    switch (settings.driveButtonTheme || 'blue') {
+      case 'emerald':
+        return {
+          btn: 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-900',
+          iconBox: 'bg-emerald-600 text-white'
+        };
+      case 'amber':
+        return {
+          btn: 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-950',
+          iconBox: 'bg-amber-500 text-slate-950'
+        };
+      case 'rose':
+        return {
+          btn: 'bg-rose-50 hover:bg-rose-100 border-rose-200 text-rose-900',
+          iconBox: 'bg-rose-600 text-white'
+        };
+      case 'purple':
+        return {
+          btn: 'bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-900',
+          iconBox: 'bg-purple-600 text-white'
+        };
+      case 'slate':
+        return {
+          btn: 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-white',
+          iconBox: 'bg-white/15 text-amber-300'
+        };
+      default:
+        return {
+          btn: 'bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-900',
+          iconBox: 'bg-blue-600 text-white'
+        };
+    }
+  }, [settings.driveButtonTheme]);
 
   return (
-    <div
-      dir="rtl"
-      className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
-      onContextMenu={(e) => e.preventDefault()}
-    >
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[94vh] flex flex-col overflow-hidden border border-slate-200">
-        {/* رأس النافذة */}
-        <div className="flex items-center justify-between px-5 py-4 bg-slate-900 text-white">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center shrink-0">
-              <BookOpen className="w-5 h-5 text-blue-400" />
-            </div>
-            <div className="min-w-0">
-              <h3 className="font-extrabold text-base sm:text-lg truncate">{notebook.title}</h3>
-              <p className="text-xs text-slate-400 truncate">
-                {notebook.category} • {notebook.stage} • {notebook.grade} • {notebook.subject}
-              </p>
-            </div>
+    <div dir="rtl" className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+      <div
+        className={`bg-white rounded-3xl shadow-2xl w-full ${
+          isFullscreen ? 'max-w-6xl h-[95vh]' : 'max-w-4xl max-h-[93vh]'
+        } flex flex-col overflow-hidden border border-slate-200`}
+      >
+        {/* رأس نافذة المعاينة */}
+        <div className="flex items-center justify-between px-5 py-3.5 bg-slate-900 text-white shrink-0">
+          <div className="min-w-0">
+            <h3 className="font-extrabold text-base sm:text-lg truncate">{notebook.title}</h3>
+            <p className="text-xs text-slate-400">
+              {notebook.category} • {notebook.stage} • {notebook.grade} • {notebook.subject}
+            </p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white transition"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+              title={isFullscreen ? 'تصغير العرض' : 'ملء الشاشة'}
+            >
+              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        {/* محتوى النافذة */}
+        {/* محتوى المعاينة */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* عارض الصفحات المحمي */}
-          <div className={`${isFullscreen ? 'lg:col-span-12' : 'lg:col-span-7'} flex flex-col`}>
-            <div className="relative bg-slate-900 rounded-2xl overflow-hidden border border-slate-800 flex items-center justify-center min-h-[340px] sm:min-h-[440px] select-none">
-              {loadingSamples ? (
-                <div className="text-slate-300 text-sm flex items-center gap-2">
-                  <RefreshCw className="w-5 h-5 animate-spin text-blue-400" />
-                  جاري تحميل صفحات المعاينة عالية الدقة...
+          <div className="lg:col-span-7 flex flex-col space-y-3">
+            <div
+              onContextMenu={(e) => e.preventDefault()}
+              className="relative bg-slate-100 rounded-2xl border border-slate-200 overflow-hidden flex items-center justify-center min-h-[320px] sm:min-h-[430px] select-none"
+            >
+              {loadingSamples && allPages.length <= 1 ? (
+                <div className="flex flex-col items-center gap-2 text-slate-500 text-xs font-bold">
+                  <RefreshCw className="w-6 h-6 animate-spin text-blue-600" />
+                  <span>جاري تحميل صفحات العينة...</span>
                 </div>
               ) : allPages.length > 0 ? (
                 <>
@@ -682,185 +730,175 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onAddToCart, onOrd
                     src={allPages[activeIdx] || allPages[0]}
                     alt={`صفحة ${activeIdx + 1}`}
                     draggable={false}
-                    className={`w-full ${isFullscreen ? 'max-h-[75vh]' : 'max-h-[460px]'} object-contain pointer-events-none`}
+                    className="max-h-[460px] w-auto object-contain pointer-events-none"
                   />
-                  {/* علامة مائية قطرية لحماية الصفحات */}
-                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden opacity-20">
-                    <span className="text-white font-black text-2xl sm:text-4xl -rotate-30 whitespace-nowrap tracking-widest border-2 border-white/40 px-6 py-2 rounded-2xl">
-                      {settings.siteName} • عينة معاينة
+                  {/* علامة مائية خفيفة للحماية */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-15">
+                    <span className="text-slate-900 font-black text-2xl sm:text-3xl -rotate-12">
+                      عينة معاينة • {settings.siteName}
                     </span>
-                  </div>
-
-                  {/* أزرار التنقل بين الصفحات */}
-                  {allPages.length > 1 && (
-                    <>
-                      <button
-                        onClick={() => setActiveIdx((prev) => (prev > 0 ? prev - 1 : allPages.length - 1))}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-slate-900/80 hover:bg-blue-600 text-white shadow-lg transition"
-                      >
-                        <ArrowRight className="w-5 h-5" />
-                      </button>
-                      <button
-                        onClick={() => setActiveIdx((prev) => (prev < allPages.length - 1 ? prev + 1 : 0))}
-                        className="absolute left-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-slate-900/80 hover:bg-blue-600 text-white shadow-lg transition"
-                      >
-                        <ArrowLeft className="w-5 h-5" />
-                      </button>
-                    </>
-                  )}
-
-                  {/* شريط الأدوات السفلي للعارض */}
-                  <div className="absolute bottom-3 inset-x-3 flex items-center justify-between bg-slate-950/80 backdrop-blur-md px-4 py-2 rounded-xl text-white text-xs">
-                    <span>
-                      صفحة {activeIdx + 1} من {allPages.length}
-                    </span>
-                    <button
-                      onClick={() => setIsFullscreen(!isFullscreen)}
-                      className="flex items-center gap-1.5 text-blue-300 hover:text-white font-bold"
-                    >
-                      {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                      {isFullscreen ? 'تصغير العرض' : 'تكبير ملء الشاشة'}
-                    </button>
                   </div>
                 </>
               ) : (
-                <div className="text-center p-8 text-slate-400">
+                <div className="text-center text-slate-400 p-8">
                   <BookOpen className="w-12 h-12 mx-auto mb-2 opacity-40" />
-                  <p className="text-sm">لا توجد صور معاينة مرفوعة لهذه المذكرة بعد</p>
+                  <p className="text-xs font-bold">لا توجد صور عينة مرفوعة لهذه المذكرة بعد</p>
                 </div>
+              )}
+
+              {allPages.length > 1 && (
+                <>
+                  <button
+                    onClick={() => setActiveIdx((prev) => (prev - 1 + allPages.length) % allPages.length)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-slate-900/80 hover:bg-slate-900 text-white shadow-lg transition"
+                  >
+                    <ArrowRight className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => setActiveIdx((prev) => (prev + 1) % allPages.length)}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-slate-900/80 hover:bg-slate-900 text-white shadow-lg transition"
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                  </button>
+                  <span className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-slate-900/80 text-white text-xs font-extrabold">
+                    صفحة {activeIdx + 1} من {allPages.length}
+                  </span>
+                </>
               )}
             </div>
 
             {/* شريط المصغرات */}
             {allPages.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto py-3 px-1">
-                {allPages.map((url, idx) => (
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {allPages.map((img, i) => (
                   <button
-                    key={idx}
-                    onClick={() => setActiveIdx(idx)}
-                    className={`relative w-16 h-20 rounded-xl overflow-hidden border-2 shrink-0 transition ${
-                      activeIdx === idx ? 'border-blue-600 scale-105 shadow-md' : 'border-slate-200 opacity-70 hover:opacity-100'
+                    key={i}
+                    onClick={() => setActiveIdx(i)}
+                    className={`w-14 h-16 rounded-xl overflow-hidden border-2 shrink-0 transition ${
+                      activeIdx === i ? 'border-blue-600 scale-105' : 'border-slate-200 opacity-70 hover:opacity-100'
                     }`}
                   >
-                    <img src={url} alt="" className="w-full h-full object-cover" />
-                    <span className="absolute bottom-0 inset-x-0 bg-slate-900/75 text-white text-[10px] text-center">
-                      {idx === 0 && notebook.coverUrl ? 'الغلاف' : idx + 1}
-                    </span>
+                    <img src={img} alt="" className="w-full h-full object-cover" />
                   </button>
                 ))}
               </div>
             )}
           </div>
 
-          {/* تفاصيل المذكرة + صندوق التنبيهات */}
-          {!isFullscreen && (
-            <div className="lg:col-span-5 flex flex-col justify-between space-y-4">
-              <div className="space-y-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-bold">
-                    {notebook.subject}
+          {/* تفاصيل المذكرة والتنبيهات وأزرار الطلب */}
+          <div className="lg:col-span-5 flex flex-col justify-between space-y-4">
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                {notebook.badge && (
+                  <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-extrabold">
+                    {notebook.badge}
                   </span>
-                  {notebook.pages > 0 && (
-                    <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">
-                      {notebook.pages} صفحة
-                    </span>
-                  )}
-                  {notebook.isComingSoon && (
-                    <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-bold">
-                      قريبًا / حجز مسبق
-                    </span>
-                  )}
-                </div>
-
-                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80">
-                  <div className="flex items-baseline gap-3">
-                    <span className="text-3xl font-black text-blue-600">{notebook.price} ج.م</span>
-                    {notebook.oldPrice > notebook.price && (
-                      <span className="text-base text-slate-400 line-through font-bold">
-                        {notebook.oldPrice} ج.م
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">شامل إضافة اسم المعلم ورقم الهاتف والشعار</p>
-                </div>
-
-                {notebook.description && (
-                  <div>
-                    <h4 className="text-sm font-extrabold text-slate-800 mb-1.5">وصف ومحتويات المذكرة:</h4>
-                    <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line bg-white p-3.5 rounded-2xl border border-slate-100">
-                      {notebook.description}
-                    </p>
-                  </div>
                 )}
-
-                {/* صندوق التنبيهات الخاص بكل مذكرة */}
-                {(settings.notebookNoticeEnabled || notebook.customNotice) && (
-                  <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-4 space-y-1.5">
-                    <div className="flex items-center gap-2 text-amber-800 font-extrabold text-sm">
-                      <Bell className="w-4 h-4 text-amber-600 shrink-0" />
-                      <span>{settings.notebookNoticeTitle || 'تنبيه هام قبل تأكيد الطلب'}</span>
-                    </div>
-                    {settings.notebookNoticeEnabled && settings.notebookNoticeText && (
-                      <p className="text-xs text-amber-900/90 leading-relaxed">{settings.notebookNoticeText}</p>
-                    )}
-                    {notebook.customNotice && (
-                      <p className="text-xs font-bold text-amber-950 bg-amber-100/70 p-2 rounded-xl mt-1">
-                        ملاحظة خاصة بهذه المذكرة: {notebook.customNotice}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {safeDriveUrl && (
-                  <a
-                    href={safeDriveUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition"
-                  >
-                    <ExternalLink className="w-4 h-4 text-blue-600" />
-                    معاينة نسخة إضافية على Google Drive
-                  </a>
+                {notebook.pages > 0 && (
+                  <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">
+                    {notebook.pages} صفحة PDF
+                  </span>
                 )}
               </div>
 
-              {/* أزرار الطلب والسلة */}
-              <div className="pt-3 border-t border-slate-100 space-y-2.5">
-                <button
-                  onClick={() => {
-                    onClose();
-                    onOrderNow(notebook);
-                  }}
-                  className="w-full py-3.5 px-5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 transition"
+              <div className="flex items-baseline gap-3">
+                <span className="text-3xl font-black text-blue-600">{notebook.price} ج.م</span>
+                {notebook.oldPrice > notebook.price && (
+                  <span className="text-sm text-slate-400 line-through font-bold">{notebook.oldPrice} ج.م</span>
+                )}
+              </div>
+
+              {notebook.description && (
+                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed whitespace-pre-line">
+                  {notebook.description}
+                </p>
+              )}
+
+              {/* صندوق التنبيهات العامة (كل تنبيه في سطر مستقل) */}
+              {settings.notebookNoticeEnabled && noticeLines.length > 0 && (
+                <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-4 space-y-2.5">
+                  <div className="flex items-center gap-2 text-amber-800 font-extrabold text-sm">
+                    <Bell className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>{settings.notebookNoticeTitle || 'تنبيه هام قبل تأكيد الطلب'}</span>
+                  </div>
+                  <ul className="space-y-2 pr-1">
+                    {noticeLines.map((line, idx) => (
+                      <li
+                        key={idx}
+                        className="flex items-start gap-2 text-xs text-amber-950/90 leading-relaxed font-semibold"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-600 shrink-0 mt-2"></span>
+                        <span>{line}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* صندوق التنبيه / الملاحظة الخاصة بهذه المذكرة (منفصل تمامًا) */}
+              {notebook.customNotice && (
+                <div className="bg-indigo-50/90 border border-indigo-200 rounded-2xl p-4 space-y-1.5">
+                  <div className="flex items-center gap-2 text-indigo-900 font-extrabold text-sm">
+                    <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <span>تنبيه خاص بهذه المذكرة</span>
+                  </div>
+                  <p className="text-xs font-bold text-indigo-950 leading-relaxed pr-1">
+                    {notebook.customNotice}
+                  </p>
+                </div>
+              )}
+
+              {safeDriveUrl && (
+                <a
+                  href={safeDriveUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`flex items-center justify-center gap-2.5 w-full py-3 px-4 rounded-2xl border font-extrabold text-xs shadow-2xs transition ${driveThemeStyles.btn}`}
                 >
-                  <ShoppingCart className="w-5 h-5" />
-                  {notebook.isComingSoon ? 'احجز نسختك مسبقًا الآن' : 'اطلب المذكرة الآن باسمك'}
-                </button>
-                {settings.orderEnableMultiCart && (
-                  <button
-                    onClick={() => onAddToCart(notebook)}
-                    className={`w-full py-3 px-4 rounded-2xl font-bold text-xs border transition flex items-center justify-center gap-2 ${
-                      isInCart
-                        ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                        : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
-                    }`}
-                  >
-                    {isInCart ? (
-                      <>
-                        <CheckCircle2 className="w-4 h-4" />
-                        مضافة في سلة الطلبات
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="w-4 h-4" />
-                        أضف إلى سلة الطلبات (لطلب أكثر من مذكرة)
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
+                  <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${driveThemeStyles.iconBox}`}>
+                    <ExternalLink className="w-4 h-4" />
+                  </span>
+                  <span>{settings.driveButtonText || 'معاينة نسخة إضافية على Google Drive'}</span>
+                </a>
+              )}
             </div>
-          )}
+
+            <div className="pt-4 border-t border-slate-100 space-y-2.5">
+              <button
+                onClick={() => {
+                  onClose();
+                  onOrderNow(notebook);
+                }}
+                className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transition"
+              >
+                <ShoppingCart className="w-4 h-4" />
+                {notebook.isComingSoon ? 'احجز نسختك مسبقًا الآن' : 'اطلب المذكرة الآن باسمك وشعارك'}
+              </button>
+
+              {settings.orderEnableMultiCart && (
+                <button
+                  onClick={() => onAddToCart(notebook)}
+                  className={`w-full py-3 rounded-2xl font-extrabold text-xs border transition flex items-center justify-center gap-1.5 ${
+                    isInCart
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                      : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
+                  }`}
+                >
+                  {isInCart ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      مضافة في سلة الطلبات
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" />
+                      أضف إلى سلة الطلبات
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -868,7 +906,7 @@ function ProtectedPreviewModal({ notebook, settings, onClose, onAddToCart, onOrd
 }
 
 // ============================================================================
-// 5. نافذة سلة المشتريات وإتمام الطلب (تدعم الكوبونات العامة + الفردية + خصم الباقات)
+// 5. نافذة إتمام الطلب (تطبيق الكوبونات + خصم المجموعات + مكافأة الطلب القادم)
 // ============================================================================
 function OrderCheckoutModal({
   cart,
@@ -890,19 +928,16 @@ function OrderCheckoutModal({
   const [copiedCode, setCopiedCode] = useState(false);
   const [showAddMorePicker, setShowAddMorePicker] = useState(false);
 
-  // حساب المجموع الفرعي للمذكرات في السلة
   const subtotal = useMemo(() => cart.reduce((sum, item) => sum + (Number(item.price) || 0), 0), [cart]);
 
-  // حساب خصم المجموعات / الباقات تلقائيًا إذا كانت المذكرات المختارة تطابق أي باقة مفعلة
+  // حساب خصم الباقات والمجموعات تلقائيًا
   const bundleDiscountInfo = useMemo(() => {
-    const bundles = Array.isArray(settings.bundles) ? settings.bundles : [];
-    const cartIds = new Set(cart.map((c) => c.id));
+    const cartIdSet = new Set(cart.map((c) => c.id));
     let bestDiscount = 0;
     let matchedBundle = null;
-
-    bundles.forEach((b) => {
-      if (!b.active || !Array.isArray(b.notebookIds) || b.notebookIds.length === 0) return;
-      const allIncluded = b.notebookIds.every((id) => cartIds.has(id));
+    (settings.bundles || []).forEach((b) => {
+      if (b.active === false || !Array.isArray(b.notebookIds) || b.notebookIds.length < 2) return;
+      const allIncluded = b.notebookIds.every((id) => cartIdSet.has(id));
       if (allIncluded) {
         const bundleItemsSum = cart
           .filter((c) => b.notebookIds.includes(c.id))
@@ -917,18 +952,17 @@ function OrderCheckoutModal({
         }
       }
     });
-
     return { discount: bestDiscount, bundle: matchedBundle };
   }, [cart, settings.bundles]);
 
-  // حساب خصم الكوبون (عام أو شخصي لمرة واحدة)
+  // حساب خصم الكوبون
   const couponDiscount = useMemo(() => {
     if (!appliedCoupon) return 0;
-    const baseAfterBundle = Math.max(0, subtotal - bundleDiscountInfo.discount);
+    const afterBundle = Math.max(0, subtotal - bundleDiscountInfo.discount);
     if (appliedCoupon.discountType === 'fixed') {
-      return Math.min(baseAfterBundle, Number(appliedCoupon.discountValue) || 0);
+      return Math.min(afterBundle, Number(appliedCoupon.discountValue) || 0);
     }
-    return Math.round((baseAfterBundle * (Number(appliedCoupon.discountValue) || 0)) / 100);
+    return Math.round((afterBundle * (Number(appliedCoupon.discountValue) || 0)) / 100);
   }, [appliedCoupon, subtotal, bundleDiscountInfo.discount]);
 
   const finalTotal = Math.max(0, subtotal - bundleDiscountInfo.discount - couponDiscount);
@@ -937,130 +971,124 @@ function OrderCheckoutModal({
     setCouponError('');
     const code = couponInput.trim().toUpperCase();
     if (!code) return;
-
     const found = coupons.find((c) => String(c.code || '').toUpperCase() === code);
     if (!found) {
-      setCouponError('كود الخصم غير صحيح، تأكد من كتابته بشكل سليم.');
+      setCouponError('كود الخصم غير صحيح');
       return;
     }
     if (found.active === false) {
-      setCouponError('هذا الكوبون متوقف حاليًا.');
+      setCouponError('هذا الكوبون متوقف حاليًا');
       return;
     }
-    // التحقق من الكوبون الشخصي ذي الاستخدام الواحد
-    if (found.singleUse && (found.used || (Number(found.usedCount) || 0) >= 1)) {
-      setCouponError('هذا الكوبون الشخصي تم استخدامه مسبقًا ولا يمكن استخدامه مرة أخرى.');
+    if (found.singleUse && found.used) {
+      setCouponError('تم استخدام هذا الكوبون الشخصي مسبقًا');
       return;
     }
-    // التحقق من الحد الأقصى للاستخدام للكوبون العام
-    if (!found.singleUse && Number(found.maxUses) > 0 && (Number(found.usedCount) || 0) >= Number(found.maxUses)) {
-      setCouponError('عذرًا، انتهى الحد الأقصى لعدد مرات استخدام هذا الكوبون.');
+    if (found.maxUses > 0 && (found.usedCount || 0) >= found.maxUses) {
+      setCouponError('تم الوصول للحد الأقصى لاستخدام هذا الكوبون');
       return;
     }
-    // التحقق من تاريخ الانتهاء
-    if (found.expiresAt) {
-      const exp = new Date(found.expiresAt);
-      if (!isNaN(exp.getTime()) && exp.getTime() < Date.now()) {
-        setCouponError('انتهت صلاحية هذا الكوبون.');
-        return;
-      }
+    if (found.expiresAt && new Date(found.expiresAt) < new Date()) {
+      setCouponError('انتهت صلاحية هذا الكوبون');
+      return;
     }
-
     setAppliedCoupon(found);
-    onNotify(`تم تطبيق كود الخصم (${found.code}) بنجاح!`, 'success');
+    onNotify(`تم تطبيق كوبون الخصم (${found.code}) بنجاح!`, 'success');
   };
 
   const handleFieldFile = async (fieldId, file) => {
     if (!file) return;
     try {
-      const compressed = await compressImageFile(file, 700, 0.78);
+      const compressed = await compressImageFile(file, 450, 0.78);
       setFormValues((prev) => ({ ...prev, [fieldId]: compressed }));
-      onNotify('تم إرفاق الصورة بنجاح', 'success');
     } catch {
-      onNotify('تعذر معالجة الصورة المختارة', 'error');
+      onNotify('تعذر قراءة ملف الصورة', 'error');
     }
+  };
+
+  const openWhatsAppWithOrder = (orderObj) => {
+    const cleanPhone = String(settings.whatsappNumber || '201000000000').replace(/[^\d]/g, '');
+    const itemsText = (orderObj.items || [])
+      .map((i, idx) => `${idx + 1}. ${i.title} (${i.grade} - ${i.subject}) : ${i.price} ج.م`)
+      .join('\n');
+    const msg = [
+      `مرحبًا ${settings.siteName}، أرغب في تأكيد طلبي:`,
+      `رقم الطلب: ${orderObj.orderNumber}`,
+      `الاسم للغلاف: ${orderObj.teacherName || ''}`,
+      `رقم التواصل: ${orderObj.phone || ''}`,
+      `--- المذكرات المطلوبة ---`,
+      itemsText,
+      `الإجمالي النهائي: ${orderObj.totalPrice} ج.م`,
+      orderObj.couponCode ? `كوبون مستخدم: ${orderObj.couponCode}` : '',
+      orderObj.nextOrderCouponCode ? `كوبون هديتي للطلب القادم: ${orderObj.nextOrderCouponCode}` : ''
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener,noreferrer');
   };
 
   const handleSubmitOrder = async (e) => {
     e.preventDefault();
     if (cart.length === 0) {
-      onNotify('سلة الطلبات فارغة، اختر مذكرة واحدة على الأقل', 'error');
+      onNotify('يرجى اختيار مذكرة واحدة على الأقل', 'error');
       return;
     }
-
-    // التحقق من الحقول الإلزامية
-    const visibleFields = (settings.orderFormFields || []).filter((f) => f.visible !== false);
-    for (const field of visibleFields) {
-      if (field.required && !String(formValues[field.id] || '').trim()) {
-        onNotify(`يرجى إدخال: ${field.label}`, 'error');
-        return;
-      }
-    }
-
     setSubmitting(true);
     try {
       const orderNumber = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
-      const customerPhone = String(formValues.phone || '').trim();
-      const customerName = String(formValues.teacherName || 'عميل').trim();
+      const teacherName = formValues.teacherName || Object.values(formValues)[0] || 'معلم';
+      const phone = formValues.phone || '';
 
-      // توليد كوبون مكافأة فريد للعميل على طلبه القادم (يستخدم مرة واحدة فقط)
+      // توليد كوبون فريد لمرة واحدة للطلب القادم إذا كانت الميزة مفعّلة
       let nextOrderCouponCode = '';
       if (settings.nextOrderRewardEnabled && Number(settings.nextOrderRewardPercent) > 0) {
         nextOrderCouponCode = generateUniqueCouponCode('NEXT');
         try {
           await addDoc(publicCol('coupons'), {
+            title: `مكافأة الطلب القادم (${orderNumber})`,
             code: nextOrderCouponCode,
-            type: 'personal_next',
             discountType: 'percent',
-            discountValue: Number(settings.nextOrderRewardPercent),
+            discountValue: Number(settings.nextOrderRewardPercent) || 15,
             singleUse: true,
             used: false,
             usedCount: 0,
             maxUses: 1,
+            issuedForOrder: orderNumber,
+            issuedForName: teacherName,
+            issuedForPhone: phone,
             active: true,
-            issuedForPhone: customerPhone,
-            issuedForName: customerName,
-            issuedFromOrder: orderNumber,
             createdAt: serverTimestamp()
           });
-        } catch (err) {
-          console.warn('Could not persist reward coupon:', err);
-        }
+        } catch {}
       }
 
-      // تحديث حالة الكوبون المستخدم في هذا الطلب
+      // تحديث حالة الكوبون المستخدم في هذا الطلب (حرقه إذا كان لمرة واحدة)
       if (appliedCoupon && appliedCoupon.id) {
         try {
-          const newUsedCount = (Number(appliedCoupon.usedCount) || 0) + 1;
           await updateDoc(publicDoc('coupons', appliedCoupon.id), {
-            usedCount: newUsedCount,
             used: appliedCoupon.singleUse ? true : false,
-            lastUsedOrder: orderNumber,
+            usedCount: (Number(appliedCoupon.usedCount) || 0) + 1,
             lastUsedAt: serverTimestamp()
           });
-        } catch (err) {
-          console.warn('Coupon update warning:', err);
-        }
+        } catch {}
       }
 
       const orderPayload = {
         orderNumber,
-        items: cart.map((item) => ({
-          id: item.id,
-          title: item.title,
-          category: item.category,
-          stage: item.stage,
-          grade: item.grade,
-          subject: item.subject,
-          price: item.price
+        teacherName,
+        phone,
+        formValues,
+        items: cart.map((c) => ({
+          id: c.id,
+          title: c.title,
+          grade: c.grade,
+          subject: c.subject,
+          price: Number(c.price) || 0
         })),
-        customerData: formValues,
-        teacherName: customerName,
-        phone: customerPhone,
         subtotal,
         bundleDiscount: bundleDiscountInfo.discount,
-        bundleTitle: bundleDiscountInfo.bundle?.title || '',
-        couponCode: appliedCoupon?.code || '',
+        couponCode: appliedCoupon ? appliedCoupon.code : '',
         couponDiscount,
         totalPrice: finalTotal,
         nextOrderCouponCode,
@@ -1069,40 +1097,14 @@ function OrderCheckoutModal({
       };
 
       await addDoc(publicCol('orders'), orderPayload);
-
-      setCompletedOrder({
-        ...orderPayload,
-        nextOrderCouponCode
-      });
+      setCompletedOrder(orderPayload);
       onClearCart();
+      onNotify('تم تسجيل طلبك بنجاح!', 'success');
     } catch (err) {
-      onNotify(`حدث خطأ أثناء إرسال الطلب: ${err?.message || 'حاول مرة أخرى'}`, 'error');
+      onNotify(`حدث خطأ أثناء تسجيل الطلب: ${err?.message || 'حاول مرة أخرى'}`, 'error');
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const openWhatsAppWithOrder = (order) => {
-    const cleanWa = String(settings.whatsappNumber || '').replace(/[^\d]/g, '');
-    const itemsLines = order.items.map((it, idx) => `${idx + 1}. ${it.title} (${it.grade}) - ${it.price} ج.م`).join('\n');
-    const msg = [
-      `السلام عليكم ورحمة الله وبركاته،`,
-      `أرغب في تأكيد طلبي من *${settings.siteName}*`,
-      `📌 *رقم الطلب:* ${order.orderNumber}`,
-      `👤 *الاسم للطباعة:* ${order.teacherName}`,
-      `📱 *الهاتف:* ${order.phone}`,
-      `📚 *المذكرات المطلوبة:*`,
-      itemsLines,
-      order.bundleDiscount > 0 ? `🎁 *خصم الباقة (${order.bundleTitle}):* -${order.bundleDiscount} ج.م` : '',
-      order.couponCode ? `🏷️ *كوبون الخصم (${order.couponCode}):* -${order.couponDiscount} ج.م` : '',
-      `💰 *الإجمالي النهائي:* ${order.totalPrice} ج.م`,
-      order.nextOrderCouponCode ? `🎉 *هدية طلبي القادم:* ${order.nextOrderCouponCode}` : ''
-    ]
-      .filter(Boolean)
-      .join('\n');
-
-    const url = `https://wa.me/${cleanWa}?text=${encodeURIComponent(msg)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -2403,17 +2405,18 @@ function AdminPortal({
             { id: 'taxonomy', label: 'الأقسام والمراحل والصفوف', icon: Layers },
             { id: 'settings', label: 'إعدادات الموقع والمظهر وطلب العميل', icon: Settings }
           ].map((tab) => {
-            const Icon = tab.icon;
-            const active = activeTab === tab.id;
+            const IconComp = tab.icon;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold flex items-center gap-2 transition ${
-                  active ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'
+                  activeTab === tab.id
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                    : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                <Icon className="w-4 h-4" />
+                <IconComp className="w-4 h-4" />
                 {tab.label}
               </button>
             );
@@ -2421,14 +2424,13 @@ function AdminPortal({
         </div>
 
         {/* ===================================================================== */}
-        {/* التبويب 1: إدارة المذكرات (إضافة / تعديل / إظهار وإخفاء / تثبيت في ما الجديد) */}
+        {/* التبويب 1: إدارة المذكرات (إضافة / تعديل / إخفاء / تثبيت في ما الجديد) */}
         {/* ===================================================================== */}
         {activeTab === 'notebooks' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* نموذج إضافة أو تعديل مذكرة */}
             <form
               onSubmit={handleSaveNotebook}
-              className="lg:col-span-5 bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4 h-fit"
+              className="lg:col-span-5 bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4 h-fit"
             >
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-black text-slate-900">
@@ -2438,7 +2440,7 @@ function AdminPortal({
                   <button
                     type="button"
                     onClick={() => setEditingNotebookId(null)}
-                    className="text-xs text-rose-600 font-bold"
+                    className="text-xs font-bold text-rose-600 hover:underline"
                   >
                     إلغاء التعديل
                   </button>
@@ -3668,11 +3670,10 @@ function AdminPortal({
                         onClick={() =>
                           setLocalSettings({
                             ...localSettings,
-                            trustCardPoints: moveArrayItem(localSettings.trustCardPoints, idx, -1)
+                            trustCardPoints: moveArrayItem(localSettings.trustCardPoints || [], idx, -1)
                           })
                         }
-                        className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200"
-                        title="تحريك لأعلى"
+                        className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200"
                       >
                         <ChevronUp className="w-3.5 h-3.5" />
                       </button>
@@ -3681,11 +3682,10 @@ function AdminPortal({
                         onClick={() =>
                           setLocalSettings({
                             ...localSettings,
-                            trustCardPoints: moveArrayItem(localSettings.trustCardPoints, idx, 1)
+                            trustCardPoints: moveArrayItem(localSettings.trustCardPoints || [], idx, 1)
                           })
                         }
-                        className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200"
-                        title="تحريك لأسفل"
+                        className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200"
                       >
                         <ChevronDown className="w-3.5 h-3.5" />
                       </button>
@@ -3708,7 +3708,6 @@ function AdminPortal({
                           })
                         }
                         className="p-2 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100"
-                        title="حذف النقطة"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -3718,10 +3717,10 @@ function AdminPortal({
                   <div className="flex gap-2 pt-1">
                     <input
                       type="text"
-                      placeholder="أضف نقطة ميزة جديدة داخل البطاقة..."
+                      placeholder="أضف ميزة جديدة للبطاقة..."
                       value={newTrustPoint}
                       onChange={(e) => setNewTrustPoint(e.target.value)}
-                      className="flex-1 px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                      className="flex-1 px-3.5 py-2 rounded-xl border border-slate-300 text-xs"
                     />
                     <button
                       type="button"
@@ -3733,13 +3732,94 @@ function AdminPortal({
                         });
                         setNewTrustPoint('');
                       }}
-                      className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold"
+                      className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold"
                     >
                       + إضافة نقطة
                     </button>
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* 2. التحكم في قسم «ما الجديد؟» في الصفحة الرئيسية */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-lg font-black text-slate-900">التحكم في قسم «ما الجديد؟» بالصفحة الرئيسية</h3>
+                <label className="flex items-center gap-2 text-xs font-extrabold cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={localSettings.whatsNewEnabled}
+                    onChange={(e) => setLocalSettings({ ...localSettings, whatsNewEnabled: e.target.checked })}
+                    className="w-4 h-4 accent-blue-600"
+                  />
+                  إظهار قسم «ما الجديد» في الصفحة الرئيسية
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">عنوان القسم</label>
+                  <input
+                    type="text"
+                    value={localSettings.whatsNewTitle}
+                    onChange={(e) => setLocalSettings({ ...localSettings, whatsNewTitle: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">طريقة اختيار المذكرات</label>
+                  <select
+                    value={localSettings.whatsNewMode}
+                    onChange={(e) => setLocalSettings({ ...localSettings, whatsNewMode: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold bg-white"
+                  >
+                    <option value="auto">تلقائي (أحدث المذكرات المضافة)</option>
+                    <option value="manual">اختيار يدوي من مكتبتي</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">عدد المذكرات المعروضة (تلقائي)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={localSettings.whatsNewCount}
+                    onChange={(e) => setLocalSettings({ ...localSettings, whatsNewCount: Number(e.target.value) || 6 })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
+                  />
+                </div>
+              </div>
+
+              {localSettings.whatsNewMode === 'manual' && (
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
+                  <p className="text-xs font-extrabold text-slate-700">حدد المذكرات التي تريد إبرازها في «ما الجديد»:</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-44 overflow-y-auto">
+                    {notebooks.map((nb) => {
+                      const checked = (localSettings.whatsNewSelectedIds || []).includes(nb.id);
+                      return (
+                        <label
+                          key={nb.id}
+                          className={`flex items-center gap-2 p-2 rounded-xl border text-xs cursor-pointer ${
+                            checked ? 'bg-blue-50 border-blue-300 font-bold' : 'bg-white border-slate-200'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              const set = new Set(localSettings.whatsNewSelectedIds || []);
+                              if (set.has(nb.id)) set.delete(nb.id);
+                              else set.add(nb.id);
+                              setLocalSettings({ ...localSettings, whatsNewSelectedIds: Array.from(set) });
+                            }}
+                          />
+                          <span className="truncate">{nb.title}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* 3. التحكم في قسم الأخبار والمذكرات قيد التجهيز + تنبيهات صفحة المذكرة */}
@@ -3824,10 +3904,10 @@ function AdminPortal({
                 </div>
               </div>
 
-              {/* تنبيهات صفحة كل مذكرة */}
+              {/* تنبيهات صفحة كل مذكرة + تخصيص زر Google Drive */}
               <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-base font-black text-slate-900">التنبيهات داخل صفحة كل مذكرة</h3>
+                  <h3 className="text-base font-black text-slate-900">التنبيهات وزر Google Drive داخل صفحة المذكرة</h3>
                   <label className="flex items-center gap-2 text-xs font-extrabold">
                     <input
                       type="checkbox"
@@ -3850,13 +3930,57 @@ function AdminPortal({
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">نص التنبيه العام للعميل</label>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">
+                    نصوص التنبيهات العامة (اكتب كل تنبيه في سطر مستقل أو افصل بينها بـ - )
+                  </label>
                   <textarea
                     rows={4}
                     value={localSettings.notebookNoticeText}
                     onChange={(e) => setLocalSettings({ ...localSettings, notebookNoticeText: e.target.value })}
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs leading-relaxed"
                   />
+                </div>
+
+                {/* التحكم في نص ولون أيقونة زر Google Drive */}
+                <div className="pt-3 border-t border-slate-100 space-y-3">
+                  <h4 className="text-xs font-black text-slate-800">تخصيص زر وأيقونة Google Drive</h4>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 block mb-1">النص المكتوب على الزر</label>
+                    <input
+                      type="text"
+                      value={localSettings.driveButtonText || ''}
+                      onChange={(e) => setLocalSettings({ ...localSettings, driveButtonText: e.target.value })}
+                      placeholder="معاينة نسخة إضافية على Google Drive"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 block mb-1.5">لون الزر والأيقونة</label>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { id: 'blue', label: 'أزرق', dot: 'bg-blue-600' },
+                        { id: 'emerald', label: 'أخضر', dot: 'bg-emerald-600' },
+                        { id: 'amber', label: 'ذهبي', dot: 'bg-amber-500' },
+                        { id: 'rose', label: 'أحمر', dot: 'bg-rose-600' },
+                        { id: 'purple', label: 'بنفسجي', dot: 'bg-purple-600' },
+                        { id: 'slate', label: 'داكن', dot: 'bg-slate-900' }
+                      ].map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setLocalSettings({ ...localSettings, driveButtonTheme: opt.id })}
+                          className={`px-3 py-1.5 rounded-xl border text-xs font-extrabold flex items-center gap-1.5 transition ${
+                            (localSettings.driveButtonTheme || 'blue') === opt.id
+                              ? 'border-slate-900 bg-slate-100 shadow-2xs'
+                              : 'border-slate-200 bg-white hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className={`w-3.5 h-3.5 rounded-full ${opt.dot}`}></span>
+                          <span>{opt.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
