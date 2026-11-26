@@ -1976,7 +1976,7 @@ function EmptySectionBox({ settings, onRequestPreOrder }) {
 // ============================================================================
 // 8. صفحة العروض والباقات (تتيح للزائر طلب مجموعات المذكرات بخصم فوري)
 // ============================================================================
-function OffersAndBundlesPage({ notebooks, settings, coupons, onOrderBundle, onNotify }) {
+function OffersAndBundlesPage({ notebooks, settings, coupons, onPreview, onOrderBundle, onNotify }) {
   const activePublicCoupons = useMemo(
     () => coupons.filter((c) => c.active !== false && !c.singleUse),
     [coupons]
@@ -2089,14 +2089,16 @@ function OffersAndBundlesPage({ notebooks, settings, coupons, onOrderBundle, onN
                         {includedNotebooks.map((nb) => (
                           <div
                             key={nb.id}
-                            className="flex items-center justify-between gap-3 p-2.5 rounded-2xl bg-slate-50/90 hover:bg-blue-50/50 border border-slate-200/70 transition"
+                            onClick={() => onPreview(nb)}
+                            title="اضغط لمعاينة تفاصيل وصفحات هذه المذكرة"
+                            className="flex items-center justify-between gap-3 p-2.5 rounded-2xl bg-slate-50/90 hover:bg-blue-50 border border-slate-200/70 hover:border-blue-300 cursor-pointer transition group/item"
                           >
                             <div className="flex items-center gap-3 min-w-0">
                               {nb.coverUrl ? (
                                 <img
                                   src={nb.coverUrl}
                                   alt=""
-                                  className="w-10 h-12 rounded-xl object-cover shrink-0 border border-slate-200 shadow-2xs"
+                                  className="w-10 h-12 rounded-xl object-cover shrink-0 border border-slate-200 shadow-2xs group-hover/item:scale-105 transition-transform"
                                 />
                               ) : (
                                 <div className="w-10 h-12 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
@@ -2104,7 +2106,7 @@ function OffersAndBundlesPage({ notebooks, settings, coupons, onOrderBundle, onN
                                 </div>
                               )}
                               <div className="min-w-0">
-                                <p className="font-extrabold text-xs sm:text-sm text-slate-900 truncate">
+                                <p className="font-extrabold text-xs sm:text-sm text-slate-900 group-hover/item:text-blue-700 truncate transition-colors">
                                   {nb.title}
                                 </p>
                                 <span className="inline-block text-[11px] font-bold text-slate-500">
@@ -2113,9 +2115,15 @@ function OffersAndBundlesPage({ notebooks, settings, coupons, onOrderBundle, onN
                               </div>
                             </div>
 
-                            <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-extrabold text-slate-600 shrink-0">
-                              {nb.price} ج.م
-                            </span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-100/80 text-blue-700 group-hover/item:bg-blue-600 group-hover/item:text-white text-[11px] font-extrabold transition-colors">
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>التفاصيل</span>
+                              </span>
+                              <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-extrabold text-slate-600">
+                                {nb.price} ج.م
+                              </span>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -5608,6 +5616,7 @@ function MuzakkiratiApp() {
             notebooks={visibleNotebooks}
             settings={settings}
             coupons={coupons}
+            onPreview={setPreviewNotebook}
             onOrderBundle={handleOrderBundle}
             onNotify={notify}
           />
