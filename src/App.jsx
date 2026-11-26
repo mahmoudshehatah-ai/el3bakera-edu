@@ -60,7 +60,9 @@ import {
   ZoomOut,
   RotateCcw,
   Image as ImageIcon,
-  Download
+  Download,
+  Folder,
+  FolderOpen
 } from 'lucide-react';
 
 // ==========================================
@@ -1642,157 +1644,356 @@ function CatalogPage({
   onOrderNotebook,
   onOrderCustom
 }) {
-  const [filters, setFilters] = useState({
-    search: '',
-    category: initialCategory || 'all',
-    stage: 'all',
-    grade: 'all',
-    subject: 'all'
-  });
+  const [selectedCategory, setSelectedCategory] = useState(initialCategory || 'all');
+  const [selectedStage, setSelectedStage] = useState('all');
+  const [selectedGrade, setSelectedGrade] = useState('all');
+  const [selectedSubject, setSelectedSubject] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    setFilters((prev) => ({ ...prev, category: initialCategory || 'all' }));
+    setSelectedCategory(initialCategory || 'all');
+    setSelectedStage('all');
+    setSelectedGrade('all');
+    setSelectedSubject('all');
+    setSearchQuery('');
   }, [initialCategory]);
 
+  const visibleNotebooks = useMemo(
+    () => notebooks.filter((nb) => !nb.isHidden),
+    [notebooks]
+  );
+
+  // Determine current folder level when not searching
+  const isSearching = searchQuery.trim().length > 0;
+  const folderLevel = useMemo(() => {
+    if (isSearching) return 'notebooks';
+    if (selectedCategory === 'all') return 'categories';
+    if (selectedStage === 'all') return 'stages';
+    if (selectedGrade === 'all') return 'grades';
+    return 'notebooks';
+  }, [isSearching, selectedCategory, selectedStage, selectedGrade]);
+
   const filteredNotebooks = useMemo(() => {
-    return notebooks.filter((nb) => {
-      if (nb.isHidden) return false;
-      if (filters.category !== 'all' && nb.category !== filters.category) return false;
-      if (filters.stage !== 'all' && nb.stage !== filters.stage) return false;
-      if (filters.grade !== 'all' && nb.grade !== filters.grade) return false;
-      if (filters.subject !== 'all' && nb.subject !== filters.subject) return false;
-      if (filters.search.trim()) {
-        const q = filters.search.trim().toLowerCase();
-        const haystack = `${nb.title} ${nb.description} ${nb.subject} ${nb.grade} ${nb.category}`.toLowerCase();
+    return visibleNotebooks.filter((nb) => {
+      if (selectedCategory !== 'all' && nb.category !== selectedCategory) return false;
+      if (selectedStage !== 'all' && nb.stage !== selectedStage) return false;
+      if (selectedGrade !== 'all' && nb.grade !== selectedGrade) return false;
+      if (selectedSubject !== 'all' && nb.subject !== selectedSubject) return false;
+      if (isSearching) {
+        const q = searchQuery.trim().toLowerCase();
+        const haystack = `${nb.title} ${nb.description} ${nb.subject} ${nb.grade} ${nb.stage} ${nb.category}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       return true;
     });
-  }, [notebooks, filters]);
+  }, [visibleNotebooks, selectedCategory, selectedStage, selectedGrade, selectedSubject, isSearching, searchQuery]);
+
+  const handleStepBack = () => {
+    if (selectedGrade !== 'all') {
+      setSelectedGrade('all');
+      setSelectedSubject('all');
+    } else if (selectedStage !== 'all') {
+      setSelectedStage('all');
+    } else if (selectedCategory !== 'all') {
+      setSelectedCategory('all');
+    }
+  };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
-      {/* Filters Bar */}
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-6">
+      {/* Top Search & Breadcrumb Navigation */}
       <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-xs space-y-4">
         <div className="relative">
           <Search className="w-5 h-5 text-slate-400 absolute right-4 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="ابحث باسم المذكرة، المادة، أو الصف الدراسي..."
-            value={filters.search}
-            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+            placeholder="ابحث مباشرة باسم المذكرة، المادة، أو الصف الدراسي..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pr-12 pl-4 py-3 rounded-2xl border border-slate-200 text-sm focus:border-blue-600 outline-hidden"
           />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <select
-            value={filters.category}
-            onChange={(e) => setFilters({ ...filters, category: e.target.value })}
-            className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold bg-slate-50"
-          >
-            <option value="all">كل الأقسام</option>
-            {settings.categories.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+        {/* Folder Breadcrumbs */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <div className="flex flex-wrap items-center gap-1.5 text-xs font-extrabold">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedCategory('all');
+                setSelectedStage('all');
+                setSelectedGrade('all');
+                setSelectedSubject('all');
+                setSearchQuery('');
+              }}
+              className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
+                selectedCategory === 'all' && !isSearching
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+              }`}
+            >
+              كل الأقسام
+            </button>
 
-          <select
-            value={filters.stage}
-            onChange={(e) => setFilters({ ...filters, stage: e.target.value })}
-            className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold bg-slate-50"
-          >
-            <option value="all">كل المراحل الدراسية</option>
-            {settings.stages.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+            {selectedCategory !== 'all' && (
+              <>
+                <ChevronLeft className="w-4 h-4 text-slate-400" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedStage('all');
+                    setSelectedGrade('all');
+                    setSelectedSubject('all');
+                  }}
+                  className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
+                    selectedStage === 'all'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  {selectedCategory}
+                </button>
+              </>
+            )}
 
-          <select
-            value={filters.grade}
-            onChange={(e) => setFilters({ ...filters, grade: e.target.value })}
-            className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold bg-slate-50"
-          >
-            <option value="all">كل الصفوف الدراسية</option>
-            {settings.grades.map((g) => (
-              <option key={g} value={g}>
-                {g}
-              </option>
-            ))}
-          </select>
+            {selectedStage !== 'all' && (
+              <>
+                <ChevronLeft className="w-4 h-4 text-slate-400" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedGrade('all');
+                    setSelectedSubject('all');
+                  }}
+                  className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${
+                    selectedGrade === 'all'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  {selectedStage}
+                </button>
+              </>
+            )}
 
-          <select
-            value={filters.subject}
-            onChange={(e) => setFilters({ ...filters, subject: e.target.value })}
-            className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold bg-slate-50"
-          >
-            <option value="all">كل المواد</option>
-            {settings.subjects.map((sub) => (
-              <option key={sub} value={sub}>
-                {sub}
-              </option>
-            ))}
-          </select>
+            {selectedGrade !== 'all' && (
+              <>
+                <ChevronLeft className="w-4 h-4 text-slate-400" />
+                <span className="px-3 py-1.5 rounded-xl bg-blue-600 text-white">
+                  {selectedGrade}
+                </span>
+              </>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {folderLevel === 'notebooks' && settings.subjects.length > 0 && (
+              <select
+                value={selectedSubject}
+                onChange={(e) => setSelectedSubject(e.target.value)}
+                className="px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold bg-slate-50"
+              >
+                <option value="all">كل المواد</option>
+                {settings.subjects.map((sub) => (
+                  <option key={sub} value={sub}>
+                    {sub}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {(selectedCategory !== 'all' || isSearching) && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (isSearching) setSearchQuery('');
+                  else handleStepBack();
+                }}
+                className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold flex items-center gap-1 cursor-pointer"
+              >
+                <ChevronRight className="w-4 h-4" />
+                <span>رجوع</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Results or Customizable Empty State */}
-      {filteredNotebooks.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredNotebooks.map((nb) => (
-            <NotebookCard
-              key={nb.id}
-              notebook={nb}
-              onPreview={() => onPreviewNotebook(nb)}
-              onOrder={() => onOrderNotebook(nb)}
-            />
-          ))}
+      {/* LEVEL 1: Categories Folders */}
+      {folderLevel === 'categories' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {settings.categories.map((cat) => {
+            const count = visibleNotebooks.filter((n) => n.category === cat).length;
+            return (
+              <div
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className="bg-white rounded-3xl p-6 border border-slate-200 hover:border-blue-400 shadow-xs hover:shadow-lg transition-all cursor-pointer flex items-center justify-between gap-4 group"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition flex items-center justify-center shrink-0">
+                    <Folder className="w-7 h-7" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-slate-900 group-hover:text-blue-700 transition">
+                      {cat}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {count > 0 ? `${count} مذكرة متاحة` : 'اضغط لاستعراض المراحل'}
+                    </p>
+                  </div>
+                </div>
+                <ChevronLeft className="w-5 h-5 text-slate-400 group-hover:text-blue-600" />
+              </div>
+            );
+          })}
         </div>
-      ) : (
-        <div className="bg-white rounded-3xl p-8 sm:p-12 border border-slate-200 text-center max-w-2xl mx-auto space-y-5 shadow-xs">
-          {settings.emptyCatalogImage ? (
-            <img
-              src={settings.emptyCatalogImage}
-              alt="Empty Section"
-              className="max-h-60 mx-auto rounded-2xl object-contain"
+      )}
+
+      {/* LEVEL 2: Educational Stages Folders inside Selected Category */}
+      {folderLevel === 'stages' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-black text-slate-900">
+              اختر المرحلة الدراسية داخل «{selectedCategory}»
+            </h3>
+            <button
+              type="button"
+              onClick={() => setSelectedGrade('__ALL_IN_CATEGORY__')}
+              className="hidden"
             />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {settings.stages.map((st) => {
+              const count = visibleNotebooks.filter(
+                (n) => n.category === selectedCategory && n.stage === st
+              ).length;
+              return (
+                <div
+                  key={st}
+                  onClick={() => setSelectedStage(st)}
+                  className="bg-white rounded-3xl p-6 border border-slate-200 hover:border-emerald-400 shadow-xs hover:shadow-lg transition-all cursor-pointer flex items-center justify-between gap-4 group"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition flex items-center justify-center shrink-0">
+                      <FolderOpen className="w-7 h-7" />
+                    </div>
+                    <div>
+                      <h4 className="text-base font-black text-slate-900 group-hover:text-emerald-700 transition">
+                        {st}
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {count > 0 ? `يحتوي على ${count} مذكرة` : 'تصفح صفوف المرحلة'}
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronLeft className="w-5 h-5 text-slate-400 group-hover:text-emerald-600" />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* LEVEL 3: Grades Folders inside Selected Stage */}
+      {folderLevel === 'grades' && (
+        <div className="space-y-4">
+          <h3 className="text-lg font-black text-slate-900">
+            اختر الصف الدراسي داخل «{selectedStage}»
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {settings.grades.map((gr) => {
+              const count = visibleNotebooks.filter(
+                (n) =>
+                  n.category === selectedCategory &&
+                  n.stage === selectedStage &&
+                  n.grade === gr
+              ).length;
+              return (
+                <div
+                  key={gr}
+                  onClick={() => setSelectedGrade(gr)}
+                  className="bg-white rounded-3xl p-6 border border-slate-200 hover:border-amber-400 shadow-xs hover:shadow-lg transition-all cursor-pointer flex items-center justify-between gap-4 group"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 group-hover:bg-amber-500 group-hover:text-white transition flex items-center justify-center shrink-0">
+                      <Folder className="w-7 h-7" />
+                    </div>
+                    <div>
+                      <h4 className="text-base font-black text-slate-900 group-hover:text-amber-700 transition">
+                        {gr}
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {count > 0 ? `${count} مذكرة جاهزة` : 'افتح المجلد'}
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronLeft className="w-5 h-5 text-slate-400 group-hover:text-amber-600" />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* LEVEL 4: Notebooks inside Selected Grade (or Search Results) */}
+      {folderLevel === 'notebooks' && (
+        <>
+          {filteredNotebooks.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredNotebooks.map((nb) => (
+                <NotebookCard
+                  key={nb.id}
+                  notebook={nb}
+                  onPreview={() => onPreviewNotebook(nb)}
+                  onOrder={() => onOrderNotebook(nb)}
+                />
+              ))}
+            </div>
           ) : (
-            <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
-              <BookOpen className="w-8 h-8" />
+            <div className="bg-white rounded-3xl p-8 sm:p-12 border border-slate-200 text-center max-w-2xl mx-auto space-y-5 shadow-xs">
+              {settings.emptyCatalogImage ? (
+                <img
+                  src={settings.emptyCatalogImage}
+                  alt="Empty Section"
+                  className="max-h-60 mx-auto rounded-2xl object-contain"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
+                  <BookOpen className="w-8 h-8" />
+                </div>
+              )}
+              <div className="space-y-2">
+                <h3 className="text-xl font-black text-slate-900">
+                  {settings.emptyCatalogTitle || 'جاري تجهيز أحدث المذكرات لهذا القسم قريبًا!'}
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
+                  {settings.emptyCatalogSubtitle ||
+                    'نعمل حاليًا على تنسيق ومراجعة مذكرات هذا القسم بأعلى جودة. يمكنك حجز مذكرتك مسبقًا.'}
+                </p>
+              </div>
+              <div className="flex flex-wrap justify-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={onOrderCustom}
+                  className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-md cursor-pointer"
+                >
+                  {settings.emptyCatalogBtnText || 'اطلب تجهيز مذكرتك الآن'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isSearching) setSearchQuery('');
+                    else handleStepBack();
+                  }}
+                  className="px-5 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-extrabold cursor-pointer"
+                >
+                  العودة للخلف
+                </button>
+              </div>
             </div>
           )}
-          <div className="space-y-2">
-            <h3 className="text-xl font-black text-slate-900">
-              {settings.emptyCatalogTitle || 'جاري تجهيز أحدث المذكرات لهذا القسم قريبًا!'}
-            </h3>
-            <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
-              {settings.emptyCatalogSubtitle ||
-                'نعمل حاليًا على تنسيق ومراجعة مذكرات هذا القسم بأعلى جودة. يمكنك حجز مذكرتك مسبقًا.'}
-            </p>
-          </div>
-          <div className="flex flex-wrap justify-center gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onOrderCustom}
-              className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-md cursor-pointer"
-            >
-              {settings.emptyCatalogBtnText || 'اطلب تجهيز مذكرتك الآن'}
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                setFilters({ search: '', category: 'all', stage: 'all', grade: 'all', subject: 'all' })
-              }
-              className="px-5 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-extrabold cursor-pointer"
-            >
-              إعادة ضبط الفلتر
-            </button>
-          </div>
-        </div>
+        </>
       )}
     </div>
   );
