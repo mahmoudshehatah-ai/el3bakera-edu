@@ -163,6 +163,7 @@ const DEFAULT_SETTINGS = {
   heroHeight: 540,
   promoBarEnabled: true,
   promoBarText: '🎉 عرض خاص للمعلمين: خصم 15% على جميع مذكرات الترم الأول + إضافة الشعار مجانًا لفترة محدودة!',
+  trustCardEnabled: true,
   trustCardTitle: 'لماذا يثق بنا المعلمون؟',
   trustCardPoints: [
     'محتوى علمي منقح ومطابق لأحدث مواصفات الوزارة',
@@ -2039,6 +2040,7 @@ function AdminPortal({
   const [selectedStageForGrades, setSelectedStageForGrades] = useState(localSettings.stages[0] || '');
   const [newGradeName, setNewGradeName] = useState('');
   const [newSubjectName, setNewSubjectName] = useState('');
+  const [newTrustPoint, setNewTrustPoint] = useState('');
 
   // حالة إضافة خبر جديد
   const [newsForm, setNewsForm] = useState({ badge: 'خبر جديد', title: '', content: '', color: 'blue' });
@@ -3631,53 +3633,111 @@ function AdminPortal({
                   />
                 </div>
               </div>
-            </div>
 
-            {/* 2. التحكم في قسم «ما الجديد؟» في الصفحة الرئيسية */}
-            <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-black text-slate-900">التحكم في قسم «ما الجديد؟» بالصفحة الرئيسية</h3>
-                <label className="flex items-center gap-2 text-xs font-extrabold">
-                  <input
-                    type="checkbox"
-                    checked={localSettings.whatsNewEnabled}
-                    onChange={(e) => setLocalSettings({ ...localSettings, whatsNewEnabled: e.target.checked })}
-                    className="w-4 h-4 accent-blue-600"
-                  />
-                  إظهار القسم
-                </label>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* التحكم الكامل في بطاقة «لماذا يثق بنا المعلمون؟» */}
+              <div className="pt-4 mt-4 border-t border-slate-200 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="text-sm font-black text-slate-900">التحكم في بطاقة «لماذا يثق بنا المعلمون؟»</h4>
+                  <label className="flex items-center gap-2 text-xs font-extrabold text-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={localSettings.trustCardEnabled !== false}
+                      onChange={(e) => setLocalSettings({ ...localSettings, trustCardEnabled: e.target.checked })}
+                      className="w-4 h-4 accent-blue-600"
+                    />
+                    إظهار البطاقة في الواجهة الرئيسية
+                  </label>
+                </div>
+
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">عنوان القسم</label>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">عنوان البطاقة</label>
                   <input
                     type="text"
-                    value={localSettings.whatsNewTitle}
-                    onChange={(e) => setLocalSettings({ ...localSettings, whatsNewTitle: e.target.value })}
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                    value={localSettings.trustCardTitle}
+                    onChange={(e) => setLocalSettings({ ...localSettings, trustCardTitle: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
                   />
                 </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">طريقة اختيار المذكرات</label>
-                  <select
-                    value={localSettings.whatsNewMode}
-                    onChange={(e) => setLocalSettings({ ...localSettings, whatsNewMode: e.target.value })}
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white"
-                  >
-                    <option value="auto">تلقائي (أحدث المذكرات المضافة)</option>
-                    <option value="manual">يدوي (المذكرات التي أحددها بنفسي)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">عدد المذكرات في العرض التلقائي</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={12}
-                    value={localSettings.whatsNewCount}
-                    onChange={(e) => setLocalSettings({ ...localSettings, whatsNewCount: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
-                  />
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-600 block">نقاط المميزات داخل البطاقة</label>
+                  {(localSettings.trustCardPoints || []).map((pt, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLocalSettings({
+                            ...localSettings,
+                            trustCardPoints: moveArrayItem(localSettings.trustCardPoints, idx, -1)
+                          })
+                        }
+                        className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200"
+                        title="تحريك لأعلى"
+                      >
+                        <ChevronUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLocalSettings({
+                            ...localSettings,
+                            trustCardPoints: moveArrayItem(localSettings.trustCardPoints, idx, 1)
+                          })
+                        }
+                        className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200"
+                        title="تحريك لأسفل"
+                      >
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </button>
+                      <input
+                        type="text"
+                        value={pt}
+                        onChange={(e) => {
+                          const copy = [...(localSettings.trustCardPoints || [])];
+                          copy[idx] = e.target.value;
+                          setLocalSettings({ ...localSettings, trustCardPoints: copy });
+                        }}
+                        className="flex-1 px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLocalSettings({
+                            ...localSettings,
+                            trustCardPoints: (localSettings.trustCardPoints || []).filter((_, i) => i !== idx)
+                          })
+                        }
+                        className="p-2 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100"
+                        title="حذف النقطة"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+
+                  <div className="flex gap-2 pt-1">
+                    <input
+                      type="text"
+                      placeholder="أضف نقطة ميزة جديدة داخل البطاقة..."
+                      value={newTrustPoint}
+                      onChange={(e) => setNewTrustPoint(e.target.value)}
+                      className="flex-1 px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!newTrustPoint.trim()) return;
+                        setLocalSettings({
+                          ...localSettings,
+                          trustCardPoints: [...(localSettings.trustCardPoints || []), newTrustPoint.trim()]
+                        });
+                        setNewTrustPoint('');
+                      }}
+                      className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold"
+                    >
+                      + إضافة نقطة
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -4685,7 +4745,7 @@ function MuzakkiratiApp() {
                 />
               )}
               <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-14 grid grid-cols-1 lg:grid-cols-12 gap-10 items-center w-full">
-                <div className="lg:col-span-7 space-y-6">
+                <div className={`${settings.trustCardEnabled !== false ? 'lg:col-span-7' : 'lg:col-span-12 max-w-3xl'} space-y-6`}>
                   {settings.heroBadge && (
                     <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-400/15 border border-amber-400/30 text-amber-300 text-xs font-extrabold">
                       <Sparkles className="w-4 h-4" />
@@ -4712,30 +4772,34 @@ function MuzakkiratiApp() {
                 </div>
 
                 {/* بطاقة لماذا يثق بنا المعلمون */}
-                <div className="lg:col-span-5">
-                  <div className="bg-slate-900/85 backdrop-blur-md border border-white/10 rounded-3xl p-6 sm:p-8 space-y-4 shadow-2xl">
-                    <h3 className="text-lg font-black text-amber-400 flex items-center gap-2">
-                      <ShieldCheck className="w-5 h-5" />
-                      <span>{settings.trustCardTitle}</span>
-                    </h3>
-                    <ul className="space-y-3">
-                      {(settings.trustCardPoints || []).map((pt, idx) => (
-                        <li key={idx} className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-200 leading-relaxed">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                          <span>{pt}</span>
-                        </li>
-                      ))}
-                    </ul>
+                {settings.trustCardEnabled !== false && (
+                  <div className="lg:col-span-5">
+                    <div className="bg-slate-900/85 backdrop-blur-md border border-white/10 rounded-3xl p-6 sm:p-8 space-y-4 shadow-2xl">
+                      <h3 className="text-lg font-black text-amber-400 flex items-center gap-2">
+                        <ShieldCheck className="w-5 h-5" />
+                        <span>{settings.trustCardTitle}</span>
+                      </h3>
+                      <ul className="space-y-3">
+                        {(settings.trustCardPoints || []).map((pt, idx) => (
+                          <li key={idx} className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-200 leading-relaxed">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                            <span>{pt}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </section>
 
-            {/* 2. الأقسام الرئيسية للمذكرات والكورسات بتصميم واضح ومشرق */}
+            {/* 2. الأقسام الرئيسية للمذكرات والكورسات */}
             <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
-              <div className="text-center max-w-xl mx-auto">
-                <h2 className="text-2xl sm:text-3xl font-black text-slate-900">الأقسام الرئيسية للمذكرات والكورسات</h2>
-                <p className="text-xs sm:text-sm text-slate-500 mt-1.5">
+              <div className="text-center max-w-2xl mx-auto">
+                <h3 className="text-2xl sm:text-3xl font-black text-slate-900">
+                  الأقسام الرئيسية للمذكرات والكورسات
+                </h3>
+                <p className="text-sm text-slate-500 mt-1.5">
                   اختر القسم المناسب لتصفح مجلدات المراحل والصفوف الدراسية
                 </p>
               </div>
@@ -4748,21 +4812,21 @@ function MuzakkiratiApp() {
                     <button
                       key={cat}
                       onClick={() => navigateTo('catalog', { category: cat, stage: '', grade: '' })}
-                      className="overflow-hidden bg-white rounded-3xl border border-slate-200 hover:border-blue-600 shadow-sm hover:shadow-xl transition-all duration-300 text-right group flex flex-col"
+                      className="overflow-hidden bg-white rounded-3xl border border-slate-200 hover:border-blue-500 shadow-sm hover:shadow-xl transition-all duration-300 text-right group flex flex-col"
                     >
                       {bgImg ? (
-                        <div className="relative h-48 w-full bg-slate-100 overflow-hidden">
+                        <div className="relative h-44 w-full bg-slate-100 overflow-hidden">
                           <img
                             src={bgImg}
                             alt={cat}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                           />
-                          <span className="absolute top-3.5 left-3.5 px-3.5 py-1.5 rounded-full bg-slate-950/85 backdrop-blur-md text-white text-xs font-black shadow-md">
+                          <span className="absolute top-3 left-3 px-3.5 py-1.5 rounded-full bg-slate-950/85 backdrop-blur-md text-white text-xs font-black shadow-md">
                             {count} مذكرة متاحة
                           </span>
                         </div>
                       ) : (
-                        <div className="relative h-40 w-full bg-gradient-to-br from-blue-600 to-indigo-700 p-6 flex items-center justify-between text-white">
+                        <div className="relative h-36 w-full bg-gradient-to-br from-blue-600 to-indigo-700 p-6 flex items-center justify-between text-white">
                           <div className="w-14 h-14 rounded-2xl bg-white/15 backdrop-blur-sm flex items-center justify-center">
                             <BookOpen className="w-7 h-7" />
                           </div>
@@ -4771,17 +4835,11 @@ function MuzakkiratiApp() {
                           </span>
                         </div>
                       )}
-
-                      <div className="p-6 flex-1 flex flex-col justify-between w-full bg-white">
-                        <div>
-                          <h3 className="text-xl font-black text-slate-900 group-hover:text-blue-600 transition">{cat}</h3>
-                          <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                            تصفح المراحل والصفوف الدراسية والمذكرات المتاحة
-                          </p>
-                        </div>
-                        <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs sm:text-sm font-extrabold text-blue-600">
-                          <span>دخول القسم</span>
-                          <span className="group-hover:-translate-x-1 transition-transform">←</span>
+                      <div className="p-5 flex-1 flex flex-col justify-between w-full bg-white">
+                        <h4 className="text-xl font-black text-slate-900 group-hover:text-blue-600 transition">{cat}</h4>
+                        <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 text-xs font-extrabold text-blue-600">
+                          <span>تصفح المراحل والصفوف الدراسية</span>
+                          <span>←</span>
                         </div>
                       </div>
                     </button>
@@ -4795,15 +4853,15 @@ function MuzakkiratiApp() {
               <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
                 <div className="flex flex-wrap items-end justify-between gap-4">
                   <div>
-                    <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-extrabold">
+                    <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-extrabold">
                       إصدارات حديثة
                     </span>
-                    <h2 className="text-2xl sm:text-3xl font-black text-slate-900 mt-2">{settings.whatsNewTitle}</h2>
-                    <p className="text-xs sm:text-sm text-slate-500 mt-1">{settings.whatsNewSubtitle}</p>
+                    <h3 className="text-2xl sm:text-3xl font-black text-slate-900 mt-2">{settings.whatsNewTitle}</h3>
+                    <p className="text-sm text-slate-500 mt-1">{settings.whatsNewSubtitle}</p>
                   </div>
                   <button
                     onClick={() => navigateTo('catalog', { category: '', stage: '', grade: '' })}
-                    className="px-5 py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold transition"
+                    className="px-5 py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition"
                   >
                     عرض جميع المذكرات ←
                   </button>
@@ -4832,13 +4890,13 @@ function MuzakkiratiApp() {
                   <div className="text-center max-w-2xl mx-auto">
                     <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-extrabold">
                       <Megaphone className="w-3.5 h-3.5" />
-                      أخبار وتحديثات المنصة
+                      تنويهات وإصدارات قادمة
                     </span>
-                    <h2 className="text-2xl sm:text-3xl font-black text-slate-900 mt-2">{settings.newsSectionTitle}</h2>
-                    <p className="text-xs sm:text-sm text-slate-500 mt-1">{settings.newsSectionSubtitle}</p>
+                    <h3 className="text-2xl sm:text-3xl font-black text-slate-900 mt-2">{settings.newsSectionTitle}</h3>
+                    <p className="text-sm text-slate-500 mt-1">{settings.newsSectionSubtitle}</p>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {(settings.newsItems || []).map((news) => (
                       <div
                         key={news.id}
@@ -4847,30 +4905,30 @@ function MuzakkiratiApp() {
                         <span className="inline-block px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-extrabold">
                           {news.badge}
                         </span>
-                        <h3 className="font-black text-base text-slate-900">{news.title}</h3>
-                        <p className="text-xs text-slate-600 leading-relaxed">{news.content}</p>
+                        <h4 className="text-lg font-black text-slate-900">{news.title}</h4>
+                        <p className="text-sm text-slate-600 leading-relaxed">{news.content}</p>
                       </div>
                     ))}
 
                     {comingSoonNotebooks.map((nb) => (
                       <div
                         key={nb.id}
-                        className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl p-6 border border-amber-200 flex flex-col justify-between space-y-4"
+                        className="bg-gradient-to-l from-amber-50 to-orange-50 rounded-3xl p-6 border border-amber-200 flex items-center justify-between gap-4"
                       >
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                           <span className="inline-block px-3 py-1 rounded-full bg-amber-500 text-slate-950 text-xs font-black">
                             قيد التجهيز • حجز مسبق
                           </span>
-                          <h3 className="font-black text-base text-slate-900">{nb.title}</h3>
+                          <h4 className="text-base font-black text-slate-900">{nb.title}</h4>
                           <p className="text-xs text-slate-600">
                             {nb.grade} • {nb.subject}
                           </p>
                         </div>
                         <button
                           onClick={() => handleOrderNow(nb)}
-                          className="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs transition"
+                          className="px-4 py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs shrink-0"
                         >
-                          احجز نسختك مسبقًا الآن
+                          احجز مسبقًا
                         </button>
                       </div>
                     ))}
@@ -4885,7 +4943,7 @@ function MuzakkiratiApp() {
             notebooks={notebooks}
             settings={settings}
             navState={catalogNav}
-            onNavigateCatalog={(next) => navigateTo('catalog', next)}
+            onNavigateCatalog={setCatalogNav}
             onPreview={setPreviewNotebook}
             onOrderNow={handleOrderNow}
             onAddToCart={handleAddToCart}
@@ -4905,22 +4963,28 @@ function MuzakkiratiApp() {
         )}
 
         {activePage === 'track' && (
-          <div className="max-w-2xl mx-auto px-4 py-12 space-y-6">
+          <div className="max-w-2xl mx-auto px-4 sm:px-6 py-12 space-y-6">
             <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-4 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
+                <PackageCheck className="w-7 h-7" />
+              </div>
               <h2 className="text-2xl font-black text-slate-900">تتبع حالة طلبك</h2>
-              <p className="text-xs text-slate-500">أدخل رقم الطلب (مثل ORD-123456) أو رقم هاتفك المسجل</p>
-              <form onSubmit={handleTrackOrder} className="flex gap-2">
+              <p className="text-xs sm:text-sm text-slate-500">
+                أدخل رقم الطلب (مثال: ORD-123456) أو رقم هاتفك المسجل في الطلب
+              </p>
+
+              <form onSubmit={handleTrackOrder} className="flex gap-2 pt-2">
                 <input
                   type="text"
                   required
                   value={trackQuery}
                   onChange={(e) => setTrackQuery(e.target.value)}
                   placeholder="رقم الطلب أو رقم الهاتف..."
-                  className="flex-1 px-4 py-3 rounded-2xl border border-slate-300 text-sm font-bold"
+                  className="flex-1 px-4 py-3 rounded-2xl border border-slate-300 text-sm font-bold focus:outline-none focus:border-blue-600"
                 />
                 <button
                   type="submit"
-                  className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm"
+                  className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm transition"
                 >
                   بحث
                 </button>
@@ -4930,20 +4994,20 @@ function MuzakkiratiApp() {
             {trackSearched && (
               <div className="space-y-3">
                 {trackedOrders.length === 0 ? (
-                  <div className="bg-white rounded-2xl p-6 text-center text-xs text-slate-500 border">
+                  <div className="bg-white rounded-3xl p-6 text-center border border-slate-200 text-sm text-slate-500">
                     لم يتم العثور على طلبات مطابقة، تأكد من الرقم أو تواصل معنا عبر واتساب.
                   </div>
                 ) : (
                   trackedOrders.map((o) => (
-                    <div key={o.id} className="bg-white rounded-2xl p-5 border border-slate-200 space-y-2">
+                    <div key={o.id} className="bg-white rounded-3xl p-5 border border-slate-200 space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="font-black text-blue-700 text-sm">{o.orderNumber}</span>
+                        <span className="font-black text-blue-600">{o.orderNumber}</span>
                         <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-extrabold">
                           {o.status === 'completed'
                             ? 'مكتمل وتم التسليم'
                             : o.status === 'processing'
-                            ? 'جاري تجهيز المذكرة باسمك'
-                            : 'قيد المراجعة والتأكيد'}
+                            ? 'جاري التجهيز والطباعة'
+                            : 'تم استلام الطلب'}
                         </span>
                       </div>
                       <p className="text-xs text-slate-600">
