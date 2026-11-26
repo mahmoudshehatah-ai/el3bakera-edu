@@ -44,6 +44,8 @@ import { initializeApp } from 'firebase/app';
 import {
   getAuth,
   signInWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
   signInAnonymously,
   onAuthStateChanged,
   signOut
@@ -285,6 +287,31 @@ function mergeAndNormalizeSettings(prev, incoming = {}) {
     }));
   }
   return merged;
+}
+
+function normalizeNotebook(raw = {}) {
+  const inlineSamples = Array.isArray(raw.samplePages)
+    ? raw.samplePages
+    : Array.isArray(raw.samples)
+    ? raw.samples
+    : Array.isArray(raw.pages)
+    ? raw.pages
+    : [];
+
+  const resolvedCover =
+    raw.coverImage ||
+    raw.cover ||
+    raw.image ||
+    raw.imageUrl ||
+    raw.thumbnail ||
+    inlineSamples[0] ||
+    '';
+
+  return {
+    ...raw,
+    coverImage: resolvedCover,
+    samplePages: inlineSamples
+  };
 }
 
 function SocialPlatformBadge({ url }) {
@@ -3433,7 +3460,7 @@ function MuzakkiratiApp() {
     });
 
     const unsubNotebooks = onSnapshot(publicCol('notebooks'), (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const list = snap.docs.map((d) => normalizeNotebook({ id: d.id, ...d.data() }));
       setNotebooks(list);
     });
 
@@ -3469,8 +3496,33 @@ function MuzakkiratiApp() {
       setAdminPassword('');
       setActivePage('admin');
       showToast('مرحبًا بك في لوحة تحكم الإدارة');
-    } catch {
-      setLoginError('البريد الإلكتروني أو كلمة المرور غير صحيحة');
+    } catch (err) {
+      const code = err?.code || '';
+      if (code === 'auth/too-many-requests') {
+        setLoginError('تم إيقاف المحاولات مؤقتًا لكثرة المحاولات. استخدم زر الدخول بحساب Google أدناه أو انتظر قليلًا.');
+      } else if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') {
+        setLoginError('كلمة المرور غير صحيحة لحساب الإدارة (تأكد من كتابتها بالإنجليزية أو ادخل عبر Google).');
+      } else {
+        setLoginError(`تعذر تسجيل الدخول (${code || 'خطأ في التحقق'})`);
+      }
+    }
+  };
+
+  const handleGoogleAdminLogin = async () => {
+    setLoginError('');
+    try {
+      const provider = new GoogleAuthProvider();
+      const res = await signInWithPopup(auth, provider);
+      if (res.user?.email === ADMIN_EMAIL) {
+        setAdminLoginOpen(false);
+        setActivePage('admin');
+        showToast('مرحبًا بك في لوحة تحكم الإدارة');
+      } else {
+        await signOut(auth);
+        setLoginError(`هذا الحساب (${res.user?.email}) غير مصرح له بالدخول للإدارة.`);
+      }
+    } catch (err) {
+      setLoginError(`تعذر تسجيل الدخول عبر Google (${err?.code || 'أعد المحاولة'})`);
     }
   };
 
@@ -4156,6 +4208,21 @@ function MuzakkiratiApp() {
               className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-md transition"
             >
               تسجيل الدخول للوحة التحكم
+            </button>
+
+            <div className="relative flex items-center justify-center">
+              <span className="border-t border-slate-200 w-full" />
+              <span className="bg-white px-3 text-[11px] font-bold text-slate-400">أو</span>
+              <span className="border-t border-slate-200 w-full" />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleGoogleAdminLogin}
+              className="w-full py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs sm:text-sm shadow transition flex items-center justify-center gap-2"
+            >
+              <ShieldCheck className="w-4 h-4 text-amber-400" />
+              <span>دخول سريع بحساب Google الإداري</span>
             </button>
           </form>
         </div>
