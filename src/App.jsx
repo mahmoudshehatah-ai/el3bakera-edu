@@ -319,6 +319,8 @@ const DEFAULT_SETTINGS = {
   promoCouponCode: 'OPEN15',
   promoDiscountPercent: 15,
   promoMaxDiscount: 0,
+  promoApplyScope: 'all',
+  promoTargetNotebookIds: [],
   promoBgColor: '#0f172a',
   promoTextColor: '#ffffff',
   globalAlertsEnabled: true,
@@ -1346,55 +1348,98 @@ export default function App() {
 
   const couponDiscountAmount = useMemo(() => {
     if (!appliedCoupon || cartSubtotal <= 0) return 0;
-    if (appliedCoupon.minOrder && cartSubtotal < Number(appliedCoupon.minOrder)) return 0;
+
+    // تحديد المجموع الخاضع للخصم حسب نطاق الكوبون (الكل / مذكرات محددة / استثناء مذكرات)
+    const scope = appliedCoupon.applyScope || 'all';
+    const targetIds = Array.isArray(appliedCoupon.targetNotebookIds) ? appliedCoupon.targetNotebookIds : [];
+
+    const eligibleSubtotal = cart.reduce((sum, item) => {
+      const itemTotal = (Number(item.price) || 0) * (item.qty || 1);
+      if (scope === 'include') {
+        return targetIds.includes(item.id) ? sum + itemTotal : sum;
+      }
+      if (scope === 'exclude') {
+        return !targetIds.includes(item.id) ? sum + itemTotal : sum;
+      }
+      return sum + itemTotal;
+    }, 0);
+
+    if (eligibleSubtotal <= 0) return 0;
+    if (appliedCoupon.minOrder && eligibleSubtotal < Number(appliedCoupon.minOrder)) return 0;
+
     let discount = 0;
     if (appliedCoupon.type === 'fixed') {
-      discount = Math.min(cartSubtotal, Number(appliedCoupon.value) || 0);
+      discount = Math.min(eligibleSubtotal, Number(appliedCoupon.value) || 0);
     } else {
-      discount = Math.round((cartSubtotal * (Number(appliedCoupon.value) || 0)) / 100);
+      discount = Math.round((eligibleSubtotal * (Number(appliedCoupon.value) || 0)) / 100);
     }
     const maxCap = Number(appliedCoupon.maxDiscount) || 0;
     if (maxCap > 0) {
       discount = Math.min(discount, maxCap);
     }
-    return Math.min(cartSubtotal, discount);
-  }, [appliedCoupon, cartSubtotal]);
+    return Math.min(eligibleSubtotal, discount);
+  }, [appliedCoupon, cartSubtotal, cart]);
 
   const cartFinalTotal = Math.max(0, cartSubtotal - couponDiscountAmount);
 
   const handleApplyCoupon = () => {
     const code = couponInput.trim().toUpperCase();
     if (!code) return;
+
+    let candidateCoupon = null;
     if (settings.promoEnabled && settings.promoCouponCode && code === settings.promoCouponCode.trim().toUpperCase()) {
-      setAppliedCoupon({
+      candidateCoupon = {
         code,
         type: 'percent',
         value: Number(settings.promoDiscountPercent) || 15,
         maxDiscount: Number(settings.promoMaxDiscount) || 0,
+        applyScope: settings.promoApplyScope || 'all',
+        targetNotebookIds: Array.isArray(settings.promoTargetNotebookIds) ? settings.promoTargetNotebookIds : [],
         minOrder: 0
-      });
-      showToast(`تم تفعيل كود الخصم ${code} بنجاح!`);
+      };
+    } else {
+      const found = coupons.find((c) => c.code?.toUpperCase() === code && c.active !== false);
+      if (!found) {
+        showToast('كود الكوبون غير صحيح أو منتهي الصلاحية.', 'error');
+        return;
+      }
+      if (found.expiresAt && Date.parse(found.expiresAt) < Date.now()) {
+        showToast('انتهت صلاحية هذا الكوبون.', 'error');
+        return;
+      }
+      if (found.maxUses && Number(found.usedCount || 0) >= Number(found.maxUses)) {
+        showToast('تم استنفاد الحد الأقصى لاستخدام هذا الكوبون.', 'error');
+        return;
+      }
+      candidateCoupon = found;
+    }
+
+    const scope = candidateCoupon.applyScope || 'all';
+    const targetIds = Array.isArray(candidateCoupon.targetNotebookIds) ? candidateCoupon.targetNotebookIds : [];
+    const eligibleSubtotal = cart.reduce((sum, item) => {
+      const itemTotal = (Number(item.price) || 0) * (item.qty || 1);
+      if (scope === 'include') return targetIds.includes(item.id) ? sum + itemTotal : sum;
+      if (scope === 'exclude') return !targetIds.includes(item.id) ? sum + itemTotal : sum;
+      return sum + itemTotal;
+    }, 0);
+
+    if (eligibleSubtotal <= 0) {
+      showToast(
+        scope === 'include'
+          ? 'هذا الكوبون مخصص لمذكرات محددة غير موجودة في سلتك الحالية.'
+          : 'المذكرات الموجودة في سلتك مستثناة من هذا الكوبون.',
+        'error'
+      );
       return;
     }
-    const found = coupons.find((c) => c.code?.toUpperCase() === code && c.active !== false);
-    if (!found) {
-      showToast('كود الكوبون غير صحيح أو منتهي الصلاحية.', 'error');
+
+    if (candidateCoupon.minOrder && eligibleSubtotal < Number(candidateCoupon.minOrder)) {
+      showToast(`الحد الأدنى للمذكرات المشمولة بهذا الكوبون هو ${candidateCoupon.minOrder} ج.م.`, 'error');
       return;
     }
-    if (found.expiresAt && Date.parse(found.expiresAt) < Date.now()) {
-      showToast('انتهت صلاحية هذا الكوبون.', 'error');
-      return;
-    }
-    if (found.maxUses && Number(found.usedCount || 0) >= Number(found.maxUses)) {
-      showToast('تم استنفاد الحد الأقصى لاستخدام هذا الكوبون.', 'error');
-      return;
-    }
-    if (found.minOrder && cartSubtotal < Number(found.minOrder)) {
-      showToast(`الحد الأدنى لاستخدام هذا الكوبون هو ${found.minOrder} ج.م.`, 'error');
-      return;
-    }
-    setAppliedCoupon(found);
-    showToast(`تم تطبيق كوبون ${found.code} بنجاح!`);
+
+    setAppliedCoupon(candidateCoupon);
+    showToast(`تم تطبيق كوبون ${candidateCoupon.code} بنجاح!`);
   };
 
   const handleSubmitOrder = async (e) => {
@@ -3306,6 +3351,8 @@ function AdminDashboard({
       value: Number(c.value) || 0,
       maxDiscount: Number(c.maxDiscount) || 0,
       minOrder: Number(c.minOrder) || 0,
+      applyScope: c.applyScope || 'all',
+      targetNotebookIds: Array.isArray(c.targetNotebookIds) ? c.targetNotebookIds : [],
       expiresAt: c.expiresAt || '',
       active: c.active !== false
     }));
@@ -3365,11 +3412,11 @@ function AdminDashboard({
     minOrder: '',
     maxUses: '',
     expiresAt: '',
+    applyScope: 'all',
+    targetNotebookIds: [],
     active: true
   });
-
-  // حفظ الإعدادات الشاملة في السحابة (بتقسيم الصور إلى مستندات مستقلة لتفادي حد الـ 1MB في Firestore)
-  const saveAllSettingsToCloud = async (updatedObj) => {
+  const [couponNbSearch, setCouponNbSearch] = useState('');
     setSavingSettings(true);
     try {
       const safeLogo = await shrinkDataUrlIfNeeded(updatedObj.logoImage || '', 260000);
@@ -3413,6 +3460,8 @@ function AdminDashboard({
         value: Number(c.value) || 0,
         maxDiscount: Number(c.maxDiscount) || 0,
         minOrder: Number(c.minOrder) || 0,
+        applyScope: c.applyScope || 'all',
+        targetNotebookIds: Array.isArray(c.targetNotebookIds) ? c.targetNotebookIds : [],
         expiresAt: c.expiresAt || '',
         active: c.active !== false
       }));
@@ -3680,6 +3729,9 @@ function AdminDashboard({
         minOrder: Number(couponForm.minOrder) || 0,
         maxUses: Number(couponForm.maxUses) || 0,
         expiresAt: couponForm.expiresAt || '',
+        applyScope: couponForm.applyScope || 'all',
+        targetNotebookIds:
+          (couponForm.applyScope || 'all') === 'all' ? [] : Array.isArray(couponForm.targetNotebookIds) ? couponForm.targetNotebookIds : [],
         active: couponForm.active !== false,
         updatedAt: serverTimestamp()
       };
@@ -3707,8 +3759,11 @@ function AdminDashboard({
         minOrder: '',
         maxUses: '',
         expiresAt: '',
+        applyScope: 'all',
+        targetNotebookIds: [],
         active: true
       });
+      setCouponNbSearch('');
       showToast('تم حفظ كوبون الخصم وتعميمه على العملاء بنجاح!');
     } catch (err) {
       showToast(`خطأ: ${err?.message || ''}`, 'error');
@@ -4437,7 +4492,35 @@ function AdminDashboard({
         <div className="space-y-6">
           {/* إدارة كوبونات الخصم */}
           <form onSubmit={handleSaveCoupon} className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-4">
-            <h3 className="text-base sm:text-lg font-black text-slate-900">إضافة أو تعديل كوبون خصم</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-base sm:text-lg font-black text-slate-900">
+                {couponForm.id ? `تعديل الكوبون: ${couponForm.code}` : 'إضافة أو تعديل كوبون خصم'}
+              </h3>
+              {couponForm.id && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCouponForm({
+                      id: '',
+                      code: '',
+                      type: 'percent',
+                      value: '',
+                      maxDiscount: '',
+                      minOrder: '',
+                      maxUses: '',
+                      expiresAt: '',
+                      applyScope: 'all',
+                      targetNotebookIds: [],
+                      active: true
+                    })
+                  }
+                  className="text-xs font-black text-rose-600 hover:underline"
+                >
+                  إلغاء التعديل
+                </button>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">كود الكوبون *</label>
@@ -4490,37 +4573,163 @@ function AdminDashboard({
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
                 />
               </div>
-              <div className="flex items-end">
-                <button
-                  type="submit"
-                  className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black"
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">نطاق تطبيق الكوبون</label>
+                <select
+                  value={couponForm.applyScope || 'all'}
+                  onChange={(e) => setCouponForm({ ...couponForm, applyScope: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-black text-blue-700"
                 >
-                  حفظ الكوبون
-                </button>
+                  <option value="all">جميع المذكرات والباقات</option>
+                  <option value="include">مذكرات محددة فقط</option>
+                  <option value="exclude">الكل باستثناء مذكرات محددة</option>
+                </select>
               </div>
+            </div>
+
+            {/* اختيار المذكرات المشمولة أو المستثناة */}
+            {(couponForm.applyScope === 'include' || couponForm.applyScope === 'exclude') && (
+              <div
+                className={`p-4 rounded-2xl border space-y-3 ${
+                  couponForm.applyScope === 'include'
+                    ? 'bg-blue-50/70 border-blue-200'
+                    : 'bg-amber-50/70 border-amber-200'
+                }`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-xs sm:text-sm font-black text-slate-900">
+                      {couponForm.applyScope === 'include'
+                        ? `حدد المذكرات التي يسري عليها الخصم فقط (${couponForm.targetNotebookIds?.length || 0} مذكرة مختارة):`
+                        : `حدد المذكرات المستثناة من الخصم (${couponForm.targetNotebookIds?.length || 0} مذكرة مستثناة):`}
+                    </div>
+                    <p className="text-[11px] text-slate-600 font-bold">
+                      {couponForm.applyScope === 'include'
+                        ? 'سيُحتسب الخصم على أسعار المذكرات المحددة فقط داخل سلة العميل.'
+                        : 'سيسري الخصم على جميع محتويات السلة ما عدا المذكرات المحددة أدناه.'}
+                    </p>
+                  </div>
+                  <input
+                    type="text"
+                    value={couponNbSearch}
+                    onChange={(e) => setCouponNbSearch(e.target.value)}
+                    placeholder="ابحث باسم المذكرة..."
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold w-56"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-56 overflow-y-auto p-1">
+                  {notebooks
+                    .filter((nb) => {
+                      if (!couponNbSearch.trim()) return true;
+                      return `${nb.title} ${nb.subject}`.toLowerCase().includes(couponNbSearch.trim().toLowerCase());
+                    })
+                    .map((nb) => {
+                      const isSelected = (couponForm.targetNotebookIds || []).includes(nb.id);
+                      return (
+                        <label
+                          key={nb.id}
+                          className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between gap-2 cursor-pointer transition ${
+                            isSelected
+                              ? couponForm.applyScope === 'include'
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'bg-rose-600 text-white border-rose-600'
+                              : 'bg-white border-slate-200 text-slate-800 hover:border-blue-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {
+                                const current = couponForm.targetNotebookIds || [];
+                                const next = isSelected
+                                  ? current.filter((id) => id !== nb.id)
+                                  : [...current, nb.id];
+                                setCouponForm({ ...couponForm, targetNotebookIds: next });
+                              }}
+                              className="w-4 h-4 shrink-0"
+                            />
+                            <span className="truncate">{nb.title}</span>
+                          </div>
+                          <span className={`text-[11px] font-black shrink-0 ${isSelected ? 'text-white/90' : 'text-blue-600'}`}>
+                            {nb.price} ج.م
+                          </span>
+                        </label>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                className="px-6 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-black shadow"
+              >
+                {couponForm.id ? 'حفظ تعديلات الكوبون' : 'حفظ الكوبون'}
+              </button>
             </div>
 
             {coupons.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-2">
-                {coupons.map((cp) => (
-                  <div key={cp.id} className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
-                    <div>
-                      <div className="text-sm font-black text-slate-900">{cp.code}</div>
-                      <div className="text-xs text-slate-600 font-bold">
-                        خصم {cp.value}
-                        {cp.type === 'fixed' ? ' ج.م' : '%'}
-                        {Number(cp.maxDiscount) > 0 ? ` (بحد أقصى ${cp.maxDiscount} ج.م)` : ''}
+                {coupons.map((cp) => {
+                  const scopeCount = Array.isArray(cp.targetNotebookIds) ? cp.targetNotebookIds.length : 0;
+                  return (
+                    <div key={cp.id} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-sm font-black text-slate-900">{cp.code}</div>
+                        <div className="text-xs text-slate-600 font-bold">
+                          خصم {cp.value}
+                          {cp.type === 'fixed' ? ' ج.م' : '%'}
+                          {Number(cp.maxDiscount) > 0 ? ` (بحد أقصى ${cp.maxDiscount} ج.م)` : ''}
+                        </div>
+                        {cp.applyScope === 'include' && (
+                          <div className="text-[11px] text-blue-700 font-black mt-0.5">
+                            يسري على {scopeCount} مذكرة محددة فقط
+                          </div>
+                        )}
+                        {cp.applyScope === 'exclude' && (
+                          <div className="text-[11px] text-rose-700 font-black mt-0.5">
+                            مستثنى منه {scopeCount} مذكرة محددة
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCouponForm({
+                              id: cp.id,
+                              code: cp.code || '',
+                              type: cp.type || 'percent',
+                              value: String(cp.value || ''),
+                              maxDiscount: cp.maxDiscount ? String(cp.maxDiscount) : '',
+                              minOrder: cp.minOrder ? String(cp.minOrder) : '',
+                              maxUses: cp.maxUses ? String(cp.maxUses) : '',
+                              expiresAt: cp.expiresAt || '',
+                              applyScope: cp.applyScope || 'all',
+                              targetNotebookIds: Array.isArray(cp.targetNotebookIds) ? cp.targetNotebookIds : [],
+                              active: cp.active !== false
+                            })
+                          }
+                          className="p-2 rounded-xl bg-blue-100 text-blue-800"
+                          title="تعديل الكوبون"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteDoc(publicDoc('coupons', cp.id))}
+                          className="p-2 rounded-xl bg-rose-100 text-rose-700"
+                          title="حذف الكوبون"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => deleteDoc(publicDoc('coupons', cp.id))}
-                      className="p-2 rounded-xl bg-rose-100 text-rose-700"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </form>
