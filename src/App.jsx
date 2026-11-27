@@ -679,10 +679,54 @@ function MuzakkiratiPlatformContent() {
     }
   });
   const [adminPinInput, setAdminPinInput] = useState('');
+  const [showAdminPin, setShowAdminPin] = useState(false);
   const [adminSubTab, setAdminSubTab] = useState('products');
   const logoTapCountRef = useRef(0);
   const logoTapTimerRef = useRef(null);
   const isSavingRef = useRef(false);
+
+  // ربط زر الرجوع الفعلي في الهاتف والمتصفح (Hardware Back Button)
+  useEffect(() => {
+    const onPopState = (event) => {
+      const targetTab = event.state?.tab || 'home';
+      setActiveTab(targetTab);
+      try {
+        localStorage.setItem('el3bakera_active_tab', targetTab);
+      } catch {}
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  const navigateToTabWithHistory = (newTab) => {
+    if (newTab === activeTab) return;
+    setTabHistory((prev) => [...prev, newTab]);
+    setActiveTab(newTab);
+    try {
+      localStorage.setItem('el3bakera_active_tab', newTab);
+      window.history.pushState({ tab: newTab }, '', newTab === 'admin' ? '#admin' : `#${newTab}`);
+    } catch {}
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleMobileAndUiBack = () => {
+    if (tabHistory.length > 1) {
+      const nextHistory = tabHistory.slice(0, -1);
+      const prevTab = nextHistory[nextHistory.length - 1] || 'home';
+      setTabHistory(nextHistory);
+      setActiveTab(prevTab);
+      try {
+        localStorage.setItem('el3bakera_active_tab', prevTab);
+      } catch {}
+    } else {
+      setActiveTab('home');
+      setTabHistory(['home']);
+      try {
+        localStorage.setItem('el3bakera_active_tab', 'home');
+      } catch {}
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // تحميل البيانات من IndexedDB وسحابة Firebase
   useEffect(() => {
@@ -816,7 +860,7 @@ function MuzakkiratiPlatformContent() {
     const checkAdminHash = () => {
       if (window.location.hash === '#admin') {
         if (isAdminAuthenticated) {
-          navigateToTab('admin');
+          navigateToTabWithHistory('admin');
         } else {
           setIsAdminModalOpen(true);
         }
@@ -828,7 +872,7 @@ function MuzakkiratiPlatformContent() {
   }, [isAdminAuthenticated]);
 
   const handleLogoSecretTap = () => {
-    navigateToTab('home');
+    navigateToTabWithHistory('home');
     logoTapCountRef.current += 1;
     if (logoTapTimerRef.current) clearTimeout(logoTapTimerRef.current);
     logoTapTimerRef.current = setTimeout(() => {
@@ -838,7 +882,7 @@ function MuzakkiratiPlatformContent() {
     if (logoTapCountRef.current >= 5) {
       logoTapCountRef.current = 0;
       if (isAdminAuthenticated) {
-        navigateToTab('admin');
+        navigateToTabWithHistory('admin');
       } else {
         setIsAdminModalOpen(true);
       }
@@ -874,19 +918,18 @@ function MuzakkiratiPlatformContent() {
             const mergedCategories = Array.isArray(cloudData.categories)
               ? cloudData.categories.map((c) => {
                   const prevCat = (prev.categories || []).find((pc) => pc.id === c.id);
-                  return { ...c, coverImage: c.coverImage || prevCat?.coverImage || '' };
+                  return { ...c, coverImage: prevCat?.coverImage || c.coverImage || '' };
                 })
               : prev.categories;
             const merged = {
               ...prev,
               ...cloudData,
               categories: mergedCategories,
-              logoImage: cloudData.logoImage || prev.logoImage || '',
-              heroImage: cloudData.heroImage || prev.heroImage || '',
-              heroBgImage: cloudData.heroBgImage || prev.heroBgImage || ''
+              logoImage: prev.logoImage || cloudData.logoImage || '',
+              heroImage: prev.heroImage || cloudData.heroImage || '',
+              heroBgImage: prev.heroBgImage || cloudData.heroBgImage || ''
             };
             idbSet('settings_v5', merged);
-            safeLocalSet('el3bakera_settings_v5', merged);
             return merged;
           });
         }
@@ -898,7 +941,6 @@ function MuzakkiratiPlatformContent() {
     const unsubMediaAssets = onSnapshot(
       mediaCol,
       (snapshot) => {
-        if (snapshot.empty) return;
         const assetsMap = {};
         snapshot.forEach((d) => {
           const item = d.data();
@@ -910,13 +952,13 @@ function MuzakkiratiPlatformContent() {
         setSettings((prev) => {
           const updatedCats = (prev.categories || []).map((c) => ({
             ...c,
-            coverImage: assetsMap[`cat_${c.id}`] || c.coverImage || ''
+            coverImage: assetsMap[`cat_${c.id}`] !== undefined ? assetsMap[`cat_${c.id}`] : c.coverImage || ''
           }));
           const updatedSettings = {
             ...prev,
-            logoImage: assetsMap['logoImage'] || prev.logoImage || '',
-            heroImage: assetsMap['heroImage'] || prev.heroImage || '',
-            heroBgImage: assetsMap['heroBgImage'] || prev.heroBgImage || '',
+            logoImage: assetsMap['logoImage'] !== undefined ? assetsMap['logoImage'] : prev.logoImage || '',
+            heroImage: assetsMap['heroImage'] !== undefined ? assetsMap['heroImage'] : prev.heroImage || '',
+            heroBgImage: assetsMap['heroBgImage'] !== undefined ? assetsMap['heroBgImage'] : prev.heroBgImage || '',
             categories: updatedCats
           };
           idbSet('settings_v5', updatedSettings);
@@ -926,7 +968,10 @@ function MuzakkiratiPlatformContent() {
         setProducts((prev) => {
           const updatedProds = prev.map((p) => ({
             ...p,
-            coverImage: assetsMap[`prod_cover_${p.id}`] || p.coverImage || ''
+            coverImage:
+              assetsMap[`prod_cover_${p.id}`] !== undefined
+                ? assetsMap[`prod_cover_${p.id}`]
+                : p.coverImage || ''
           }));
           idbSet('products_v5', updatedProds);
           return updatedProds;
@@ -1267,8 +1312,9 @@ function MuzakkiratiPlatformContent() {
       localStorage.setItem('el3bakera_admin_auth', 'true');
     } catch {}
     setIsAdminModalOpen(false);
-    navigateToTab('admin');
+    navigateToTabWithHistory('admin');
     setAdminPinInput('');
+    setShowAdminPin(false);
     showToast('تم تسجيل الدخول إلى لوحة الإدارة بنجاح');
   };
 
@@ -1526,11 +1572,11 @@ function MuzakkiratiPlatformContent() {
   };
 
   return (
-    <div dir="rtl" className="min-h-screen bg-[#f4f6fa] text-slate-900 font-sans flex flex-col">
+    <div dir="rtl" className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#f4f6fa] text-slate-900 font-sans flex flex-col">
       {/* إشعار Toast عائم */}
       {toast && (
         <div
-          className={`fixed bottom-5 right-5 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl text-white text-sm font-bold transition-all ${
+          className={`fixed bottom-5 right-4 left-4 sm:left-auto sm:right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl text-white text-xs sm:text-sm font-bold transition-all ${
             toast.type === 'error' ? 'bg-rose-600' : 'bg-slate-900'
           }`}
         >
@@ -1546,48 +1592,48 @@ function MuzakkiratiPlatformContent() {
             backgroundColor: safeText(settings.promoBgColor, '#0654d0'),
             color: safeText(settings.promoTextColor, '#fde047')
           }}
-          className="w-full py-2.5 px-4 text-center text-xs sm:text-sm font-bold flex flex-wrap items-center justify-center gap-2.5 shadow-sm"
+          className="w-full py-2 px-3 text-center text-[11px] sm:text-sm font-bold flex flex-wrap items-center justify-center gap-2 shadow-sm"
         >
-          <Sparkles className="w-4 h-4 shrink-0" />
-          <span>{safeText(settings.promoText)}</span>
+          <Sparkles className="w-3.5 h-3.5 shrink-0" />
+          <span className="leading-snug">{safeText(settings.promoText)}</span>
           {settings.promoCouponCode && (
             <button
               onClick={copyPromoCode}
-              className="inline-flex items-center gap-1.5 bg-amber-300 text-slate-950 px-3 py-0.5 rounded-md font-black text-xs hover:bg-amber-200 transition cursor-pointer"
+              className="inline-flex items-center gap-1 bg-amber-300 text-slate-950 px-2.5 py-0.5 rounded-md font-black text-[11px] hover:bg-amber-200 transition cursor-pointer"
               title="اضغط لنسخ الكود"
             >
               <span>{safeText(settings.promoCouponCode)}</span>
-              {copiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              {copiedCode ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
             </button>
           )}
         </div>
       )}
 
-      {/* الهيدر الرئيسي */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-3">
+      {/* الهيدر الرئيسي المتجاوب بالكامل مع الهاتف */}
+      <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur border-b border-slate-200/80">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-2">
           <div
             onClick={handleLogoSecretTap}
-            className="flex items-center gap-3 cursor-pointer select-none shrink-0"
+            className="flex items-center gap-2 sm:gap-3 cursor-pointer select-none min-w-0 flex-1"
           >
             <img
               src={resolvedLogo}
               alt={safeText(settings.platformName)}
-              className="w-12 h-12 rounded-2xl object-cover shadow-md border border-slate-200"
+              className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl object-cover shadow-sm border border-slate-200 shrink-0"
             />
-            <div>
-              <h1 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+            <div className="min-w-0">
+              <h1 className="text-xs sm:text-lg font-black text-slate-900 leading-tight truncate">
                 {safeText(settings.platformName)}
               </h1>
-              <p className="text-[11px] sm:text-xs text-slate-500 font-medium hidden sm:block">
+              <p className="text-[11px] sm:text-xs text-slate-500 font-medium hidden sm:block truncate">
                 {safeText(settings.platformTagline)}
               </p>
             </div>
           </div>
 
-          <nav className="hidden md:flex items-center gap-2">
+          <nav className="hidden md:flex items-center gap-2 shrink-0">
             <button
-              onClick={() => navigateToTab('home')}
+              onClick={() => navigateToTabWithHistory('home')}
               className={`px-4 py-2 rounded-xl text-sm font-bold transition ${
                 activeTab === 'home'
                   ? 'bg-blue-600 text-white shadow-sm'
@@ -1597,7 +1643,7 @@ function MuzakkiratiPlatformContent() {
               الرئيسية
             </button>
             <button
-              onClick={() => navigateToTab('library')}
+              onClick={() => navigateToTabWithHistory('library')}
               className={`px-4 py-2 rounded-xl text-sm font-bold transition ${
                 activeTab === 'library'
                   ? 'bg-blue-600 text-white shadow-sm'
@@ -1607,7 +1653,7 @@ function MuzakkiratiPlatformContent() {
               المذكرات
             </button>
             <button
-              onClick={() => navigateToTab('bundles')}
+              onClick={() => navigateToTabWithHistory('bundles')}
               className={`px-4 py-2 rounded-xl text-sm font-bold transition ${
                 activeTab === 'bundles'
                   ? 'bg-blue-600 text-white shadow-sm'
@@ -1617,7 +1663,7 @@ function MuzakkiratiPlatformContent() {
               العروض
             </button>
             <button
-              onClick={() => navigateToTab('track')}
+              onClick={() => navigateToTabWithHistory('track')}
               className={`px-4 py-2 rounded-xl text-sm font-bold transition ${
                 activeTab === 'track'
                   ? 'bg-blue-600 text-white shadow-sm'
@@ -1628,7 +1674,7 @@ function MuzakkiratiPlatformContent() {
             </button>
             {isAdminAuthenticated && (
               <button
-                onClick={() => navigateToTab('admin')}
+                onClick={() => navigateToTabWithHistory('admin')}
                 className={`px-4 py-2 rounded-xl text-sm font-bold transition ${
                   activeTab === 'admin'
                     ? 'bg-slate-900 text-amber-400 shadow-sm'
@@ -1640,23 +1686,24 @@ function MuzakkiratiPlatformContent() {
             )}
           </nav>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             <button
               onClick={() => setIsContactModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold shadow-sm transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-2.5 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold shadow-sm transition cursor-pointer"
+              title="تواصل معنا"
             >
-              <Phone className="w-4 h-4" />
+              <Phone className="w-4 h-4 shrink-0" />
               <span className="hidden sm:inline">تواصل معنا</span>
             </button>
 
             <button
               onClick={() => setIsCartOpen(true)}
-              className="relative inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold shadow-sm transition cursor-pointer"
+              className="relative inline-flex items-center gap-1.5 px-2.5 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold shadow-sm transition cursor-pointer"
             >
-              <ShoppingCart className="w-4 h-4 text-amber-400" />
+              <ShoppingCart className="w-4 h-4 text-amber-400 shrink-0" />
               <span>السلة</span>
               {cart.length > 0 && (
-                <span className="px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 text-xs font-black">
+                <span className="px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] sm:text-xs font-black">
                   {cart.length}
                 </span>
               )}
@@ -1664,35 +1711,35 @@ function MuzakkiratiPlatformContent() {
           </div>
         </div>
 
-        {/* شريط تنقل للهواتف المحمولة */}
-        <div className="flex md:hidden items-center justify-around border-t border-slate-100 py-2 px-2 bg-white">
+        {/* شريط تنقل متجاوب للهواتف المحمولة */}
+        <div className="grid md:hidden grid-flow-col auto-cols-fr border-t border-slate-100 py-1.5 px-2 gap-1 bg-white">
           <button
-            onClick={() => navigateToTab('home')}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold ${
+            onClick={() => navigateToTabWithHistory('home')}
+            className={`py-1.5 rounded-lg text-[11px] font-bold text-center truncate ${
               activeTab === 'home' ? 'bg-blue-600 text-white' : 'text-slate-600'
             }`}
           >
             الرئيسية
           </button>
           <button
-            onClick={() => navigateToTab('library')}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold ${
+            onClick={() => navigateToTabWithHistory('library')}
+            className={`py-1.5 rounded-lg text-[11px] font-bold text-center truncate ${
               activeTab === 'library' ? 'bg-blue-600 text-white' : 'text-slate-600'
             }`}
           >
             المذكرات
           </button>
           <button
-            onClick={() => navigateToTab('bundles')}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold ${
+            onClick={() => navigateToTabWithHistory('bundles')}
+            className={`py-1.5 rounded-lg text-[11px] font-bold text-center truncate ${
               activeTab === 'bundles' ? 'bg-blue-600 text-white' : 'text-slate-600'
             }`}
           >
             العروض
           </button>
           <button
-            onClick={() => navigateToTab('track')}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold ${
+            onClick={() => navigateToTabWithHistory('track')}
+            className={`py-1.5 rounded-lg text-[11px] font-bold text-center truncate ${
               activeTab === 'track' ? 'bg-blue-600 text-white' : 'text-slate-600'
             }`}
           >
@@ -1700,8 +1747,8 @@ function MuzakkiratiPlatformContent() {
           </button>
           {isAdminAuthenticated && (
             <button
-              onClick={() => navigateToTab('admin')}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold ${
+              onClick={() => navigateToTabWithHistory('admin')}
+              className={`py-1.5 rounded-lg text-[11px] font-bold text-center truncate ${
                 activeTab === 'admin' ? 'bg-slate-900 text-amber-400' : 'bg-amber-100 text-amber-900'
               }`}
             >
@@ -1711,12 +1758,13 @@ function MuzakkiratiPlatformContent() {
         </div>
       </header>
 
-      {/* زر الرجوع */}
+      {/* زر الرجوع للخلف */}
       {activeTab !== 'home' && (
-        <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 pt-5">
+        <div className="max-w-7xl mx-auto w-full px-3 sm:px-6 lg:px-8 pt-4">
           <button
-            onClick={handleGoBack}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs sm:text-sm font-bold shadow-2xs transition cursor-pointer"
+            type="button"
+            onClick={handleMobileAndUiBack}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-slate-200 active:bg-slate-200 hover:bg-slate-100 text-slate-800 text-xs sm:text-sm font-black shadow-2xs transition cursor-pointer touch-manipulation"
           >
             <ArrowRight className="w-4 h-4" />
             <span>رجوع للخلف</span>
@@ -1763,13 +1811,13 @@ function MuzakkiratiPlatformContent() {
 
                   <div className="flex flex-wrap items-center gap-3 pt-1">
                     <button
-                      onClick={() => navigateToTab('library')}
+                      onClick={() => navigateToTabWithHistory('library')}
                       className="px-6 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-sm shadow-lg shadow-blue-600/30 transition cursor-pointer"
                     >
                       استعراض جميع المذكرات
                     </button>
                     <button
-                      onClick={() => navigateToTab('bundles')}
+                      onClick={() => navigateToTabWithHistory('bundles')}
                       className="px-6 py-3.5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 text-white font-bold text-sm transition cursor-pointer"
                     >
                       باقات التوفير والعروض
@@ -1834,7 +1882,9 @@ function MuzakkiratiPlatformContent() {
                 <button
                   onClick={() => {
                     setSelectedCategory('all');
-                    navigateToTab('library');
+                    setSelectedStage('all');
+                    setSelectedGrade('all');
+                    navigateToTabWithHistory('library');
                   }}
                   className="text-sm font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
                 >
@@ -1850,7 +1900,9 @@ function MuzakkiratiPlatformContent() {
                       key={cat.id}
                       onClick={() => {
                         setSelectedCategory(cat.id);
-                        navigateToTab('library');
+                        setSelectedStage('all');
+                        setSelectedGrade('all');
+                        navigateToTabWithHistory('library');
                       }}
                       className="group bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-sm hover:shadow-xl transition-all cursor-pointer flex flex-col"
                     >
@@ -2062,78 +2114,79 @@ function MuzakkiratiPlatformContent() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-xl sm:text-2xl font-black text-slate-900">
-                      {safeText(settings.testimonialsTitle, 'آراء وتقييمات المعلمين في مذكراتنا')}
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-1">
-                      تجارب حقيقية لمعلمين اعتمدوا على مذكرات منصة العباقرة في فصولهم ومجموعاتهم
-                    </p>
-                  </div>
-                  <div className="hidden sm:flex items-center gap-1 text-amber-400">
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <Star key={n} className="w-4 h-4 fill-amber-400" />
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {safeTestimonials.map((rev) => (
-                    <div
-                      key={rev.id}
-                      className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-sm flex flex-col justify-between gap-4"
-                    >
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1 text-amber-400">
-                            {[1, 2, 3, 4, 5].map((n) => (
-                              <Star key={n} className="w-3.5 h-3.5 fill-amber-400" />
-                            ))}
-                          </div>
-                          <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full">
-                            تقييم موثق
-                          </span>
-                        </div>
-
-                        {rev.image && (
-                          <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-50">
-                            <img
-                              src={rev.image}
-                              alt={safeText(rev.teacherName, 'تقييم معلم')}
-                              className="w-full max-h-64 object-contain mx-auto"
-                            />
-                          </div>
-                        )}
-
-                        {rev.text && (
-                          <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
-                            "{safeText(rev.text)}"
-                          </p>
-                        )}
-                      </div>
-
-                      {(rev.teacherName || rev.role) && (
-                        <div className="pt-3 border-t border-slate-100 flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 font-black text-xs flex items-center justify-center shrink-0">
-                            {safeText(rev.teacherName, 'م').slice(0, 1)}
-                          </div>
-                          <div>
-                            {rev.teacherName && (
-                              <div className="text-xs font-black text-slate-900">{safeText(rev.teacherName)}</div>
-                            )}
-                            {rev.role && <div className="text-[11px] text-slate-500">{safeText(rev.role)}</div>}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-          </div>
-        )}
-
-        {/* 2. مكتبة المذكرات والفلاتر (بدون التنبيه العام) */}
+        {/* 2. مكتبة المذكرات والأقسام والمراحل */}
         {activeTab === 'library' && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
+            {/* بطاقات المراحل الدراسية تظهر بوضوح في أعلى صفحة الأقسام */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base sm:text-lg font-black text-slate-900">اختر المرحلة الدراسية</h3>
+                {selectedStage !== 'all' && (
+                  <button
+                    onClick={() => {
+                      setSelectedStage('all');
+                      setSelectedGrade('all');
+                    }}
+                    className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+                  >
+                    عرض كل المراحل
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <button
+                  onClick={() => {
+                    setSelectedStage('all');
+                    setSelectedGrade('all');
+                  }}
+                  className={`p-3.5 sm:p-4 rounded-2xl border text-right transition cursor-pointer flex items-center justify-between ${
+                    selectedStage === 'all'
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-md'
+                      : 'bg-white text-slate-800 border-slate-200 hover:border-blue-400'
+                  }`}
+                >
+                  <div>
+                    <div className="font-black text-xs sm:text-sm">جميع المراحل</div>
+                    <div className={`text-[11px] mt-0.5 ${selectedStage === 'all' ? 'text-slate-300' : 'text-slate-500'}`}>
+                      {visibleProducts.length} مذكرة
+                    </div>
+                  </div>
+                  <Layers className="w-5 h-5 text-amber-400 shrink-0" />
+                </button>
+
+                {normalizedStages.map((st) => {
+                  const stageCount = visibleProducts.filter(
+                    (p) =>
+                      p.stageId === st.id &&
+                      (selectedCategory === 'all' || p.categoryId === selectedCategory)
+                  ).length;
+                  const isSelected = selectedStage === st.id;
+                  return (
+                    <button
+                      key={st.id}
+                      onClick={() => {
+                        setSelectedStage(st.id);
+                        setSelectedGrade('all');
+                      }}
+                      className={`p-3.5 sm:p-4 rounded-2xl border text-right transition cursor-pointer flex items-center justify-between ${
+                        isSelected
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-md'
+                          : 'bg-white text-slate-800 border-slate-200 hover:border-blue-400'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-black text-xs sm:text-sm">{st.name}</div>
+                        <div className={`text-[11px] mt-0.5 ${isSelected ? 'text-blue-100' : 'text-slate-500'}`}>
+                          {stageCount} مذكرة متاحة
+                        </div>
+                      </div>
+                      <BookOpen className={`w-5 h-5 shrink-0 ${isSelected ? 'text-amber-300' : 'text-blue-600'}`} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="bg-white rounded-3xl border border-slate-200/80 p-4 sm:p-6 shadow-sm space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
                 <div className="md:col-span-6 relative">
@@ -4156,20 +4209,7 @@ function MuzakkiratiPlatformContent() {
                 <a
                   key={soc.id}
                   href={soc.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full p-3.5 rounded-2xl bg-slate-50 hover:bg-blue-50 border border-slate-200 text-slate-800 hover:text-blue-700 font-bold text-xs sm:text-sm flex items-center justify-between transition"
-                >
-                  <span>{safeText(soc.label)}</span>
-                  <ExternalLink className="w-4 h-4 text-slate-400" />
-                </a>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* نافذة تسجيل دخول الإدارة الآمنة */}
+      {/* نافذة تسجيل دخول الإدارة الآمنة مع زر إظهار الرقم السري */}
       {isAdminModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-200 space-y-5">
@@ -4184,7 +4224,10 @@ function MuzakkiratiPlatformContent() {
                 </div>
               </div>
               <button
-                onClick={() => setIsAdminModalOpen(false)}
+                onClick={() => {
+                  setIsAdminModalOpen(false);
+                  setShowAdminPin(false);
+                }}
                 className="p-1.5 rounded-xl bg-slate-100 text-slate-600 cursor-pointer"
               >
                 <X className="w-4 h-4" />
@@ -4192,14 +4235,24 @@ function MuzakkiratiPlatformContent() {
             </div>
 
             <form onSubmit={handleAdminLogin} className="space-y-4">
-              <input
-                type="password"
-                required
-                value={adminPinInput}
-                onChange={(e) => setAdminPinInput(e.target.value)}
-                placeholder="أدخل رمز المرور الخاص بالإدارة..."
-                className="w-full px-4 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-sm outline-none focus:border-blue-600"
-              />
+              <div className="relative">
+                <input
+                  type={showAdminPin ? 'text' : 'password'}
+                  required
+                  value={adminPinInput}
+                  onChange={(e) => setAdminPinInput(e.target.value)}
+                  placeholder="أدخل رمز المرور الخاص بالإدارة..."
+                  className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-sm outline-none focus:border-blue-600"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAdminPin((prev) => !prev)}
+                  title={showAdminPin ? 'إخفاء رمز المرور' : 'إظهار رمز المرور'}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-200/70 transition cursor-pointer"
+                >
+                  {showAdminPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
               <button
                 type="submit"
                 className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow cursor-pointer"
