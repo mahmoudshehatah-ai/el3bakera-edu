@@ -551,16 +551,7 @@ function shrinkDataUrlIfNeeded(dataUrl, maxBytes = 480000) {
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         result = canvas.toDataURL('image/jpeg', curQuality);
         curQuality = +(curQuality - 0.1).toFixed(2);
-        curWidth = Math.round(curWidth * 0.82);
-      }
-      resolve(result);
-    };
-    img.onerror = () => resolve(dataUrl);
-    img.src = dataUrl;
-  });
-}
-
-function processHighQualityLogoFile(file, maxWidth = 1800, maxBytes = 820000) {
+function processHighQualityLogoFile(file, maxWidth = 2400, maxBytes = 2400000) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (ev) => {
@@ -573,7 +564,7 @@ function processHighQualityLogoFile(file, maxWidth = 1800, maxBytes = 820000) {
       const img = new Image();
       img.onload = () => {
         let curWidth = img.width > maxWidth ? maxWidth : img.width;
-        let curQuality = 0.94;
+        let curQuality = 0.96;
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
 
@@ -589,9 +580,9 @@ function processHighQualityLogoFile(file, maxWidth = 1800, maxBytes = 820000) {
         };
 
         let result = renderAttempt();
-        while (result.length > maxBytes && curWidth > 450) {
-          curWidth = Math.round(curWidth * 0.82);
-          if (!isPngOrWebp) curQuality = Math.max(0.75, +(curQuality - 0.06).toFixed(2));
+        while (result.length > maxBytes && curWidth > 900) {
+          curWidth = Math.round(curWidth * 0.85);
+          if (!isPngOrWebp) curQuality = Math.max(0.82, +(curQuality - 0.05).toFixed(2));
           result = renderAttempt();
         }
         resolve(result);
@@ -602,6 +593,15 @@ function processHighQualityLogoFile(file, maxWidth = 1800, maxBytes = 820000) {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+function splitDataUrlToChunks(dataUrl, chunkSize = 550000) {
+  if (!dataUrl || typeof dataUrl !== 'string') return [];
+  const chunks = [];
+  for (let i = 0; i < dataUrl.length; i += chunkSize) {
+    chunks.push(dataUrl.slice(i, i + chunkSize));
+  }
+  return chunks;
 }
 
 function normalizeNotebook(id, data) {
@@ -1592,6 +1592,15 @@ export default function App() {
         customerLogoImage: customerLogoImage || '',
         hasLogoImage: Boolean(customerLogoImage),
         items: cart.map((i) => ({ id: i.id, title: i.title, price: i.price, qty: i.qty || 1 })),
+      const logoChunks = customerLogoImage ? splitDataUrlToChunks(customerLogoImage, 550000) : [];
+      const orderDoc = {
+        orderCode,
+        customer: customerForm,
+        customerLogoText: customerLogoText.trim(),
+        customerLogoImage: logoChunks.length === 1 ? logoChunks[0] : '',
+        customerLogoChunksCount: logoChunks.length,
+        hasLogoImage: logoChunks.length > 0,
+        items: cart.map((i) => ({ id: i.id, title: i.title, price: i.price, qty: i.qty || 1 })),
         subtotal: cartSubtotal,
         quantityDiscount: quantityDiscountInfo.amount,
         discount: couponDiscountAmount + quantityDiscountInfo.amount,
@@ -1603,33 +1612,24 @@ export default function App() {
       };
 
       if (db) {
-        let savedOrderSuccess = false;
-        try {
-          await addDoc(publicCol('orders'), orderDoc);
-          savedOrderSuccess = true;
-        } catch {
-          // في حال تجاوز حجم المستند الحد المسموح، نضغط الشعار قليلًا ونعيد المحاولة فورًا
-          const lighterLogo = orderDoc.customerLogoImage
-            ? await shrinkDataUrlIfNeeded(orderDoc.customerLogoImage, 240000)
-            : '';
-          await addDoc(publicCol('orders'), {
-            ...orderDoc,
-            customerLogoImage: lighterLogo,
-            hasLogoImage: Boolean(lighterLogo)
-          });
-          savedOrderSuccess = true;
-        }
-        if (savedOrderSuccess && customerLogoImage) {
-          await setDoc(
-            publicDoc('order_logos', orderCode),
-            {
-              orderCode,
-              image: customerLogoImage,
-              teacherName: safeText(customerForm.teacherName),
-              createdAt: serverTimestamp()
-            },
-            { merge: true }
-          ).catch(() => {});
+        const createdOrderRef = await addDoc(publicCol('orders'), orderDoc);
+        if (logoChunks.length > 1) {
+          await Promise.all(
+            logoChunks.map((chunkStr, cIdx) =>
+              setDoc(
+                publicDoc('orders', `${createdOrderRef.id}_logo_${cIdx}`),
+                {
+                  parentOrderId: createdOrderRef.id,
+                  orderCode,
+                  chunkIndex: cIdx,
+                  chunkData: chunkStr,
+                  isLogoChunk: true,
+                  createdAt: serverTimestamp()
+                },
+                { merge: true }
+              )
+            )
+          );
         }
         if (appliedCoupon?.id) {
           await updateDoc(publicDoc('coupons', appliedCoupon.id), {
@@ -2144,30 +2144,31 @@ export default function App() {
                         setSelectedGradeId('');
                         setActiveView('library');
                       }}
-                      className="group bg-white rounded-3xl border border-slate-200 hover:border-blue-400 overflow-hidden shadow-sm hover:shadow-xl cursor-pointer transition flex flex-col justify-between"
-                    >
-                      <div className="relative h-44 bg-gradient-to-br from-slate-900 to-blue-950 flex items-center justify-center overflow-hidden">
-                        {cat.image ? (
-                          <img
-                            src={cat.image}
-                            alt={cat.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                          />
-                        ) : (
-                          <BookOpen className="w-12 h-12 text-amber-400/90" />
-                        )}
-                      </div>
-                      <div className="p-5 flex items-center justify-between gap-3">
-                        <div>
-                          <h3 className="text-base sm:text-lg font-black text-slate-900">{safeText(cat.name)}</h3>
-                          <p className="text-xs text-slate-500 font-bold mt-0.5">{catCount} مذكرة متاحة</p>
-                        </div>
-                        <span className={`px-3.5 py-2 rounded-xl ${theme.primaryBg} text-white text-xs font-black`}>
-                          تصفح
-                        </span>
-                      </div>
-                    </div>
-                  );
+    const unsubOrders = onSnapshot(
+      publicCol('orders'),
+      (snap) => {
+        const chunkMap = {};
+        const rawOrders = [];
+        snap.docs.forEach((d) => {
+          const data = d.data() || {};
+          if (data.isLogoChunk && data.orderCode) {
+            if (!chunkMap[data.orderCode]) chunkMap[data.orderCode] = [];
+            chunkMap[data.orderCode][Number(data.chunkIndex) || 0] = data.chunkData || '';
+          } else {
+            rawOrders.push({ id: d.id, ...data });
+          }
+        });
+        const list = rawOrders.map((ord) => {
+          if (ord.orderCode && Array.isArray(chunkMap[ord.orderCode]) && chunkMap[ord.orderCode].length > 0) {
+            return { ...ord, customerLogoImage: chunkMap[ord.orderCode].join('') };
+          }
+          return ord;
+        });
+        list.sort((a, b) => toTimeMs(b.createdAt) - toTimeMs(a.createdAt));
+        setOrders(list);
+      },
+      () => {}
+    );
                 })}
               </div>
             </section>
@@ -3146,7 +3147,7 @@ export default function App() {
                               if (!file) return;
                               setUploadingCustomerLogo(true);
                               try {
-                                const hqLogo = await processHighQualityLogoFile(file, 1600, 620000);
+                                const hqLogo = await processHighQualityLogoFile(file, 2400, 2400000);
                                 setCustomerLogoImage(hqLogo);
                               } finally {
                                 setUploadingCustomerLogo(false);
