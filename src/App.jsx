@@ -46,33 +46,16 @@ import { initializeApp, getApps } from 'firebase/app';
 import {
   getFirestore,
   doc,
-  setDoc,
   getDoc,
   getDocs,
+  setDoc,
   collection,
   onSnapshot,
   serverTimestamp
 } from 'firebase/firestore';
-import {
-  getAuth,
-  signInAnonymously,
-  signInWithCustomToken,
-  onAuthStateChanged
-} from 'firebase/auth';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 
-// ============================================================================
-// 1. تهيئة Firebase والبيانات المعتمدة لمنصة العباقرة للمذكرات التعليمية
-// ============================================================================
-
-const firebaseConfig =
-  typeof __firebase_config !== 'undefined'
-    ? JSON.parse(__firebase_config)
-    : {
-        apiKey: 'demo-key',
-        authDomain: 'demo.firebaseapp.com',
-        projectId: 'el3bakera-platform'
-      };
-
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'el3bakera-app';
 
 let db = null;
@@ -90,6 +73,33 @@ const safeText = (val, fallback = '') => {
   if (typeof val === 'string' && val.trim().length > 0) return val.trim();
   if (typeof val === 'number') return String(val);
   return fallback;
+};
+
+// استخراج كافة مصفوفات الصور من أي كائن مذكرة مهما اختلف اسم الحقل (sampleImages, samples, images, pages)
+const extractSampleImages = (obj) => {
+  if (!obj || typeof obj !== 'object') return [];
+  const candidates = [
+    obj.sampleImages,
+    obj.samples,
+    obj.images,
+    obj.gallery,
+    obj.pages,
+    obj.previewImages
+  ];
+  const collected = [];
+  for (const list of candidates) {
+    if (Array.isArray(list)) {
+      for (const item of list) {
+        if (typeof item === 'string' && isValidImageSrc(item)) {
+          collected.push(item);
+        } else if (item && typeof item === 'object') {
+          const src = item.url || item.image || item.imageData || item.data || item.src;
+          if (isValidImageSrc(src)) collected.push(src);
+        }
+      }
+    }
+  }
+  return Array.from(new Set(collected));
 };
 
 // دالة لتوحيد صيغة الأقسام والمراحل والصفوف (سواء كانت نصوصاً أو كائنات بخصائص name / title / label)
@@ -752,7 +762,7 @@ export default function App() {
         }
 
         // فحص المذكرات المحفوظة في السحابة لاستعادة صور الأغلفة والعينات
-        const nbCollections = ['notebooks', 'products', 'notebooks_v4'];
+        const nbCollections = ['notebooks', 'products', 'notebooks_v4', 'notebooks_v3', 'notebooks_v2', 'items'];
         for (const colName of nbCollections) {
           const nbSnap = await getDocs(
             collection(db, 'artifacts', appId, 'public', 'data', colName)
@@ -765,24 +775,65 @@ export default function App() {
                 const merged = [...prev];
                 cloudNotebooks.forEach((cn) => {
                   const idx = merged.findIndex((p) => p.id === cn.id || p.title === cn.title);
+                  const recoveredSamples = extractSampleImages(cn);
+                  const recoveredCover =
+                    cn.coverImage || cn.cover || cn.image || cn.thumbnail || '';
                   if (idx >= 0) {
                     merged[idx] = {
                       ...merged[idx],
                       ...cn,
-                      coverImage: isValidImageSrc(cn.coverImage)
-                        ? cn.coverImage
+                      coverImage: isValidImageSrc(recoveredCover)
+                        ? recoveredCover
                         : merged[idx].coverImage,
-                      sampleImages: Array.isArray(cn.sampleImages)
-                        ? cn.sampleImages
-                        : merged[idx].sampleImages
+                      sampleImages:
+                        recoveredSamples.length > 0
+                          ? recoveredSamples
+                          : extractSampleImages(merged[idx])
                     };
                   } else {
-                    merged.push(cn);
+                    merged.push({
+                      ...cn,
+                      coverImage: isValidImageSrc(recoveredCover) ? recoveredCover : '',
+                      sampleImages: recoveredSamples
+                    });
                   }
                 });
                 return merged;
               });
             }
+          }
+        }
+
+        // فحص مجموعات العينات المنفصلة في السحابة إن وُجدت
+        const sampleCollections = ['samples', 'notebook_samples', 'product_samples'];
+        for (const sCol of sampleCollections) {
+          const sSnap = await getDocs(
+            collection(db, 'artifacts', appId, 'public', 'data', sCol)
+          ).catch(() => null);
+          if (sSnap && !sSnap.empty) {
+            const byNotebook = {};
+            sSnap.forEach((docItem) => {
+              const d = docItem.data() || {};
+              const nbId = d.notebookId || d.productId || d.parentId || docItem.id;
+              const imgs = extractSampleImages(d);
+              const single = d.url || d.imageData || d.image || d.data;
+              if (isValidImageSrc(single)) imgs.push(single);
+              if (imgs.length > 0) {
+                byNotebook[nbId] = [...(byNotebook[nbId] || []), ...imgs];
+              }
+            });
+            setProducts((prev) =>
+              prev.map((p) =>
+                byNotebook[p.id]
+                  ? {
+                      ...p,
+                      sampleImages: Array.from(
+                        new Set([...(p.sampleImages || []), ...byNotebook[p.id]])
+                      )
+                    }
+                  : p
+              )
+            );
           }
         }
       } catch (err) {
@@ -794,51 +845,102 @@ export default function App() {
     return () => unsubSettings();
   }, [user]);
 
-  // استرداد أي صور أو بيانات من مفاتيح التخزين المحلي السابقة (v1, v2, v3)
-  useEffect(() => {
+  // استرداد شامل من كافة مفاتيح التخزين المحلي (localStorage) القديمة في المتصفح
+  const scanAndRecoverLocalStorage = (notify = false) => {
+    let recoveredCount = 0;
     try {
-      const oldSettingKeys = ['el3bakera_settings_v3', 'el3bakera_settings_v2', 'el3bakera_settings'];
-      for (const k of oldSettingKeys) {
-        const raw = localStorage.getItem(k);
-        if (!raw) continue;
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object') {
-          setSettings((prev) => ({
-            ...prev,
-            logoImage: isValidImageSrc(parsed.logoImage) ? parsed.logoImage : prev.logoImage,
-            heroImage: isValidImageSrc(parsed.heroImage) ? parsed.heroImage : prev.heroImage,
-            categories: Array.isArray(parsed.categories)
-              ? prev.categories.map((c, idx) => {
-                  const oldCat = parsed.categories.find((oc) => oc.id === c.id) || parsed.categories[idx];
-                  return oldCat && isValidImageSrc(oldCat.coverImage)
-                    ? { ...c, coverImage: oldCat.coverImage }
-                    : c;
-                })
-              : prev.categories
-          }));
-        }
-      }
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key || key === STORAGE_KEYS.cart) continue;
+        const raw = localStorage.getItem(key);
+        if (!raw || (!raw.startsWith('{') && !raw.startsWith('['))) continue;
 
-      const oldProdKeys = ['el3bakera_products_v3', 'el3bakera_products_v2', 'el3bakera_notebooks'];
-      for (const k of oldProdKeys) {
-        const raw = localStorage.getItem(k);
-        if (!raw) continue;
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        let parsed = null;
+        try {
+          parsed = JSON.parse(raw);
+        } catch (e) {
+          continue;
+        }
+        if (!parsed) continue;
+
+        // استرداد الإعدادات والصور (الشعار، البانر، أغلفة الأقسام)
+        const settingsCandidate = parsed.settings ? parsed.settings : parsed;
+        if (settingsCandidate && typeof settingsCandidate === 'object' && !Array.isArray(settingsCandidate)) {
+          if (
+            isValidImageSrc(settingsCandidate.logoImage) ||
+            isValidImageSrc(settingsCandidate.heroImage) ||
+            Array.isArray(settingsCandidate.categories)
+          ) {
+            setSettings((prev) => ({
+              ...prev,
+              logoImage:
+                isValidImageSrc(settingsCandidate.logoImage) &&
+                settingsCandidate.logoImage !== DEFAULT_LOGO_SVG
+                  ? settingsCandidate.logoImage
+                  : prev.logoImage,
+              heroImage: isValidImageSrc(settingsCandidate.heroImage)
+                ? settingsCandidate.heroImage
+                : prev.heroImage,
+              categories: Array.isArray(settingsCandidate.categories)
+                ? prev.categories.map((c, idx) => {
+                    const oldCat =
+                      settingsCandidate.categories.find((oc) => oc.id === c.id) ||
+                      settingsCandidate.categories[idx];
+                    const oldCover = oldCat?.coverImage || oldCat?.image || oldCat?.cover;
+                    if (isValidImageSrc(oldCover)) {
+                      recoveredCount++;
+                      return { ...c, coverImage: oldCover };
+                    }
+                    return c;
+                  })
+                : prev.categories
+            }));
+          }
+        }
+
+        // استرداد صور أغلفة وعينات المذكرات
+        const listCandidate = Array.isArray(parsed)
+          ? parsed
+          : Array.isArray(parsed.notebooks)
+          ? parsed.notebooks
+          : Array.isArray(parsed.products)
+          ? parsed.products
+          : null;
+
+        if (listCandidate) {
           setProducts((prev) =>
             prev.map((p) => {
-              const oldP = parsed.find((op) => op.id === p.id || op.title === p.title);
+              const oldP = listCandidate.find((op) => op && (op.id === p.id || op.title === p.title));
               if (!oldP) return p;
+              const oldCover = oldP.coverImage || oldP.cover || oldP.image;
+              const oldSamples = extractSampleImages(oldP);
+              if (isValidImageSrc(oldCover) || oldSamples.length > 0) {
+                recoveredCount += oldSamples.length + (isValidImageSrc(oldCover) ? 1 : 0);
+              }
               return {
                 ...p,
-                coverImage: isValidImageSrc(oldP.coverImage) ? oldP.coverImage : p.coverImage,
-                sampleImages: Array.isArray(oldP.sampleImages) ? oldP.sampleImages : p.sampleImages
+                coverImage: isValidImageSrc(oldCover) ? oldCover : p.coverImage,
+                sampleImages:
+                  oldSamples.length > 0
+                    ? Array.from(new Set([...(p.sampleImages || []), ...oldSamples]))
+                    : p.sampleImages
               };
             })
           );
         }
       }
+      if (notify) {
+        if (recoveredCount > 0) {
+          showToast(`تم فحص الذاكرة واستعادة ${recoveredCount} صورة/عينة بنجاح!`);
+        } else {
+          showToast('تم فحص المتصفح؛ يمكنك رفع صور العينات أو استيراد ملف JSON مباشرة', 'info');
+        }
+      }
     } catch (e) {}
+  };
+
+  useEffect(() => {
+    scanAndRecoverLocalStorage(false);
   }, []);
 
   const saveSettingsToCloud = async (updatedSettings = settings) => {
@@ -1145,7 +1247,11 @@ export default function App() {
             importedProducts.map((p) => ({
               ...p,
               badge: p.badgeText || p.badge || '',
-              description: p.subtitle || p.description || ''
+              description: p.subtitle || p.description || '',
+              coverImage: isValidImageSrc(p.coverImage || p.cover || p.image)
+                ? p.coverImage || p.cover || p.image
+                : '',
+              sampleImages: extractSampleImages(p)
             }))
           );
         }
@@ -1991,6 +2097,14 @@ export default function App() {
 
                 <div className="flex flex-wrap items-center gap-2">
                   <button
+                    onClick={() => scanAndRecoverLocalStorage(true)}
+                    className="px-3.5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                    title="البحث في ذاكرة المتصفح عن أي صور عينات أو أغلفة سابقة"
+                  >
+                    <Search className="w-4 h-4 text-amber-300" />
+                    <span>فحص واسترداد الصور</span>
+                  </button>
+                  <button
                     onClick={handleResetToApprovedDefaults}
                     className="px-3.5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs flex items-center gap-1.5 transition cursor-pointer"
                     title="استعادة الإعدادات والمذكرات الأصلية المعتمدة"
@@ -2654,6 +2768,31 @@ export default function App() {
                               setNewProduct((prev) => ({ ...prev, coverImage: dataUrl }))
                             )
                           }
+                        />
+                      </label>
+                      <label className="px-4 py-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer md:col-span-3">
+                        <ImageIcon className="w-4 h-4 text-emerald-600" />
+                        <span>
+                          {Array.isArray(newProduct.sampleImages) && newProduct.sampleImages.length > 0
+                            ? `تم إرفاق ${newProduct.sampleImages.length} صورة عينة (اضغط لإضافة المزيد)`
+                            : 'رفع صور عينات صفحات المذكرة (يمكن اختيار أكثر من صورة)'}
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          className="hidden"
+                          onChange={(e) => {
+                            const files = Array.from(e.target.files || []);
+                            files.forEach((f) => {
+                              compressImageFile(f, 800, (dataUrl) => {
+                                setNewProduct((prev) => ({
+                                  ...prev,
+                                  sampleImages: [...(prev.sampleImages || []), dataUrl]
+                                }));
+                              });
+                            });
+                          }}
                         />
                       </label>
                       <textarea
