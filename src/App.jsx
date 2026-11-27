@@ -654,6 +654,7 @@ function MuzakkiratiPlatformContent() {
 
   const [previewProduct, setPreviewProduct] = useState(null);
   const [activeSampleIndex, setActiveSampleIndex] = useState(0);
+  const [isSampleFullscreen, setIsSampleFullscreen] = useState(false);
 
   const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -872,6 +873,21 @@ function MuzakkiratiPlatformContent() {
     window.addEventListener('hashchange', checkAdminHash);
     return () => window.removeEventListener('hashchange', checkAdminHash);
   }, [isAdminAuthenticated]);
+
+  const handleAdminLogout = () => {
+    setIsAdminAuthenticated(false);
+    setIsAdminModalOpen(false);
+    try {
+      localStorage.removeItem('el3bakera_admin_auth');
+      localStorage.setItem('el3bakera_active_tab', 'home');
+      if (window.location.hash === '#admin') {
+        window.history.replaceState({ tab: 'home' }, '', window.location.pathname + window.location.search);
+      }
+    } catch {}
+    setTabHistory(['home']);
+    setActiveTab('home');
+    showToast('تم تسجيل الخروج من لوحة الإدارة بأمان');
+  };
 
   const handleLogoSecretTap = () => {
     navigateToTabWithHistory('home');
@@ -1103,6 +1119,7 @@ function MuzakkiratiPlatformContent() {
     setSettings(cleanSettings);
     await idbSet('settings_v5', cleanSettings);
     safeLocalSet('el3bakera_settings_v5', cleanSettings);
+    let cloudSaved = false;
     if (db) {
       try {
         const lightCategories = (cleanSettings.categories || []).map(({ coverImage, ...rest }) => rest);
@@ -1115,7 +1132,6 @@ function MuzakkiratiPlatformContent() {
           { merge: true }
         );
 
-        // رفع كل صورة في مستند مستقل تماماً لضمان عدم تجاوز حد الـ 1MB وظهورها فوراً للعملاء
         await saveMediaAssetToCloud(db, PRIMARY_APP_ID, 'logoImage', logoImage || '');
         await saveMediaAssetToCloud(db, PRIMARY_APP_ID, 'heroImage', heroImage || '');
         await saveMediaAssetToCloud(db, PRIMARY_APP_ID, 'heroBgImage', heroBgImage || '');
@@ -1124,15 +1140,17 @@ function MuzakkiratiPlatformContent() {
         }
 
         setCloudSyncStatus('connected');
+        cloudSaved = true;
       } catch (e) {
         console.error('Firebase save error:', e);
         setCloudSyncStatus('error');
-        showToast(`تعذر الحفظ في السحابة: ${e?.code || e?.message || 'تحقق من صلاحيات Firestore'}`, 'error');
+        showToast(`تم الحفظ محلياً، وتعذر النشر للسحابة: ${e?.code || 'تحقق من Firestore Rules'}`, 'error');
       }
     }
     setTimeout(() => {
       isSavingRef.current = false;
-    }, 2000);
+    }, 1500);
+    return cloudSaved;
   };
 
   const saveProductToCloud = async (productObj) => {
@@ -1393,7 +1411,8 @@ function MuzakkiratiPlatformContent() {
   };
 
   const handleSaveAllAdminChanges = async () => {
-    await saveSettings({
+    showToast('جاري حفظ ونشر جميع التعديلات...');
+    const ok = await saveSettings({
       ...settings,
       stages: normalizedStages,
       grades: normalizedGrades,
@@ -1402,7 +1421,7 @@ function MuzakkiratiPlatformContent() {
     await idbSet('products_v5', products);
     await idbSet('bundles_v5', bundles);
     await idbSet('coupons_v5', coupons);
-    if (db) {
+    if (db && ok) {
       try {
         for (const prod of products) {
           await saveProductToCloud(prod);
@@ -1414,9 +1433,13 @@ function MuzakkiratiPlatformContent() {
             { merge: true }
           );
         }
-      } catch {}
+        showToast('✓ تم حفظ ونشر جميع التعديلات للعملاء بنجاح!');
+      } catch (err) {
+        showToast(`تم حفظ الإعدادات وتعذرت مزامنة بعض العناصر: ${err?.code || ''}`, 'error');
+      }
+    } else if (!db) {
+      showToast('✓ تم حفظ التعديلات بنجاح');
     }
-    showToast('تم حفظ ونشر جميع التعديلات للعملاء بنجاح!');
   };
 
   const handleExportBackup = () => {
@@ -1578,14 +1601,16 @@ function MuzakkiratiPlatformContent() {
 
   return (
     <div dir="rtl" className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#f4f6fa] text-slate-900 font-sans flex flex-col">
-      {/* إشعار Toast عائم */}
+      {/* إشعار Toast عائم يظهر بوضوح فوق جميع النوافذ */}
       {toast && (
         <div
-          className={`fixed bottom-5 right-4 left-4 sm:left-auto sm:right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl text-white text-xs sm:text-sm font-bold transition-all ${
-            toast.type === 'error' ? 'bg-rose-600' : 'bg-slate-900'
+          className={`fixed bottom-5 right-4 left-4 sm:left-auto sm:right-5 z-[100] flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl text-white text-xs sm:text-sm font-black transition-all border ${
+            toast.type === 'error'
+              ? 'bg-rose-600 border-rose-400'
+              : 'bg-emerald-600 border-emerald-400'
           }`}
         >
-          <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />
+          <CheckCircle2 className="w-5 h-5 text-white shrink-0" />
           <span>{toast.message}</span>
         </div>
       )}
@@ -2028,11 +2053,14 @@ function MuzakkiratiPlatformContent() {
                           <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-xl">
                             <span>📄 {product.pagesCount || 0} صفحة PDF</span>
                             <button
-                              onClick={() => {
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 setPreviewProduct(product);
                                 setActiveSampleIndex(0);
+                                setIsSampleFullscreen(false);
                               }}
-                              className="text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                              className="text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer touch-manipulation py-1 px-2"
                             >
                               <Eye className="w-3.5 h-3.5" />
                               <span>التفاصيل والعينة</span>
@@ -2422,11 +2450,14 @@ function MuzakkiratiPlatformContent() {
                           <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-xl">
                             <span>📄 {product.pagesCount} صفحة PDF</span>
                             <button
-                              onClick={() => {
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 setPreviewProduct(product);
                                 setActiveSampleIndex(0);
+                                setIsSampleFullscreen(false);
                               }}
-                              className="text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                              className="text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer touch-manipulation py-1 px-2"
                             >
                               <Eye className="w-3.5 h-3.5" />
                               <span>التفاصيل والعينة</span>
@@ -4334,8 +4365,8 @@ function MuzakkiratiPlatformContent() {
                 <button
                   type="button"
                   onClick={() => setShowAdminPin((prev) => !prev)}
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800 p-1 cursor-pointer"
                   title={showAdminPin ? 'إخفاء رمز المرور' : 'إظهار رمز المرور'}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-200/70 transition cursor-pointer"
                 >
                   {showAdminPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -4347,6 +4378,181 @@ function MuzakkiratiPlatformContent() {
                 دخول لوحة التحكم
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* معاينة المذكرة وعارض العينات بملء الشاشة للهاتف والكمبيوتر */}
+      {previewProduct && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div
+            className={`bg-white overflow-hidden shadow-2xl border border-slate-200 flex flex-col ${
+              isSampleFullscreen
+                ? 'fixed inset-0 w-full h-full rounded-none z-[60]'
+                : 'rounded-3xl max-w-3xl w-full my-auto max-h-[92vh]'
+            }`}
+          >
+            <div className="bg-slate-900 text-white px-4 sm:px-6 py-3.5 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <Eye className="w-5 h-5 text-amber-400 shrink-0" />
+                <h3 className="font-black text-xs sm:text-base truncate">
+                  {safeText(previewProduct.title)}
+                </h3>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsSampleFullscreen((prev) => !prev)}
+                  className="px-3 py-1.5 rounded-xl bg-amber-400 text-slate-950 hover:bg-amber-300 text-xs font-black cursor-pointer touch-manipulation"
+                >
+                  {isSampleFullscreen ? 'تصغير العرض' : 'ملء الشاشة'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewProduct(null);
+                    setIsSampleFullscreen(false);
+                  }}
+                  className="p-1.5 rounded-xl bg-white/15 text-white cursor-pointer touch-manipulation"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1">
+              {(() => {
+                const allGallery = [
+                  ...(previewProduct.coverImage ? [previewProduct.coverImage] : []),
+                  ...(Array.isArray(previewProduct.sampleImages) ? previewProduct.sampleImages : [])
+                ];
+                return allGallery.length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-950 flex items-center justify-center">
+                      <img
+                        src={allGallery[activeSampleIndex] || allGallery[0]}
+                        alt={safeText(previewProduct.title)}
+                        className={`w-full object-contain mx-auto transition-all ${
+                          isSampleFullscreen ? 'max-h-[72vh]' : 'max-h-80 sm:max-h-96'
+                        }`}
+                      />
+                      {renderDiscountBadge(previewProduct)}
+
+                      {allGallery.length > 1 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setActiveSampleIndex((prev) =>
+                                prev > 0 ? prev - 1 : allGallery.length - 1
+                              )
+                            }
+                            className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 text-slate-900 shadow-lg flex items-center justify-center cursor-pointer touch-manipulation"
+                          >
+                            <ChevronRight className="w-5 h-5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setActiveSampleIndex((prev) =>
+                                prev < allGallery.length - 1 ? prev + 1 : 0
+                              )
+                            }
+                            className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 text-slate-900 shadow-lg flex items-center justify-center cursor-pointer touch-manipulation"
+                          >
+                            <ChevronLeft className="w-5 h-5" />
+                          </button>
+                          <span className="absolute bottom-3 left-3 px-3 py-1 rounded-full bg-slate-900/80 text-white text-xs font-black">
+                            صفحة {activeSampleIndex + 1} من {allGallery.length}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    {allGallery.length > 1 && (
+                      <div className="flex gap-2 overflow-x-auto pb-1">
+                        {allGallery.map((img, idx) => (
+                          <button
+                            type="button"
+                            key={idx}
+                            onClick={() => setActiveSampleIndex(idx)}
+                            className={`w-16 h-20 rounded-xl overflow-hidden border-2 shrink-0 cursor-pointer touch-manipulation ${
+                              activeSampleIndex === idx ? 'border-blue-600' : 'border-transparent opacity-70'
+                            }`}
+                          >
+                            <img src={img} alt="" className="w-full h-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-6 rounded-2xl bg-slate-100 border border-slate-200 text-center text-xs text-slate-600 font-bold">
+                    لا توجد صور عينات مرفوعة حالياً — يمكنك معاينة الملف الكامل عبر رابط Google Drive بالأسفل.
+                  </div>
+                );
+              })()}
+
+              {/* موضع التنبيه العام: أعلى التفاصيل */}
+              {settings.generalNoticePosition === 'top' && renderGeneralNoticeBox()}
+
+              {/* موضع التنبيه الخاص بالمذكرة: أعلى الوصف */}
+              {settings.tipNoticePosition === 'above-desc' && renderProductTipBox(previewProduct.tipText, false)}
+
+              <div className="space-y-2">
+                <h4 className="text-lg sm:text-xl font-black text-slate-900">{safeText(previewProduct.title)}</h4>
+                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                  {safeText(previewProduct.description)}
+                </p>
+              </div>
+
+              {/* موضع التنبيه الخاص بالمذكرة: أسفل الوصف */}
+              {(settings.tipNoticePosition === 'below-desc' || !settings.tipNoticePosition) &&
+                renderProductTipBox(previewProduct.tipText, false)}
+
+              {/* موضع التنبيه العام: أسفل التفاصيل في بطاقة منفصلة */}
+              {(settings.generalNoticePosition === 'bottom' || !settings.generalNoticePosition) &&
+                renderGeneralNoticeBox()}
+
+              {/* موضع التنبيه الخاص بالمذكرة: قبل أزرار الطلب */}
+              {settings.tipNoticePosition === 'before-actions' &&
+                renderProductTipBox(previewProduct.tipText, false)}
+
+              <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-slate-100">
+                <div>
+                  <span className="text-2xl font-black text-blue-600">{previewProduct.price} ج.م</span>
+                  {Number(previewProduct.oldPrice) > Number(previewProduct.price) && (
+                    <span className="text-sm text-slate-400 line-through mr-2">
+                      {previewProduct.oldPrice} ج.م
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {previewProduct.driveSampleUrl && (
+                    <a
+                      href={previewProduct.driveSampleUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-4 py-3 rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-black inline-flex items-center gap-1.5 hover:bg-emerald-100"
+                    >
+                      <span>معاينة Google Drive</span>
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      addToCart(previewProduct, 'product');
+                      setPreviewProduct(null);
+                      setIsSampleFullscreen(false);
+                    }}
+                    className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-black shadow cursor-pointer"
+                  >
+                    اطلبها مخصصة باسمك
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
