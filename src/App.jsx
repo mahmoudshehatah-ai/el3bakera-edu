@@ -32,7 +32,9 @@ import {
   Package,
   Award,
   UserCheck,
-  Database
+  Database,
+  EyeOff,
+  ArrowRight
 } from 'lucide-react';
 import { initializeApp, getApps } from 'firebase/app';
 import {
@@ -401,7 +403,25 @@ function compressImageFile(file, maxWidth = 1100, quality = 0.82) {
 function PlatformContent() {
   // حالة التبويب النشط
   const [activeTab, setActiveTab] = useState('home'); // 'home' | 'library' | 'bundles' | 'track' | 'admin'
+  const [tabHistory, setTabHistory] = useState(['home']);
   const [selectedCategory, setSelectedCategory] = useState('all');
+
+  const navigateToTab = (newTab) => {
+    if (newTab === activeTab) return;
+    setTabHistory((prev) => [...prev, newTab]);
+    setActiveTab(newTab);
+  };
+
+  const handleGoBack = () => {
+    if (tabHistory.length > 1) {
+      const nextHist = tabHistory.slice(0, -1);
+      const prevTab = nextHist[nextHist.length - 1] || 'home';
+      setTabHistory(nextHist);
+      setActiveTab(prevTab);
+    } else {
+      setActiveTab('home');
+    }
+  };
   const [selectedStage, setSelectedStage] = useState('all');
   const [selectedGrade, setSelectedGrade] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -495,7 +515,8 @@ function PlatformContent() {
     description: '',
     driveSampleUrl: 'https://drive.google.com/',
     coverImage: '',
-    sampleImages: []
+    sampleImages: [],
+    hidden: false
   });
 
   const [newBundleForm, setNewBundleForm] = useState({
@@ -828,6 +849,7 @@ function PlatformContent() {
 
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
+      if (p.hidden) return false;
       if (selectedCategory !== 'all' && p.categoryId !== selectedCategory) return false;
       if (selectedStage !== 'all' && p.stageId !== selectedStage) return false;
       if (selectedGrade !== 'all' && p.gradeId !== selectedGrade) return false;
@@ -986,7 +1008,7 @@ function PlatformContent() {
     if (!entered) {
       setIsAdminAuthenticated(true);
       setIsAdminModalOpen(false);
-      setActiveTab('admin');
+      navigateToTab('admin');
       showToast('تم الدخول إلى لوحة الإدارة بنجاح');
       return;
     }
@@ -996,7 +1018,7 @@ function PlatformContent() {
     }
     setIsAdminAuthenticated(true);
     setIsAdminModalOpen(false);
-    setActiveTab('admin');
+    navigateToTab('admin');
     setAdminPinInput('');
     showToast('تم الدخول إلى لوحة الإدارة وحفظ رمز المرور');
   };
@@ -1017,7 +1039,8 @@ function PlatformContent() {
       description: '',
       driveSampleUrl: 'https://drive.google.com/',
       coverImage: '',
-      sampleImages: []
+      sampleImages: [],
+      hidden: false
     });
   };
 
@@ -1190,7 +1213,7 @@ function PlatformContent() {
           {/* الشعار واسم المنصة */}
           <div
             onClick={() => {
-              setActiveTab('home');
+              navigateToTab('home');
               handleLogoSecretTap();
             }}
             className="flex items-center gap-3 cursor-pointer select-none group"
@@ -1211,7 +1234,7 @@ function PlatformContent() {
           {/* روابط التنقل الرئيسية */}
           <nav className="hidden md:flex items-center gap-2">
             <button
-              onClick={() => setActiveTab('home')}
+              onClick={() => navigateToTab('home')}
               className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
                 activeTab === 'home'
                   ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
@@ -1221,7 +1244,7 @@ function PlatformContent() {
               الرئيسية
             </button>
             <button
-              onClick={() => setActiveTab('library')}
+              onClick={() => navigateToTab('library')}
               className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
                 activeTab === 'library'
                   ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
@@ -1231,7 +1254,7 @@ function PlatformContent() {
               المذكرات
             </button>
             <button
-              onClick={() => setActiveTab('bundles')}
+              onClick={() => navigateToTab('bundles')}
               className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
                 activeTab === 'bundles'
                   ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
@@ -1241,7 +1264,7 @@ function PlatformContent() {
               العروض
             </button>
             <button
-              onClick={() => setActiveTab('track')}
+              onClick={() => navigateToTab('track')}
               className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
                 activeTab === 'track'
                   ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
@@ -1252,7 +1275,7 @@ function PlatformContent() {
             </button>
             {isAdminAuthenticated && (
               <button
-                onClick={() => setActiveTab('admin')}
+                onClick={() => navigateToTab('admin')}
                 className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
                   activeTab === 'admin'
                     ? 'bg-slate-900 text-amber-400 shadow-sm'
@@ -1294,25 +1317,25 @@ function PlatformContent() {
         {/* شريط تنقل للهواتف */}
         <div className="md:hidden flex items-center justify-around border-t border-slate-100 py-2 px-2 bg-white text-xs font-bold">
           <button
-            onClick={() => setActiveTab('home')}
+            onClick={() => navigateToTab('home')}
             className={`px-3 py-1.5 rounded-lg ${activeTab === 'home' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}
           >
             الرئيسية
           </button>
           <button
-            onClick={() => setActiveTab('library')}
+            onClick={() => navigateToTab('library')}
             className={`px-3 py-1.5 rounded-lg ${activeTab === 'library' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}
           >
             المذكرات
           </button>
           <button
-            onClick={() => setActiveTab('bundles')}
+            onClick={() => navigateToTab('bundles')}
             className={`px-3 py-1.5 rounded-lg ${activeTab === 'bundles' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}
           >
             العروض
           </button>
           <button
-            onClick={() => setActiveTab('track')}
+            onClick={() => navigateToTab('track')}
             className={`px-3 py-1.5 rounded-lg ${activeTab === 'track' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}
           >
             تتبع طلبك
@@ -1322,6 +1345,17 @@ function PlatformContent() {
 
       {/* ==================== المحتوى الرئيسي ==================== */}
       <main className="flex-1">
+        {activeTab !== 'home' && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5">
+            <button
+              onClick={handleGoBack}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-xs sm:text-sm shadow-2xs transition-all"
+            >
+              <ArrowRight className="w-4 h-4" />
+              <span>رجوع للخلف</span>
+            </button>
+          </div>
+        )}
         {/* 1. الصفحة الرئيسية */}
         {activeTab === 'home' && (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-16 space-y-12">
@@ -1344,13 +1378,13 @@ function PlatformContent() {
 
                   <div className="flex flex-wrap items-center gap-3 pt-1">
                     <button
-                      onClick={() => setActiveTab('library')}
+                      onClick={() => navigateToTab('library')}
                       className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3.5 rounded-xl font-bold text-sm sm:text-base transition-all shadow-lg shadow-blue-600/25"
                     >
                       <span>استعراض جميع المذكرات</span>
                     </button>
                     <button
-                      onClick={() => setActiveTab('bundles')}
+                      onClick={() => navigateToTab('bundles')}
                       className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/15 text-white border border-white/15 px-6 py-3.5 rounded-xl font-bold text-sm sm:text-base transition-all"
                     >
                       <span>باقات التوفير والعروض</span>
@@ -1401,17 +1435,17 @@ function PlatformContent() {
                 <button
                   onClick={() => {
                     setSelectedCategory('all');
-                    setActiveTab('library');
+                    navigateToTab('library');
                   }}
                   className="text-sm font-bold text-blue-600 hover:text-blue-700"
                 >
-                  عرض الكل ({products.length})
+                  عرض الكل ({products.filter((p) => !p.hidden).length})
                 </button>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {normalizedCategories.map((cat, idx) => {
-                  const count = products.filter((p) => p.categoryId === cat.id).length;
+                  const count = products.filter((p) => !p.hidden && p.categoryId === cat.id).length;
                   const fallbackGradients = [
                     'from-sky-500 to-blue-700',
                     'from-emerald-500 to-teal-700',
@@ -1422,7 +1456,7 @@ function PlatformContent() {
                       key={cat.id}
                       onClick={() => {
                         setSelectedCategory(cat.id);
-                        setActiveTab('library');
+                        navigateToTab('library');
                       }}
                       className="group bg-white rounded-2xl border border-slate-200/90 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden cursor-pointer flex flex-col"
                     >
@@ -1466,7 +1500,7 @@ function PlatformContent() {
               <div className="flex items-center justify-between">
                 <h3 className="text-xl sm:text-2xl font-black text-slate-900">أحدث المذكرات المضافة</h3>
                 <button
-                  onClick={() => setActiveTab('library')}
+                  onClick={() => navigateToTab('library')}
                   className="text-sm font-bold text-blue-600 hover:text-blue-700"
                 >
                   تصفح المكتبة الكاملة ←
@@ -1474,7 +1508,7 @@ function PlatformContent() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {products.slice(0, 6).map((product) => {
+                {products.filter((p) => !p.hidden).slice(0, 6).map((product) => {
                   const gradeObj = normalizedGrades.find((g) => g.id === product.gradeId);
                   const catObj = normalizedCategories.find((c) => c.id === product.categoryId);
                   const discountAmount =
@@ -1638,7 +1672,7 @@ function PlatformContent() {
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  جميع الأقسام ({products.length})
+                  جميع الأقسام ({products.filter((p) => !p.hidden).length})
                 </button>
                 {normalizedCategories.map((cat) => (
                   <button
@@ -1937,6 +1971,16 @@ function PlatformContent() {
 
               <div className="flex flex-wrap items-center gap-2">
                 <button
+                  onClick={async () => {
+                    await saveSettings(settings);
+                    showToast('تم حفظ جميع إعدادات المنصة ومزامنتها مع السحابة بنجاح!');
+                  }}
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black flex items-center gap-1.5 shadow"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  <span>حفظ جميع التعديلات</span>
+                </button>
+                <button
                   onClick={handleExportBackup}
                   className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5"
                 >
@@ -1946,7 +1990,7 @@ function PlatformContent() {
                 <button
                   onClick={() => {
                     setIsAdminAuthenticated(false);
-                    setActiveTab('home');
+                    navigateToTab('home');
                   }}
                   className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold flex items-center gap-1.5"
                 >
@@ -2192,7 +2236,9 @@ function PlatformContent() {
                   {products.map((p) => (
                     <div
                       key={p.id}
-                      className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center justify-between gap-4 shadow-xs"
+                      className={`rounded-2xl border p-4 flex items-center justify-between gap-4 shadow-xs transition-all ${
+                        p.hidden ? 'bg-slate-100/80 border-slate-300 opacity-75' : 'bg-white border-slate-200'
+                      }`}
                     >
                       <div className="flex items-center gap-3.5">
                         <img
@@ -2201,7 +2247,14 @@ function PlatformContent() {
                           className="w-16 h-16 rounded-xl object-cover border border-slate-100 shrink-0"
                         />
                         <div>
-                          <h4 className="font-black text-sm sm:text-base text-slate-900">{p.title}</h4>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-black text-sm sm:text-base text-slate-900">{p.title}</h4>
+                            {p.hidden && (
+                              <span className="px-2 py-0.5 rounded-md bg-amber-200 text-amber-900 text-[10px] font-black">
+                                مخفية عن الزوار
+                              </span>
+                            )}
+                          </div>
                           <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap items-center gap-2">
                             <span className="font-bold text-blue-600">{p.price} ج.م</span>
                             <span>•</span>
@@ -2215,6 +2268,30 @@ function PlatformContent() {
                       </div>
 
                       <div className="flex items-center gap-2">
+                        <button
+                          onClick={async () => {
+                            const updatedProd = { ...p, hidden: !p.hidden };
+                            const updatedList = products.map((item) =>
+                              item.id === p.id ? updatedProd : item
+                            );
+                            setProducts(updatedList);
+                            localStorage.setItem('el3bakera_products_v5', JSON.stringify(updatedList));
+                            await saveProductToCloud(updatedProd);
+                            showToast(
+                              updatedProd.hidden
+                                ? `تم إخفاء "${p.title}" عن الزوار`
+                                : `تم إظهار "${p.title}" للزوار`
+                            );
+                          }}
+                          className={`p-2.5 rounded-xl transition-colors ${
+                            p.hidden
+                              ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                          }`}
+                          title={p.hidden ? 'إظهار المذكرة للزوار' : 'إخفاء المذكرة عن الزوار'}
+                        >
+                          {p.hidden ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                        </button>
                         <button
                           onClick={() => {
                             setEditingProduct(p);
@@ -2358,183 +2435,491 @@ function PlatformContent() {
 
             {/* تبويب المراحل والصفوف والأقسام وصور الأقسام */}
             {adminSubTab === 'taxonomy' && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* الأقسام وصورها */}
-                <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4">
-                  <h3 className="font-black text-base text-slate-900">الأقسام الدراسية وصورها</h3>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newCategoryName}
-                      onChange={(e) => setNewCategoryName(e.target.value)}
-                      placeholder="اسم القسم الجديد..."
-                      className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs"
-                    />
-                    <button
-                      onClick={() => {
-                        if (!newCategoryName.trim()) return;
-                        const updatedCats = [
-                          ...normalizedCategories,
-                          { id: `cat_${Date.now()}`, name: newCategoryName.trim(), image: '' }
-                        ];
-                        saveSettings({ ...settings, categories: updatedCats });
-                        setNewCategoryName('');
-                        showToast('تمت إضافة القسم');
-                      }}
-                      className="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold"
-                    >
-                      إضافة
-                    </button>
+              <div className="space-y-6">
+                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-black text-sm text-blue-950">تنظيم الأقسام والمراحل والصفوف</h3>
+                    <p className="text-xs text-blue-700">
+                      يمكنك تعديل أسماء الأقسام ورفع أغلفة لها، وإضافة المراحل وربط كل صف بمرحلته الدراسية.
+                    </p>
                   </div>
-
-                  <div className="space-y-3">
-                    {normalizedCategories.map((cat) => (
-                      <div key={cat.id} className="p-3 rounded-2xl border border-slate-100 bg-slate-50 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-xs text-slate-900">{cat.name}</span>
-                          <button
-                            onClick={() => {
-                              const updatedCats = normalizedCategories.filter((c) => c.id !== cat.id);
-                              saveSettings({ ...settings, categories: updatedCats });
-                            }}
-                            className="text-rose-600 text-xs"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                        <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-600 cursor-pointer">
-                          <Upload className="w-3.5 h-3.5" />
-                          <span>{cat.image ? 'تغيير صورة القسم' : 'رفع صورة غلاف للقسم'}</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={async (e) => {
-                              const f = e.target.files?.[0];
-                              if (!f) return;
-                              const url = await compressImageFile(f, 800, 0.82);
-                              const updatedCats = normalizedCategories.map((c) =>
-                                c.id === cat.id ? { ...c, image: url } : c
-                              );
-                              saveSettings({ ...settings, categories: updatedCats });
-                              showToast(`تم تحديث صورة قسم "${cat.name}"`);
-                            }}
-                          />
-                        </label>
-                      </div>
-                    ))}
-                  </div>
+                  <button
+                    onClick={async () => {
+                      await saveSettings(settings);
+                      showToast('تم حفظ تعديلات الأقسام والمراحل والصفوف بنجاح');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-black"
+                  >
+                    حفظ التنظيم الآن
+                  </button>
                 </div>
 
-                {/* المراحل الدراسية */}
-                <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4">
-                  <h3 className="font-black text-base text-slate-900">المراحل الدراسية</h3>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newStageName}
-                      onChange={(e) => setNewStageName(e.target.value)}
-                      placeholder="اسم المرحلة..."
-                      className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs"
-                    />
-                    <button
-                      onClick={() => {
-                        if (!newStageName.trim()) return;
-                        const updated = [...normalizedStages, { id: `stg_${Date.now()}`, name: newStageName.trim() }];
-                        saveSettings({ ...settings, stages: updated });
-                        setNewStageName('');
-                        showToast('تمت إضافة المرحلة');
-                      }}
-                      className="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold"
-                    >
-                      إضافة
-                    </button>
-                  </div>
-
-                  <div className="space-y-2">
-                    {normalizedStages.map((st) => (
-                      <div
-                        key={st.id}
-                        className="p-3 rounded-xl bg-slate-50 flex items-center justify-between text-xs font-bold"
-                      >
-                        <span>{st.name}</span>
-                        <button
-                          onClick={() =>
-                            saveSettings({
-                              ...settings,
-                              stages: normalizedStages.filter((s) => s.id !== st.id)
-                            })
-                          }
-                          className="text-rose-600"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* الصفوف الدراسية */}
-                <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4">
-                  <h3 className="font-black text-base text-slate-900">الصفوف الدراسية</h3>
-                  <div className="space-y-2">
-                    <select
-                      value={newGradeStageId}
-                      onChange={(e) => setNewGradeStageId(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"
-                    >
-                      {normalizedStages.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                        </option>
-                      ))}
-                    </select>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                  {/* الأقسام وصورها */}
+                  <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 p-5 space-y-4">
+                    <h3 className="font-black text-base text-slate-900">الأقسام الدراسية وأغلفتها</h3>
                     <div className="flex gap-2">
                       <input
                         type="text"
-                        value={newGradeName}
-                        onChange={(e) => setNewGradeName(e.target.value)}
-                        placeholder="اسم الصف الدراسي..."
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        placeholder="اسم القسم الجديد..."
+                        className="flex-1 px-3 py-2.5 rounded-xl border border-slate-200 text-xs"
+                      />
+                      <button
+                        onClick={() => {
+                          if (!newCategoryName.trim()) return;
+                          const updatedCats = [
+                            ...normalizedCategories,
+                            { id: `cat_${Date.now()}`, name: newCategoryName.trim(), image: '' }
+                          ];
+                          saveSettings({ ...settings, categories: updatedCats });
+                          setNewCategoryName('');
+                          showToast('تمت إضافة القسم');
+                        }}
+                        className="px-4 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold"
+                      >
+                        إضافة
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      {normalizedCategories.map((cat) => (
+                        <div key={cat.id} className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50 space-y-2.5">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={cat.name}
+                              onChange={(e) => {
+                                const updatedCats = normalizedCategories.map((c) =>
+                                  c.id === cat.id ? { ...c, name: e.target.value } : c
+                                );
+                                setSettings({ ...settings, categories: updatedCats });
+                              }}
+                              onBlur={() => saveSettings(settings)}
+                              className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white font-bold text-xs text-slate-900"
+                            />
+                            <button
+                              onClick={() => {
+                                const updatedCats = normalizedCategories.filter((c) => c.id !== cat.id);
+                                saveSettings({ ...settings, categories: updatedCats });
+                              }}
+                              className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-3">
+                            {cat.image ? (
+                              <img
+                                src={cat.image}
+                                alt={cat.name}
+                                className="w-20 h-12 rounded-lg object-cover border border-slate-200"
+                              />
+                            ) : (
+                              <div className="w-20 h-12 rounded-lg bg-slate-200 flex items-center justify-center text-[10px] text-slate-500">
+                                بدون صورة
+                              </div>
+                            )}
+
+                            <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-[11px] font-bold cursor-pointer hover:bg-blue-100">
+                              <Upload className="w-3.5 h-3.5" />
+                              <span>{cat.image ? 'تغيير الغلاف' : 'رفع غلاف القسم'}</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={async (e) => {
+                                  const f = e.target.files?.[0];
+                                  if (!f) return;
+                                  const url = await compressImageFile(f, 800, 0.82);
+                                  const updatedCats = normalizedCategories.map((c) =>
+                                    c.id === cat.id ? { ...c, image: url } : c
+                                  );
+                                  saveSettings({ ...settings, categories: updatedCats });
+                                  showToast(`تم تحديث صورة قسم "${cat.name}"`);
+                                }}
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* المراحل الدراسية */}
+                  <div className="lg:col-span-3 bg-white rounded-3xl border border-slate-200 p-5 space-y-4">
+                    <h3 className="font-black text-base text-slate-900">المراحل الدراسية</h3>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newStageName}
+                        onChange={(e) => setNewStageName(e.target.value)}
+                        placeholder="اسم المرحلة..."
                         className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs"
                       />
                       <button
                         onClick={() => {
-                          if (!newGradeName.trim()) return;
-                          const updated = [
-                            ...normalizedGrades,
-                            { id: `grd_${Date.now()}`, stageId: newGradeStageId, name: newGradeName.trim() }
-                          ];
-                          saveSettings({ ...settings, grades: updated });
-                          setNewGradeName('');
-                          showToast('تمت إضافة الصف');
+                          if (!newStageName.trim()) return;
+                          const updated = [...normalizedStages, { id: `stg_${Date.now()}`, name: newStageName.trim() }];
+                          saveSettings({ ...settings, stages: updated });
+                          setNewStageName('');
+                          showToast('تمت إضافة المرحلة');
                         }}
                         className="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold"
                       >
                         إضافة
                       </button>
                     </div>
+
+                    <div className="space-y-2">
+                      {normalizedStages.map((st) => (
+                        <div
+                          key={st.id}
+                          className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs font-bold"
+                        >
+                          <span>{st.name}</span>
+                          <button
+                            onClick={() =>
+                              saveSettings({
+                                ...settings,
+                                stages: normalizedStages.filter((s) => s.id !== st.id)
+                              })
+                            }
+                            className="text-rose-600"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
-                  <div className="space-y-2 max-h-80 overflow-y-auto">
-                    {normalizedGrades.map((gr) => (
-                      <div
-                        key={gr.id}
-                        className="p-2.5 rounded-xl bg-slate-50 flex items-center justify-between text-xs font-bold"
+                  {/* الصفوف الدراسية */}
+                  <div className="lg:col-span-4 bg-white rounded-3xl border border-slate-200 p-5 space-y-4">
+                    <h3 className="font-black text-base text-slate-900">الصفوف الدراسية</h3>
+                    <div className="space-y-2">
+                      <select
+                        value={newGradeStageId}
+                        onChange={(e) => setNewGradeStageId(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
                       >
-                        <span>{gr.name}</span>
+                        {normalizedStages.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={newGradeName}
+                          onChange={(e) => setNewGradeName(e.target.value)}
+                          placeholder="اسم الصف الدراسي..."
+                          className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs"
+                        />
                         <button
-                          onClick={() =>
-                            saveSettings({
-                              ...settings,
-                              grades: normalizedGrades.filter((g) => g.id !== gr.id)
-                            })
-                          }
-                          className="text-rose-600"
+                          onClick={() => {
+                            if (!newGradeName.trim()) return;
+                            const updated = [
+                              ...normalizedGrades,
+                              { id: `grd_${Date.now()}`, stageId: newGradeStageId, name: newGradeName.trim() }
+                            ];
+                            saveSettings({ ...settings, grades: updated });
+                            setNewGradeName('');
+                            showToast('تمت إضافة الصف');
+                          }}
+                          className="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          إضافة
                         </button>
                       </div>
-                    ))}
+                    </div>
+
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {normalizedGrades.map((gr) => {
+                        const stName = normalizedStages.find((s) => s.id === gr.stageId)?.name || '';
+                        return (
+                          <div
+                            key={gr.id}
+                            className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs"
+                          >
+                            <div>
+                              <div className="font-bold text-slate-900">{gr.name}</div>
+                              {stName && <div className="text-[10px] text-slate-400">{stName}</div>}
+                            </div>
+                            <button
+                              onClick={() =>
+                                saveSettings({
+                                  ...settings,
+                                  grades: normalizedGrades.filter((g) => g.id !== gr.id)
+                                })
+                              }
+                              className="text-rose-600"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* تبويب الكوبونات والعروض الترويجية */}
+            {adminSubTab === 'coupons' && (
+              <div className="space-y-6">
+                {/* إعدادات الشريط الترويجي وخصم الكميات */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-black text-base text-slate-900">الشريط الترويجي العلوي</h3>
+                      <label className="inline-flex items-center gap-2 text-xs font-bold cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={settings.promoBannerEnabled !== false}
+                          onChange={(e) =>
+                            saveSettings({ ...settings, promoBannerEnabled: e.target.checked })
+                          }
+                        />
+                        <span>مفعّل</span>
+                      </label>
+                    </div>
+                    <input
+                      type="text"
+                      value={settings.promoBannerText || ''}
+                      onChange={(e) => setSettings({ ...settings, promoBannerText: e.target.value })}
+                      placeholder="نص العرض الترويجي..."
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs"
+                    />
+                    <div className="grid grid-cols-3 gap-2">
+                      <input
+                        type="text"
+                        value={settings.promoBannerCode || ''}
+                        onChange={(e) => setSettings({ ...settings, promoBannerCode: e.target.value })}
+                        placeholder="الكود (M20)"
+                        className="px-3 py-2 rounded-xl border border-slate-200 text-xs uppercase font-bold"
+                      />
+                      <input
+                        type="color"
+                        value={settings.promoBannerBg || '#0654d0'}
+                        onChange={(e) => setSettings({ ...settings, promoBannerBg: e.target.value })}
+                        className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
+                        title="لون الخلفية"
+                      />
+                      <input
+                        type="color"
+                        value={settings.promoBannerTextColor || '#fde047'}
+                        onChange={(e) =>
+                          setSettings({ ...settings, promoBannerTextColor: e.target.value })
+                        }
+                        className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
+                        title="لون النص"
+                      />
+                    </div>
+                    <button
+                      onClick={async () => {
+                        await saveSettings(settings);
+                        showToast('تم حفظ إعدادات الشريط الترويجي');
+                      }}
+                      className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold"
+                    >
+                      حفظ الشريط الترويجي
+                    </button>
+                  </div>
+
+                  <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-black text-base text-slate-900">خصم الكميات التلقائي في السلة</h3>
+                      <label className="inline-flex items-center gap-2 text-xs font-bold cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={settings.bulkDiscountEnabled !== false}
+                          onChange={(e) =>
+                            saveSettings({ ...settings, bulkDiscountEnabled: e.target.checked })
+                          }
+                        />
+                        <span>مفعّل</span>
+                      </label>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-500 mb-1">أقل عدد مذكرات</label>
+                        <input
+                          type="number"
+                          value={settings.bulkDiscountMinItems || 2}
+                          onChange={(e) =>
+                            setSettings({ ...settings, bulkDiscountMinItems: Number(e.target.value) })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-500 mb-1">نسبة الخصم %</label>
+                        <input
+                          type="number"
+                          value={settings.bulkDiscountPercent || 15}
+                          onChange={(e) =>
+                            setSettings({ ...settings, bulkDiscountPercent: Number(e.target.value) })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-500 mb-1">الحد الأقصى (ج.م)</label>
+                        <input
+                          type="number"
+                          value={settings.bulkDiscountMaxAmount || 150}
+                          onChange={(e) =>
+                            setSettings({ ...settings, bulkDiscountMaxAmount: Number(e.target.value) })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        await saveSettings(settings);
+                        showToast('تم حفظ قواعد خصم الكميات');
+                      }}
+                      className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold"
+                    >
+                      حفظ خصم الكميات
+                    </button>
+                  </div>
+                </div>
+
+                {/* إدارة كوبونات الخصم */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (!newCouponForm.code.trim()) return;
+                      const cp = {
+                        id: `cp_${Date.now()}`,
+                        code: newCouponForm.code.trim().toUpperCase(),
+                        discountPercent: Number(newCouponForm.discountPercent || 15),
+                        maxDiscount: Number(newCouponForm.maxDiscount || 200),
+                        active: true
+                      };
+                      const updated = [cp, ...coupons];
+                      setCoupons(updated);
+                      localStorage.setItem('el3bakera_coupons_v5', JSON.stringify(updated));
+                      if (db) {
+                        try {
+                          await setDoc(
+                            doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cp.id),
+                            cp
+                          );
+                        } catch {}
+                      }
+                      setNewCouponForm({ code: '', discountPercent: 15, maxDiscount: 200 });
+                      showToast('تمت إضافة الكوبون');
+                    }}
+                    className="md:col-span-4 bg-white rounded-3xl border border-slate-200 p-6 space-y-3 h-fit"
+                  >
+                    <h3 className="font-black text-base">إضافة كوبون خصم جديد</h3>
+                    <input
+                      type="text"
+                      required
+                      placeholder="كود الخصم (مثال: VIP2026)"
+                      value={newCouponForm.code}
+                      onChange={(e) => setNewCouponForm({ ...newCouponForm, code: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm uppercase"
+                    />
+                    <input
+                      type="number"
+                      placeholder="نسبة الخصم %"
+                      value={newCouponForm.discountPercent}
+                      onChange={(e) => setNewCouponForm({ ...newCouponForm, discountPercent: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm"
+                    />
+                    <input
+                      type="number"
+                      placeholder="الحد الأقصى للخصم (ج.م)"
+                      value={newCouponForm.maxDiscount}
+                      onChange={(e) => setNewCouponForm({ ...newCouponForm, maxDiscount: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm"
+                    />
+                    <button type="submit" className="w-full py-3 rounded-xl bg-blue-600 text-white font-bold text-sm">
+                      إضافة الكوبون
+                    </button>
+                  </form>
+
+                  <div className="md:col-span-8 grid grid-cols-1 sm:grid-cols-2 gap-3 h-fit">
+                    {coupons.map((c) => {
+                      const pct = c.discountPercent ?? c.discount ?? c.percent ?? 15;
+                      const maxD = c.maxDiscount ?? c.maxAmount ?? 200;
+                      return (
+                        <div
+                          key={c.id}
+                          className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center justify-between"
+                        >
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="px-3 py-1 rounded-lg bg-amber-100 text-amber-900 font-black text-sm">
+                                {c.code}
+                              </span>
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                  c.active !== false
+                                    ? 'bg-emerald-100 text-emerald-700'
+                                    : 'bg-slate-200 text-slate-600'
+                                }`}
+                              >
+                                {c.active !== false ? 'نشط' : 'متوقف'}
+                              </span>
+                            </div>
+                            <div className="text-xs text-slate-500 mt-1.5">
+                              خصم {pct}% (بحد أقصى {maxD} ج.م)
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={async () => {
+                                const updated = coupons.map((item) =>
+                                  item.id === c.id ? { ...item, active: item.active === false } : item
+                                );
+                                setCoupons(updated);
+                                localStorage.setItem('el3bakera_coupons_v5', JSON.stringify(updated));
+                                if (db) {
+                                  try {
+                                    await setDoc(
+                                      doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', c.id),
+                                      { active: c.active === false },
+                                      { merge: true }
+                                    );
+                                  } catch {}
+                                }
+                              }}
+                              className="px-2.5 py-1.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold"
+                            >
+                              {c.active !== false ? 'إيقاف' : 'تفعيل'}
+                            </button>
+                            <button
+                              onClick={async () => {
+                                const updated = coupons.filter((item) => item.id !== c.id);
+                                setCoupons(updated);
+                                localStorage.setItem('el3bakera_coupons_v5', JSON.stringify(updated));
+                                if (db) {
+                                  try {
+                                    await deleteDoc(
+                                      doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', c.id)
+                                    );
+                                  } catch {}
+                                }
+                              }}
+                              className="p-2 rounded-xl bg-rose-50 text-rose-600"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -2751,7 +3136,7 @@ function PlatformContent() {
                       <input
                         type="text"
                         value={settings.platformName}
-                        onChange={(e) => saveSettings({ ...settings, platformName: e.target.value })}
+                        onChange={(e) => setSettings({ ...settings, platformName: e.target.value })}
                         className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200"
                       />
                     </div>
@@ -2761,7 +3146,7 @@ function PlatformContent() {
                         <input
                           type="text"
                           value={settings.whatsappNumber}
-                          onChange={(e) => saveSettings({ ...settings, whatsappNumber: e.target.value })}
+                          onChange={(e) => setSettings({ ...settings, whatsappNumber: e.target.value })}
                           className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200"
                         />
                       </div>
@@ -2770,7 +3155,7 @@ function PlatformContent() {
                         <input
                           type="text"
                           value={settings.vodafoneCashNumber}
-                          onChange={(e) => saveSettings({ ...settings, vodafoneCashNumber: e.target.value })}
+                          onChange={(e) => setSettings({ ...settings, vodafoneCashNumber: e.target.value })}
                           className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200"
                         />
                       </div>
@@ -2780,10 +3165,20 @@ function PlatformContent() {
                       <input
                         type="text"
                         value={settings.adminPin}
-                        onChange={(e) => saveSettings({ ...settings, adminPin: e.target.value })}
+                        onChange={(e) => setSettings({ ...settings, adminPin: e.target.value })}
                         className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200"
                       />
                     </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await saveSettings(settings);
+                        showToast('تم حفظ بيانات الهوية والأرقام ورمز الإدارة بنجاح!');
+                      }}
+                      className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-sm"
+                    >
+                      حفظ التعديلات الآن
+                    </button>
                   </div>
                 </div>
 
