@@ -115,12 +115,29 @@ const extractSampleImages = (obj) => {
         if (typeof item === 'string' && isValidImageSrc(item)) {
           collected.push(item);
         } else if (item && typeof item === 'object') {
-          const src = item.url || item.image || item.imageData || item.data || item.src;
+          const src =
+            item.url ||
+            item.image ||
+            item.imageData ||
+            item.dataUrl ||
+            item.imageUrl ||
+            item.base64 ||
+            item.pageImage ||
+            item.data ||
+            item.src;
           if (isValidImageSrc(src)) collected.push(src);
         }
       }
     }
   }
+
+  // فحص شامل لأي حقل نصي مباشر داخل الكائن يحتوي على صورة (مثل dataUrl أو imageUrl أو base64 أو pageImage)
+  Object.values(obj).forEach((val) => {
+    if (typeof val === 'string' && isValidImageSrc(val)) {
+      collected.push(val);
+    }
+  });
+
   return Array.from(new Set(collected));
 };
 
@@ -752,6 +769,8 @@ export default function App() {
         for (const targetAppId of candidateAppIds) {
           // فحص الإعدادات القديمة في السحابة لاستعادة الشعار والبانر وأغلفة الأقسام
           const legacySettingsPaths = [
+            doc(db, 'artifacts', targetAppId, 'public', 'data', 'config', 'main'),
+            doc(db, 'artifacts', targetAppId, 'public', 'data', 'config', 'settings'),
             doc(db, 'artifacts', targetAppId, 'public', 'data', 'platform_settings', 'main'),
             doc(db, 'artifacts', targetAppId, 'public', 'data', 'platform_settings_v4', 'main'),
             doc(db, 'artifacts', targetAppId, 'public', 'data', 'settings', 'main')
@@ -812,80 +831,47 @@ export default function App() {
               });
             }
           }
-
-          // فحص المذكرات المحفوظة في السحابة لاستعادة صور الأغلفة والعينات
-          const nbCollections = ['notebooks', 'products', 'notebooks_v4', 'notebooks_v3', 'notebooks_v2', 'items'];
-          for (const colName of nbCollections) {
-            const nbSnap = await getDocs(
-              collection(db, 'artifacts', targetAppId, 'public', 'data', colName)
-            ).catch(() => null);
-            if (nbSnap && !nbSnap.empty) {
-              const cloudNotebooks = [];
-              nbSnap.forEach((d) => cloudNotebooks.push({ id: d.id, ...d.data() }));
-              if (cloudNotebooks.length > 0) {
-                setProducts((prev) => {
-                  const merged = [...prev];
-                  cloudNotebooks.forEach((cn) => {
-                    const idx = merged.findIndex((p) => p.id === cn.id || p.title === cn.title);
-                    const recoveredSamples = extractSampleImages(cn);
-                    const recoveredCover =
-                      cn.coverImage || cn.cover || cn.image || cn.thumbnail || '';
-                    if (idx >= 0) {
-                      merged[idx] = {
-                        ...merged[idx],
-                        ...cn,
-                        coverImage: isValidImageSrc(recoveredCover)
-                          ? recoveredCover
-                          : merged[idx].coverImage,
-                        sampleImages:
-                          recoveredSamples.length > 0
-                            ? Array.from(new Set([...(merged[idx].sampleImages || []), ...recoveredSamples]))
-                            : extractSampleImages(merged[idx])
-                      };
-                    } else {
-                      merged.push({
-                        ...cn,
-                        coverImage: isValidImageSrc(recoveredCover) ? recoveredCover : '',
-                        sampleImages: recoveredSamples
-                      });
-                    }
-                  });
-                  return merged;
-                });
-              }
-            }
-          }
-
-          // فحص مجموعات العينات المنفصلة في السحابة إن وُجدت
-          const sampleCollections = ['samples', 'notebook_samples', 'product_samples'];
+          // فحص مجموعات العينات المنفصلة في السحابة (مثل notebook_samples)
+          const sampleCollections = ['notebook_samples', 'samples', 'product_samples'];
           for (const sCol of sampleCollections) {
             const sSnap = await getDocs(
               collection(db, 'artifacts', targetAppId, 'public', 'data', sCol)
             ).catch(() => null);
             if (sSnap && !sSnap.empty) {
               const byNotebook = {};
-              sSnap.forEach((docItem) => {
-                const d = docItem.data() || {};
-                const nbId = d.notebookId || d.productId || d.parentId || docItem.id;
+              const sortedDocs = [];
+              sSnap.forEach((docItem) => sortedDocs.push({ id: docItem.id, data: docItem.data() || {} }));
+              sortedDocs.sort((a, b) => (a.data.order ?? a.data.index ?? 0) - (b.data.order ?? b.data.index ?? 0));
+
+              sortedDocs.forEach(({ id: docId, data: d }) => {
+                const rawNbId =
+                  d.notebookId ||
+                  d.productId ||
+                  d.parentId ||
+                  d.itemId ||
+                  (docId.includes('_') ? docId.split('_')[0] : docId);
                 const imgs = extractSampleImages(d);
-                const single = d.url || d.imageData || d.image || d.data;
-                if (isValidImageSrc(single)) imgs.push(single);
-                if (imgs.length > 0) {
-                  byNotebook[nbId] = [...(byNotebook[nbId] || []), ...imgs];
+                if (imgs.length > 0 && rawNbId) {
+                  byNotebook[rawNbId] = [...(byNotebook[rawNbId] || []), ...imgs];
                 }
               });
-              setProducts((prev) =>
-                prev.map((p) =>
-                  byNotebook[p.id]
-                    ? {
-                        ...p,
-                        sampleImages: Array.from(
-                          new Set([...(p.sampleImages || []), ...byNotebook[p.id]])
-                        )
-                      }
-                    : p
-                )
-              );
+
+              if (Object.keys(byNotebook).length > 0) {
+                setProducts((prev) =>
+                  prev.map((p) => {
+                    const matchedKey = Object.keys(byNotebook).find(
+                      (k) => k === p.id || k.startsWith(p.id) || p.id.startsWith(k)
+                    );
+                    if (!matchedKey) return p;
+                    return {
+                      ...p,
+                      sampleImages: Array.from(
+                        new Set([...(p.sampleImages || []), ...byNotebook[matchedKey]])
+                      )
+                    };
+                  })
+                );
+              }
             }
           }
 
@@ -3411,25 +3397,22 @@ export default function App() {
               </div>
 
               {Array.isArray(previewProduct.sampleImages) && previewProduct.sampleImages.length > 0 && (
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   <p className="text-xs font-extrabold text-slate-700">
-                    صور عينات من صفحات المذكرة ({previewProduct.sampleImages.length}):
+                    صور عينات من صفحات المذكرة ({previewProduct.sampleImages.length} صفحة):
                   </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {previewProduct.sampleImages.map((imgSrc, sIdx) => (
-                      <a
+                      <div
                         key={sIdx}
-                        href={imgSrc}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block rounded-xl overflow-hidden border border-slate-200 bg-slate-100 h-28 hover:opacity-90 transition"
+                        className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm"
                       >
                         <img
                           src={imgSrc}
-                          alt={`عينة ${sIdx + 1}`}
-                          className="w-full h-full object-cover"
+                          alt={`صفحة عينة ${sIdx + 1}`}
+                          className="w-full h-auto object-contain max-h-96 mx-auto"
                         />
-                      </a>
+                      </div>
                     ))}
                   </div>
                 </div>
