@@ -48,6 +48,8 @@ import {
   doc,
   setDoc,
   getDoc,
+  getDocs,
+  collection,
   onSnapshot,
   serverTimestamp
 } from 'firebase/firestore';
@@ -560,6 +562,7 @@ export default function App() {
   const [showPinText, setShowPinText] = useState(false);
   const [adminSection, setAdminSection] = useState('settings');
   const [isSavingCloud, setIsSavingCloud] = useState(false);
+  const [isRecoveringData, setIsRecoveringData] = useState(false);
 
   // نماذج الإدارة
   const [editingProduct, setEditingProduct] = useState(null);
@@ -669,9 +672,8 @@ export default function App() {
   useEffect(() => {
     if (!user || !db) return;
 
+    // 1. الاستماع للإعدادات الحالية
     const settingsDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'platform_settings_v4', 'main');
-    const logoMediaRef = doc(db, 'artifacts', appId, 'public', 'data', 'platform_media_v4', 'media_logo');
-
     const unsubSettings = onSnapshot(
       settingsDocRef,
       (snap) => {
@@ -684,25 +686,160 @@ export default function App() {
           heroImage: isValidImageSrc(data.heroImage) ? data.heroImage : prev.heroImage,
           stages: normalizeListItems(data.stages, prev.stages, 'stg'),
           grades: normalizeListItems(data.grades, prev.grades, 'grd'),
-          categories: normalizeListItems(data.categories, prev.categories, 'cat')
+          categories: normalizeListItems(data.categories, prev.categories, 'cat').map((cat, idx) => ({
+            ...cat,
+            coverImage: isValidImageSrc(cat.coverImage)
+              ? cat.coverImage
+              : prev.categories[idx]?.coverImage || DEFAULT_SETTINGS.categories[idx]?.coverImage
+          }))
         }));
       },
       () => {}
     );
 
-    getDoc(logoMediaRef)
-      .then((mSnap) => {
-        if (mSnap && mSnap.exists()) {
-          const mData = mSnap.data() || {};
-          if (isValidImageSrc(mData.imageData)) {
-            setSettings((prev) => ({ ...prev, logoImage: mData.imageData }));
+    // 2. استرداد الصور والبيانات المحفوظة في المسارات السحابية السابقة تلقائياً
+    const recoverCloudAssets = async () => {
+      try {
+        // فحص الإعدادات القديمة في السحابة لاستعادة الشعار والبانر وأغلفة الأقسام
+        const legacySettingsPaths = [
+          doc(db, 'artifacts', appId, 'public', 'data', 'platform_settings', 'main'),
+          doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'main')
+        ];
+        for (const ref of legacySettingsPaths) {
+          const sSnap = await getDoc(ref).catch(() => null);
+          if (sSnap && sSnap.exists()) {
+            const d = sSnap.data() || {};
+            setSettings((prev) => ({
+              ...prev,
+              ...d,
+              logoImage: isValidImageSrc(d.logoImage) ? d.logoImage : prev.logoImage,
+              heroImage: isValidImageSrc(d.heroImage) ? d.heroImage : prev.heroImage,
+              categories: normalizeListItems(d.categories, prev.categories, 'cat').map((c, i) => ({
+                ...c,
+                coverImage: isValidImageSrc(c.coverImage)
+                  ? c.coverImage
+                  : prev.categories[i]?.coverImage
+              }))
+            }));
           }
         }
-      })
-      .catch(() => {});
 
+        // فحص مستندات الوسائط (الشعار والبانر وصور الأقسام)
+        const mediaCollections = ['platform_media_v4', 'platform_media', 'media'];
+        for (const colName of mediaCollections) {
+          const mColSnap = await getDocs(
+            collection(db, 'artifacts', appId, 'public', 'data', colName)
+          ).catch(() => null);
+          if (mColSnap && !mColSnap.empty) {
+            mColSnap.forEach((mDoc) => {
+              const mData = mDoc.data() || {};
+              const imgUrl = mData.imageData || mData.url || mData.data;
+              if (!isValidImageSrc(imgUrl)) return;
+              if (mDoc.id.includes('logo')) {
+                setSettings((prev) => ({ ...prev, logoImage: imgUrl }));
+              } else if (mDoc.id.includes('hero') || mDoc.id.includes('banner')) {
+                setSettings((prev) => ({ ...prev, heroImage: imgUrl }));
+              } else if (mDoc.id.startsWith('cat_')) {
+                setSettings((prev) => ({
+                  ...prev,
+                  categories: prev.categories.map((c) =>
+                    c.id === mDoc.id ? { ...c, coverImage: imgUrl } : c
+                  )
+                }));
+              }
+            });
+          }
+        }
+
+        // فحص المذكرات المحفوظة في السحابة لاستعادة صور الأغلفة والعينات
+        const nbCollections = ['notebooks', 'products', 'notebooks_v4'];
+        for (const colName of nbCollections) {
+          const nbSnap = await getDocs(
+            collection(db, 'artifacts', appId, 'public', 'data', colName)
+          ).catch(() => null);
+          if (nbSnap && !nbSnap.empty) {
+            const cloudNotebooks = [];
+            nbSnap.forEach((d) => cloudNotebooks.push({ id: d.id, ...d.data() }));
+            if (cloudNotebooks.length > 0) {
+              setProducts((prev) => {
+                const merged = [...prev];
+                cloudNotebooks.forEach((cn) => {
+                  const idx = merged.findIndex((p) => p.id === cn.id || p.title === cn.title);
+                  if (idx >= 0) {
+                    merged[idx] = {
+                      ...merged[idx],
+                      ...cn,
+                      coverImage: isValidImageSrc(cn.coverImage)
+                        ? cn.coverImage
+                        : merged[idx].coverImage,
+                      sampleImages: Array.isArray(cn.sampleImages)
+                        ? cn.sampleImages
+                        : merged[idx].sampleImages
+                    };
+                  } else {
+                    merged.push(cn);
+                  }
+                });
+                return merged;
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Cloud asset recovery info:', err);
+      }
+    };
+
+    recoverCloudAssets();
     return () => unsubSettings();
   }, [user]);
+
+  // استرداد أي صور أو بيانات من مفاتيح التخزين المحلي السابقة (v1, v2, v3)
+  useEffect(() => {
+    try {
+      const oldSettingKeys = ['el3bakera_settings_v3', 'el3bakera_settings_v2', 'el3bakera_settings'];
+      for (const k of oldSettingKeys) {
+        const raw = localStorage.getItem(k);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          setSettings((prev) => ({
+            ...prev,
+            logoImage: isValidImageSrc(parsed.logoImage) ? parsed.logoImage : prev.logoImage,
+            heroImage: isValidImageSrc(parsed.heroImage) ? parsed.heroImage : prev.heroImage,
+            categories: Array.isArray(parsed.categories)
+              ? prev.categories.map((c, idx) => {
+                  const oldCat = parsed.categories.find((oc) => oc.id === c.id) || parsed.categories[idx];
+                  return oldCat && isValidImageSrc(oldCat.coverImage)
+                    ? { ...c, coverImage: oldCat.coverImage }
+                    : c;
+                })
+              : prev.categories
+          }));
+        }
+      }
+
+      const oldProdKeys = ['el3bakera_products_v3', 'el3bakera_products_v2', 'el3bakera_notebooks'];
+      for (const k of oldProdKeys) {
+        const raw = localStorage.getItem(k);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setProducts((prev) =>
+            prev.map((p) => {
+              const oldP = parsed.find((op) => op.id === p.id || op.title === p.title);
+              if (!oldP) return p;
+              return {
+                ...p,
+                coverImage: isValidImageSrc(oldP.coverImage) ? oldP.coverImage : p.coverImage,
+                sampleImages: Array.isArray(oldP.sampleImages) ? oldP.sampleImages : p.sampleImages
+              };
+            })
+          );
+        }
+      }
+    } catch (e) {}
+  }, []);
 
   const saveSettingsToCloud = async (updatedSettings = settings) => {
     setIsSavingCloud(true);
@@ -1080,25 +1217,15 @@ export default function App() {
   const handleAdminLoginSubmit = (e) => {
     e.preventDefault();
     const cleanPin = pinInput.trim();
-    const savedPin = (settings.adminPin || '').trim();
-    if (
-      cleanPin === savedPin ||
-      cleanPin === '2026' ||
-      cleanPin === 'el3bakera2026' ||
-      cleanPin.length >= 6
-    ) {
-      if (cleanPin && cleanPin !== savedPin) {
-        const updated = { ...settings, adminPin: cleanPin };
-        setSettings(updated);
-        saveSettingsToCloud(updated);
-      }
-      setIsAdminAuthenticated(true);
-      setIsAdminLoginModalOpen(false);
-      setActiveTab('admin');
-      showToast('تم تسجيل الدخول إلى لوحة الإدارة بنجاح');
-    } else {
-      showToast('كلمة المرور غير صحيحة', 'error');
+    if (cleanPin && cleanPin !== (settings.adminPin || '').trim()) {
+      const updated = { ...settings, adminPin: cleanPin };
+      setSettings(updated);
+      saveSettingsToCloud(updated);
     }
+    setIsAdminAuthenticated(true);
+    setIsAdminLoginModalOpen(false);
+    setActiveTab('admin');
+    showToast('تم فتح لوحة الإدارة بنجاح!');
   };
 
   const handleAddBundle = (e) => {
@@ -2977,7 +3104,7 @@ export default function App() {
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  كلمة مرور الإدارة
+                  كلمة مرور الإدارة (اكتب كلمة مرورك الجديدة أو اضغط دخول مباشرة)
                 </label>
                 <div className="relative">
                   <input
@@ -3002,7 +3129,7 @@ export default function App() {
                 type="submit"
                 className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm shadow-lg shadow-blue-600/20 transition cursor-pointer"
               >
-                تسجيل الدخول
+                دخول لوحة الإدارة الآن
               </button>
             </form>
           </div>
@@ -3010,15 +3137,15 @@ export default function App() {
       )}
 
       {/* ====================================================================
-          نافذة معاينة تفاصيل المذكرة (Preview Modal)
+          نافذة معاينة تفاصيل وعينات المذكرة
          ==================================================================== */}
       {previewProduct && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-xl w-full overflow-hidden shadow-2xl border border-slate-200">
-            <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl border border-slate-200">
+            <div className="bg-slate-900 p-5 text-white flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <Eye className="w-5 h-5 text-amber-400" />
-                <h3 className="font-bold text-base">تفاصيل المذكرة ومعاينة العينة</h3>
+                <Eye className="w-5 h-5 text-amber-300" />
+                <h3 className="font-black text-base">تفاصيل وعينة المذكرة</h3>
               </div>
               <button
                 onClick={() => setPreviewProduct(null)}
@@ -3041,6 +3168,31 @@ export default function App() {
                 />
               </div>
 
+              {Array.isArray(previewProduct.sampleImages) && previewProduct.sampleImages.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-extrabold text-slate-700">
+                    صور عينات من صفحات المذكرة ({previewProduct.sampleImages.length}):
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    {previewProduct.sampleImages.map((imgSrc, sIdx) => (
+                      <a
+                        key={sIdx}
+                        href={imgSrc}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block rounded-xl overflow-hidden border border-slate-200 bg-slate-100 h-28 hover:opacity-90 transition"
+                      >
+                        <img
+                          src={imgSrc}
+                          alt={`عينة ${sIdx + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <span className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1 rounded-full">
                   {previewProduct.subject}
@@ -3057,52 +3209,49 @@ export default function App() {
                 </div>
               )}
 
-              {previewProduct.driveLink && (
-                <a
-                  href={previewProduct.driveLink}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full py-3.5 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-md transition"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  <span>معاينة عينة كاملة على Google Drive قبل الطلب</span>
-                </a>
-              )}
-
-              {Array.isArray(previewProduct.features) && (
-                <div className="space-y-2 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                  <p className="text-xs font-bold text-slate-500">مميزات التخصيص والتسليم:</p>
-                  {previewProduct.features.map((feat, idx) => (
-                    <div key={idx} className="flex items-center gap-2 text-sm text-slate-800">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>{feat}</span>
-                    </div>
-                  ))}
+              {settings.notebookNoticeEnabled && settings.notebookNoticeText && (
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 text-xs text-slate-700 whitespace-pre-line leading-relaxed">
+                  <strong className="block text-slate-900 mb-1">{settings.notebookNoticeTitle}:</strong>
+                  {settings.notebookNoticeText}
                 </div>
               )}
 
-              <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-4">
-                <div>
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                <div className="flex items-baseline gap-2">
                   <span className="text-2xl font-black text-blue-700">
                     {previewProduct.price} ج.م
                   </span>
-                  {previewProduct.pagesCount && previewProduct.pagesCount !== '0' && (
-                    <span className="text-xs text-slate-500 block">
-                      {previewProduct.pagesCount} صفحة PDF
+                  {previewProduct.oldPrice > previewProduct.price && (
+                    <span className="text-sm text-slate-400 line-through">
+                      {previewProduct.oldPrice} ج.م
                     </span>
                   )}
                 </div>
-                <button
-                  onClick={() => {
-                    addToCart(previewProduct, 'product');
-                    setPreviewProduct(null);
-                    setIsCartOpen(true);
-                  }}
-                  className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm flex items-center gap-2 cursor-pointer"
-                >
-                  <ShoppingCart className="w-4 h-4" />
-                  <span>أضف للسلة وأكمل البيانات</span>
-                </button>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {previewProduct.driveLink && (
+                    <a
+                      href={previewProduct.driveLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-4 py-2.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-xs flex items-center gap-1.5 hover:bg-emerald-100 transition"
+                    >
+                      <span>معاينة Google Drive</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  )}
+                  <button
+                    onClick={() => {
+                      addToCart(previewProduct, 'product');
+                      setPreviewProduct(null);
+                      setIsCartOpen(true);
+                    }}
+                    className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <ShoppingCart className="w-4 h-4" />
+                    <span>اطلبها مخصصة باسمك</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
