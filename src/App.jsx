@@ -329,13 +329,18 @@ const DEFAULT_SETTINGS = {
   whatsNewCount: 4,
   whatsNewManualIds: [],
   newsSectionEnabled: false,
+  newsSectionBadge: 'قريبًا على المنصة',
   newsSectionTitle: 'أخبار المنصة ومذكرات قيد التجهيز',
   newsItems: [
     {
       id: 'news_1',
       title: 'جاري تجهيز مراجعات ليلة الامتحان النهائية لجميع الصفوف',
       date: 'قريبًا',
-      description: 'يمكنك حجز نسختك المخصصة مسبقًا عبر واتساب ليتم تسليمها فور الصدور.'
+      badgeColor: 'amber',
+      description: 'يمكنك حجز نسختك المخصصة مسبقًا عبر واتساب ليتم تسليمها فور الصدور.',
+      showBookingBtn: true,
+      bookingBtnText: 'احجز نسختك مسبقًا عبر واتساب',
+      bookingBtnColor: '#0f172a'
     }
   ],
   customBannerEnabled: true,
@@ -1824,10 +1829,12 @@ export default function App() {
               <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-black mb-1">
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>قريبًا على المنصة</span>
-                    </span>
+                    {safeText(settings.newsSectionBadge, 'قريبًا على المنصة') && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-black mb-1">
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>{safeText(settings.newsSectionBadge, 'قريبًا على المنصة')}</span>
+                      </span>
+                    )}
                     <h2 className="text-xl sm:text-2xl font-black text-slate-900">
                       {safeText(settings.newsSectionTitle, 'أخبار المنصة ومذكرات قيد التجهيز')}
                     </h2>
@@ -1835,43 +1842,57 @@ export default function App() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {settings.newsItems.map((item, idx) => (
-                    <div
-                      key={item.id || idx}
-                      className="bg-white rounded-3xl border border-amber-200/80 p-5 sm:p-6 shadow-sm hover:shadow-md transition flex flex-col justify-between space-y-4"
-                    >
-                      <div className="space-y-2.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="px-3 py-1 rounded-full bg-amber-400 text-slate-950 text-xs font-black">
-                            {safeText(item.date, 'قريبًا')}
-                          </span>
-                          <Sparkles className="w-4 h-4 text-amber-500" />
+                  {settings.newsItems.map((item, idx) => {
+                    const badgePalette = {
+                      amber: 'bg-amber-400 text-slate-950',
+                      blue: 'bg-blue-600 text-white',
+                      emerald: 'bg-emerald-600 text-white',
+                      rose: 'bg-rose-600 text-white'
+                    }[item.badgeColor || 'amber'] || 'bg-amber-400 text-slate-950';
+                    const showBtn = item.showBookingBtn !== false;
+                    return (
+                      <div
+                        key={item.id || idx}
+                        className="bg-white rounded-3xl border border-amber-200/80 p-5 sm:p-6 shadow-sm hover:shadow-md transition flex flex-col justify-between space-y-4"
+                      >
+                        <div className="space-y-2.5">
+                          <div className="flex items-center justify-between gap-2">
+                            {safeText(item.date) && (
+                              <span className={`px-3 py-1 rounded-full text-xs font-black ${badgePalette}`}>
+                                {safeText(item.date)}
+                              </span>
+                            )}
+                            <Sparkles className="w-4 h-4 text-amber-500 mr-auto" />
+                          </div>
+                          <h3 className="text-base sm:text-lg font-black text-slate-900 leading-snug">
+                            {safeText(item.title)}
+                          </h3>
+                          {item.description && (
+                            <p className="text-xs sm:text-sm text-slate-600 font-bold leading-relaxed">
+                              {safeText(item.description)}
+                            </p>
+                          )}
                         </div>
-                        <h3 className="text-base sm:text-lg font-black text-slate-900 leading-snug">
-                          {safeText(item.title)}
-                        </h3>
-                        {item.description && (
-                          <p className="text-xs sm:text-sm text-slate-600 font-bold leading-relaxed">
-                            {safeText(item.description)}
-                          </p>
+
+                        {showBtn && (
+                          <div className="pt-3 border-t border-slate-100">
+                            <a
+                              href={`https://wa.me/${String(settings.whatsappNumber || '201000000000').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                                `السلام عليكم، أرغب في الاستفسار أو الحجز المسبق بخصوص: ${safeText(item.title)}`
+                              )}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ backgroundColor: item.bookingBtnColor || '#0f172a' }}
+                              className="w-full py-2.5 rounded-2xl hover:opacity-95 text-white text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 transition"
+                            >
+                              <MessageCircle className="w-4 h-4 text-emerald-400" />
+                              <span>{safeText(item.bookingBtnText, 'احجز نسختك مسبقًا عبر واتساب')}</span>
+                            </a>
+                          </div>
                         )}
                       </div>
-
-                      <div className="pt-3 border-t border-slate-100">
-                        <a
-                          href={`https://wa.me/${String(settings.whatsappNumber || '201000000000').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
-                            `السلام عليكم، أرغب في الاستفسار أو الحجز المسبق بخصوص: ${safeText(item.title)}`
-                          )}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="w-full py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 transition"
-                        >
-                          <MessageCircle className="w-4 h-4 text-emerald-400" />
-                          <span>احجز نسختك مسبقًا عبر واتساب</span>
-                        </a>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </section>
             )}
@@ -4678,7 +4699,11 @@ function AdminDashboard({
                             id: `news_${Date.now()}`,
                             title: 'عنوان المذكرة القادمة أو الخبر',
                             date: 'قريبًا',
-                            description: 'اكتب تفاصيل المذكرة القادمة وموعد توفرها هنا...'
+                            badgeColor: 'amber',
+                            description: 'اكتب تفاصيل المذكرة القادمة وموعد توفرها هنا...',
+                            showBookingBtn: true,
+                            bookingBtnText: 'احجز نسختك مسبقًا عبر واتساب',
+                            bookingBtnColor: '#0f172a'
                           }
                         ]
                       })
@@ -4690,20 +4715,32 @@ function AdminDashboard({
                   </button>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">عنوان القسم في الصفحة الرئيسية</label>
-                  <input
-                    type="text"
-                    value={localSettings.newsSectionTitle || ''}
-                    onChange={(e) => setLocalSettings({ ...localSettings, newsSectionTitle: e.target.value })}
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">نص الشارة العلوية للقسم (اتركه فارغًا للإخفاء)</label>
+                    <input
+                      type="text"
+                      value={localSettings.newsSectionBadge ?? 'قريبًا على المنصة'}
+                      onChange={(e) => setLocalSettings({ ...localSettings, newsSectionBadge: e.target.value })}
+                      placeholder="مثال: قريبًا على المنصة"
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">عنوان القسم في الصفحة الرئيسية</label>
+                    <input
+                      type="text"
+                      value={localSettings.newsSectionTitle || ''}
+                      onChange={(e) => setLocalSettings({ ...localSettings, newsSectionTitle: e.target.value })}
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                    />
+                  </div>
                 </div>
 
-                <div className="space-y-2.5">
+                <div className="space-y-3">
                   {(localSettings.newsItems || []).map((item, idx) => (
-                    <div key={item.id || idx} className="p-3 rounded-2xl bg-white border border-amber-200 space-y-2">
-                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                    <div key={item.id || idx} className="p-3.5 rounded-2xl bg-white border border-amber-200 space-y-2.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
                         <input
                           type="text"
                           value={item.title || ''}
@@ -4713,20 +4750,34 @@ function AdminDashboard({
                             setLocalSettings({ ...localSettings, newsItems: arr });
                           }}
                           placeholder="عنوان الإعلان / المذكرة القادمة"
-                          className="sm:col-span-3 px-3 py-2 rounded-xl border border-slate-200 text-xs font-black"
+                          className="sm:col-span-6 px-3 py-2 rounded-xl border border-slate-200 text-xs font-black"
                         />
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            type="text"
-                            value={item.date || ''}
+                        <input
+                          type="text"
+                          value={item.date || ''}
+                          onChange={(e) => {
+                            const arr = [...localSettings.newsItems];
+                            arr[idx] = { ...item, date: e.target.value };
+                            setLocalSettings({ ...localSettings, newsItems: arr });
+                          }}
+                          placeholder="قريبًا / الموعد (اتركه فارغًا للإخفاء)"
+                          className="sm:col-span-3 px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                        />
+                        <div className="sm:col-span-3 flex items-center gap-1.5">
+                          <select
+                            value={item.badgeColor || 'amber'}
                             onChange={(e) => {
                               const arr = [...localSettings.newsItems];
-                              arr[idx] = { ...item, date: e.target.value };
+                              arr[idx] = { ...item, badgeColor: e.target.value };
                               setLocalSettings({ ...localSettings, newsItems: arr });
                             }}
-                            placeholder="قريبًا / الموعد"
-                            className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
-                          />
+                            className="flex-1 px-2.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                          >
+                            <option value="amber">شارة ذهبية</option>
+                            <option value="blue">شارة زرقاء</option>
+                            <option value="emerald">شارة خضراء</option>
+                            <option value="rose">شارة حمراء</option>
+                          </select>
                           <button
                             type="button"
                             onClick={() =>
@@ -4741,6 +4792,7 @@ function AdminDashboard({
                           </button>
                         </div>
                       </div>
+
                       <textarea
                         rows={2}
                         value={item.description || ''}
@@ -4752,6 +4804,52 @@ function AdminDashboard({
                         placeholder="تفاصيل المذكرة القادمة..."
                         className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
                       />
+
+                      {/* التحكم الكامل في زر الحجز المسبق أسفل البطاقة */}
+                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-wrap items-center gap-3">
+                        <label className="flex items-center gap-2 text-xs font-black text-slate-800 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={item.showBookingBtn !== false}
+                            onChange={(e) => {
+                              const arr = [...localSettings.newsItems];
+                              arr[idx] = { ...item, showBookingBtn: e.target.checked };
+                              setLocalSettings({ ...localSettings, newsItems: arr });
+                            }}
+                            className="w-4 h-4"
+                          />
+                          <span>إظهار زر الحجز / التواصل أسفل البطاقة</span>
+                        </label>
+
+                        {item.showBookingBtn !== false && (
+                          <>
+                            <input
+                              type="text"
+                              value={item.bookingBtnText ?? 'احجز نسختك مسبقًا عبر واتساب'}
+                              onChange={(e) => {
+                                const arr = [...localSettings.newsItems];
+                                arr[idx] = { ...item, bookingBtnText: e.target.value };
+                                setLocalSettings({ ...localSettings, newsItems: arr });
+                              }}
+                              placeholder="نص الزر..."
+                              className="flex-1 min-w-[180px] px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold"
+                            />
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[11px] font-bold text-slate-600">لون الزر:</span>
+                              <input
+                                type="color"
+                                value={item.bookingBtnColor || '#0f172a'}
+                                onChange={(e) => {
+                                  const arr = [...localSettings.newsItems];
+                                  arr[idx] = { ...item, bookingBtnColor: e.target.value };
+                                  setLocalSettings({ ...localSettings, newsItems: arr });
+                                }}
+                                className="w-8 h-8 rounded-lg border border-slate-200 cursor-pointer"
+                              />
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
