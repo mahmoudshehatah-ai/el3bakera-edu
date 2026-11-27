@@ -1584,19 +1584,18 @@ export default function App() {
 
       {/* المحتوى الرئيسي */}
       <main className="flex-1 w-full">
-        {/* التنبيهات العامة المفعّلة للمنصة */}
-        {Array.isArray(settings.globalAlerts) &&
-          settings.globalAlerts.filter((al) => al && al.active !== false && safeText(al.text).trim() && al.scope !== 'preview_only').length > 0 && (
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 space-y-2">
-              {settings.globalAlerts
-                .filter((al) => al && al.active !== false && safeText(al.text).trim() && al.scope !== 'preview_only')
-                .map((al, idx) => (
-                  <div key={al.id || idx} className="rounded-2xl overflow-hidden shadow-sm">
-                    <NoticeBanner text={safeText(al.text)} color={al.color || 'amber'} />
-                  </div>
-                ))}
+        {/* التنبيهات العامة المفعّلة للمنصة في مستطيل واحد موحّد */}
+        {(() => {
+          const homeAlerts = (Array.isArray(settings.globalAlerts) ? settings.globalAlerts : []).filter(
+            (al) => al && al.active !== false && safeText(al.text).trim() && al.scope !== 'preview_only'
+          );
+          if (homeAlerts.length === 0) return null;
+          return (
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4">
+              <UnifiedNoticeBox items={homeAlerts.map((al) => ({ text: safeText(al.text), color: al.color || 'amber' }))} />
             </div>
-          )}
+          );
+        })()}
 
         {/* =================================================================== */}
         {/* الصفحة الرئيسية */}
@@ -2288,17 +2287,17 @@ export default function App() {
                 </button>
               </div>
             </div>
-
-            {/* التنبيه العلوي الخاص بالمذكرة والتنبيهات العامة */}
-            {Array.isArray(settings.globalAlerts) &&
-              settings.globalAlerts
+            {/* التنبيه العلوي الخاص بالمذكرة والتنبيهات العامة في مستطيل واحد */}
+            {(() => {
+              const previewAlerts = (Array.isArray(settings.globalAlerts) ? settings.globalAlerts : [])
                 .filter((al) => al && al.active !== false && safeText(al.text).trim() && al.scope !== 'home_only')
-                .map((al, idx) => (
-                  <NoticeBanner key={al.id || idx} text={safeText(al.text)} color={al.color || 'amber'} />
-                ))}
-            {activePreviewNotice && previewNotebook.noticePosition !== 'bottom' && (
-              <NoticeBanner text={activePreviewNotice} color={previewNotebook.noticeColor} />
-            )}
+                .map((al) => ({ text: safeText(al.text), color: al.color || 'amber' }));
+              if (activePreviewNotice && previewNotebook.noticePosition !== 'bottom') {
+                previewAlerts.push({ text: activePreviewNotice, color: previewNotebook.noticeColor || 'amber' });
+              }
+              if (previewAlerts.length === 0) return null;
+              return <UnifiedNoticeBox items={previewAlerts} compact />;
+            })()}
 
             {/* تفاصيل المذكرة الكاملة داخل نافذة المعاينة */}
             {(previewNotebook.subtitle || previewNotebook.badgeText || previewNotebook.term) && (
@@ -2745,21 +2744,35 @@ export default function App() {
 }
 
 // ============================================================================
-// 9. مكون شريط التنبيه الخاص بالمذكرة
+// 9. مكون صندوق التنبيهات الموحّد (يجمع كافة التنبيهات في مستطيل واحد)
 // ============================================================================
-function NoticeBanner({ text, color = 'amber' }) {
+function UnifiedNoticeBox({ items = [], compact = false }) {
+  if (!Array.isArray(items) || items.length === 0) return null;
   const styles = {
     amber: 'bg-amber-50 border-amber-200 text-amber-950',
     blue: 'bg-blue-50 border-blue-200 text-blue-950',
     rose: 'bg-rose-50 border-rose-200 text-rose-950',
     emerald: 'bg-emerald-50 border-emerald-200 text-emerald-950'
   };
+  const primaryColor = items[0]?.color || 'amber';
   return (
-    <div className={`px-4 sm:px-6 py-2.5 border-y text-xs sm:text-sm font-black flex items-center gap-2 shrink-0 ${styles[color] || styles.amber}`}>
-      <AlertTriangle className="w-4 h-4 shrink-0" />
-      <span>{text}</span>
+    <div
+      className={`px-4 sm:px-6 py-2.5 text-xs sm:text-sm font-black space-y-1.5 shrink-0 ${
+        compact ? 'border-y' : 'rounded-2xl border shadow-sm'
+      } ${styles[primaryColor] || styles.amber}`}
+    >
+      {items.map((item, idx) => (
+        <div key={idx} className="flex items-start gap-2 leading-relaxed">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>{item.text}</span>
+        </div>
+      ))}
     </div>
   );
+}
+
+function NoticeBanner({ text, color = 'amber' }) {
+  return <UnifiedNoticeBox items={[{ text, color }]} compact />;
 }
 
 // ============================================================================
