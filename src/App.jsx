@@ -1426,7 +1426,14 @@ export default function App() {
   // 8. واجهة المستخدم الرئيسية
   // ============================================================================
   return (
-    <div dir="rtl" className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-50 text-slate-900 flex flex-col font-sans">
+    <div
+      dir="rtl"
+      style={{ fontFamily: "'Cairo', 'Tajawal', 'Segoe UI', Tahoma, sans-serif" }}
+      className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-50 text-slate-900 flex flex-col"
+    >
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@500;700;800;900&display=swap');
+      `}</style>
       {/* إشعار Toast عائم */}
       {toast && (
         <div className="fixed bottom-5 left-5 z-[120] max-w-sm animate-bounce">
@@ -1476,32 +1483,32 @@ export default function App() {
       )}
 
       {/* الهيدر الرئيسي المطور */}
-      <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 sm:py-4 flex flex-col lg:flex-row items-center justify-between gap-3.5">
+      <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col lg:flex-row items-center justify-between gap-4">
           {/* الشعار واسم المنصة */}
-          <div className="flex items-center gap-3.5 w-full lg:w-auto justify-between lg:justify-start">
-            <div className="flex items-center gap-3.5 min-w-0">
+          <div className="flex items-center gap-4 w-full lg:w-auto justify-between lg:justify-start">
+            <div className="flex items-center gap-4 min-w-0">
               <button
                 type="button"
                 onClick={handleLogoSecretClick}
                 title={safeText(settings.platformName)}
-                className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-slate-900 text-white flex items-center justify-center overflow-hidden shadow-lg shrink-0 ring-2 ring-amber-400/50 hover:scale-105 transition"
+                className="w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-2xl bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 text-white flex items-center justify-center overflow-hidden shadow-xl shrink-0 ring-2 ring-amber-400/70 hover:scale-105 transition"
               >
                 {settings.logoImage ? (
                   <img src={settings.logoImage} alt={safeText(settings.platformName)} className="w-full h-full object-cover" />
                 ) : (
-                  <BookOpen className="w-7 h-7 text-amber-400" />
+                  <BookOpen className="w-8 h-8 text-amber-400" />
                 )}
               </button>
               <div
                 onClick={() => setActiveView('home')}
-                className="cursor-pointer min-w-0 space-y-1"
+                className="cursor-pointer min-w-0 space-y-1.5"
               >
-                <h1 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight leading-snug">
+                <h1 className="text-xl sm:text-3xl font-black bg-gradient-to-l from-slate-950 via-blue-900 to-indigo-800 bg-clip-text text-transparent tracking-tight leading-tight">
                   {safeText(settings.platformName, 'منصة العباقرة للمذكرات التعليمية')}
                 </h1>
-                <div className="flex items-center gap-1.5 text-xs sm:text-sm text-slate-600 font-bold">
-                  <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-50 border border-amber-200/80 text-xs sm:text-sm text-amber-950 font-extrabold">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                   <span className="leading-snug">{safeText(settings.platformTagline)}</span>
                 </div>
               </div>
@@ -1509,18 +1516,20 @@ export default function App() {
           </div>
 
           {/* أزرار التنقل الرئيسية */}
-          <div className="flex flex-wrap items-center justify-center lg:justify-end gap-2 w-full lg:w-auto">
-            <nav className="flex flex-wrap items-center justify-center gap-1.5 bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200/80">
+          <div className="flex flex-wrap items-center justify-center lg:justify-end gap-2.5 w-full lg:w-auto">
+            <nav className="flex flex-wrap items-center justify-center gap-1.5 bg-slate-100/95 p-1.5 rounded-2xl border border-slate-200 shadow-inner">
               <button
                 type="button"
                 onClick={() => setActiveView('home')}
-                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black flex items-center gap-1.5 transition ${
+                className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black flex items-center gap-2 transition ${
                   activeView === 'home'
-                    ? `${theme.primaryBg} text-white shadow-sm`
-                    : 'text-slate-700 hover:bg-white hover:text-slate-900'
+                    ? `${theme.primaryBg} text-white shadow-md`
+                    : 'text-slate-700 hover:bg-white hover:text-blue-700'
                 }`}
               >
-                <Sparkles className="w-4 h-4" />
+                <span className={`w-6 h-6 rounded-lg flex items-center justify-center ${activeView === 'home' ? 'bg-white/20' : 'bg-blue-100 text-blue-700'}`}>
+                  <Sparkles className="w-3.5 h-3.5" />
+                </span>
                 <span>الرئيسية</span>
               </button>
               <button
@@ -1531,37 +1540,43 @@ export default function App() {
                   setSelectedGradeId('');
                   setActiveView('library');
                 }}
-                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black flex items-center gap-1.5 transition ${
+                className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black flex items-center gap-2 transition ${
                   activeView === 'library'
-                    ? `${theme.primaryBg} text-white shadow-sm`
-                    : 'text-slate-700 hover:bg-white hover:text-slate-900'
+                    ? `${theme.primaryBg} text-white shadow-md`
+                    : 'text-slate-700 hover:bg-white hover:text-indigo-700'
                 }`}
               >
-                <BookOpen className="w-4 h-4" />
-                <span>المذكرات</span>
+                <span className={`w-6 h-6 rounded-lg flex items-center justify-center ${activeView === 'library' ? 'bg-white/20' : 'bg-indigo-100 text-indigo-700'}`}>
+                  <BookOpen className="w-3.5 h-3.5" />
+                </span>
+                <span>مكتبة المذكرات</span>
               </button>
               <button
                 type="button"
                 onClick={() => setActiveView('offers')}
-                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black flex items-center gap-1.5 transition ${
+                className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black flex items-center gap-2 transition ${
                   activeView === 'offers'
-                    ? `${theme.primaryBg} text-white shadow-sm`
-                    : 'text-slate-700 hover:bg-white hover:text-slate-900'
+                    ? `${theme.primaryBg} text-white shadow-md`
+                    : 'text-slate-700 hover:bg-white hover:text-amber-700'
                 }`}
               >
-                <Tag className="w-4 h-4" />
+                <span className={`w-6 h-6 rounded-lg flex items-center justify-center ${activeView === 'offers' ? 'bg-white/20' : 'bg-amber-100 text-amber-700'}`}>
+                  <Tag className="w-3.5 h-3.5" />
+                </span>
                 <span>العروض والباقات</span>
               </button>
               <button
                 type="button"
                 onClick={() => setActiveView('track')}
-                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black flex items-center gap-1.5 transition ${
+                className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black flex items-center gap-2 transition ${
                   activeView === 'track'
-                    ? `${theme.primaryBg} text-white shadow-sm`
-                    : 'text-slate-700 hover:bg-white hover:text-slate-900'
+                    ? `${theme.primaryBg} text-white shadow-md`
+                    : 'text-slate-700 hover:bg-white hover:text-emerald-700'
                 }`}
               >
-                <Package className="w-4 h-4" />
+                <span className={`w-6 h-6 rounded-lg flex items-center justify-center ${activeView === 'track' ? 'bg-white/20' : 'bg-emerald-100 text-emerald-700'}`}>
+                  <Package className="w-3.5 h-3.5" />
+                </span>
                 <span>تتبع طلبك</span>
               </button>
             </nav>
@@ -1570,9 +1585,11 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setContactModalOpen(true)}
-                className="px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-black bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 transition shadow-md"
+                className="px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-black bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2 transition shadow-md"
               >
-                <MessageCircle className="w-4 h-4" />
+                <span className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center">
+                  <MessageCircle className="w-4 h-4" />
+                </span>
                 <span>تواصل معنا</span>
               </button>
               <button
@@ -1580,8 +1597,10 @@ export default function App() {
                 onClick={() => setCartOpen(true)}
                 className="relative px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-black bg-slate-900 hover:bg-slate-800 text-white flex items-center gap-2 transition shadow-md"
               >
-                <ShoppingCart className="w-4 h-4 text-amber-400" />
-                <span>السلة</span>
+                <span className="w-6 h-6 rounded-lg bg-amber-400/20 flex items-center justify-center">
+                  <ShoppingCart className="w-4 h-4 text-amber-400" />
+                </span>
+                <span>سلة الطلبات</span>
                 {cart.length > 0 && (
                   <span className="px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 text-xs font-black">
                     {cart.length}
@@ -1595,7 +1614,7 @@ export default function App() {
                   className="px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-black bg-amber-400 hover:bg-amber-300 text-slate-950 flex items-center gap-1.5 transition shadow-md"
                 >
                   <ShieldCheck className="w-4 h-4" />
-                  <span>الإدارة</span>
+                  <span>لوحة الإدارة</span>
                 </button>
               )}
             </div>
@@ -1700,15 +1719,25 @@ export default function App() {
             </section>
 
             {/* الأقسام الرئيسية */}
-            <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
-              <div className="text-center space-y-1.5">
-                <h2 className="text-xl sm:text-3xl font-black text-slate-900">الأقسام الرئيسية للمذكرات والكورسات</h2>
-                <p className="text-xs sm:text-sm text-slate-500 font-bold">اختر القسم المناسب لتصفح مجلدات المراحل والصفوف الدراسية</p>
+            <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-7">
+              <div className="text-center space-y-2">
+                <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-xs font-black">
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>تصفح حسب القسم</span>
+                </span>
+                <h2 className="text-2xl sm:text-3xl font-black text-slate-900">الأقسام الرئيسية للمذكرات والكورسات</h2>
+                <p className="text-xs sm:text-sm text-slate-600 font-bold">اختر القسم المناسب لتصفح مجلدات المراحل والصفوف الدراسية</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {(settings.categories || []).map((cat) => {
+                {(settings.categories || []).map((cat, idx) => {
                   const count = countNotebooksInCategory(cat);
+                  const badgeColors = [
+                    'from-blue-600 to-indigo-700',
+                    'from-emerald-600 to-teal-700',
+                    'from-amber-500 to-orange-600'
+                  ];
+                  const fallbackGrad = badgeColors[idx % badgeColors.length];
                   return (
                     <div
                       key={cat.id}
@@ -1718,9 +1747,9 @@ export default function App() {
                         setSelectedGradeId('');
                         setActiveView('library');
                       }}
-                      className="group bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl hover:border-blue-400 transition cursor-pointer flex flex-col"
+                      className="group bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-md hover:shadow-2xl hover:-translate-y-1 hover:border-blue-400 transition-all duration-300 cursor-pointer flex flex-col"
                     >
-                      <div className={`relative h-48 bg-gradient-to-br ${theme.cardGradient} overflow-hidden flex items-center justify-center`}>
+                      <div className={`relative h-52 bg-gradient-to-br ${fallbackGrad} overflow-hidden flex items-center justify-center`}>
                         {cat.image ? (
                           <img
                             src={cat.image}
@@ -1729,20 +1758,27 @@ export default function App() {
                             className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                           />
                         ) : (
-                          <Layers className="w-14 h-14 text-white/80" />
+                          <div className="w-20 h-20 rounded-3xl bg-white/15 backdrop-blur-md border border-white/25 flex items-center justify-center shadow-lg">
+                            <BookOpen className="w-10 h-10 text-white" />
+                          </div>
                         )}
-                        <span className="absolute top-3 right-3 px-3 py-1 rounded-full bg-slate-950/80 text-white text-xs font-black">
+                        <span className="absolute top-3.5 right-3.5 px-3.5 py-1.5 rounded-full bg-slate-950/85 backdrop-blur-sm text-amber-300 border border-white/15 text-xs font-black shadow">
                           {count} مذكرة متاحة
                         </span>
                       </div>
-                      <div className="p-5 flex items-center justify-between">
-                        <div>
-                          <h3 className="text-lg font-black text-slate-900">{cat.name}</h3>
-                          <p className="text-xs text-blue-600 font-bold mt-0.5">
-                            {cat.browseMode === 'direct' ? 'عرض جميع المذكرات مباشرة' : 'تصفح المراحل والصفوف الدراسية'}
-                          </p>
+                      <div className="p-5 flex items-center justify-between gap-3 bg-white">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-700 border border-blue-100 flex items-center justify-center shrink-0 group-hover:bg-blue-600 group-hover:text-white transition">
+                            <Layers className="w-5 h-5" />
+                          </span>
+                          <div className="min-w-0">
+                            <h3 className="text-lg sm:text-xl font-black text-slate-900 truncate">{cat.name}</h3>
+                            <p className="text-xs text-slate-600 font-bold mt-0.5">
+                              {cat.browseMode === 'direct' ? 'عرض جميع المذكرات مباشرة' : 'تصفح المراحل والصفوف الدراسية'}
+                            </p>
+                          </div>
                         </div>
-                        <span className="w-10 h-10 rounded-2xl bg-slate-100 group-hover:bg-blue-600 group-hover:text-white flex items-center justify-center transition">
+                        <span className="w-10 h-10 rounded-2xl bg-slate-100 group-hover:bg-blue-600 group-hover:text-white flex items-center justify-center shrink-0 transition">
                           <ChevronLeft className="w-5 h-5" />
                         </span>
                       </div>
