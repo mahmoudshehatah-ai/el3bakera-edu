@@ -510,6 +510,25 @@ function idbGet(key) {
   });
 }
 
+function safeLocalSet(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // تجاهل تجاوز سعة localStorage لأن البيانات والصور محفوظة بالكامل في IndexedDB والسحابة
+  }
+}
+
+function stripHeavyProductMedia(list) {
+  if (!Array.isArray(list)) return [];
+  return list.map(({ sampleImages, ...rest }) => ({
+    ...rest,
+    coverImage:
+      typeof rest.coverImage === 'string' && rest.coverImage.length < 150000
+        ? rest.coverImage
+        : ''
+  }));
+}
+
 // ============================================================================
 // المكون الرئيسي للتطبيق
 // ============================================================================
@@ -861,9 +880,13 @@ function MuzakkiratiPlatformContent() {
               heroBgImage: cloudData.heroBgImage || prev.heroBgImage || ''
             };
             idbSet('settings_v5', merged);
-            try {
-              localStorage.setItem('el3bakera_settings_v5', JSON.stringify(merged));
-            } catch {}
+            safeLocalSet('el3bakera_settings_v5', {
+              ...merged,
+              logoImage: '',
+              heroImage: '',
+              heroBgImage: '',
+              categories: (merged.categories || []).map(({ coverImage, ...c }) => c)
+            });
             return merged;
           });
         }
@@ -923,7 +946,8 @@ function MuzakkiratiPlatformContent() {
                     : existing?.sampleImages || []
               };
             });
-            localStorage.setItem('el3bakera_products_v5', JSON.stringify(merged));
+            idbSet('products_v5', merged);
+            safeLocalSet('el3bakera_products_v5', stripHeavyProductMedia(merged));
             return merged;
           });
         }
@@ -976,7 +1000,8 @@ function MuzakkiratiPlatformContent() {
                       : p.sampleImages || []
                 };
               });
-              localStorage.setItem('el3bakera_products_v5', JSON.stringify(updated));
+              idbSet('products_v5', updated);
+              safeLocalSet('el3bakera_products_v5', stripHeavyProductMedia(updated));
               return updated;
             });
           }
@@ -1002,9 +1027,13 @@ function MuzakkiratiPlatformContent() {
     };
     setSettings(cleanSettings);
     await idbSet('settings_v5', cleanSettings);
-    try {
-      localStorage.setItem('el3bakera_settings_v5', JSON.stringify(cleanSettings));
-    } catch {}
+    safeLocalSet('el3bakera_settings_v5', {
+      ...cleanSettings,
+      logoImage: '',
+      heroImage: '',
+      heroBgImage: '',
+      categories: (cleanSettings.categories || []).map(({ coverImage, ...c }) => c)
+    });
     if (db) {
       try {
         const categoryCovers = {};
@@ -1267,9 +1296,7 @@ function MuzakkiratiPlatformContent() {
 
     setProducts(nextProducts);
     await idbSet('products_v5', nextProducts);
-    try {
-      localStorage.setItem('el3bakera_products_v5', JSON.stringify(nextProducts));
-    } catch {}
+    safeLocalSet('el3bakera_products_v5', stripHeavyProductMedia(nextProducts));
     await saveProductToCloud(productObj);
 
     setEditingProductId(null);
@@ -1298,9 +1325,7 @@ function MuzakkiratiPlatformContent() {
     const nextProducts = products.map((p) => (p.id === product.id ? updatedProduct : p));
     setProducts(nextProducts);
     await idbSet('products_v5', nextProducts);
-    try {
-      localStorage.setItem('el3bakera_products_v5', JSON.stringify(nextProducts));
-    } catch {}
+    safeLocalSet('el3bakera_products_v5', stripHeavyProductMedia(nextProducts));
     await saveProductToCloud(updatedProduct);
     showToast(updatedProduct.hidden ? 'تم إخفاء المذكرة عن العملاء' : 'تم إظهار المذكرة للعملاء');
   };
@@ -1309,9 +1334,7 @@ function MuzakkiratiPlatformContent() {
     const nextProducts = products.filter((p) => p.id !== id);
     setProducts(nextProducts);
     await idbSet('products_v5', nextProducts);
-    try {
-      localStorage.setItem('el3bakera_products_v5', JSON.stringify(nextProducts));
-    } catch {}
+    safeLocalSet('el3bakera_products_v5', stripHeavyProductMedia(nextProducts));
     if (db) {
       try {
         await deleteDoc(doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebooks', id));
@@ -1377,10 +1400,22 @@ function MuzakkiratiPlatformContent() {
         }
         if (Array.isArray(parsed.products)) {
           setProducts(parsed.products);
-          localStorage.setItem('el3bakera_products_v5', JSON.stringify(parsed.products));
+          await idbSet('products_v5', parsed.products);
+          safeLocalSet('el3bakera_products_v5', stripHeavyProductMedia(parsed.products));
           for (const prod of parsed.products) {
             await saveProductToCloud(prod);
           }
+        }
+        if (Array.isArray(parsed.bundles)) {
+          setBundles(parsed.bundles);
+          await idbSet('bundles_v5', parsed.bundles);
+          safeLocalSet('el3bakera_bundles_v5', parsed.bundles);
+        }
+        if (Array.isArray(parsed.coupons)) {
+          setCoupons(parsed.coupons);
+          await idbSet('coupons_v5', parsed.coupons);
+          safeLocalSet('el3bakera_coupons_v5', parsed.coupons);
+        }
         }
         if (Array.isArray(parsed.bundles)) {
           setBundles(parsed.bundles);
