@@ -55,8 +55,15 @@ import {
 // تهيئة Firebase بأمان مع التعامل مع بيئات التطوير والنشر بدون تحذيرات import.meta
 const getEnvVar = (key, fallback) => {
   try {
-    if (typeof window !== 'undefined' && window.__FIREBASE_CONFIG__?.[key]) {
-      return window.__FIREBASE_CONFIG__[key];
+    if (typeof window !== 'undefined') {
+      const savedCfg = window.localStorage?.getItem('el3bakera_fb_config');
+      if (savedCfg) {
+        const parsed = JSON.parse(savedCfg);
+        if (parsed?.[key]) return parsed[key];
+      }
+      if (window.__FIREBASE_CONFIG__?.[key]) {
+        return window.__FIREBASE_CONFIG__[key];
+      }
     }
     if (typeof process !== 'undefined' && process.env?.[key]) {
       return process.env[key];
@@ -66,7 +73,7 @@ const getEnvVar = (key, fallback) => {
 };
 
 const firebaseConfig = {
-  apiKey: getEnvVar('apiKey', getEnvVar('VITE_FIREBASE_API_KEY', 'AIzaSyDummyKeyForPreview')),
+  apiKey: getEnvVar('apiKey', getEnvVar('VITE_FIREBASE_API_KEY', '')),
   authDomain: getEnvVar('authDomain', getEnvVar('VITE_FIREBASE_AUTH_DOMAIN', 'el3bakera-edu.firebaseapp.com')),
   projectId: getEnvVar('projectId', getEnvVar('VITE_FIREBASE_PROJECT_ID', 'el3bakera-edu')),
   storageBucket: getEnvVar('storageBucket', getEnvVar('VITE_FIREBASE_STORAGE_BUCKET', 'el3bakera-edu.appspot.com')),
@@ -79,9 +86,11 @@ let auth = null;
 let db = null;
 
 try {
-  app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
+  if (firebaseConfig.apiKey && firebaseConfig.apiKey !== 'AIzaSyDummyKeyForPreview') {
+    app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+  }
 } catch {
   // في حال عدم توفر إعدادات Firebase ستعمل المنصة بالوضع المحلي بسلاسة
 }
@@ -357,8 +366,10 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminUserEmail, setAdminUserEmail] = useState('');
   const [adminLoginOpen, setAdminLoginOpen] = useState(false);
-  const [loginEmail, setLoginEmail] = useState('');
+  const [loginEmail, setLoginEmail] = useState('mahmoudelzaaty7@gmail.com');
   const [loginPassword, setLoginPassword] = useState('');
+  const [fbApiKeyInput, setFbApiKeyInput] = useState(firebaseConfig.apiKey || '');
+  const [showFbSetup, setShowFbSetup] = useState(!firebaseConfig.apiKey);
   const [adminTab, setAdminTab] = useState('notebooks');
 
   // نموذج إضافة/تعديل مذكرة
@@ -1197,8 +1208,19 @@ export default function App() {
 
   const handleAdminLogin = async (e) => {
     e.preventDefault();
+    if (fbApiKeyInput.trim() && fbApiKeyInput.trim() !== firebaseConfig.apiKey) {
+      try {
+        window.localStorage?.setItem(
+          'el3bakera_fb_config',
+          JSON.stringify({ ...firebaseConfig, apiKey: fbApiKeyInput.trim() })
+        );
+        window.location.reload();
+        return;
+      } catch {}
+    }
     if (!auth) {
-      showToast('خدمة المصادقة غير مهيأة في هذه البيئة.', 'error');
+      setShowFbSetup(true);
+      showToast('يرجى إدخال مفتاح Firebase API Key الخاص بمشروعك أولاً.', 'error');
       return;
     }
     try {
@@ -1206,8 +1228,8 @@ export default function App() {
       setAdminLoginOpen(false);
       setActiveView('admin');
       showToast('تم تسجيل الدخول إلى لوحة التحكم بنجاح.');
-    } catch {
-      showToast('بيانات الدخول غير صحيحة.', 'error');
+    } catch (err) {
+      showToast(`تعذر تسجيل الدخول: ${err?.code || 'تأكد من البريد وكلمة المرور'}`, 'error');
     }
   };
 
@@ -1330,16 +1352,16 @@ export default function App() {
                 }`}
               >
                 <ShieldCheck className="w-4 h-4" />
-                <span>الإدارة</span>
+                <span>لوحة الإدارة</span>
               </button>
             ) : (
               <button
                 type="button"
                 onClick={() => setAdminLoginOpen(true)}
-                title="دخول الإدارة"
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+                className="px-3.5 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-950 text-xs sm:text-sm font-black inline-flex items-center gap-1.5 transition"
               >
-                <ShieldCheck className="w-4 h-4" />
+                <ShieldCheck className="w-4 h-4 text-amber-700" />
+                <span>الإدارة</span>
               </button>
             )}
           </nav>
@@ -3462,25 +3484,56 @@ export default function App() {
                 <X className="w-5 h-5 text-slate-400" />
               </button>
             </div>
-            <input
-              type="email"
-              required
-              value={loginEmail}
-              onChange={(e) => setLoginEmail(e.target.value)}
-              placeholder="البريد الإلكتروني للإدارة"
-              className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-sm font-bold"
-            />
-            <input
-              type="password"
-              required
-              value={loginPassword}
-              onChange={(e) => setLoginPassword(e.target.value)}
-              placeholder="كلمة المرور"
-              className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-sm font-bold"
-            />
+            <div>
+              <label className="block text-xs font-black text-slate-700 mb-1">البريد الإلكتروني للإدارة</label>
+              <input
+                type="email"
+                required
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                placeholder="البريد الإلكتروني للإدارة"
+                className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-sm font-bold"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-black text-slate-700 mb-1">كلمة المرور</label>
+              <input
+                type="password"
+                required
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                placeholder="كلمة المرور"
+                className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-sm font-bold"
+              />
+            </div>
+
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => setShowFbSetup((v) => !v)}
+                className="text-xs font-black text-blue-600 hover:underline"
+              >
+                {showFbSetup ? 'إخفاء إعدادات ربط السحابة (Firebase)' : 'ضبط مفتاح ربط السحابة (Firebase API Key)'}
+              </button>
+              {showFbSetup && (
+                <div className="mt-2 p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5">
+                  <label className="block text-[11px] font-black text-slate-700">
+                    Firebase Web API Key (من إعدادات مشروع el3bakera-edu):
+                  </label>
+                  <input
+                    type="text"
+                    value={fbApiKeyInput}
+                    onChange={(e) => setFbApiKeyInput(e.target.value)}
+                    placeholder="AIzaSy..."
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono"
+                  />
+                </div>
+              )}
+            </div>
+
             <button
               type="submit"
-              className="w-full py-3 rounded-2xl bg-slate-900 text-white font-black text-sm"
+              className="w-full py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-black text-sm"
             >
               دخول
             </button>
