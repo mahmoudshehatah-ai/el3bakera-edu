@@ -314,6 +314,7 @@ const DEFAULT_SETTINGS = {
   promoCouponCode: 'OPEN15',
   promoBgColor: '#0f172a',
   promoTextColor: '#ffffff',
+  globalAlerts: [],
   whatsappNumber: '201000000000',
   trustTitle: 'لماذا يثق بنا المعلمون؟',
   trustPoints: [
@@ -808,7 +809,23 @@ export default function App() {
         const cfgData = configSnap && configSnap.exists() ? configSnap.data() : null;
         const legData = legacyMainSnap && legacyMainSnap.exists() ? legacyMainSnap.data() : null;
         const mainData = mainSnap && mainSnap.exists() ? mainSnap.data() : null;
-        latestMainSettings = { ...(legData || {}), ...(cfgData || {}), ...(mainData || {}) };
+        const combinedRaw = { ...(legData || {}), ...(cfgData || {}), ...(mainData || {}) };
+        const rawAlerts =
+          combinedRaw.globalAlerts || combinedRaw.alerts || combinedRaw.announcements || [];
+        if (Array.isArray(rawAlerts) && rawAlerts.length > 0) {
+          combinedRaw.globalAlerts = rawAlerts.map((al, i) =>
+            typeof al === 'string'
+              ? { id: `al_${i}`, text: al, color: 'amber', scope: 'all', active: true }
+              : {
+                  id: safeText(al?.id, `al_${i}`),
+                  text: safeText(al?.text || al?.message || al?.title || al?.content, ''),
+                  color: safeText(al?.color || al?.type, 'amber'),
+                  scope: safeText(al?.scope || al?.placement, 'all'),
+                  active: al?.active !== false
+                }
+          );
+        }
+        latestMainSettings = combinedRaw;
 
         if (logoSnap && logoSnap.exists() && logoSnap.data()?.logoImage) {
           latestLogo = extractImageFromValue(logoSnap.data().logoImage);
@@ -1567,6 +1584,20 @@ export default function App() {
 
       {/* المحتوى الرئيسي */}
       <main className="flex-1 w-full">
+        {/* التنبيهات العامة المفعّلة للمنصة */}
+        {Array.isArray(settings.globalAlerts) &&
+          settings.globalAlerts.filter((al) => al && al.active !== false && safeText(al.text).trim() && al.scope !== 'preview_only').length > 0 && (
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 space-y-2">
+              {settings.globalAlerts
+                .filter((al) => al && al.active !== false && safeText(al.text).trim() && al.scope !== 'preview_only')
+                .map((al, idx) => (
+                  <div key={al.id || idx} className="rounded-2xl overflow-hidden shadow-sm">
+                    <NoticeBanner text={safeText(al.text)} color={al.color || 'amber'} />
+                  </div>
+                ))}
+            </div>
+          )}
+
         {/* =================================================================== */}
         {/* الصفحة الرئيسية */}
         {/* =================================================================== */}
@@ -2258,7 +2289,13 @@ export default function App() {
               </div>
             </div>
 
-            {/* التنبيه العلوي الخاص بالمذكرة */}
+            {/* التنبيه العلوي الخاص بالمذكرة والتنبيهات العامة */}
+            {Array.isArray(settings.globalAlerts) &&
+              settings.globalAlerts
+                .filter((al) => al && al.active !== false && safeText(al.text).trim() && al.scope !== 'home_only')
+                .map((al, idx) => (
+                  <NoticeBanner key={al.id || idx} text={safeText(al.text)} color={al.color || 'amber'} />
+                ))}
             {activePreviewNotice && previewNotebook.noticePosition !== 'bottom' && (
               <NoticeBanner text={activePreviewNotice} color={previewNotebook.noticeColor} />
             )}
@@ -4474,88 +4511,118 @@ function AdminDashboard({
                   </div>
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* 2. الواجهة وبطاقة الثقة */}
-          {settingsSubTab === 'hero' && (
-            <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">الشارة العلوية في الواجهة</label>
-                  <input
-                    type="text"
-                    value={localSettings.heroBadge || ''}
-                    onChange={(e) => setLocalSettings({ ...localSettings, heroBadge: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">ارتفاع الواجهة بالبكسل</label>
-                  <input
-                    type="number"
-                    value={localSettings.heroMinHeight || 460}
-                    onChange={(e) => setLocalSettings({ ...localSettings, heroMinHeight: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold"
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 mb-1">العنوان الرئيسي</label>
-                  <input
-                    type="text"
-                    value={localSettings.heroTitle || ''}
-                    onChange={(e) => setLocalSettings({ ...localSettings, heroTitle: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold"
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 mb-1">الوصف أسفل العنوان</label>
-                  <textarea
-                    rows={2}
-                    value={localSettings.heroSubtitle || ''}
-                    onChange={(e) => setLocalSettings({ ...localSettings, heroSubtitle: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold"
-                  />
-                </div>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
-                <div className="text-xs font-black text-slate-800">نقاط بطاقة «لماذا يثق بنا المعلمون؟»</div>
-                {(localSettings.trustPoints || []).map((pt, idx) => (
-                  <div key={idx} className="flex gap-2">
-                    <input
-                      type="text"
-                      value={pt}
-                      onChange={(e) => {
-                        const arr = [...localSettings.trustPoints];
-                        arr[idx] = e.target.value;
-                        setLocalSettings({ ...localSettings, trustPoints: arr });
-                      }}
-                      className="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setLocalSettings({
-                          ...localSettings,
-                          trustPoints: localSettings.trustPoints.filter((_, i) => i !== idx)
-                        })
-                      }
-                      className="p-2 rounded-xl bg-rose-100 text-rose-700"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+              {/* إدارة التنبيهات العامة للمنصة */}
+              <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <span className="text-sm font-black text-slate-900">التنبيهات العامة للمنصة (تظهر للزوار في الرئيسية وداخل معاينة المذكرات)</span>
+                    <p className="text-xs text-slate-600 font-bold">أضف تنبيهات هامة مثل مواعيد التسليم، خصومات الكميات، أو تعليمات الطلب</p>
                   </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() =>
-                    setLocalSettings({ ...localSettings, trustPoints: [...(localSettings.trustPoints || []), 'ميزة جديدة'] })
-                  }
-                  className="px-3.5 py-2 rounded-xl bg-blue-600 text-white text-xs font-black"
-                >
-                  + إضافة نقطة ثقة
-                </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLocalSettings({
+                        ...localSettings,
+                        globalAlerts: [
+                          ...(localSettings.globalAlerts || []),
+                          {
+                            id: `al_${Date.now()}`,
+                            text: 'تنبيه هام: التسليم يتم خلال ساعات قليلة بصيغة PDF عالية الجودة جاهزة للطباعة.',
+                            color: 'amber',
+                            scope: 'all',
+                            active: true
+                          }
+                        ]
+                      })
+                    }
+                    className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black flex items-center gap-1"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>إضافة تنبيه عام</span>
+                  </button>
+                </div>
+
+                {(!localSettings.globalAlerts || localSettings.globalAlerts.length === 0) ? (
+                  <p className="text-xs text-slate-500 font-bold py-2">لا توجد تنبيهات عامة مضافة حاليًا. اضغط «إضافة تنبيه عام» لإضافة تنبيه.</p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {localSettings.globalAlerts.map((al, idx) => (
+                      <div key={al.id || idx} className="p-3 rounded-2xl bg-white border border-amber-200 grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                        <div className="sm:col-span-6">
+                          <input
+                            type="text"
+                            value={al.text || ''}
+                            onChange={(e) => {
+                              const arr = [...localSettings.globalAlerts];
+                              arr[idx] = { ...al, text: e.target.value };
+                              setLocalSettings({ ...localSettings, globalAlerts: arr });
+                            }}
+                            placeholder="اكتب نص التنبيه هنا..."
+                            className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <select
+                            value={al.color || 'amber'}
+                            onChange={(e) => {
+                              const arr = [...localSettings.globalAlerts];
+                              arr[idx] = { ...al, color: e.target.value };
+                              setLocalSettings({ ...localSettings, globalAlerts: arr });
+                            }}
+                            className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                          >
+                            <option value="amber">أصفر تحذيري</option>
+                            <option value="blue">أزرق معلوماتي</option>
+                            <option value="rose">أحمر هام</option>
+                            <option value="emerald">أخضر تأكيدي</option>
+                          </select>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <select
+                            value={al.scope || 'all'}
+                            onChange={(e) => {
+                              const arr = [...localSettings.globalAlerts];
+                              arr[idx] = { ...al, scope: e.target.value };
+                              setLocalSettings({ ...localSettings, globalAlerts: arr });
+                            }}
+                            className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                          >
+                            <option value="all">الرئيسية + المعاينة</option>
+                            <option value="home_only">الرئيسية فقط</option>
+                            <option value="preview_only">معاينة المذكرات فقط</option>
+                          </select>
+                        </div>
+                        <div className="sm:col-span-2 flex items-center justify-end gap-2">
+                          <label className="flex items-center gap-1 text-xs font-bold cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={al.active !== false}
+                              onChange={(e) => {
+                                const arr = [...localSettings.globalAlerts];
+                                arr[idx] = { ...al, active: e.target.checked };
+                                setLocalSettings({ ...localSettings, globalAlerts: arr });
+                              }}
+                            />
+                            <span>نشط</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setLocalSettings({
+                                ...localSettings,
+                                globalAlerts: localSettings.globalAlerts.filter((_, i) => i !== idx)
+                              })
+                            }
+                            className="p-2 rounded-xl bg-rose-100 text-rose-700"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
