@@ -263,8 +263,8 @@ function normalizeNotebook(id, data = {}) {
   return {
     id,
     title: safeText(data.title, 'مذكرة دراسية'),
-    description: safeText(data.description, ''),
-    badge: safeText(data.badge, ''),
+    description: safeText(data.description || data.subtitle, ''),
+    badge: safeText(data.badge || data.badgeText, ''),
     price: Number(data.price) || 0,
     oldPrice: Number(data.oldPrice) || 0,
     pagesCount: Number(data.pagesCount) || 0,
@@ -278,53 +278,167 @@ function normalizeNotebook(id, data = {}) {
     detailsPosition: safeText(data.detailsPosition, 'global'),
     featured: Boolean(data.featured),
     sampleImages: Array.isArray(data.sampleImages) ? data.sampleImages.filter(isValidImageSrc) : [],
-    createdAt: data.createdAt || null
+    createdAt: data.createdAt || data.createdAtMs || null
   };
 }
 
 const DEFAULT_SETTINGS = {
   platformName: 'منصة العباقرة للمذكرات التعليمية',
-  platformTagline: 'مذكرات دراسية احترافية مخصصة باسمك وبياناتك الخاصة',
-  heroTitle: 'مذكرات تعليمية احترافية مُعدّة بأعلى معايير الجودة للمعلمين',
-  heroSubtitle: 'تصفح عينات المذكرات مباشرة، واختر ما يناسب طلابك، وسنقوم بتخصيص الغلاف والصفحات باسمك ورقم هاتفك وشعارك الخاص.',
+  platformTagline: 'مذكرات دراسية احترافية مخصصة للمعلم باسمه وبياناته الخاصة',
+  heroBadge: 'تخصيص كامل باسم المعلم ورقم هاتفه وشعاره',
+  heroTitle: 'مذكرتك التعليمية الجاهزة... باسمك وشعارك وهويتك الاحترافية',
+  heroSubtitle: 'نوفر للمعلمين مذكرات دراسية منسقة ومحدثة وفق أحدث المناهج بصيغة PDF عالية الدقة، مع إضافة بيانات المعلم.',
   heroImage: '',
   logoImage: '',
-  whatsappNumber: '201000000000',
-  facebookUrl: '',
-  telegramUrl: '',
+  whatsappNumber: '201068481536',
+  paymentInstructions: 'فودافون كاش : 01068481536 — أرسل صورة التحويل على واتساب لتأكيد الطلب وبدء التخصيص فورًا.',
+  facebookUrl: 'https://www.facebook.com',
+  telegramUrl: 'https://t.me/+vklZUBKqbWk4YTY0',
   topBannerEnabled: true,
-  topBannerText: 'عرض خاص للمعلمين: خصم 15% على جميع المذكرات بمناسبة إطلاق المنصة',
+  topBannerText: 'عرض خاص للمعلمين: خصم 15% على جميع المذكرات حتى نهاية الشهر بمناسبة اطلاق موقعنا',
   topBannerCoupon: 'M20',
   globalDetailsPosition: 'top',
   categories: [
-    { id: 'cat_term1', name: 'مذكرات الفصل الدراسي الأول', image: '' },
-    { id: 'cat_term2', name: 'مذكرات الفصل الدراسي الثاني', image: '' },
-    { id: 'cat_rev', name: 'بنوك المراجعة والاختبارات', image: '' }
+    { id: 'cat_0', name: 'مذكرات الفصل الدراسي الأول', image: '' },
+    { id: 'cat_1', name: 'مذكرات الفصل الدراسي الثاني', image: '' },
+    { id: 'cat_2', name: 'كورسات التأسيس والمراجعات النهائية', image: '' }
   ],
   stages: [
-    { id: 'stage_prep', name: 'المرحلة الإعدادية' },
-    { id: 'stage_sec', name: 'المرحلة الثانوية' }
+    { id: 'stg_prim_1', name: 'المرحلة الابتدائية' },
+    { id: 'stg_prep_1', name: 'المرحلة الإعدادية' },
+    { id: 'stg_1795789584022', name: 'المرحلة الثانوية' }
   ],
   grades: [
-    { id: 'grade_prep1', stageId: 'stage_prep', name: 'الصف الأول الإعدادي' },
-    { id: 'grade_prep2', stageId: 'stage_prep', name: 'الصف الثاني الإعدادي' },
-    { id: 'grade_prep3', stageId: 'stage_prep', name: 'الصف الثالث الإعدادي' },
-    { id: 'grade_sec1', stageId: 'stage_sec', name: 'الصف الأول الثانوي' },
-    { id: 'grade_sec2', stageId: 'stage_sec', name: 'الصف الثاني الثانوي' },
-    { id: 'grade_sec3', stageId: 'stage_sec', name: 'الصف الثالث الثانوي' }
+    { id: 'grd_p4', stageId: 'stg_prim_1', name: 'الصف الرابع الابتدائي' },
+    { id: 'grd_p5', stageId: 'stg_prim_1', name: 'الصف الخامس الابتدائي' },
+    { id: 'grd_p6', stageId: 'stg_prim_1', name: 'الصف السادس الابتدائي' },
+    { id: 'grd_m1', stageId: 'stg_prep_1', name: 'الصف الأول الإعدادي' },
+    { id: 'grd_m2', stageId: 'stg_prep_1', name: 'الصف الثاني الإعدادي' },
+    { id: 'grd_m3', stageId: 'stg_prep_1', name: 'الصف الثالث الإعدادي' },
+    { id: 'grd_1795789597175', stageId: 'stg_1795789584022', name: 'الصف الأول الثانوي' },
+    { id: 'grd_1795789611950', stageId: 'stg_1795789584022', name: 'الصف الثاني بكالوريا' },
+    { id: 'grd_1795789612478', stageId: 'stg_1795789584022', name: 'الصف الثاني الثانوي' },
+    { id: 'grd_1795789612785', stageId: 'stg_1795789584022', name: 'الصف الثالث الثانوي' }
   ],
-  quantityDiscountEnabled: false,
+  subjects: [
+    'اللغة العربية',
+    'اللغة الإنجليزية',
+    'الرياضيات',
+    'العلوم',
+    'الدراسات الاجتماعية'
+  ],
+  quantityDiscountEnabled: true,
   quantityDiscountMinCount: 2,
   quantityDiscountType: 'percent',
   quantityDiscountValue: 15,
-  quantityDiscountMaxAmount: 0,
+  quantityDiscountMaxAmount: 150,
   quantityDiscountScope: 'all',
   quantityDiscountNotebookIds: [],
-  nextOrderRewardEnabled: false,
+  nextOrderRewardEnabled: true,
   nextOrderRewardPercent: 15,
-  nextOrderRewardMaxDiscount: 100,
-  nextOrderRewardDays: 30
+  nextOrderRewardMaxDiscount: 0,
+  nextOrderRewardDays: 7,
+  nextOrderRewardPrefix: 'VIP'
 };
+
+const BACKUP_INITIAL_PACKAGES = [
+  {
+    id: 'Q5fhvYenW7ApQJ8H6iPE',
+    title: 'المراجعلة الشاملة للمرحلة الإعدادية',
+    description: 'مراجعة شاملة لكل صف تشمل (بنك المراجعة + بوكليت الامتحانات)',
+    badge: 'وفّر أكثر مع الباقة',
+    price: 650,
+    oldPrice: 800,
+    notebookIds: [
+      '1RiLyOKr1A9pIpzF4JfJ',
+      'XtvkC4ilRVUbdk4hPXZR',
+      '5PU5jPmu0D2wBWOl7N26',
+      'Za3cdwmUIgZdSsTtdZBG',
+      '5bYQ6PQOifbAVJ7ya33u',
+      'zMMZEaGQvdprL4vadOUY'
+    ]
+  }
+];
+
+const BACKUP_INITIAL_COUPONS = [
+  {
+    id: 'jFiYRhmRvnl9Jf0aJ274',
+    code: 'M20',
+    type: 'percent',
+    value: 15,
+    maxDiscount: 0,
+    minOrder: 100,
+    applyScope: 'all',
+    targetNotebookIds: [],
+    active: true
+  },
+  {
+    id: 'etujmU4psKGIGZu24ntS',
+    code: 'VIP7906',
+    type: 'percent',
+    value: 15,
+    maxDiscount: 0,
+    minOrder: 0,
+    applyScope: 'all',
+    targetNotebookIds: [],
+    active: true
+  },
+  {
+    id: 'MbXqI2jk3YDP3XkPbRJm',
+    code: 'VIP1589',
+    type: 'percent',
+    value: 15,
+    maxDiscount: 0,
+    minOrder: 0,
+    applyScope: 'all',
+    targetNotebookIds: [],
+    active: true
+  },
+  {
+    id: 'yyOlqOnPnPctApTLeZt0',
+    code: 'VIP8097',
+    type: 'percent',
+    value: 15,
+    maxDiscount: 0,
+    minOrder: 0,
+    applyScope: 'all',
+    targetNotebookIds: [],
+    active: true
+  },
+  {
+    id: 'aQvbcRXB3IhDQefmj5WB',
+    code: 'VIP5742',
+    type: 'percent',
+    value: 15,
+    maxDiscount: 0,
+    minOrder: 0,
+    applyScope: 'all',
+    targetNotebookIds: [],
+    active: true
+  },
+  {
+    id: 'JVwJQllz46O1xnz0phSj',
+    code: 'VIP3885',
+    type: 'percent',
+    value: 15,
+    maxDiscount: 0,
+    minOrder: 0,
+    applyScope: 'all',
+    targetNotebookIds: [],
+    active: true
+  },
+  {
+    id: 'ba5JSMjiaUnOMiLFfdfk',
+    code: 'VIP2302',
+    type: 'percent',
+    value: 15,
+    maxDiscount: 0,
+    minOrder: 0,
+    applyScope: 'all',
+    targetNotebookIds: [],
+    active: true
+  }
+];
 
 export default function App() {
   // التصفح والحالات العامة
@@ -333,8 +447,8 @@ export default function App() {
   const [detailSamples, setDetailSamples] = useState([]);
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [notebooks, setNotebooks] = useState([]);
-  const [packages, setPackages] = useState([]);
-  const [coupons, setCoupons] = useState([]);
+  const [packages, setPackages] = useState(BACKUP_INITIAL_PACKAGES);
+  const [coupons, setCoupons] = useState(BACKUP_INITIAL_COUPONS);
   const [orders, setOrders] = useState([]);
 
   // فلاتر المكتبة
@@ -3769,7 +3883,17 @@ export default function App() {
                       type="text"
                       value={settings.whatsappNumber}
                       onChange={(e) => setSettings({ ...settings, whatsappNumber: e.target.value })}
-                      placeholder="201000000000"
+                      placeholder="201068481536"
+                      className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-sm font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-black text-slate-700 mb-1">تعليمات الدفع والتحويل (فودافون كاش / واتساب)</label>
+                    <input
+                      type="text"
+                      value={settings.paymentInstructions || ''}
+                      onChange={(e) => setSettings({ ...settings, paymentInstructions: e.target.value })}
+                      placeholder="فودافون كاش : 01068481536..."
                       className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 text-sm font-bold"
                     />
                   </div>
