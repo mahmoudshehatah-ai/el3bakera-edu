@@ -64,14 +64,32 @@ import {
 // ============================================================================
 // 1. إعدادات Firebase والاتصال بقاعدة البيانات السحابية (el3bakera-edu)
 // ============================================================================
-const FALLBACK_FIREBASE_CONFIG = {
-  apiKey: ['AIzaSyD_du5VY8nJGDJ169Fof9EALI9x2W2d-14'].join(''),
+const LOCAL_API_KEY_STORAGE = 'el3bakera_firebase_web_api_key';
+
+const getStoredOrEnvApiKey = () => {
+  try {
+    const fromStorage = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_API_KEY_STORAGE) : '';
+    if (fromStorage && fromStorage.trim().startsWith('AIza')) return fromStorage.trim();
+  } catch {
+    // تجاهل
+  }
+  try {
+    const fromEnv = import.meta?.env?.VITE_FIREBASE_API_KEY;
+    if (fromEnv && String(fromEnv).trim().startsWith('AIza')) return String(fromEnv).trim();
+  } catch {
+    // تجاهل
+  }
+  return ['AIzaSyD_du5VY8nJGDJ169Fof9EALI9x2W2d-14'].join('');
+};
+
+const buildFirebaseConfig = (apiKeyOverride = '') => ({
+  apiKey: (apiKeyOverride || getStoredOrEnvApiKey()).trim(),
   authDomain: 'el3bakera-edu.firebaseapp.com',
   projectId: 'el3bakera-edu',
   storageBucket: 'el3bakera-edu.firebasestorage.app',
   messagingSenderId: '74663879858',
   appId: '1:74663879858:web:4327c0ea1b825dd6c615ab'
-};
+});
 
 const APP_ID = 'el3bakera-edu';
 const LEGACY_APP_ID = 'muzakkirati-edu-app';
@@ -94,19 +112,22 @@ let app = null;
 let auth = null;
 let db = null;
 
-try {
-  const cfg =
-    typeof window !== 'undefined' && window.__firebase_config
-      ? typeof window.__firebase_config === 'string'
-        ? JSON.parse(window.__firebase_config)
-        : window.__firebase_config
-      : FALLBACK_FIREBASE_CONFIG;
-  app = getApps().length > 0 ? getApp() : initializeApp(cfg);
-  auth = getAuth(app);
-  db = getFirestore(app);
-} catch (e) {
-  console.warn('Firebase init fallback:', e);
-}
+const initFirebaseServices = (apiKeyOverride = '') => {
+  try {
+    const cfg = buildFirebaseConfig(apiKeyOverride);
+    const appName = apiKeyOverride ? `el3bakera_${apiKeyOverride.slice(-6)}` : '[DEFAULT]';
+    const existing = getApps().find((a) => a.name === appName);
+    app = existing || (appName === '[DEFAULT]' ? initializeApp(cfg) : initializeApp(cfg, appName));
+    auth = getAuth(app);
+    db = getFirestore(app);
+    return { app, auth, db };
+  } catch (e) {
+    console.warn('Firebase init fallback:', e);
+    return { app, auth, db };
+  }
+};
+
+initFirebaseServices();
 
 const publicCol = (colName) => collection(db, 'artifacts', APP_ID, 'public', 'data', colName);
 const publicDoc = (colName, docId) => doc(db, 'artifacts', APP_ID, 'public', 'data', colName, docId);
@@ -678,6 +699,13 @@ function MuzakkiratiApp() {
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [adminEmailInput, setAdminEmailInput] = useState(ADMIN_EMAIL);
   const [adminPassInput, setAdminPassInput] = useState('');
+  const [customApiKeyInput, setCustomApiKeyInput] = useState(() => {
+    try {
+      return localStorage.getItem(LOCAL_API_KEY_STORAGE) || '';
+    } catch {
+      return '';
+    }
+  });
   const [showPass, setShowPass] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
@@ -1173,12 +1201,21 @@ function MuzakkiratiApp() {
     setLoginError('');
     setLoginLoading(true);
     try {
+      if (customApiKeyInput.trim().startsWith('AIza')) {
+        try {
+          localStorage.setItem(LOCAL_API_KEY_STORAGE, customApiKeyInput.trim());
+        } catch {
+          // تجاهل
+        }
+        initFirebaseServices(customApiKeyInput.trim());
+      }
       if (!auth) throw new Error('لم يتم تهيئة Firebase Auth');
       const cred = await signInWithEmailAndPassword(auth, adminEmailInput.trim(), adminPassInput);
       if (cred.user?.email?.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
         await signOut(auth);
         setLoginError('هذا الحساب غير مصرح له بالدخول إلى لوحة الإدارة.');
       } else {
+        setFirebaseUser(cred.user);
         setPreviewAdminUnlocked(false);
         setLoginModalOpen(false);
         setActiveView('admin');
@@ -1186,7 +1223,11 @@ function MuzakkiratiApp() {
       }
     } catch (err) {
       const code = err?.code || '';
-      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') {
+      if (code === 'auth/api-key-not-valid.-please-pass-a-valid-api-key') {
+        setLoginError(
+          'يرجى لصق مفتاح Web API Key الخاص بمشروعك من Firebase Console -> Project Settings في الخانة المخصصة بالأسفل لمرة واحدة.'
+        );
+      } else if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') {
         setLoginError('كلمة المرور غير صحيحة في Firebase. جرب «دخول سريع بحساب Google الإداري» بالأسفل.');
       } else if (code === 'auth/operation-not-allowed') {
         setLoginError('طريقة الدخول بالبريد غير مفعلة في Firebase Authentication — استخدم زر Google بالأسفل.');
@@ -1202,6 +1243,14 @@ function MuzakkiratiApp() {
     setLoginError('');
     setLoginLoading(true);
     try {
+      if (customApiKeyInput.trim().startsWith('AIza')) {
+        try {
+          localStorage.setItem(LOCAL_API_KEY_STORAGE, customApiKeyInput.trim());
+        } catch {
+          // تجاهل
+        }
+        initFirebaseServices(customApiKeyInput.trim());
+      }
       if (!auth) throw new Error('لم يتم تهيئة Firebase Auth');
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
@@ -1210,6 +1259,7 @@ function MuzakkiratiApp() {
         await signOut(auth);
         setLoginError(`الحساب (${cred.user?.email}) غير مصرح له. يرجى اختيار (${ADMIN_EMAIL}).`);
       } else {
+        setFirebaseUser(cred.user);
         setPreviewAdminUnlocked(false);
         setLoginModalOpen(false);
         setActiveView('admin');
@@ -1217,7 +1267,11 @@ function MuzakkiratiApp() {
       }
     } catch (err) {
       const code = err?.code || '';
-      if (code === 'auth/unauthorized-domain') {
+      if (code === 'auth/api-key-not-valid.-please-pass-a-valid-api-key') {
+        setLoginError(
+          'يرجى لصق مفتاح Web API Key الخاص بمشروعك من Firebase Console -> Project Settings في الخانة المخصصة بالأسفل لمرة واحدة.'
+        );
+      } else if (code === 'auth/unauthorized-domain') {
         setLoginError(
           `نطاق الموقع (${window.location.hostname}) غير مضاف في Firebase Console -> Authentication -> Settings -> Authorized domains.`
         );
@@ -2455,6 +2509,20 @@ function MuzakkiratiApp() {
                     {showPass ? 'إخفاء' : 'إظهار'}
                   </button>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-black text-slate-600 mb-1">
+                  مفتاح Firebase Web API Key (يُطلب مرة واحدة فقط إذا ظهر خطأ api-key)
+                </label>
+                <input
+                  type="text"
+                  dir="ltr"
+                  placeholder="AIzaSy..."
+                  value={customApiKeyInput}
+                  onChange={(e) => setCustomApiKeyInput(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-2xl border border-slate-200 bg-slate-50 text-xs font-bold text-left"
+                />
               </div>
 
               {loginError && (
