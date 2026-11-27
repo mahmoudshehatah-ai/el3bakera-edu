@@ -316,6 +316,9 @@ const DEFAULT_SETTINGS = {
   promoTextColor: '#ffffff',
   globalAlertsEnabled: true,
   globalAlertsPosition: 'preview_top',
+  globalAlertsShowInFullscreen: false,
+  previewDetailsPosition: 'above_samples',
+  previewDetailsShowInFullscreen: false,
   globalAlerts: [],
   whatsappNumber: '201000000000',
   trustTitle: 'لماذا يثق بنا المعلمون؟',
@@ -566,6 +569,7 @@ function normalizeNotebook(id, data) {
     noticeText: notice,
     noticeColor: safeText(d.noticeColor, 'amber'),
     noticePosition: ['top', 'bottom', 'below_details'].includes(d.noticePosition) ? d.noticePosition : 'top',
+    noticeShowInFullscreen: Boolean(d.noticeShowInFullscreen),
     coverImage: cover,
     inlineSamples,
     createdAtMs: toTimeMs(d.createdAt || d.updatedAt)
@@ -2228,68 +2232,206 @@ export default function App() {
             </div>
 
             {previewFullscreen ? (
-              /* وضع ملء الشاشة الكامل للعينة فقط */
-              <div
-                onTouchStart={(e) => {
-                  touchStartXRef.current = e.touches?.[0]?.clientX ?? null;
-                }}
-                onTouchEnd={(e) => {
-                  if (touchStartXRef.current === null || previewSamplesList.length <= 1) return;
-                  const diff = (e.changedTouches?.[0]?.clientX ?? 0) - touchStartXRef.current;
-                  if (Math.abs(diff) > 40) {
-                    if (diff > 0) {
-                      setPreviewPageIdx((i) => (i + 1) % previewSamplesList.length);
-                    } else {
-                      setPreviewPageIdx((i) => (i - 1 + previewSamplesList.length) % previewSamplesList.length);
-                    }
-                  }
-                  touchStartXRef.current = null;
-                }}
-                className="relative flex-1 w-full h-full bg-slate-950 overflow-auto flex items-center justify-center p-1 sm:p-3"
-              >
-                {previewSamplesList.length > 0 ? (
-                  <img
-                    src={previewSamplesList[previewPageIdx] || previewSamplesList[0]}
-                    alt={`عينة ${previewPageIdx + 1}`}
-                    onError={(e) => {
-                      if (previewNotebook?.coverImage && e.currentTarget.src !== previewNotebook.coverImage) {
-                        e.currentTarget.src = previewNotebook.coverImage;
-                      }
-                    }}
-                    style={{
-                      transform: previewZoom !== 1 ? `scale(${previewZoom})` : undefined,
-                      transformOrigin: 'center center'
-                    }}
-                    className="w-auto h-auto max-w-full max-h-[calc(100vh-64px)] object-contain transition-transform"
-                  />
-                ) : (
-                  <p className="text-sm font-bold text-slate-400">لا توجد صور عينات مرفوعة لهذه المذكرة.</p>
-                )}
+              /* وضع ملء الشاشة الكامل مع احترام خيارات إظهار التنبيهات والتفاصيل في ملء الشاشة */
+              <>
+                <div className="shrink-0">
+                  {settings.globalAlertsEnabled !== false &&
+                    settings.globalAlertsShowInFullscreen &&
+                    settings.globalAlertsPosition !== 'preview_bottom' &&
+                    previewGlobalNotices.length > 0 && <UnifiedNoticeBox items={previewGlobalNotices} compact />}
 
-                {previewSamplesList.length > 1 && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setPreviewPageIdx((i) => (i - 1 + previewSamplesList.length) % previewSamplesList.length)}
-                      className="fixed right-3 sm:right-6 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/20 hover:bg-white/35 text-white backdrop-blur flex items-center justify-center shadow-xl"
-                    >
-                      <ChevronRight className="w-6 h-6" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPreviewPageIdx((i) => (i + 1) % previewSamplesList.length)}
-                      className="fixed left-3 sm:left-6 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/20 hover:bg-white/35 text-white backdrop-blur flex items-center justify-center shadow-xl"
-                    >
-                      <ChevronLeft className="w-6 h-6" />
-                    </button>
-                  </>
-                )}
-              </div>
+                  {previewNotebookNotice &&
+                    previewNotebook.noticeShowInFullscreen &&
+                    previewNotebook.noticePosition !== 'bottom' && (
+                      <UnifiedNoticeBox items={previewNotebookNotice} compact />
+                    )}
+
+                  {settings.previewDetailsShowInFullscreen &&
+                    settings.previewDetailsPosition !== 'below_samples' &&
+                    (previewNotebook.subtitle ||
+                      previewNotebook.badgeText ||
+                      previewNotebook.subject ||
+                      previewNotebook.pagesCount) && (
+                      <div className="bg-slate-900/95 text-slate-100 px-3 sm:px-5 py-2 border-b border-white/10 space-y-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {previewNotebook.badgeText && (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black">
+                              {previewNotebook.badgeText}
+                            </span>
+                          )}
+                          {previewNotebook.subject && (
+                            <span className="px-2 py-0.5 rounded-md bg-white/10 text-slate-200 text-[10px] font-bold">
+                              المادة: {previewNotebook.subject}
+                            </span>
+                          )}
+                          {previewNotebook.pagesCount && (
+                            <span className="px-2 py-0.5 rounded-md bg-white/10 text-slate-200 text-[10px] font-bold">
+                              عدد الصفحات: {previewNotebook.pagesCount} صفحة
+                            </span>
+                          )}
+                        </div>
+                        {previewNotebook.subtitle && (
+                          <p className="text-[11px] sm:text-xs text-slate-200 font-bold leading-snug line-clamp-2">
+                            {previewNotebook.subtitle}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                </div>
+
+                <div
+                  onTouchStart={(e) => {
+                    touchStartXRef.current = e.touches?.[0]?.clientX ?? null;
+                  }}
+                  onTouchEnd={(e) => {
+                    if (touchStartXRef.current === null || previewSamplesList.length <= 1) return;
+                    const diff = (e.changedTouches?.[0]?.clientX ?? 0) - touchStartXRef.current;
+                    if (Math.abs(diff) > 40) {
+                      if (diff > 0) {
+                        setPreviewPageIdx((i) => (i + 1) % previewSamplesList.length);
+                      } else {
+                        setPreviewPageIdx((i) => (i - 1 + previewSamplesList.length) % previewSamplesList.length);
+                      }
+                    }
+                    touchStartXRef.current = null;
+                  }}
+                  className="relative flex-1 w-full h-full bg-slate-950 overflow-auto flex items-center justify-center p-1 sm:p-3"
+                >
+                  {previewSamplesList.length > 0 ? (
+                    <img
+                      src={previewSamplesList[previewPageIdx] || previewSamplesList[0]}
+                      alt={`عينة ${previewPageIdx + 1}`}
+                      onError={(e) => {
+                        if (previewNotebook?.coverImage && e.currentTarget.src !== previewNotebook.coverImage) {
+                          e.currentTarget.src = previewNotebook.coverImage;
+                        }
+                      }}
+                      style={{
+                        transform: previewZoom !== 1 ? `scale(${previewZoom})` : undefined,
+                        transformOrigin: 'center center'
+                      }}
+                      className="w-auto h-auto max-w-full max-h-[calc(100vh-70px)] object-contain transition-transform"
+                    />
+                  ) : (
+                    <p className="text-sm font-bold text-slate-400">لا توجد صور عينات مرفوعة لهذه المذكرة.</p>
+                  )}
+
+                  {previewSamplesList.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewPageIdx((i) => (i - 1 + previewSamplesList.length) % previewSamplesList.length)}
+                        className="fixed right-3 sm:right-6 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/20 hover:bg-white/35 text-white backdrop-blur flex items-center justify-center shadow-xl"
+                      >
+                        <ChevronRight className="w-6 h-6" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewPageIdx((i) => (i + 1) % previewSamplesList.length)}
+                        className="fixed left-3 sm:left-6 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/20 hover:bg-white/35 text-white backdrop-blur flex items-center justify-center shadow-xl"
+                      >
+                        <ChevronLeft className="w-6 h-6" />
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                <div className="shrink-0">
+                  {settings.globalAlertsEnabled !== false &&
+                    settings.globalAlertsShowInFullscreen &&
+                    settings.globalAlertsPosition === 'preview_bottom' &&
+                    previewGlobalNotices.length > 0 && <UnifiedNoticeBox items={previewGlobalNotices} compact />}
+
+                  {previewNotebookNotice &&
+                    previewNotebook.noticeShowInFullscreen &&
+                    previewNotebook.noticePosition === 'bottom' && (
+                      <UnifiedNoticeBox items={previewNotebookNotice} compact />
+                    )}
+
+                  {settings.previewDetailsShowInFullscreen &&
+                    settings.previewDetailsPosition === 'below_samples' &&
+                    (previewNotebook.subtitle ||
+                      previewNotebook.badgeText ||
+                      previewNotebook.subject ||
+                      previewNotebook.pagesCount) && (
+                      <div className="bg-slate-900/95 text-slate-100 px-3 sm:px-5 py-2 border-t border-white/10 space-y-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {previewNotebook.badgeText && (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black">
+                              {previewNotebook.badgeText}
+                            </span>
+                          )}
+                          {previewNotebook.subject && (
+                            <span className="px-2 py-0.5 rounded-md bg-white/10 text-slate-200 text-[10px] font-bold">
+                              المادة: {previewNotebook.subject}
+                            </span>
+                          )}
+                          {previewNotebook.pagesCount && (
+                            <span className="px-2 py-0.5 rounded-md bg-white/10 text-slate-200 text-[10px] font-bold">
+                              عدد الصفحات: {previewNotebook.pagesCount} صفحة
+                            </span>
+                          )}
+                        </div>
+                        {previewNotebook.subtitle && (
+                          <p className="text-[11px] sm:text-xs text-slate-200 font-bold leading-snug line-clamp-2">
+                            {previewNotebook.subtitle}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                </div>
+              </>
             ) : (
-              /* الوضع الافتراضي: صفحة العينة كاملة أولاً ثم التفاصيل والتنبيهات أسفلها */
+              /* الوضع الافتراضي: مواضع قابلة للتحكم الكامل (فوق أو أسفل صفحات المعاينة) */
               <>
                 <div className="flex-1 overflow-y-auto bg-slate-100">
-                  {/* 1. صفحة العينة كاملة في مقدمة النافذة */}
+                  {/* العناصر التي اختار المدير ظهورها فوق صفحات المعاينة */}
+                  <div className="bg-white divide-y divide-slate-100">
+                    {settings.globalAlertsEnabled !== false &&
+                      settings.globalAlertsPosition === 'preview_top' &&
+                      previewGlobalNotices.length > 0 && <UnifiedNoticeBox items={previewGlobalNotices} compact />}
+
+                    {previewNotebookNotice && previewNotebook.noticePosition === 'top' && (
+                      <UnifiedNoticeBox items={previewNotebookNotice} compact />
+                    )}
+
+                    {settings.previewDetailsPosition !== 'below_samples' &&
+                      (previewNotebook.subtitle ||
+                        previewNotebook.badgeText ||
+                        previewNotebook.subject ||
+                        previewNotebook.pagesCount) && (
+                        <div className="px-3 sm:px-5 py-2.5 space-y-1.5 border-b border-slate-200/80">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {previewNotebook.badgeText && (
+                              <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[11px] font-black">
+                                {previewNotebook.badgeText}
+                              </span>
+                            )}
+                            {previewNotebook.subject && (
+                              <span className="px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-bold">
+                                المادة: {previewNotebook.subject}
+                              </span>
+                            )}
+                            {previewNotebook.pagesCount && (
+                              <span className="px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-bold">
+                                عدد الصفحات: {previewNotebook.pagesCount} صفحة
+                              </span>
+                            )}
+                          </div>
+                          {previewNotebook.subtitle && (
+                            <p className="text-xs sm:text-sm text-slate-700 font-bold leading-relaxed">
+                              {previewNotebook.subtitle}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                    {previewNotebookNotice && previewNotebook.noticePosition === 'below_details' && (
+                      <UnifiedNoticeBox items={previewNotebookNotice} compact />
+                    )}
+                  </div>
+
+                  {/* منطقة عرض صفحات العينات */}
                   <div
                     onTouchStart={(e) => {
                       touchStartXRef.current = e.touches?.[0]?.clientX ?? null;
@@ -2354,40 +2496,46 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* 2. التنبيهات العامة والخاصة وتفاصيل المذكرة أسفل صفحة العينة */}
+                  {/* العناصر التي اختار المدير ظهورها أسفل صفحات المعاينة */}
                   <div className="bg-white divide-y divide-slate-100">
-                    {settings.globalAlertsPosition !== 'home_top' && previewGlobalNotices.length > 0 && (
-                      <UnifiedNoticeBox items={previewGlobalNotices} compact />
+                    {settings.globalAlertsEnabled !== false &&
+                      settings.globalAlertsPosition === 'preview_bottom' &&
+                      previewGlobalNotices.length > 0 && <UnifiedNoticeBox items={previewGlobalNotices} compact />}
+
+                    {previewNotebookNotice && previewNotebook.noticePosition === 'bottom' && (
+                      <UnifiedNoticeBox items={previewNotebookNotice} compact />
                     )}
 
-                    {previewNotebookNotice && <UnifiedNoticeBox items={previewNotebookNotice} compact />}
-
-                    {(previewNotebook.subtitle || previewNotebook.badgeText || previewNotebook.subject || previewNotebook.pagesCount) && (
-                      <div className="px-3 sm:px-5 py-3.5 space-y-2">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {previewNotebook.badgeText && (
-                            <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[11px] font-black">
-                              {previewNotebook.badgeText}
-                            </span>
-                          )}
-                          {previewNotebook.subject && (
-                            <span className="px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-bold">
-                              المادة: {previewNotebook.subject}
-                            </span>
-                          )}
-                          {previewNotebook.pagesCount && (
-                            <span className="px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-bold">
-                              عدد الصفحات: {previewNotebook.pagesCount} صفحة
-                            </span>
+                    {settings.previewDetailsPosition === 'below_samples' &&
+                      (previewNotebook.subtitle ||
+                        previewNotebook.badgeText ||
+                        previewNotebook.subject ||
+                        previewNotebook.pagesCount) && (
+                        <div className="px-3 sm:px-5 py-3.5 space-y-2">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {previewNotebook.badgeText && (
+                              <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[11px] font-black">
+                                {previewNotebook.badgeText}
+                              </span>
+                            )}
+                            {previewNotebook.subject && (
+                              <span className="px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-bold">
+                                المادة: {previewNotebook.subject}
+                              </span>
+                            )}
+                            {previewNotebook.pagesCount && (
+                              <span className="px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-bold">
+                                عدد الصفحات: {previewNotebook.pagesCount} صفحة
+                              </span>
+                            )}
+                          </div>
+                          {previewNotebook.subtitle && (
+                            <p className="text-xs sm:text-sm text-slate-700 font-bold leading-relaxed">
+                              {previewNotebook.subtitle}
+                            </p>
                           )}
                         </div>
-                        {previewNotebook.subtitle && (
-                          <p className="text-xs sm:text-sm text-slate-700 font-bold leading-relaxed">
-                            {previewNotebook.subtitle}
-                          </p>
-                        )}
-                      </div>
-                    )}
+                      )}
                   </div>
                 </div>
 
@@ -2774,6 +2922,7 @@ function AdminDashboard({
     noticeText: '',
     noticeColor: 'amber',
     noticePosition: 'top',
+    noticeShowInFullscreen: false,
     hidden: false,
     coverImage: '',
     samples: []
@@ -2898,6 +3047,7 @@ function AdminDashboard({
         noticeText: nbForm.noticeText.trim(),
         noticeColor: nbForm.noticeColor || 'amber',
         noticePosition: nbForm.noticePosition || 'top',
+        noticeShowInFullscreen: Boolean(nbForm.noticeShowInFullscreen),
         hidden: Boolean(nbForm.hidden),
         coverImage: nbForm.coverImage || '',
         updatedAt: serverTimestamp()
@@ -3325,17 +3475,28 @@ function AdminDashboard({
 
             {/* التنبيه الخاص بالمذكرة */}
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs sm:text-sm font-black text-slate-900">التنبيه الخاص بهذه المذكرة (منفصل عن التنبيهات العامة)</span>
-                <label className="flex items-center gap-2 text-xs font-black text-slate-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={nbForm.noticeEnabled !== false}
-                    onChange={(e) => setNbForm({ ...nbForm, noticeEnabled: e.target.checked })}
-                    className="w-4 h-4"
-                  />
-                  <span>إظهار التنبيه</span>
-                </label>
+                <div className="flex flex-wrap items-center gap-4">
+                  <label className="flex items-center gap-2 text-xs font-black text-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={nbForm.noticeEnabled !== false}
+                      onChange={(e) => setNbForm({ ...nbForm, noticeEnabled: e.target.checked })}
+                      className="w-4 h-4"
+                    />
+                    <span>إظهار التنبيه</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-xs font-black text-blue-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(nbForm.noticeShowInFullscreen)}
+                      onChange={(e) => setNbForm({ ...nbForm, noticeShowInFullscreen: e.target.checked })}
+                      className="w-4 h-4"
+                    />
+                    <span>إظهاره في وضع الشاشة الكاملة</span>
+                  </label>
+                </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div className="sm:col-span-2">
@@ -4426,10 +4587,21 @@ function AdminDashboard({
                       onChange={(e) => setLocalSettings({ ...localSettings, globalAlertsPosition: e.target.value })}
                       className="px-3 py-2 rounded-xl border border-amber-300 bg-white text-xs font-black"
                     >
-                      <option value="preview_top">أعلى نافذة معاينة المذكرات</option>
-                      <option value="preview_bottom">أسفل نافذة معاينة المذكرات</option>
+                      <option value="preview_top">فوق صفحات المعاينة</option>
+                      <option value="preview_bottom">أسفل صفحات المعاينة</option>
                       <option value="home_top">في الصفحة الرئيسية أعلى الأقسام</option>
                     </select>
+                    <label className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-amber-300 text-xs font-black text-slate-800 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(localSettings.globalAlertsShowInFullscreen)}
+                        onChange={(e) =>
+                          setLocalSettings({ ...localSettings, globalAlertsShowInFullscreen: e.target.checked })
+                        }
+                        className="w-4 h-4"
+                      />
+                      <span>إظهار في ملء الشاشة</span>
+                    </label>
                     <button
                       type="button"
                       onClick={() =>
@@ -4507,359 +4679,33 @@ function AdminDashboard({
                   </div>
                 ))}
               </div>
-            </div>
-          )}
 
-          {/* 2. الواجهة وبطاقة الثقة */}
-          {settingsSubTab === 'hero' && (
-            <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* التحكم في موضع تفاصيل المذكرة داخل نافذة المعاينة ووضع الشاشة الكاملة */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">الشارة العلوية في الواجهة</label>
-                  <input
-                    type="text"
-                    value={localSettings.heroBadge || ''}
-                    onChange={(e) => setLocalSettings({ ...localSettings, heroBadge: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold"
-                  />
+                  <div className="text-sm font-black text-slate-900">تفاصيل المذكرة داخل نافذة المعاينة (الوصف، المادة، عدد الصفحات)</div>
+                  <p className="text-xs text-slate-600 font-bold">حدد موضع ظهور التفاصيل وهل تظهر عند تفعيل وضع ملء الشاشة أم لا</p>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">ارتفاع الواجهة الرئيسية (px)</label>
-                  <input
-                    type="number"
-                    min="320"
-                    max="750"
-                    value={localSettings.heroMinHeight || 460}
-                    onChange={(e) => setLocalSettings({ ...localSettings, heroMinHeight: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold"
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 mb-1">العنوان الرئيسي الكبير (Hero Title)</label>
-                  <input
-                    type="text"
-                    value={localSettings.heroTitle || ''}
-                    onChange={(e) => setLocalSettings({ ...localSettings, heroTitle: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold"
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 mb-1">الوصف أسفل العنوان</label>
-                  <textarea
-                    rows={2}
-                    value={localSettings.heroSubtitle || ''}
-                    onChange={(e) => setLocalSettings({ ...localSettings, heroSubtitle: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold"
-                  />
-                </div>
-              </div>
-
-              {/* بطاقة لماذا يثق بنا المعلمون */}
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-black text-slate-900">نقاط بطاقة الثقة في الواجهة الرئيسية</span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setLocalSettings({
-                        ...localSettings,
-                        trustPoints: [...(localSettings.trustPoints || []), 'نقطة ميزة جديدة للمعلمين']
-                      })
-                    }
-                    className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-black"
-                  >
-                    + إضافة نقطة
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  value={localSettings.trustTitle || ''}
-                  onChange={(e) => setLocalSettings({ ...localSettings, trustTitle: e.target.value })}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-black"
-                />
-                {(localSettings.trustPoints || []).map((pt, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={pt}
-                      onChange={(e) => {
-                        const arr = [...localSettings.trustPoints];
-                        arr[idx] = e.target.value;
-                        setLocalSettings({ ...localSettings, trustPoints: arr });
-                      }}
-                      className="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setLocalSettings({
-                          ...localSettings,
-                          trustPoints: localSettings.trustPoints.filter((_, i) => i !== idx)
-                        })
-                      }
-                      className="p-2 rounded-xl bg-rose-100 text-rose-700"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 3. شارة التوفير وما الجديد والأخبار */}
-          {settingsSubTab === 'sections' && (
-            <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-5">
-              {/* التحكم في لون ومكان شارة التوفير */}
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-                <div className="text-xs sm:text-sm font-black text-slate-900">
-                  التحكم في لون ومكان شارة قيمة التوفير على المذكرات
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">مكان ظهور شارة التوفير</label>
-                    <select
-                      value={localSettings.savingsBadgePosition || 'next_to_pages'}
-                      onChange={(e) => setLocalSettings({ ...localSettings, savingsBadgePosition: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
-                    >
-                      <option value="next_to_pages">بجوار أيقونة عدد الصفحات (الافتراضي)</option>
-                      <option value="next_to_price">بجوار السعر</option>
-                      <option value="on_cover">على صورة غلاف المذكرة</option>
-                      <option value="hidden">إخفاء شارة التوفير</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">لون شارة التوفير</label>
-                    <select
-                      value={localSettings.savingsBadgeColor || 'emerald'}
-                      onChange={(e) => setLocalSettings({ ...localSettings, savingsBadgeColor: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
-                    >
-                      <option value="emerald">أخضر زمردي</option>
-                      <option value="rose">أحمر وردي مميز</option>
-                      <option value="amber">ذهبي / عنبري</option>
-                      <option value="blue">أزرق ملكي</option>
-                      <option value="purple">بنفسجي</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* قسم ما الجديد */}
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-black text-slate-900">قسم «ما الجديد؟» في الصفحة الرئيسية</span>
-                  <input
-                    type="checkbox"
-                    checked={localSettings.whatsNewEnabled !== false}
-                    onChange={(e) => setLocalSettings({ ...localSettings, whatsNewEnabled: e.target.checked })}
-                    className="w-5 h-5"
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <input
-                    type="text"
-                    value={localSettings.whatsNewTitle || ''}
-                    onChange={(e) => setLocalSettings({ ...localSettings, whatsNewTitle: e.target.value })}
-                    className="px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
-                  />
+                <div className="flex flex-wrap items-center gap-2">
                   <select
-                    value={localSettings.whatsNewMode || 'auto'}
-                    onChange={(e) => setLocalSettings({ ...localSettings, whatsNewMode: e.target.value })}
-                    className="px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                    value={localSettings.previewDetailsPosition || 'above_samples'}
+                    onChange={(e) => setLocalSettings({ ...localSettings, previewDetailsPosition: e.target.value })}
+                    className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-black"
                   >
-                    <option value="auto">اختيار تلقائي لأحدث المذكرات</option>
-                    <option value="manual">اختيار يدوي لمذكرات محددة</option>
+                    <option value="above_samples">فوق صفحات المعاينة (الافتراضي)</option>
+                    <option value="below_samples">أسفل صفحات المعاينة</option>
                   </select>
-                  <input
-                    type="number"
-                    min="1"
-                    max="12"
-                    value={localSettings.whatsNewCount || 4}
-                    onChange={(e) => setLocalSettings({ ...localSettings, whatsNewCount: Number(e.target.value) })}
-                    className="px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
-                  />
-                </div>
-              </div>
-
-              {/* قسم الإعلان عن القادم وأخبار المنصة */}
-              <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-black text-slate-800 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={localSettings.newsSectionEnabled !== false}
-                      onChange={(e) => setLocalSettings({ ...localSettings, newsSectionEnabled: e.target.checked })}
-                      className="w-5 h-5"
+                      checked={Boolean(localSettings.previewDetailsShowInFullscreen)}
+                      onChange={(e) =>
+                        setLocalSettings({ ...localSettings, previewDetailsShowInFullscreen: e.target.checked })
+                      }
+                      className="w-4 h-4"
                     />
-                    <span className="text-sm font-black text-slate-900">قسم الإعلان عن القادم ومذكرات قيد التجهيز</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setLocalSettings({
-                        ...localSettings,
-                        newsSectionEnabled: true,
-                        newsItems: [
-                          ...(localSettings.newsItems || []),
-                          {
-                            id: `news_${Date.now()}`,
-                            title: 'عنوان المذكرة القادمة أو الخبر',
-                            date: 'قريبًا',
-                            badgeColor: 'amber',
-                            description: 'اكتب تفاصيل المذكرة القادمة وموعد توفرها هنا...',
-                            showBookingBtn: true,
-                            bookingBtnText: 'احجز نسختك مسبقًا عبر واتساب',
-                            bookingBtnColor: '#0f172a'
-                          }
-                        ]
-                      })
-                    }
-                    className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black flex items-center gap-1"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>إضافة إعلان عن قادم</span>
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">نص الشارة العلوية للقسم (اتركه فارغًا للإخفاء)</label>
-                    <input
-                      type="text"
-                      value={localSettings.newsSectionBadge ?? 'قريبًا على المنصة'}
-                      onChange={(e) => setLocalSettings({ ...localSettings, newsSectionBadge: e.target.value })}
-                      placeholder="مثال: قريبًا على المنصة"
-                      className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">عنوان القسم في الصفحة الرئيسية</label>
-                    <input
-                      type="text"
-                      value={localSettings.newsSectionTitle || ''}
-                      onChange={(e) => setLocalSettings({ ...localSettings, newsSectionTitle: e.target.value })}
-                      className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  {(localSettings.newsItems || []).map((item, idx) => (
-                    <div key={item.id || idx} className="p-3.5 rounded-2xl bg-white border border-amber-200 space-y-2.5">
-                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
-                        <input
-                          type="text"
-                          value={item.title || ''}
-                          onChange={(e) => {
-                            const arr = [...localSettings.newsItems];
-                            arr[idx] = { ...item, title: e.target.value };
-                            setLocalSettings({ ...localSettings, newsItems: arr });
-                          }}
-                          placeholder="عنوان الإعلان / المذكرة القادمة"
-                          className="sm:col-span-6 px-3 py-2 rounded-xl border border-slate-200 text-xs font-black"
-                        />
-                        <input
-                          type="text"
-                          value={item.date || ''}
-                          onChange={(e) => {
-                            const arr = [...localSettings.newsItems];
-                            arr[idx] = { ...item, date: e.target.value };
-                            setLocalSettings({ ...localSettings, newsItems: arr });
-                          }}
-                          placeholder="قريبًا / الموعد (اتركه فارغًا للإخفاء)"
-                          className="sm:col-span-3 px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
-                        />
-                        <div className="sm:col-span-3 flex items-center gap-1.5">
-                          <select
-                            value={item.badgeColor || 'amber'}
-                            onChange={(e) => {
-                              const arr = [...localSettings.newsItems];
-                              arr[idx] = { ...item, badgeColor: e.target.value };
-                              setLocalSettings({ ...localSettings, newsItems: arr });
-                            }}
-                            className="flex-1 px-2.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
-                          >
-                            <option value="amber">شارة ذهبية</option>
-                            <option value="blue">شارة زرقاء</option>
-                            <option value="emerald">شارة خضراء</option>
-                            <option value="rose">شارة حمراء</option>
-                          </select>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setLocalSettings({
-                                ...localSettings,
-                                newsItems: localSettings.newsItems.filter((_, i) => i !== idx)
-                              })
-                            }
-                            className="p-2 rounded-xl bg-rose-100 text-rose-700"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <textarea
-                        rows={2}
-                        value={item.description || ''}
-                        onChange={(e) => {
-                          const arr = [...localSettings.newsItems];
-                          arr[idx] = { ...item, description: e.target.value };
-                          setLocalSettings({ ...localSettings, newsItems: arr });
-                        }}
-                        placeholder="تفاصيل المذكرة القادمة..."
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
-                      />
-
-                      {/* التحكم الكامل في زر الحجز المسبق أسفل البطاقة */}
-                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-wrap items-center gap-3">
-                        <label className="flex items-center gap-2 text-xs font-black text-slate-800 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={item.showBookingBtn !== false}
-                            onChange={(e) => {
-                              const arr = [...localSettings.newsItems];
-                              arr[idx] = { ...item, showBookingBtn: e.target.checked };
-                              setLocalSettings({ ...localSettings, newsItems: arr });
-                            }}
-                            className="w-4 h-4"
-                          />
-                          <span>إظهار زر الحجز / التواصل أسفل البطاقة</span>
-                        </label>
-
-                        {item.showBookingBtn !== false && (
-                          <>
-                            <input
-                              type="text"
-                              value={item.bookingBtnText ?? 'احجز نسختك مسبقًا عبر واتساب'}
-                              onChange={(e) => {
-                                const arr = [...localSettings.newsItems];
-                                arr[idx] = { ...item, bookingBtnText: e.target.value };
-                                setLocalSettings({ ...localSettings, newsItems: arr });
-                              }}
-                              placeholder="نص الزر..."
-                              className="flex-1 min-w-[180px] px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold"
-                            />
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[11px] font-bold text-slate-600">لون الزر:</span>
-                              <input
-                                type="color"
-                                value={item.bookingBtnColor || '#0f172a'}
-                                onChange={(e) => {
-                                  const arr = [...localSettings.newsItems];
-                                  arr[idx] = { ...item, bookingBtnColor: e.target.value };
-                                  setLocalSettings({ ...localSettings, newsItems: arr });
-                                }}
-                                className="w-8 h-8 rounded-lg border border-slate-200 cursor-pointer"
-                              />
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    <span>إظهار في ملء الشاشة</span>
+                  </label>
                 </div>
               </div>
             </div>
