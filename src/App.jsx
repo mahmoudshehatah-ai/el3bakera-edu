@@ -2768,40 +2768,52 @@ export default function App() {
 // ============================================================================
 // 9. مكون صندوق التنبيهات الموحّد (مضغوط وكل تنبيه في سطر واحد)
 // ============================================================================
+const NOTICE_COLOR_OPTIONS = [
+  { id: 'amber', label: 'أصفر ذهبي (تحذيري)', hex: '#f59e0b' },
+  { id: 'blue', label: 'أزرق ملكي (معلوماتي)', hex: '#2563eb' },
+  { id: 'rose', label: 'أحمر قرمزي (هام)', hex: '#e11d48' },
+  { id: 'emerald', label: 'أخضر زمردي (تأكيدي)', hex: '#059669' },
+  { id: 'indigo', label: 'بنفسجي نيلي', hex: '#4f46e5' },
+  { id: 'purple', label: 'بنفسجي ملكي', hex: '#9333ea' },
+  { id: 'orange', label: 'برتقالي دافئ', hex: '#ea580c' },
+  { id: 'cyan', label: 'سماوي فيروزي', hex: '#0891b2' },
+  { id: 'pink', label: 'وردي أنيق', hex: '#db2777' },
+  { id: 'slate', label: 'كحلي داكن فاخر', hex: '#0f172a' }
+];
+
+function resolveNoticeColorHex(colorVal) {
+  const c = safeText(colorVal, 'amber').trim();
+  if (c.startsWith('#')) return c;
+  const found = NOTICE_COLOR_OPTIONS.find((opt) => opt.id === c);
+  return found ? found.hex : '#f59e0b';
+}
+
 function UnifiedNoticeBox({ items = [], compact = false }) {
   if (!Array.isArray(items) || items.length === 0) return null;
-  const themes = {
-    amber: {
-      wrapper: 'bg-amber-50/95 border-amber-300 border-r-amber-500 text-amber-950',
-      iconBox: 'bg-amber-500 text-white'
-    },
-    blue: {
-      wrapper: 'bg-blue-50/95 border-blue-300 border-r-blue-600 text-blue-950',
-      iconBox: 'bg-blue-600 text-white'
-    },
-    rose: {
-      wrapper: 'bg-rose-50/95 border-rose-300 border-r-rose-600 text-rose-950',
-      iconBox: 'bg-rose-600 text-white'
-    },
-    emerald: {
-      wrapper: 'bg-emerald-50/95 border-emerald-300 border-r-emerald-600 text-emerald-950',
-      iconBox: 'bg-emerald-600 text-white'
-    }
-  };
-  const primaryColor = items[0]?.color || 'amber';
-  const st = themes[primaryColor] || themes.amber;
+  const primaryHex = resolveNoticeColorHex(items[0]?.color || 'amber');
 
   return (
     <div className={`${compact ? 'px-3 sm:px-5 py-1.5 bg-slate-50 border-b border-slate-200/80 shrink-0' : ''}`}>
-      <div className={`rounded-xl border border-r-4 px-2.5 py-1.5 space-y-1 ${st.wrapper}`}>
+      <div
+        style={{
+          backgroundColor: `${primaryHex}14`,
+          borderColor: `${primaryHex}55`,
+          borderRightColor: primaryHex
+        }}
+        className="rounded-xl border border-r-4 px-2.5 py-1.5 space-y-1 text-slate-900"
+      >
         {items.map((item, idx) => {
           const cleanText = safeText(item.text).replace(/^[-–—•*]\s*/, '').trim();
+          const itemHex = resolveNoticeColorHex(item.color || primaryHex);
           return (
             <div key={idx} className="flex items-center gap-1.5 min-w-0 text-[11px] sm:text-xs font-black">
-              <span className={`w-4 h-4 rounded-md flex items-center justify-center shrink-0 ${st.iconBox}`}>
+              <span
+                style={{ backgroundColor: itemHex }}
+                className="w-4 h-4 rounded-md flex items-center justify-center shrink-0 text-white"
+              >
                 <AlertTriangle className="w-2.5 h-2.5" />
               </span>
-              <span className="truncate leading-tight" title={cleanText}>
+              <span className="truncate leading-tight text-slate-900" title={cleanText}>
                 {cleanText}
               </span>
             </div>
@@ -3598,53 +3610,68 @@ function AdminDashboard({
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">لون التنبيه</label>
-                  <select
-                    value={nbForm.noticeColor}
-                    onChange={(e) => setNbForm({ ...nbForm, noticeColor: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
-                  >
-                    <option value="amber">أصفر تحذيري</option>
-                    <option value="blue">أزرق معلوماتي</option>
-                    <option value="rose">أحمر هام</option>
-                    <option value="emerald">أخضر تأكيدي</option>
-                  </select>
+                  <div className="flex items-center gap-1.5">
+                    <select
+                      value={NOTICE_COLOR_OPTIONS.some((o) => o.id === nbForm.noticeColor) ? nbForm.noticeColor : 'custom'}
+                      onChange={(e) => {
+                        if (e.target.value !== 'custom') {
+                          setNbForm({ ...nbForm, noticeColor: e.target.value });
+                        }
+                      }}
+                      className="flex-1 min-w-0 px-2.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                    >
+                      {NOTICE_COLOR_OPTIONS.map((opt) => (
+                        <option key={opt.id} value={opt.id}>
+                          {opt.label}
+                        </option>
+                      ))}
+                      <option value="custom">لون مخصص</option>
+                    </select>
+                    <input
+                      type="color"
+                      title="اختر أي درجة لون مخصصة"
+                      value={resolveNoticeColorHex(nbForm.noticeColor)}
+                      onChange={(e) => setNbForm({ ...nbForm, noticeColor: e.target.value })}
+                      className="w-10 h-10 rounded-xl border border-slate-200 cursor-pointer shrink-0"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">موضع التنبيه</label>
                   <select
-                    value={nbForm.noticePosition}
+                    value={nbForm.noticePosition || 'top'}
                     onChange={(e) => setNbForm({ ...nbForm, noticePosition: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
                   >
-                    <option value="top">أعلى نافذة المعاينة</option>
+                    <option value="top">فوق صفحات المعاينة</option>
                     <option value="below_details">أسفل تفاصيل المذكرة</option>
-                    <option value="bottom">أسفل العينات</option>
+                    <option value="bottom">أسفل صفحات المعاينة</option>
                   </select>
                 </div>
               </div>
             </div>
 
-            {/* رفع صورة الغلاف وصور العينات */}
+            {/* رفع صورة الغلاف وصفحات العينات */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-4 rounded-2xl border border-dashed border-slate-300 space-y-2">
-                <div className="text-xs font-black text-slate-800">صورة غلاف المذكرة</div>
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                <label className="block text-xs font-black text-slate-800">صورة غلاف المذكرة</label>
                 <input
                   type="file"
                   accept="image/*"
                   onChange={async (e) => {
-                    const f = e.target.files?.[0];
-                    if (!f) return;
-                    const compressed = await compressImageFile(f, 1200, 0.85);
-                    setNbForm({ ...nbForm, coverImage: compressed });
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const dataUrl = await compressImageFile(file, 1000, 0.85, 380000);
+                    setNbForm((prev) => ({ ...prev, coverImage: dataUrl }));
                   }}
                   className="text-xs font-bold"
                 />
                 {nbForm.coverImage && (
-                  <div className="relative w-28 h-36 rounded-xl overflow-hidden border">
-                    <img src={nbForm.coverImage} alt="cover" className="w-full h-full object-cover" />
+                  <div className="relative w-24 h-28 rounded-xl overflow-hidden border border-slate-300">
+                    <img src={nbForm.coverImage} alt="غلاف" className="w-full h-full object-cover" />
                     <button
                       type="button"
-                      onClick={() => setNbForm({ ...nbForm, coverImage: '' })}
+                      onClick={() => setNbForm((prev) => ({ ...prev, coverImage: '' }))}
                       className="absolute top-1 left-1 p-1 rounded-full bg-rose-600 text-white"
                     >
                       <X className="w-3 h-3" />
@@ -3653,16 +3680,13 @@ function AdminDashboard({
                 )}
               </div>
 
-              <div className="p-4 rounded-2xl border border-dashed border-slate-300 space-y-2">
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
                 <div className="flex items-center justify-between">
-                  <div className="text-xs font-black text-slate-800">
-                    صور صفحات العينات (يمكن اختيار عدة صور معًا)
-                  </div>
+                  <label className="block text-xs font-black text-slate-800">
+                    صفحات العينة للمعاينة ({nbForm.samples?.length || 0} صفحة)
+                  </label>
                   {loadingEditSamples && (
-                    <span className="text-[11px] font-black text-blue-600 flex items-center gap-1">
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>جاري استرجاع العينات...</span>
-                    </span>
+                    <span className="text-[11px] font-black text-blue-600">جاري تحميل العينات...</span>
                   )}
                 </div>
                 <input
@@ -3672,17 +3696,19 @@ function AdminDashboard({
                   onChange={async (e) => {
                     const files = Array.from(e.target.files || []);
                     if (files.length === 0) return;
-                    const compressedList = await Promise.all(files.map((f) => compressImageFile(f, 1400, 0.85)));
+                    const compressed = await Promise.all(
+                      files.map((f) => compressImageFile(f, 1300, 0.84, 420000))
+                    );
                     setSamplesTouched(true);
-                    setNbForm((prev) => ({ ...prev, samples: [...(prev.samples || []), ...compressedList] }));
+                    setNbForm((prev) => ({ ...prev, samples: [...(prev.samples || []), ...compressed] }));
                   }}
                   className="text-xs font-bold"
                 />
-                {(nbForm.samples || []).length > 0 && (
+                {Array.isArray(nbForm.samples) && nbForm.samples.length > 0 && (
                   <div className="flex flex-wrap gap-2 pt-1">
-                    {nbForm.samples.map((sImg, sIdx) => (
-                      <div key={sIdx} className="relative w-16 h-20 rounded-lg overflow-hidden border">
-                        <img src={sImg} alt={`sample_${sIdx}`} className="w-full h-full object-cover" />
+                    {nbForm.samples.map((smp, sIdx) => (
+                      <div key={sIdx} className="relative w-14 h-18 rounded-lg overflow-hidden border border-slate-300 bg-white">
+                        <img src={smp} alt={`عينة ${sIdx + 1}`} className="w-full h-full object-cover" />
                         <button
                           type="button"
                           onClick={() => {
@@ -3694,7 +3720,7 @@ function AdminDashboard({
                           }}
                           className="absolute top-0.5 left-0.5 p-0.5 rounded-full bg-rose-600 text-white"
                         >
-                          <X className="w-3 h-3" />
+                          <X className="w-2.5 h-2.5" />
                         </button>
                       </div>
                     ))}
@@ -3706,136 +3732,109 @@ function AdminDashboard({
             <button
               type="submit"
               disabled={savingNb}
-              className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-black shadow-md transition"
+              className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-black shadow"
             >
-              {savingNb ? 'جاري الحفظ...' : nbForm.id ? 'حفظ التعديلات على المذكرة' : 'إضافة المذكرة للمنصة'}
+              {savingNb ? 'جاري حفظ المذكرة والعينات...' : nbForm.id ? 'حفظ التعديلات' : 'إضافة المذكرة للمنصة'}
             </button>
           </form>
 
           {/* قائمة المذكرات الحالية */}
           <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-base sm:text-lg font-black text-slate-900">المذكرات المرفوعة ({notebooks.length})</h3>
+              <h3 className="text-base font-black text-slate-900">المذكرات المضافة ({notebooks.length})</h3>
               <input
                 type="text"
                 value={adminNbSearch}
                 onChange={(e) => setAdminNbSearch(e.target.value)}
-                placeholder="بحث سريع في المذكرات..."
-                className="px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold w-full sm:w-64"
+                placeholder="بحث في المذكرات..."
+                className="px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold w-64"
               />
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               {filteredAdminNotebooks.map((nb) => (
                 <div
                   key={nb.id}
-                  className={`p-4 rounded-2xl border flex flex-wrap items-center justify-between gap-3 ${
-                    nb.hidden ? 'bg-slate-100 border-slate-300 opacity-80' : 'bg-slate-50 border-slate-200'
-                  }`}
+                  className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-3"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-14 h-16 rounded-xl bg-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
+                    <div className="w-12 h-14 rounded-xl bg-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
                       {nb.coverImage ? (
                         <img src={nb.coverImage} alt={nb.title} className="w-full h-full object-cover" />
                       ) : (
-                        <BookOpen className="w-6 h-6 text-slate-400" />
+                        <BookOpen className="w-5 h-5 text-slate-500" />
                       )}
                     </div>
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-black text-slate-900 truncate">{nb.title}</h4>
-                        {nb.hidden && (
-                          <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-950 text-[11px] font-black">
-                            مخفية عن الزوار
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-slate-600 font-bold">
-                        {nb.price} ج.م {nb.subject ? `• ${nb.subject}` : ''} {nb.pagesCount ? `• ${nb.pagesCount} صفحة` : ''}
+                      <div className="text-sm font-black text-slate-900 truncate">{nb.title}</div>
+                      <div className="text-xs text-slate-500 font-bold">
+                        {nb.price} ج.م {nb.hidden ? '• (مخفية عن الزوار)' : ''}
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => toggleNotebookHidden(nb)}
-                      className={`px-3 py-2 rounded-xl text-xs font-black flex items-center gap-1 transition ${
-                        nb.hidden
-                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                          : 'bg-amber-100 hover:bg-amber-200 text-amber-900'
-                      }`}
-                    >
-                      {nb.hidden ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                      <span>{nb.hidden ? 'إظهار للزوار' : 'إخفاء عن الزوار'}</span>
-                    </button>
-
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <button
                       type="button"
                       onClick={async () => {
                         setSamplesTouched(false);
-                        const initialCached = (samplesMap[nb.id] || nb.inlineSamples || [])
-                          .map((im) => extractImageFromValue(im))
-                          .filter(Boolean);
+                        const existingSamples = samplesMap[nb.id] || nb.inlineSamples || [];
                         setNbForm({
+                          ...emptyNotebookForm,
                           ...nb,
-                          price: String(nb.price),
+                          price: String(nb.price || ''),
                           oldPrice: nb.oldPrice ? String(nb.oldPrice) : '',
-                          samples: initialCached
+                          samples: existingSamples
                         });
                         window.scrollTo({ top: 0, behavior: 'smooth' });
-
-                        if (db) {
+                        if (existingSamples.length === 0 && db) {
                           setLoadingEditSamples(true);
                           try {
-                            const pageIds = Array.from({ length: 16 }, (_, i) => `${nb.id}_p${i}`);
-                            const [sSnap, legSnap, ...pSnaps] = await Promise.all([
-                              getDoc(publicDoc('notebook_samples', nb.id)).catch(() => null),
-                              getDoc(legacyPublicDoc('notebook_samples', nb.id)).catch(() => null),
-                              ...pageIds.map((pid) => getDoc(publicDoc('notebook_samples', pid)).catch(() => null))
-                            ]);
-                            const found = [...initialCached];
-                            [sSnap, ...pSnaps, legSnap].forEach((snap) => {
-                              if (snap && snap.exists()) {
-                                extractAnyImagesFromDoc(snap.data()).forEach((im) => {
-                                  const clean = extractImageFromValue(im);
-                                  if (clean && clean !== nb.coverImage && !found.includes(clean)) {
-                                    found.push(clean);
-                                  }
-                                });
+                            const pageIds = Array.from({ length: 12 }, (_, i) => `${nb.id}_p${i}`);
+                            const snaps = await Promise.all(
+                              pageIds.map((pid) => getDoc(publicDoc('notebook_samples', pid)).catch(() => null))
+                            );
+                            const loaded = [];
+                            snaps.forEach((s) => {
+                              if (s && s.exists()) {
+                                const im = extractImageFromValue(s.data()?.image);
+                                if (im) loaded.push(im);
                               }
                             });
-                            if (found.length > 0) {
-                              setSamplesMap((prev) => ({ ...prev, [nb.id]: found }));
-                              setNbForm((prev) => (prev.id === nb.id ? { ...prev, samples: found } : prev));
+                            if (loaded.length > 0) {
+                              setNbForm((prev) => (prev.id === nb.id ? { ...prev, samples: loaded } : prev));
+                              setSamplesMap((prev) => ({ ...prev, [nb.id]: loaded }));
                             }
                           } finally {
                             setLoadingEditSamples(false);
                           }
                         }
                       }}
-                      className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black flex items-center gap-1"
+                      className="px-3 py-1.5 rounded-xl bg-blue-100 text-blue-800 text-xs font-black flex items-center gap-1"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
                       <span>تعديل</span>
                     </button>
-
                     <button
                       type="button"
                       onClick={() => handleDuplicateNotebook(nb)}
-                      className="px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-black flex items-center gap-1"
+                      className="px-3 py-1.5 rounded-xl bg-slate-200 text-slate-800 text-xs font-black"
                     >
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>نسخ</span>
+                      تكرار
                     </button>
-
+                    <button
+                      type="button"
+                      onClick={() => toggleNotebookHidden(nb)}
+                      className="px-3 py-1.5 rounded-xl bg-amber-100 text-amber-900 text-xs font-black"
+                    >
+                      {nb.hidden ? 'إظهار' : 'إخفاء'}
+                    </button>
                     <button
                       type="button"
                       onClick={() => handleDeleteNotebook(nb)}
-                      className="px-3 py-2 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-700 text-xs font-black flex items-center gap-1"
+                      className="px-3 py-1.5 rounded-xl bg-rose-100 text-rose-700 text-xs font-black"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>حذف</span>
+                      حذف
                     </button>
                   </div>
                 </div>
@@ -3850,24 +3849,9 @@ function AdminDashboard({
       {/* ===================================================================== */}
       {activeTab === 'categories' && (
         <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-5">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
-            <h3 className="text-base sm:text-lg font-black text-slate-900">إدارة الأقسام الرئيسية والمراحل والصفوف</h3>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const updated = (localSettings.categories || []).map((c, idx) => ({
-                    ...c,
-                    name: DEFAULT_CATEGORIES[idx]?.name || c.name,
-                    stages: c.stages?.length ? c.stages : DEFAULT_CATEGORIES[idx]?.stages || []
-                  }));
-                  setLocalSettings({ ...localSettings, categories: updated });
-                  showToast('تمت استعادة الأسماء والمراحل الافتراضية، اضغط حفظ لتثبيتها.');
-                }}
-                className="px-3.5 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-950 text-xs font-black"
-              >
-                استعادة الأسماء والمراحل الافتراضية مع الإبقاء على الصور
-              </button>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-base sm:text-lg font-black text-slate-900">هيكلة الأقسام والمراحل والصفوف</h3>
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() =>
@@ -3875,49 +3859,30 @@ function AdminDashboard({
                     ...localSettings,
                     categories: [
                       ...(localSettings.categories || []),
-                      { id: `cat_${Date.now()}`, name: 'قسم جديد', image: '', browseMode: 'hierarchical', stages: [] }
+                      { id: `cat_${Date.now()}`, name: 'قسم دراسي جديد', image: '', browseMode: 'hierarchical', stages: [] }
                     ]
                   })
                 }
-                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black flex items-center gap-1"
+                className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-black flex items-center gap-1"
               >
                 <Plus className="w-4 h-4" />
-                <span>إضافة قسم</span>
+                <span>إضافة قسم رئيسي</span>
+              </button>
+              <button
+                type="button"
+                disabled={savingSettings}
+                onClick={() => saveAllSettingsToCloud(localSettings)}
+                className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-black"
+              >
+                {savingSettings ? 'جاري الحفظ...' : 'حفظ الأقسام'}
               </button>
             </div>
           </div>
 
           <div className="space-y-4">
             {(localSettings.categories || []).map((cat, cIdx) => (
-              <div key={cat.id} className="p-4 sm:p-5 rounded-3xl border border-slate-200 bg-slate-50 space-y-4">
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <div className="flex flex-col gap-1">
-                    <button
-                      type="button"
-                      disabled={cIdx === 0}
-                      onClick={() => {
-                        const arr = [...localSettings.categories];
-                        [arr[cIdx - 1], arr[cIdx]] = [arr[cIdx], arr[cIdx - 1]];
-                        setLocalSettings({ ...localSettings, categories: arr });
-                      }}
-                      className="p-1 rounded bg-white border border-slate-200 disabled:opacity-40"
-                    >
-                      <ChevronUp className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={cIdx === localSettings.categories.length - 1}
-                      onClick={() => {
-                        const arr = [...localSettings.categories];
-                        [arr[cIdx + 1], arr[cIdx]] = [arr[cIdx], arr[cIdx + 1]];
-                        setLocalSettings({ ...localSettings, categories: arr });
-                      }}
-                      className="p-1 rounded bg-white border border-slate-200 disabled:opacity-40"
-                    >
-                      <ChevronDown className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
+              <div key={cat.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
                   <input
                     type="text"
                     value={cat.name}
@@ -3926,9 +3891,8 @@ function AdminDashboard({
                       arr[cIdx] = { ...cat, name: e.target.value };
                       setLocalSettings({ ...localSettings, categories: arr });
                     }}
-                    className="flex-1 min-w-[180px] px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-black"
+                    className="flex-1 min-w-[180px] px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-sm font-black"
                   />
-
                   <select
                     value={cat.browseMode || 'hierarchical'}
                     onChange={(e) => {
@@ -3936,29 +3900,11 @@ function AdminDashboard({
                       arr[cIdx] = { ...cat, browseMode: e.target.value };
                       setLocalSettings({ ...localSettings, categories: arr });
                     }}
-                    className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                    className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
                   >
-                    <option value="hierarchical">تصفح هرمي (مراحل وصفوف)</option>
-                    <option value="direct">تصفح مباشر للمذكرات</option>
+                    <option value="hierarchical">مراحل ثم صفوف</option>
+                    <option value="direct">عرض مباشر للمذكرات</option>
                   </select>
-
-                  <label className="px-3 py-2.5 rounded-xl bg-white border border-slate-200 text-xs font-black cursor-pointer hover:bg-slate-100">
-                    <span>صورة القسم</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={async (e) => {
-                        const f = e.target.files?.[0];
-                        if (!f) return;
-                        const compressed = await compressImageFile(f, 900, 0.85);
-                        const arr = [...localSettings.categories];
-                        arr[cIdx] = { ...cat, image: compressed };
-                        setLocalSettings({ ...localSettings, categories: arr });
-                      }}
-                    />
-                  </label>
-
                   <button
                     type="button"
                     onClick={() => {
@@ -3969,442 +3915,243 @@ function AdminDashboard({
                       };
                       setLocalSettings({ ...localSettings, categories: arr });
                     }}
-                    className="px-3 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-black"
+                    className="px-3 py-2 rounded-xl bg-blue-100 text-blue-800 text-xs font-black"
                   >
                     + مرحلة
                   </button>
-
                   <button
                     type="button"
-                    onClick={() => {
-                      const arr = localSettings.categories.filter((_, idx) => idx !== cIdx);
-                      setLocalSettings({ ...localSettings, categories: arr });
-                    }}
-                    className="p-2.5 rounded-xl bg-rose-100 text-rose-700"
+                    onClick={() =>
+                      setLocalSettings({
+                        ...localSettings,
+                        categories: localSettings.categories.filter((_, i) => i !== cIdx)
+                      })
+                    }
+                    className="p-2 rounded-xl bg-rose-100 text-rose-700"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
 
-                {cat.image && (
-                  <div className="relative w-36 h-20 rounded-xl overflow-hidden border bg-white">
-                    <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const arr = [...localSettings.categories];
-                        arr[cIdx] = { ...cat, image: '' };
-                        setLocalSettings({ ...localSettings, categories: arr });
-                      }}
-                      className="absolute top-1 left-1 p-1 rounded-full bg-rose-600 text-white"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                )}
+                {(cat.stages || []).map((stg, sIdx) => (
+                  <div key={stg.id} className="mr-4 p-3 rounded-xl bg-white border border-slate-200 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={stg.name}
+                        onChange={(e) => {
+                          const cats = [...localSettings.categories];
+                          const stgs = [...cat.stages];
+                          stgs[sIdx] = { ...stg, name: e.target.value };
+                          cats[cIdx] = { ...cat, stages: stgs };
+                          setLocalSettings({ ...localSettings, categories: cats });
+                        }}
+                        className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-black"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const cats = [...localSettings.categories];
+                          const stgs = [...cat.stages];
+                          stgs[sIdx] = {
+                            ...stg,
+                            grades: [...(stg.grades || []), { id: `grd_${Date.now()}`, name: 'صف جديد' }]
+                          };
+                          cats[cIdx] = { ...cat, stages: stgs };
+                          setLocalSettings({ ...localSettings, categories: cats });
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-emerald-100 text-emerald-800 text-xs font-black"
+                      >
+                        + صف
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const cats = [...localSettings.categories];
+                          cats[cIdx] = { ...cat, stages: cat.stages.filter((_, i) => i !== sIdx) };
+                          setLocalSettings({ ...localSettings, categories: cats });
+                        }}
+                        className="p-1.5 rounded-lg bg-rose-100 text-rose-700"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
 
-                {/* المراحل والصفوف داخل القسم */}
-                {(cat.stages || []).length > 0 && (
-                  <div className="space-y-2.5 pr-4 border-r-2 border-blue-200">
-                    {cat.stages.map((stg, sIdx) => (
-                      <div key={stg.id} className="p-3 rounded-2xl bg-white border border-slate-200 space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      {(stg.grades || []).map((grd, gIdx) => (
+                        <div key={grd.id} className="flex items-center gap-1 bg-slate-100 px-2.5 py-1 rounded-lg">
                           <input
                             type="text"
-                            value={stg.name}
+                            value={grd.name}
                             onChange={(e) => {
-                              const arr = [...localSettings.categories];
-                              const stages = [...cat.stages];
-                              stages[sIdx] = { ...stg, name: e.target.value };
-                              arr[cIdx] = { ...cat, stages };
-                              setLocalSettings({ ...localSettings, categories: arr });
+                              const cats = [...localSettings.categories];
+                              const stgs = [...cat.stages];
+                              const grds = [...stg.grades];
+                              grds[gIdx] = { ...grd, name: e.target.value };
+                              stgs[sIdx] = { ...stg, grades: grds };
+                              cats[cIdx] = { ...cat, stages: stgs };
+                              setLocalSettings({ ...localSettings, categories: cats });
                             }}
-                            className="flex-1 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-black"
+                            className="bg-transparent text-xs font-bold w-32 focus:outline-none"
                           />
                           <button
                             type="button"
                             onClick={() => {
-                              const arr = [...localSettings.categories];
-                              const stages = [...cat.stages];
-                              stages[sIdx] = {
-                                ...stg,
-                                grades: [...(stg.grades || []), { id: `grd_${Date.now()}`, name: 'صف جديد' }]
-                              };
-                              arr[cIdx] = { ...cat, stages };
-                              setLocalSettings({ ...localSettings, categories: arr });
+                              const cats = [...localSettings.categories];
+                              const stgs = [...cat.stages];
+                              stgs[sIdx] = { ...stg, grades: stg.grades.filter((_, i) => i !== gIdx) };
+                              cats[cIdx] = { ...cat, stages: stgs };
+                              setLocalSettings({ ...localSettings, categories: cats });
                             }}
-                            className="px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-xs font-black"
+                            className="text-rose-600"
                           >
-                            + صف دراسي
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const arr = [...localSettings.categories];
-                              arr[cIdx] = { ...cat, stages: cat.stages.filter((_, idx) => idx !== sIdx) };
-                              setLocalSettings({ ...localSettings, categories: arr });
-                            }}
-                            className="p-1.5 rounded-lg bg-rose-50 text-rose-600"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <X className="w-3 h-3" />
                           </button>
                         </div>
-
-                        <div className="flex flex-wrap gap-2">
-                          {(stg.grades || []).map((grd, gIdx) => (
-                            <div key={grd.id} className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1">
-                              <input
-                                type="text"
-                                value={grd.name}
-                                onChange={(e) => {
-                                  const arr = [...localSettings.categories];
-                                  const stages = [...cat.stages];
-                                  const grades = [...stg.grades];
-                                  grades[gIdx] = { ...grd, name: e.target.value };
-                                  stages[sIdx] = { ...stg, grades };
-                                  arr[cIdx] = { ...cat, stages };
-                                  setLocalSettings({ ...localSettings, categories: arr });
-                                }}
-                                className="bg-transparent text-xs font-bold w-36 outline-none"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const arr = [...localSettings.categories];
-                                  const stages = [...cat.stages];
-                                  stages[sIdx] = { ...stg, grades: stg.grades.filter((_, idx) => idx !== gIdx) };
-                                  arr[cIdx] = { ...cat, stages };
-                                  setLocalSettings({ ...localSettings, categories: arr });
-                                }}
-                                className="text-rose-500 hover:text-rose-700"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                )}
+                ))}
               </div>
             ))}
           </div>
-
-          <button
-            type="button"
-            disabled={savingSettings}
-            onClick={() => saveAllSettingsToCloud(localSettings)}
-            className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-black shadow-md transition"
-          >
-            {savingSettings ? 'جاري الحفظ...' : 'حفظ هيكل الأقسام والصور'}
-          </button>
         </div>
       )}
 
       {/* ===================================================================== */}
-      {/* تبويب 3: الكوبونات والباقات والخصومات */}
+      {/* تبويب 3: الكوبونات والباقات التوفيرية */}
       {/* ===================================================================== */}
       {activeTab === 'offers' && (
         <div className="space-y-6">
-          {/* إدارة الباقات التوفيرية */}
+          {/* إدارة كوبونات الخصم */}
+          <form onSubmit={handleSaveCoupon} className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-4">
+            <h3 className="text-base sm:text-lg font-black text-slate-900">إضافة أو تعديل كوبون خصم</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">كود الكوبون *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="SAVE20"
+                  value={couponForm.code}
+                  onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-black uppercase"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">نوع الخصم</label>
+                <select
+                  value={couponForm.type}
+                  onChange={(e) => setCouponForm({ ...couponForm, type: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                >
+                  <option value="percent">نسبة مئوية (%)</option>
+                  <option value="fixed">مبلغ ثابت (ج.م)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">قيمة الخصم *</label>
+                <input
+                  type="number"
+                  required
+                  value={couponForm.value}
+                  onChange={(e) => setCouponForm({ ...couponForm, value: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">الحد الأقصى للخصم (ج.م)</label>
+                <input
+                  type="number"
+                  placeholder="0 = بدون حد"
+                  value={couponForm.maxDiscount}
+                  onChange={(e) => setCouponForm({ ...couponForm, maxDiscount: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">الحد الأدنى للطلب (ج.م)</label>
+                <input
+                  type="number"
+                  value={couponForm.minOrder}
+                  onChange={(e) => setCouponForm({ ...couponForm, minOrder: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                />
+              </div>
+              <div className="flex items-end">
+                <button
+                  type="submit"
+                  className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black"
+                >
+                  حفظ الكوبون
+                </button>
+              </div>
+            </div>
+
+            {coupons.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-2">
+                {coupons.map((cp) => (
+                  <div key={cp.id} className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-black text-slate-900">{cp.code}</div>
+                      <div className="text-xs text-slate-600 font-bold">
+                        خصم {cp.value}
+                        {cp.type === 'fixed' ? ' ج.م' : '%'}
+                        {Number(cp.maxDiscount) > 0 ? ` (بحد أقصى ${cp.maxDiscount} ج.م)` : ''}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => deleteDoc(publicDoc('coupons', cp.id))}
+                      className="p-2 rounded-xl bg-rose-100 text-rose-700"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </form>
+
+          {/* إدارة باقات التوفير */}
           <form onSubmit={handleSavePackage} className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-4">
-            <h3 className="text-base sm:text-lg font-black text-slate-900">
-              {pkgForm.id ? 'تعديل باقة توفير' : 'إضافة باقة توفير وربط مذكراتها'}
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <h3 className="text-base sm:text-lg font-black text-slate-900">إضافة باقة توفير مجمعة</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <input
                 type="text"
                 required
                 placeholder="اسم الباقة"
                 value={pkgForm.title}
                 onChange={(e) => setPkgForm({ ...pkgForm, title: e.target.value })}
-                className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold"
-              />
-              <textarea
-                rows={1}
-                placeholder="وصف الباقة ومميزاتها"
-                value={pkgForm.description}
-                onChange={(e) => setPkgForm({ ...pkgForm, description: e.target.value })}
-                className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold"
+                className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
               />
               <input
                 type="number"
                 required
-                placeholder="سعر الباقة بعد الخصم (ج.م)"
+                placeholder="سعر الباقة (ج.م)"
                 value={pkgForm.price}
                 onChange={(e) => setPkgForm({ ...pkgForm, price: e.target.value })}
-                className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold"
+                className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
               />
               <input
                 type="number"
-                placeholder="السعر قبل الخصم (يُحسب تلقائيًا عند اختيار المذكرات)"
+                placeholder="السعر قبل الخصم (ج.م)"
                 value={pkgForm.oldPrice}
                 onChange={(e) => setPkgForm({ ...pkgForm, oldPrice: e.target.value, oldPriceManual: true })}
-                className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold"
+                className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
               />
+              <button type="submit" className="py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-black">
+                حفظ الباقة
+              </button>
             </div>
-
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-              <div className="text-xs font-black text-slate-700">حدد المذكرات المشمولة داخل الباقة (يُجمع سعرها تلقائيًا):</div>
-              <div className="flex flex-wrap gap-2">
-                {notebooks.map((nb) => {
-                  const selected = pkgForm.notebookIds.includes(nb.id);
-                  return (
-                    <button
-                      key={nb.id}
-                      type="button"
-                      onClick={() => togglePackageNotebook(nb.id)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-black border transition ${
-                        selected
-                          ? 'bg-blue-600 text-white border-blue-600'
-                          : 'bg-white text-slate-700 border-slate-200 hover:border-blue-400'
-                      }`}
-                    >
-                      {nb.title} ({nb.price} ج.م)
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              className="px-6 py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-black shadow-md"
-            >
-              {pkgForm.id ? 'حفظ تعديل الباقة' : 'حفظ الباقة'}
-            </button>
-
-            {packages.length > 0 && (
-              <div className="space-y-2 pt-3 border-t border-slate-100">
-                {packages.map((p) => (
-                  <div key={p.id} className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
-                    <div>
-                      <div className="text-sm font-black text-slate-900">{p.title}</div>
-                      <div className="text-xs text-slate-600 font-bold">
-                        {p.price} ج.م {p.oldPrice ? `(بدلاً من ${p.oldPrice} ج.م)` : ''}
-                      </div>
-                    </div>
-                    <div className="flex gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setPkgForm({
-                            id: p.id,
-                            title: p.title,
-                            description: p.description || '',
-                            price: String(p.price),
-                            oldPrice: p.oldPrice ? String(p.oldPrice) : '',
-                            oldPriceManual: true,
-                            notebookIds: p.notebookIds || []
-                          })
-                        }
-                        className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-black"
-                      >
-                        تعديل
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => deleteDoc(publicDoc('packages', p.id))}
-                        className="px-3 py-1.5 rounded-xl bg-rose-100 text-rose-700 text-xs font-black"
-                      >
-                        حذف
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <input
+              type="text"
+              placeholder="وصف محتويات الباقة..."
+              value={pkgForm.description}
+              onChange={(e) => setPkgForm({ ...pkgForm, description: e.target.value })}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
+            />
           </form>
-
-          {/* إدارة كوبونات الخصم */}
-          <form onSubmit={handleSaveCoupon} className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-4">
-            <h3 className="text-base sm:text-lg font-black text-slate-900">
-              {couponForm.id ? 'تعديل كوبون خصم' : 'إضافة كوبون خصم جديد'}
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-              <input
-                type="text"
-                required
-                placeholder="كود الكوبون (مثال: VIP20)"
-                value={couponForm.code}
-                onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value })}
-                className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-black uppercase"
-              />
-              <select
-                value={couponForm.type}
-                onChange={(e) => setCouponForm({ ...couponForm, type: e.target.value })}
-                className="px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-bold"
-              >
-                <option value="percent">نسبة مئوية (%)</option>
-                <option value="fixed">مبلغ ثابت (ج.م)</option>
-              </select>
-              <input
-                type="number"
-                required
-                placeholder="قيمة الخصم"
-                value={couponForm.value}
-                onChange={(e) => setCouponForm({ ...couponForm, value: e.target.value })}
-                className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold"
-              />
-              <input
-                type="number"
-                min="0"
-                placeholder="الحد الأقصى لمبلغ الخصم (ج.م - 0 = بلا حد)"
-                value={couponForm.maxDiscount}
-                onChange={(e) => setCouponForm({ ...couponForm, maxDiscount: e.target.value })}
-                className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold"
-              />
-              <input
-                type="number"
-                placeholder="الحد الأدنى للطلب (ج.م - اختياري)"
-                value={couponForm.minOrder}
-                onChange={(e) => setCouponForm({ ...couponForm, minOrder: e.target.value })}
-                className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold"
-              />
-              <input
-                type="number"
-                placeholder="أقصى عدد مرات استخدام (0 = مفتوح)"
-                value={couponForm.maxUses}
-                onChange={(e) => setCouponForm({ ...couponForm, maxUses: e.target.value })}
-                className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold"
-              />
-              <input
-                type="datetime-local"
-                value={couponForm.expiresAt}
-                onChange={(e) => setCouponForm({ ...couponForm, expiresAt: e.target.value })}
-                className="sm:col-span-2 px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-black shadow-md"
-            >
-              {couponForm.id ? 'حفظ تعديل الكوبون' : 'إضافة الكوبون'}
-            </button>
-
-            {coupons.length > 0 && (
-              <div className="space-y-2 pt-3 border-t border-slate-100">
-                {coupons.map((c) => (
-                  <div key={c.id} className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <span className="text-sm font-black text-slate-900">{c.code}</span>
-                      <span className="text-xs text-slate-600 font-bold mr-2">
-                        • خصم {c.value} {c.type === 'fixed' ? 'ج.م' : '%'}
-                        {Number(c.maxDiscount) > 0 ? ` (بحد أقصى ${c.maxDiscount} ج.م)` : ''}
-                        {' '}(مستخدم {c.usedCount || 0} مرة)
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => updateDoc(publicDoc('coupons', c.id), { active: c.active === false })}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-black ${
-                          c.active === false ? 'bg-amber-200 text-amber-950' : 'bg-emerald-100 text-emerald-800'
-                        }`}
-                      >
-                        {c.active === false ? 'متوقف (تفعيل)' : 'نشط (إيقاف)'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setCouponForm({
-                            id: c.id,
-                            code: c.code,
-                            type: c.type || 'percent',
-                            value: String(c.value),
-                            maxDiscount: c.maxDiscount ? String(c.maxDiscount) : '',
-                            minOrder: c.minOrder ? String(c.minOrder) : '',
-                            maxUses: c.maxUses ? String(c.maxUses) : '',
-                            expiresAt: c.expiresAt || '',
-                            active: c.active !== false
-                          })
-                        }
-                        className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-black"
-                      >
-                        تعديل
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => deleteDoc(publicDoc('coupons', c.id))}
-                        className="px-3 py-1.5 rounded-xl bg-rose-100 text-rose-700 text-xs font-black"
-                      >
-                        حذف
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </form>
-
-          {/* مكافأة الطلب القادم التلقائية */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-base sm:text-lg font-black text-slate-900">مكافأة الطلب القادم التلقائية</h3>
-                <p className="text-xs text-slate-500 font-bold">
-                  يولّد النظام تلقائيًا كود خصم خاص لكل معلم بعد إتمام طلبه لتشجيعه على الطلب مرة أخرى
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                checked={localSettings.nextOrderRewardEnabled !== false}
-                onChange={(e) => setLocalSettings({ ...localSettings, nextOrderRewardEnabled: e.target.checked })}
-                className="w-5 h-5"
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">نسبة الخصم (%)</label>
-                <input
-                  type="number"
-                  value={localSettings.nextOrderRewardPercent || 15}
-                  onChange={(e) => setLocalSettings({ ...localSettings, nextOrderRewardPercent: Number(e.target.value) })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">الحد الأقصى للخصم (ج.م - 0 = بلا حد)</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={localSettings.nextOrderRewardMaxDiscount ?? 0}
-                  onChange={(e) =>
-                    setLocalSettings({ ...localSettings, nextOrderRewardMaxDiscount: Number(e.target.value) })
-                  }
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">مدة الصلاحية بالأيام (0 = مفتوح)</label>
-                <input
-                  type="number"
-                  value={localSettings.nextOrderRewardDays ?? 7}
-                  onChange={(e) => setLocalSettings({ ...localSettings, nextOrderRewardDays: Number(e.target.value) })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">بادئة الكود</label>
-                <input
-                  type="text"
-                  value={localSettings.nextOrderRewardPrefix || 'VIP'}
-                  onChange={(e) => setLocalSettings({ ...localSettings, nextOrderRewardPrefix: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold uppercase"
-                />
-              </div>
-            </div>
-            <button
-              type="button"
-              disabled={savingSettings}
-              onClick={() => saveAllSettingsToCloud(localSettings)}
-              className="px-6 py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-black"
-            >
-              حفظ إعدادات مكافأة الطلب القادم
-            </button>
-          </div>
         </div>
       )}
 
@@ -4415,52 +4162,27 @@ function AdminDashboard({
         <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-4">
           <h3 className="text-base sm:text-lg font-black text-slate-900">الطلبات الواردة ({orders.length})</h3>
           {orders.length === 0 ? (
-            <p className="text-xs sm:text-sm text-slate-500 font-bold py-6 text-center">لا توجد طلبات مسجلة بعد.</p>
+            <p className="text-xs sm:text-sm text-slate-500 font-bold text-center py-8">لا توجد طلبات مسجلة حتى الآن.</p>
           ) : (
             <div className="space-y-3">
               {orders.map((ord) => (
-                <div key={ord.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+                <div key={ord.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-black text-slate-900">{ord.orderCode}</span>
-                      <span className="text-xs font-black text-blue-600">• {ord.total} ج.م</span>
+                    <div className="text-sm font-black text-slate-900">
+                      {ord.orderCode} • {ord.customer?.teacherName || 'معلم'} ({ord.customer?.phone || '-'})
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <select
-                        value={ord.status || 'pending'}
-                        onChange={(e) => updateDoc(publicDoc('orders', ord.id), { status: e.target.value })}
-                        className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-black"
-                      >
-                        <option value="pending">قيد المراجعة</option>
-                        <option value="processing">جاري التنسيق</option>
-                        <option value="completed">مكتمل وتم التسليم</option>
-                      </select>
-                      {ord.customer?.phone && (
-                        <a
-                          href={`https://wa.me/${String(ord.customer.phone).replace(/[^0-9]/g, '').replace(/^0/, '20')}?text=${encodeURIComponent(
-                            `السلام عليكم أ/ ${ord.customer.teacherName || ''}، تم تجهيز طلبك رقم ${ord.orderCode} من ${settings.platformName}.`
-                          )}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-black"
-                        >
-                          واتساب المعلم
-                        </a>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => deleteDoc(publicDoc('orders', ord.id))}
-                        className="p-1.5 rounded-xl bg-rose-100 text-rose-700"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="text-xs text-slate-700 font-bold">
-                    المعلم: {ord.customer?.teacherName || '-'} | الهاتف: {ord.customer?.phone || '-'}
+                    <select
+                      value={ord.status || 'pending'}
+                      onChange={(e) => updateDoc(publicDoc('orders', ord.id), { status: e.target.value })}
+                      className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-black"
+                    >
+                      <option value="pending">قيد المراجعة</option>
+                      <option value="processing">جاري التنسيق</option>
+                      <option value="completed">مكتمل وتم التسليم</option>
+                    </select>
                   </div>
                   <div className="text-xs text-slate-600 font-bold">
-                    المذكرات: {(ord.items || []).map((i) => i.title).join(' ، ')}
+                    المطلوب: {(ord.items || []).map((i) => i.title).join(' + ')} • الإجمالي: {ord.total} ج.م
                   </div>
                 </div>
               ))}
@@ -4470,27 +4192,24 @@ function AdminDashboard({
       )}
 
       {/* ===================================================================== */}
-      {/* تبويب 5: إعدادات المنصة والمظهر */}
+      {/* تبويب 5: إعدادات المنصة الشاملة */}
       {/* ===================================================================== */}
       {activeTab === 'settings' && (
         <div className="space-y-5">
-          {/* أزرار التبويبات الفرعية للإعدادات */}
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-3xl border border-slate-200 shadow-sm">
+          <div className="bg-white rounded-3xl border border-slate-200 p-4 flex flex-wrap items-center justify-between gap-3 shadow-sm">
             <div className="flex flex-wrap gap-2">
               {[
                 { id: 'identity', label: '1. الهوية والشريط الإعلاني' },
                 { id: 'hero', label: '2. الواجهة وبطاقة الثقة' },
-                { id: 'sections', label: '3. شارة التوفير وما الجديد' },
-                { id: 'checkout', label: '4. السلة والتواصل والنسخ' }
+                { id: 'sections', label: '3. شارة التوفير وما الجديد والأخبار' },
+                { id: 'checkout', label: '4. السلة والتواصل والنسخ الاحتياطي' }
               ].map((st) => (
                 <button
                   key={st.id}
                   type="button"
                   onClick={() => setSettingsSubTab(st.id)}
-                  className={`px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-black transition ${
-                    settingsSubTab === st.id
-                      ? 'bg-slate-900 text-white shadow'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  className={`px-3.5 py-2 rounded-xl text-xs font-black transition ${
+                    settingsSubTab === st.id ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
                   {st.label}
@@ -4502,161 +4221,84 @@ function AdminDashboard({
               type="button"
               disabled={savingSettings}
               onClick={() => saveAllSettingsToCloud(localSettings)}
-              className="px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-black shadow-md"
+              className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-black shadow"
             >
-              {savingSettings ? 'جاري الحفظ...' : 'حفظ كافة الإعدادات'}
+              {savingSettings ? 'جاري الحفظ...' : 'حفظ جميع الإعدادات'}
             </button>
           </div>
 
           {/* 1. الهوية والشريط الإعلاني */}
           {settingsSubTab === 'identity' && (
             <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">اسم المنصة</label>
                   <input
                     type="text"
-                    value={localSettings.platformName}
+                    value={localSettings.platformName || ''}
                     onChange={(e) => setLocalSettings({ ...localSettings, platformName: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-black"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">الوصف المختصر بجانب الشعار</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">الوصف المختصر أسفل الاسم</label>
                   <input
                     type="text"
-                    value={localSettings.platformTagline}
+                    value={localSettings.platformTagline || ''}
                     onChange={(e) => setLocalSettings({ ...localSettings, platformTagline: e.target.value })}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">نظام الألوان الرئيسي</label>
-                  <select
-                    value={localSettings.primaryTheme || 'royal'}
-                    onChange={(e) => setLocalSettings({ ...localSettings, primaryTheme: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold"
-                  >
-                    {Object.entries(THEME_PALETTES).map(([k, v]) => (
-                      <option key={k} value={k}>
-                        {v.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">رقم واتساب استقبال الطلبات (بالكود الدولي)</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">رقم واتساب لاستقبال الطلبات</label>
                   <input
                     type="text"
-                    value={localSettings.whatsappNumber}
+                    value={localSettings.whatsappNumber || ''}
                     onChange={(e) => setLocalSettings({ ...localSettings, whatsappNumber: e.target.value })}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold"
                   />
                 </div>
-              </div>
-
-              {/* الشعار وصورة الخلفية وشفافية التعتيم */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                  <div className="text-xs font-black text-slate-800">شعار المنصة (Logo)</div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">شعار المنصة (Logo)</label>
                   <input
                     type="file"
                     accept="image/*"
                     onChange={async (e) => {
                       const f = e.target.files?.[0];
                       if (!f) return;
-                      const compressed = await compressImageFile(f, 400, 0.9);
-                      setLocalSettings({ ...localSettings, logoImage: compressed });
+                      const url = await compressImageFile(f, 500, 0.85, 220000);
+                      setLocalSettings({ ...localSettings, logoImage: url });
                     }}
                     className="text-xs font-bold"
                   />
-                  {localSettings.logoImage && (
-                    <div className="flex items-center gap-3 pt-1">
-                      <img src={localSettings.logoImage} alt="logo" className="w-14 h-14 rounded-xl object-cover border" />
-                      <button
-                        type="button"
-                        onClick={() => setLocalSettings({ ...localSettings, logoImage: '' })}
-                        className="text-xs font-black text-rose-600"
-                      >
-                        إزالة الشعار
-                      </button>
-                    </div>
-                  )}
                 </div>
-
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
-                  <div className="text-xs font-black text-slate-800">صورة خلفية الواجهة الرئيسية — الكمبيوتر (Hero Desktop)</div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">صورة خلفية الكمبيوتر (Hero)</label>
                   <input
                     type="file"
                     accept="image/*"
                     onChange={async (e) => {
                       const f = e.target.files?.[0];
                       if (!f) return;
-                      const compressed = await compressImageFile(f, 1600, 0.85);
-                      setLocalSettings({ ...localSettings, heroImage: compressed });
+                      const url = await compressImageFile(f, 1600, 0.82, 480000);
+                      setLocalSettings({ ...localSettings, heroImage: url });
                     }}
                     className="text-xs font-bold"
                   />
-                  {localSettings.heroImage && (
-                    <div className="flex items-center gap-3 pt-1">
-                      <img src={localSettings.heroImage} alt="hero" className="w-24 h-14 rounded-xl object-cover border" />
-                      <button
-                        type="button"
-                        onClick={() => setLocalSettings({ ...localSettings, heroImage: '' })}
-                        className="text-xs font-black text-rose-600"
-                      >
-                        إزالة صورة الخلفية
-                      </button>
-                    </div>
-                  )}
-
-                  <div className="pt-2 border-t border-slate-200/80 space-y-1.5">
-                    <div className="text-xs font-black text-slate-800">
-                      صورة خلفية مخصصة للهاتف (اختياري — مقاس طولي 1080×1920)
-                    </div>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={async (e) => {
-                        const f = e.target.files?.[0];
-                        if (!f) return;
-                        const compressed = await compressImageFile(f, 1200, 0.85);
-                        setLocalSettings({ ...localSettings, heroMobileImage: compressed });
-                      }}
-                      className="text-xs font-bold"
-                    />
-                    {localSettings.heroMobileImage && (
-                      <div className="flex items-center gap-3 pt-1">
-                        <img
-                          src={localSettings.heroMobileImage}
-                          alt="hero-mobile"
-                          className="w-12 h-20 rounded-xl object-cover border"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setLocalSettings({ ...localSettings, heroMobileImage: '' })}
-                          className="text-xs font-black text-rose-600"
-                        >
-                          إزالة صورة الهاتف
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="pt-1">
-                    <div className="flex justify-between text-xs font-bold text-slate-700 mb-1">
-                      <span>درجة شفافية التعتيم فوق الخلفية:</span>
-                      <span>{localSettings.heroOverlayOpacity ?? 65}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="10"
-                      max="95"
-                      value={localSettings.heroOverlayOpacity ?? 65}
-                      onChange={(e) => setLocalSettings({ ...localSettings, heroOverlayOpacity: Number(e.target.value) })}
-                      className="w-full"
-                    />
-                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">صورة خلفية الهاتف المخصصة (اختياري)</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const f = e.target.files?.[0];
+                      if (!f) return;
+                      const url = await compressImageFile(f, 1080, 0.82, 450000);
+                      setLocalSettings({ ...localSettings, heroMobileImage: url });
+                    }}
+                    className="text-xs font-bold"
+                  />
                 </div>
               </div>
 
@@ -4682,44 +4324,47 @@ function AdminDashboard({
                     />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-bold text-slate-700 mb-1">كود الكوبون</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">كود الخصم</label>
                     <input
                       type="text"
                       value={localSettings.promoCouponCode || ''}
-                      onChange={(e) => setLocalSettings({ ...localSettings, promoCouponCode: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-black uppercase"
+                      onChange={(e) => setLocalSettings({ ...localSettings, promoCouponCode: e.target.value.toUpperCase() })}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-black uppercase"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-bold text-slate-700 mb-1">نسبة الخصم %</label>
+                    <input
+                      type="number"
+                      value={localSettings.promoDiscountPercent ?? 15}
+                      onChange={(e) => setLocalSettings({ ...localSettings, promoDiscountPercent: Number(e.target.value) })}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
                     />
                   </div>
                   <div className="sm:col-span-2">
                     <label className="block text-xs font-bold text-slate-700 mb-1">أقصى خصم (ج.م)</label>
                     <input
                       type="number"
-                      min="0"
-                      placeholder="0 = بلا حد"
                       value={localSettings.promoMaxDiscount ?? 0}
                       onChange={(e) => setLocalSettings({ ...localSettings, promoMaxDiscount: Number(e.target.value) })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-bold"
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
                     />
                   </div>
-                  <div className="sm:col-span-3 flex items-center gap-3">
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">لون الشريط</label>
-                      <input
-                        type="color"
-                        value={localSettings.promoBgColor || '#0f172a'}
-                        onChange={(e) => setLocalSettings({ ...localSettings, promoBgColor: e.target.value })}
-                        className="w-10 h-9 rounded-xl border border-slate-200 cursor-pointer"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">لون النص</label>
-                      <input
-                        type="color"
-                        value={localSettings.promoTextColor || '#ffffff'}
-                        onChange={(e) => setLocalSettings({ ...localSettings, promoTextColor: e.target.value })}
-                        className="w-10 h-9 rounded-xl border border-slate-200 cursor-pointer"
-                      />
-                    </div>
+                  <div className="sm:col-span-1 flex items-center gap-1">
+                    <input
+                      type="color"
+                      title="لون الخلفية"
+                      value={localSettings.promoBgColor || '#0f172a'}
+                      onChange={(e) => setLocalSettings({ ...localSettings, promoBgColor: e.target.value })}
+                      className="w-8 h-9 rounded-lg border border-slate-200 cursor-pointer"
+                    />
+                    <input
+                      type="color"
+                      title="لون النص"
+                      value={localSettings.promoTextColor || '#ffffff'}
+                      onChange={(e) => setLocalSettings({ ...localSettings, promoTextColor: e.target.value })}
+                      className="w-8 h-9 rounded-lg border border-slate-200 cursor-pointer"
+                    />
                   </div>
                 </div>
               </div>
@@ -4737,7 +4382,7 @@ function AdminDashboard({
                     <div>
                       <div className="text-sm font-black text-slate-900">التنبيهات العامة للمنصة (صندوق مستقل)</div>
                       <p className="text-xs text-slate-600 font-bold">
-                        منفصلة تمامًا عن التنبيه الخاص بكل مذكرة مع إمكانية التحكم في ظهورها وموضعها
+                        منفصلة تمامًا عن التنبيه الخاص بكل مذكرة مع إمكانية التحكم في ظهورها وموضعها وألوانها
                       </p>
                     </div>
                   </div>
@@ -4806,21 +4451,36 @@ function AdminDashboard({
                         className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
                       />
                     </div>
-                    <div className="sm:col-span-4">
+                    <div className="sm:col-span-4 flex items-center gap-1.5">
                       <select
-                        value={al.color || 'amber'}
+                        value={NOTICE_COLOR_OPTIONS.some((o) => o.id === al.color) ? al.color : 'custom'}
+                        onChange={(e) => {
+                          if (e.target.value !== 'custom') {
+                            const arr = [...localSettings.globalAlerts];
+                            arr[idx] = { ...al, color: e.target.value };
+                            setLocalSettings({ ...localSettings, globalAlerts: arr });
+                          }
+                        }}
+                        className="flex-1 min-w-0 px-2.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                      >
+                        {NOTICE_COLOR_OPTIONS.map((opt) => (
+                          <option key={opt.id} value={opt.id}>
+                            {opt.label}
+                          </option>
+                        ))}
+                        <option value="custom">لون مخصص</option>
+                      </select>
+                      <input
+                        type="color"
+                        title="اختر أي درجة لون مخصصة"
+                        value={resolveNoticeColorHex(al.color)}
                         onChange={(e) => {
                           const arr = [...localSettings.globalAlerts];
                           arr[idx] = { ...al, color: e.target.value };
                           setLocalSettings({ ...localSettings, globalAlerts: arr });
                         }}
-                        className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
-                      >
-                        <option value="amber">أصفر تحذيري</option>
-                        <option value="blue">أزرق معلوماتي</option>
-                        <option value="rose">أحمر هام</option>
-                        <option value="emerald">أخضر تأكيدي</option>
-                      </select>
+                        className="w-9 h-9 rounded-xl border border-slate-200 cursor-pointer shrink-0"
+                      />
                     </div>
                     <div className="sm:col-span-1 flex justify-end">
                       <button
