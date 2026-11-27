@@ -1699,44 +1699,45 @@ export default function App() {
           />
         ) : activeView === 'home' ? (
           <div className="space-y-12 pb-16">
-            {/* الواجهة الرئيسية (Hero) — على الهاتف تعرض الصورة بأبعادها الطبيعية الكاملة دون قصّ أو تمدد */}
-            {isMobileViewport ? (
-              <section className="bg-gradient-to-b from-slate-950 via-blue-950 to-slate-900 text-white overflow-hidden">
-                {activeHeroBg && (
-                  <div className="w-full bg-slate-950 border-b border-white/10">
-                    <img
-                      src={activeHeroBg}
-                      alt={safeText(settings.platformName)}
-                      className="w-full h-auto block object-contain"
-                    />
-                  </div>
-                )}
-                <div className="px-4 py-7 space-y-5">
+            {/* الواجهة الرئيسية (Hero) — الخلفية مدمجة خلف المحتوى مباشرة على الهاتف والكمبيوتر */}
+            <section
+              style={{
+                minHeight: isMobileViewport ? 'auto' : `${Number(settings.heroMinHeight) || 460}px`,
+                backgroundImage: activeHeroBg ? `url(${activeHeroBg})` : undefined
+              }}
+              className="relative bg-slate-950 bg-cover bg-center bg-no-repeat text-white flex items-center overflow-hidden"
+            >
+              <div
+                style={{ backgroundColor: `rgba(11, 20, 42, ${activeHeroBg ? overlayAlpha : 0.96})` }}
+                className="absolute inset-0"
+              />
+              <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-16 w-full grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-center">
+                <div className="lg:col-span-7 space-y-4 sm:space-y-5">
                   {settings.heroBadge && (
-                    <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-400/15 border border-amber-400/40 text-amber-300 text-xs font-black">
-                      <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                    <span className="inline-flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-1 sm:py-1.5 rounded-full bg-amber-400/15 border border-amber-400/40 text-amber-300 text-xs sm:text-sm font-black">
+                      <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
                       <span>{safeText(settings.heroBadge)}</span>
                     </span>
                   )}
-                  <h2 className="text-2xl font-black leading-snug">
+                  <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black leading-snug sm:leading-tight">
                     {safeText(settings.heroTitle)}
                   </h2>
-                  <p className="text-xs text-slate-200 font-bold leading-relaxed">
+                  <p className="text-xs sm:text-base text-slate-200 font-bold leading-relaxed max-w-2xl">
                     {safeText(settings.heroSubtitle)}
                   </p>
-                  <div className="grid grid-cols-1 gap-2.5 pt-1">
+                  <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5 sm:gap-3 pt-1 sm:pt-2">
                     <button
                       type="button"
                       onClick={() => setActiveView('library')}
-                      className={`w-full py-3.5 rounded-2xl ${theme.primaryBg} text-white text-sm font-black shadow-lg transition`}
+                      className={`px-6 py-3.5 rounded-2xl ${theme.primaryBg} text-white text-sm font-black shadow-lg transition text-center`}
                     >
                       {safeText(settings.heroPrimaryBtnText, 'تصفح المذكرات الدراسية')}
                     </button>
-                    <div className="grid grid-cols-2 gap-2.5">
+                    <div className="grid grid-cols-2 sm:flex gap-2.5 sm:gap-3">
                       <button
                         type="button"
                         onClick={() => setActiveView('offers')}
-                        className="py-3 px-3 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-black transition"
+                        className="px-4 sm:px-6 py-3 sm:py-3.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/25 text-white text-xs sm:text-sm font-black backdrop-blur transition text-center"
                       >
                         {safeText(settings.heroSecondaryBtnText, 'العروض والباقات')}
                       </button>
@@ -1744,102 +1745,32 @@ export default function App() {
                         <button
                           type="button"
                           onClick={() => setContactModalOpen(true)}
-                          className="py-3 px-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black shadow transition"
-                        >
-                          {safeText(settings.heroCustomBtnText, 'اطلب مذكرة خاصة')}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* بطاقة لماذا يثق بنا المعلمون */}
-                  <div className="bg-white/10 backdrop-blur-md border border-white/15 rounded-3xl p-4 space-y-3">
-                    <div className="flex items-center gap-2 text-amber-400 font-black text-sm">
-                      <ShieldCheck className="w-5 h-5 shrink-0" />
-                      <h3>{safeText(settings.trustTitle, 'لماذا يثق بنا المعلمون؟')}</h3>
-                    </div>
-                    <ul className="space-y-2">
-                      {(settings.trustPoints || []).map((pt, idx) => (
-                        <li key={idx} className="flex items-start gap-2 text-xs text-slate-100 font-bold leading-relaxed">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                          <span>{safeText(pt)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </section>
-            ) : (
-              <section
-                style={{
-                  minHeight: `${Number(settings.heroMinHeight) || 460}px`,
-                  backgroundImage: activeHeroBg ? `url(${activeHeroBg})` : undefined
-                }}
-                className="relative bg-slate-950 bg-cover bg-center bg-no-repeat text-white flex items-center overflow-hidden"
-              >
-                <div
-                  style={{ backgroundColor: `rgba(11, 20, 42, ${activeHeroBg ? overlayAlpha : 0.96})` }}
-                  className="absolute inset-0"
-                />
-                <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-12 sm:py-16 w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-                  <div className="lg:col-span-7 space-y-5">
-                    {settings.heroBadge && (
-                      <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-400/15 border border-amber-400/40 text-amber-300 text-xs sm:text-sm font-black">
-                        <Sparkles className="w-4 h-4" />
-                        <span>{safeText(settings.heroBadge)}</span>
-                      </span>
-                    )}
-                    <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black leading-tight">
-                      {safeText(settings.heroTitle)}
-                    </h2>
-                    <p className="text-sm sm:text-base text-slate-200 font-bold leading-relaxed max-w-2xl">
-                      {safeText(settings.heroSubtitle)}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-3 pt-2">
-                      <button
-                        type="button"
-                        onClick={() => setActiveView('library')}
-                        className={`px-6 py-3.5 rounded-2xl ${theme.primaryBg} text-white text-sm font-black shadow-lg transition`}
-                      >
-                        {safeText(settings.heroPrimaryBtnText, 'تصفح المذكرات الدراسية')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setActiveView('offers')}
-                        className="px-6 py-3.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/25 text-white text-sm font-black backdrop-blur transition"
-                      >
-                        {safeText(settings.heroSecondaryBtnText, 'العروض وباقات التوفير')}
-                      </button>
-                      {settings.showHeroCustomBtn !== false && (
-                        <button
-                          type="button"
-                          onClick={() => setContactModalOpen(true)}
-                          className="px-6 py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-sm font-black shadow-lg transition"
+                          className="px-4 sm:px-6 py-3 sm:py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs sm:text-sm font-black shadow-lg transition text-center"
                         >
                           {safeText(settings.heroCustomBtnText, 'اطلب مذكرة مخصصة')}
                         </button>
                       )}
                     </div>
                   </div>
-
-                  {/* بطاقة لماذا يثق بنا المعلمون */}
-                  <div className="lg:col-span-5 bg-white/10 backdrop-blur-md border border-white/20 rounded-3xl p-6 space-y-4 shadow-2xl">
-                    <div className="flex items-center gap-2.5 text-amber-400 font-black text-base sm:text-lg">
-                      <ShieldCheck className="w-6 h-6 shrink-0" />
-                      <h3>{safeText(settings.trustTitle, 'لماذا يثق بنا المعلمون؟')}</h3>
-                    </div>
-                    <ul className="space-y-3">
-                      {(settings.trustPoints || []).map((pt, idx) => (
-                        <li key={idx} className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-100 font-bold leading-relaxed">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-1" />
-                          <span>{safeText(pt)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
                 </div>
-              </section>
-            )}
+
+                {/* بطاقة لماذا يثق بنا المعلمون */}
+                <div className="lg:col-span-5 bg-white/10 backdrop-blur-md border border-white/20 rounded-3xl p-4 sm:p-6 space-y-3 sm:space-y-4 shadow-2xl">
+                  <div className="flex items-center gap-2 sm:gap-2.5 text-amber-400 font-black text-sm sm:text-lg">
+                    <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
+                    <h3>{safeText(settings.trustTitle, 'لماذا يثق بنا المعلمون؟')}</h3>
+                  </div>
+                  <ul className="space-y-2 sm:space-y-3">
+                    {(settings.trustPoints || []).map((pt, idx) => (
+                      <li key={idx} className="flex items-start gap-2 sm:gap-2.5 text-xs sm:text-sm text-slate-100 font-bold leading-relaxed">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5 sm:mt-1" />
+                        <span>{safeText(pt)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </section>
 
             {/* قسم الإعلان عن القادم وأخبار المنصة */}
             {settings.newsSectionEnabled !== false && Array.isArray(settings.newsItems) && settings.newsItems.length > 0 && (
