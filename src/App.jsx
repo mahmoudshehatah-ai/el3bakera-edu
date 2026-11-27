@@ -68,7 +68,9 @@ function resolveFirebaseConfig() {
     const saved = localStorage.getItem('el3bakera_custom_firebase_config');
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (parsed && parsed.apiKey) return parsed;
+      if (parsed && typeof parsed === 'object' && parsed.apiKey && parsed.projectId) {
+        return parsed;
+      }
     }
   } catch {}
   return DEFAULT_FIREBASE_CONFIG;
@@ -1415,15 +1417,6 @@ function MuzakkiratiPlatformContent() {
           setCoupons(parsed.coupons);
           await idbSet('coupons_v5', parsed.coupons);
           safeLocalSet('el3bakera_coupons_v5', parsed.coupons);
-        }
-        }
-        if (Array.isArray(parsed.bundles)) {
-          setBundles(parsed.bundles);
-          localStorage.setItem('el3bakera_bundles_v5', JSON.stringify(parsed.bundles));
-        }
-        if (Array.isArray(parsed.coupons)) {
-          setCoupons(parsed.coupons);
-          localStorage.setItem('el3bakera_coupons_v5', JSON.stringify(parsed.coupons));
         }
         showToast('تم استيراد النسخة الاحتياطية بالكامل بنجاح!');
       } catch {
