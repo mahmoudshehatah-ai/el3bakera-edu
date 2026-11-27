@@ -370,6 +370,8 @@ const DEFAULT_SETTINGS = {
   promoEnabled: true,
   promoText: 'عرض خاص للمعلمين: خصم 15% على جميع المذكرات بمناسبة إطلاق المنصة',
   promoCouponCode: 'M20',
+  promoBgColor: '#0f172a',
+  promoTextColor: '#fde047',
   whatsappNumber: '201000000000',
   trustTitle: 'لماذا يثق بنا المعلمون؟',
   trustPoints: [
@@ -437,6 +439,8 @@ const mergeAndNormalizeSettings = (base, incoming) => {
     'heroCustomBtnText',
     'promoText',
     'promoCouponCode',
+    'promoBgColor',
+    'promoTextColor',
     'whatsappNumber',
     'trustTitle',
     'whatsNewTitle',
@@ -1380,9 +1384,15 @@ function MuzakkiratiApp() {
 
       {/* الشريط الترويجي العلوي */}
       {settings.promoEnabled && !promoDismissed && (
-        <div className="bg-slate-900 text-slate-100 border-b border-slate-800 px-3 py-2.5 text-xs sm:text-sm font-bold">
+        <div
+          style={{
+            backgroundColor: settings.promoBgColor || '#0f172a',
+            color: settings.promoTextColor || '#fde047'
+          }}
+          className="border-b border-black/15 px-3 py-2.5 text-xs sm:text-sm font-bold transition-colors"
+        >
           <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-center gap-2.5 sm:gap-3.5 text-center">
-            <span className="inline-flex items-center gap-1.5 text-amber-300 font-black">
+            <span className="inline-flex items-center gap-1.5 font-black">
               <Sparkles className="w-4 h-4 shrink-0" />
               <span>{settings.promoText}</span>
             </span>
@@ -1395,9 +1405,9 @@ function MuzakkiratiApp() {
                   setTimeout(() => setPromoCopied(false), 2000);
                   showToast(`تم نسخ الكوبون: ${settings.promoCouponCode}`);
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 text-white text-xs font-black transition"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/15 hover:bg-white/25 border border-white/20 text-xs font-black transition"
               >
-                <Copy className="w-3.5 h-3.5 text-amber-300" />
+                <Copy className="w-3.5 h-3.5" />
                 <span>الكوبون: {settings.promoCouponCode}</span>
                 {promoCopied && <Check className="w-3.5 h-3.5 text-emerald-400" />}
               </button>
@@ -1405,14 +1415,14 @@ function MuzakkiratiApp() {
             <button
               type="button"
               onClick={() => setActiveView('offers')}
-              className="px-3 py-1 rounded-lg bg-amber-400 text-slate-950 text-xs font-black hover:bg-amber-300 transition"
+              className="px-3 py-1 rounded-lg bg-white text-slate-950 text-xs font-black hover:bg-slate-100 shadow-xs transition"
             >
               تصفح العروض ←
             </button>
             <button
               type="button"
               onClick={() => setPromoDismissed(true)}
-              className="p-1 text-slate-400 hover:text-white"
+              className="p-1 opacity-75 hover:opacity-100"
               aria-label="إغلاق الشريط"
             >
               <X className="w-4 h-4" />
@@ -2894,6 +2904,7 @@ function AdminDashboard({
   onLogout
 }) {
   const [activeTab, setActiveTab] = useState('notebooks');
+  const [settingsSubTab, setSettingsSubTab] = useState('brand');
   const [localSettings, setLocalSettings] = useState(settings);
   const [savingSettings, setSavingSettings] = useState(false);
 
@@ -4446,816 +4457,898 @@ function AdminDashboard({
       {/* 5. تبويب إعدادات الموقع والمظهر */}
       {activeTab === 'settings' && (
         <div className="space-y-6">
-          {/* النسخ الاحتياطي والاستعادة */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-5 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="font-black text-slate-900 text-sm">النسخ الاحتياطي للإعدادات والبيانات (JSON)</h3>
-              <p className="text-xs text-slate-500 font-bold">احفظ نسخة كاملة من إعداداتك على جهازك أو استعدها في أي وقت</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
+          {/* شريط الرأس والتنقل الداخلي الأنيق لصفحة الإعدادات */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-5 shadow-sm space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-slate-900">مركز تخصيص المنصة والمظهر</h3>
+                <p className="text-xs text-slate-500 font-bold">
+                  تحكم في هوية المنصة، الشريط الإعلاني، الواجهة الرئيسية، ونموذج طلبات المعلمين
+                </p>
+              </div>
               <button
                 type="button"
-                onClick={() => {
-                  const blob = new Blob([JSON.stringify(localSettings, null, 2)], { type: 'application/json' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `el3bakera-settings-${new Date().toISOString().slice(0, 10)}.json`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                  showToast('تم تنزيل ملف النسخة الاحتياطية');
-                }}
-                className="px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-black flex items-center gap-1.5"
+                onClick={handleSaveSettings}
+                disabled={savingSettings}
+                className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-black shadow-md transition"
               >
-                <Download className="w-4 h-4" />
-                <span>تنزيل نسخة احتياطية (JSON)</span>
+                {savingSettings ? 'جاري الحفظ...' : 'حفظ جميع الإعدادات'}
               </button>
-              <label className="px-4 py-2.5 rounded-xl border border-slate-300 hover:border-blue-500 text-xs font-black cursor-pointer flex items-center gap-1.5">
-                <Upload className="w-4 h-4 text-blue-600" />
-                <span>استعادة من ملف JSON</span>
-                <input
-                  type="file"
-                  accept="application/json"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = (ev) => {
-                      try {
-                        const parsed = JSON.parse(ev.target.result);
-                        setLocalSettings((prev) => mergeAndNormalizeSettings(prev, parsed));
-                        showToast('تم تحميل الإعدادات من الملف — اضغط حفظ لتثبيتها');
-                      } catch {
-                        showToast('ملف JSON غير صالح', 'error');
-                      }
-                    };
-                    reader.readAsText(file);
-                  }}
-                />
-              </label>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {[
+                { id: 'brand', label: '1. الهوية والشريط الإعلاني' },
+                { id: 'hero', label: '2. الواجهة وبطاقة الثقة' },
+                { id: 'sections', label: '3. ما الجديد والأخبار' },
+                { id: 'forms', label: '4. السلة والتواصل والنسخ' }
+              ].map((st) => (
+                <button
+                  key={st.id}
+                  type="button"
+                  onClick={() => setSettingsSubTab(st.id)}
+                  className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-black border transition ${
+                    settingsSubTab === st.id
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  {st.label}
+                </button>
+              ))}
             </div>
           </div>
 
           {/* 1. الهوية والألوان والشريط الترويجي */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 space-y-5">
-            <h3 className="font-black text-slate-900 text-base">1. الهوية ونظام الألوان والشريط الترويجي</h3>
+          {settingsSubTab === 'brand' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-5">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                  <span className="w-2.5 h-6 rounded-full bg-blue-600" />
+                  <h3 className="font-black text-slate-900 text-base">الهوية الأساسية للمنصة</h3>
+                </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-xs font-black text-slate-700 mb-1">اسم المنصة</label>
-                <input
-                  type="text"
-                  value={localSettings.platformName}
-                  onChange={(e) => setLocalSettings({ ...localSettings, platformName: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-black text-slate-700 mb-1">الوصف المختصر تحت الاسم</label>
-                <input
-                  type="text"
-                  value={localSettings.platformTagline}
-                  onChange={(e) => setLocalSettings({ ...localSettings, platformTagline: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-black text-slate-700 mb-1">نظام الألوان الرئيسي للمنصة</label>
-                <select
-                  value={localSettings.primaryTheme || 'blue'}
-                  onChange={(e) => setLocalSettings({ ...localSettings, primaryTheme: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-black"
-                >
-                  {Object.entries(THEME_PALETTES).map(([key, val]) => (
-                    <option key={key} value={key}>
-                      {val.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-black text-slate-700 mb-1">رقم واتساب استقبال الطلبات</label>
-                <input
-                  type="text"
-                  dir="ltr"
-                  value={localSettings.whatsappNumber}
-                  onChange={(e) => setLocalSettings({ ...localSettings, whatsappNumber: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-left"
-                />
-              </div>
-              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
-                <span className="text-xs font-black text-slate-800">تفعيل الشريط الترويجي العلوي</span>
-                <input
-                  type="checkbox"
-                  checked={!!localSettings.promoEnabled}
-                  onChange={(e) => setLocalSettings({ ...localSettings, promoEnabled: e.target.checked })}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-black text-slate-700 mb-1">كود الكوبون في الشريط العلوي</label>
-                <input
-                  type="text"
-                  value={localSettings.promoCouponCode}
-                  onChange={(e) => setLocalSettings({ ...localSettings, promoCouponCode: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-black uppercase"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-black text-slate-700 mb-1">نص الشريط الترويجي العلوي</label>
-              <input
-                type="text"
-                value={localSettings.promoText}
-                onChange={(e) => setLocalSettings({ ...localSettings, promoText: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-3.5 rounded-2xl border border-slate-200 space-y-2">
-                <label className="block text-xs font-black text-slate-700">شعار المنصة (Logo)</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    const dataUrl = await compressImageFile(file, 400, 0.85);
-                    setLocalSettings({ ...localSettings, logoUrl: dataUrl });
-                  }}
-                  className="text-xs"
-                />
-                {localSettings.logoUrl && (
-                  <img src={localSettings.logoUrl} alt="Logo" className="w-16 h-16 rounded-2xl object-cover border" />
-                )}
-              </div>
-
-              <div className="p-3.5 rounded-2xl border border-slate-200 space-y-2">
-                <label className="block text-xs font-black text-slate-700">صورة خلفية الواجهة الرئيسية (Hero)</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    const dataUrl = await compressImageFile(file, 1400, 0.78);
-                    setLocalSettings({ ...localSettings, heroBgImage: dataUrl });
-                  }}
-                  className="text-xs"
-                />
-                {localSettings.heroBgImage && (
-                  <img src={localSettings.heroBgImage} alt="Hero" className="h-20 rounded-xl object-cover border" />
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* 2. إعدادات الواجهة الرئيسية (Hero) وبطاقة الثقة */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 space-y-4">
-            <h3 className="font-black text-slate-900 text-base">2. الواجهة الرئيسية وبطاقة «لماذا يثق بنا المعلمون؟»</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs font-black text-slate-700 mb-1">الشارة العلوية (Badge)</label>
-                <input
-                  type="text"
-                  value={localSettings.heroBadge}
-                  onChange={(e) => setLocalSettings({ ...localSettings, heroBadge: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-black text-slate-700 mb-1">
-                  شفافية التعتيم فوق الخلفية ({localSettings.heroOverlayOpacity ?? 78}%)
-                </label>
-                <input
-                  type="range"
-                  min={20}
-                  max={95}
-                  value={localSettings.heroOverlayOpacity ?? 78}
-                  onChange={(e) => setLocalSettings({ ...localSettings, heroOverlayOpacity: Number(e.target.value) })}
-                  className="w-full"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-black text-slate-700 mb-1">
-                  ارتفاع الواجهة ({localSettings.heroMinHeight ?? 460}px)
-                </label>
-                <input
-                  type="number"
-                  min={320}
-                  max={800}
-                  value={localSettings.heroMinHeight ?? 460}
-                  onChange={(e) => setLocalSettings({ ...localSettings, heroMinHeight: Number(e.target.value) })}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-black text-slate-700 mb-1">العنوان الرئيسي في الواجهة</label>
-              <input
-                type="text"
-                value={localSettings.heroTitle}
-                onChange={(e) => setLocalSettings({ ...localSettings, heroTitle: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-black text-slate-700 mb-1">النص التعريفي في الواجهة</label>
-              <textarea
-                rows={2}
-                value={localSettings.heroSubtitle}
-                onChange={(e) => setLocalSettings({ ...localSettings, heroSubtitle: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs font-black text-slate-700 mb-1">نص الزر الرئيسي الأول</label>
-                <input
-                  type="text"
-                  value={localSettings.heroPrimaryBtnText || ''}
-                  onChange={(e) => setLocalSettings({ ...localSettings, heroPrimaryBtnText: e.target.value })}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-black text-slate-700 mb-1">نص زر الباقات الثاني</label>
-                <input
-                  type="text"
-                  value={localSettings.heroSecondaryBtnText || ''}
-                  onChange={(e) => setLocalSettings({ ...localSettings, heroSecondaryBtnText: e.target.value })}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-black text-slate-700 mb-1">نص زر المذكرة الخاصة</label>
-                <input
-                  type="text"
-                  value={localSettings.heroCustomBtnText || ''}
-                  onChange={(e) => setLocalSettings({ ...localSettings, heroCustomBtnText: e.target.value })}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold"
-                />
-              </div>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <input
-                  type="text"
-                  value={localSettings.trustTitle}
-                  onChange={(e) => setLocalSettings({ ...localSettings, trustTitle: e.target.value })}
-                  className="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-black"
-                />
-                <button
-                  type="button"
-                  onClick={() =>
-                    setLocalSettings({
-                      ...localSettings,
-                      trustPoints: [...(localSettings.trustPoints || []), 'ميزة جديدة للمعلمين']
-                    })
-                  }
-                  className="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-black"
-                >
-                  + نقطة
-                </button>
-              </div>
-              <div className="space-y-2">
-                {(localSettings.trustPoints || []).map((pt, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-black text-slate-700 mb-1.5">اسم المنصة</label>
                     <input
                       type="text"
-                      value={pt}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setLocalSettings({
-                          ...localSettings,
-                          trustPoints: localSettings.trustPoints.map((p, i) => (i === idx ? val : p))
-                        });
-                      }}
-                      className="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                      value={localSettings.platformName}
+                      onChange={(e) => setLocalSettings({ ...localSettings, platformName: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-xs sm:text-sm font-bold"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-black text-slate-700 mb-1.5">الوصف المختصر تحت الاسم</label>
+                    <input
+                      type="text"
+                      value={localSettings.platformTagline}
+                      onChange={(e) => setLocalSettings({ ...localSettings, platformTagline: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-xs sm:text-sm font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-black text-slate-700 mb-1.5">نظام الألوان الرئيسي للمنصة</label>
+                    <select
+                      value={localSettings.primaryTheme || 'blue'}
+                      onChange={(e) => setLocalSettings({ ...localSettings, primaryTheme: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs sm:text-sm font-black"
+                    >
+                      {Object.entries(THEME_PALETTES).map(([key, val]) => (
+                        <option key={key} value={key}>
+                          {val.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-black text-slate-700 mb-1.5">رقم واتساب استقبال الطلبات</label>
+                    <input
+                      type="text"
+                      dir="ltr"
+                      value={localSettings.whatsappNumber}
+                      onChange={(e) => setLocalSettings({ ...localSettings, whatsappNumber: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-xs sm:text-sm font-bold text-left"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+                    <label className="block text-xs font-black text-slate-800">شعار المنصة (Logo)</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const dataUrl = await compressImageFile(file, 400, 0.85);
+                        setLocalSettings({ ...localSettings, logoUrl: dataUrl });
+                      }}
+                      className="text-xs"
+                    />
+                    {localSettings.logoUrl && (
+                      <div className="flex items-center gap-3 pt-1">
+                        <img src={localSettings.logoUrl} alt="Logo" className="w-16 h-16 rounded-2xl object-cover border bg-white" />
+                        <button
+                          type="button"
+                          onClick={() => setLocalSettings({ ...localSettings, logoUrl: '' })}
+                          className="text-xs font-black text-rose-600"
+                        >
+                          حذف الشعار
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+                    <label className="block text-xs font-black text-slate-800">صورة خلفية الواجهة الرئيسية (Hero)</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const dataUrl = await compressImageFile(file, 1400, 0.78);
+                        setLocalSettings({ ...localSettings, heroBgImage: dataUrl });
+                      }}
+                      className="text-xs"
+                    />
+                    {localSettings.heroBgImage && (
+                      <div className="flex items-center gap-3 pt-1">
+                        <img src={localSettings.heroBgImage} alt="Hero" className="h-16 w-28 rounded-xl object-cover border" />
+                        <button
+                          type="button"
+                          onClick={() => setLocalSettings({ ...localSettings, heroBgImage: '' })}
+                          className="text-xs font-black text-rose-600"
+                        >
+                          حذف الخلفية
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* تخصيص شريط الإعلان العلوي وألوانه */}
+              <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-5">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-6 rounded-full bg-amber-500" />
+                    <h3 className="font-black text-slate-900 text-base">شريط الإعلان العلوي أعلى الشاشة الرئيسية</h3>
+                  </div>
+                  <label className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-100 text-xs font-black cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!!localSettings.promoEnabled}
+                      onChange={(e) => setLocalSettings({ ...localSettings, promoEnabled: e.target.checked })}
+                    />
+                    <span>إظهار الشريط العلوي</span>
+                  </label>
+                </div>
+
+                {/* معاينة مباشرة لشريط الإعلان */}
+                <div className="space-y-1.5">
+                  <div className="text-xs font-black text-slate-500">معاينة مباشرة لشكل الشريط:</div>
+                  <div
+                    style={{
+                      backgroundColor: localSettings.promoBgColor || '#0f172a',
+                      color: localSettings.promoTextColor || '#fde047'
+                    }}
+                    className="rounded-2xl px-4 py-3 text-xs sm:text-sm font-black flex flex-wrap items-center justify-center gap-3 shadow-inner"
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4" />
+                      <span>{localSettings.promoText || 'نص الإعلان سيظهر هنا'}</span>
+                    </span>
+                    {localSettings.promoCouponCode && (
+                      <span className="px-2.5 py-0.5 rounded-lg bg-white/15 border border-white/20 text-xs">
+                        الكوبون: {localSettings.promoCouponCode}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+                  <div className="sm:col-span-6">
+                    <label className="block text-xs font-black text-slate-700 mb-1.5">النص المكتوب على شريط الإعلان</label>
+                    <input
+                      type="text"
+                      value={localSettings.promoText}
+                      onChange={(e) => setLocalSettings({ ...localSettings, promoText: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-xs sm:text-sm font-bold"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-black text-slate-700 mb-1.5">كود الكوبون</label>
+                    <input
+                      type="text"
+                      value={localSettings.promoCouponCode}
+                      onChange={(e) => setLocalSettings({ ...localSettings, promoCouponCode: e.target.value })}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-black uppercase text-center"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-black text-slate-700 mb-1.5">لون خلفية الشريط</label>
+                    <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50">
+                      <input
+                        type="color"
+                        value={localSettings.promoBgColor || '#0f172a'}
+                        onChange={(e) => setLocalSettings({ ...localSettings, promoBgColor: e.target.value })}
+                        className="w-8 h-7 rounded cursor-pointer border-0 bg-transparent"
+                      />
+                      <span className="text-xs font-bold text-slate-600" dir="ltr">
+                        {localSettings.promoBgColor || '#0f172a'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-black text-slate-700 mb-1.5">لون النص</label>
+                    <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50">
+                      <input
+                        type="color"
+                        value={localSettings.promoTextColor || '#fde047'}
+                        onChange={(e) => setLocalSettings({ ...localSettings, promoTextColor: e.target.value })}
+                        className="w-8 h-7 rounded cursor-pointer border-0 bg-transparent"
+                      />
+                      <span className="text-xs font-bold text-slate-600" dir="ltr">
+                        {localSettings.promoTextColor || '#fde047'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 2. إعدادات الواجهة الرئيسية (Hero) وبطاقة الثقة */}
+          {settingsSubTab === 'hero' && (
+            <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-5">
+              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                <span className="w-2.5 h-6 rounded-full bg-indigo-600" />
+                <h3 className="font-black text-slate-900 text-base">الواجهة الرئيسية وبطاقة «لماذا يثق بنا المعلمون؟»</h3>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-black text-slate-700 mb-1.5">الشارة العلوية (Badge)</label>
+                  <input
+                    type="text"
+                    value={localSettings.heroBadge}
+                    onChange={(e) => setLocalSettings({ ...localSettings, heroBadge: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-slate-700 mb-1.5">
+                    شفافية التعتيم فوق الخلفية ({localSettings.heroOverlayOpacity ?? 78}%)
+                  </label>
+                  <input
+                    type="range"
+                    min={20}
+                    max={95}
+                    value={localSettings.heroOverlayOpacity ?? 78}
+                    onChange={(e) => setLocalSettings({ ...localSettings, heroOverlayOpacity: Number(e.target.value) })}
+                    className="w-full mt-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-slate-700 mb-1.5">
+                    ارتفاع الواجهة ({localSettings.heroMinHeight ?? 460}px)
+                  </label>
+                  <input
+                    type="number"
+                    min={320}
+                    max={800}
+                    value={localSettings.heroMinHeight ?? 460}
+                    onChange={(e) => setLocalSettings({ ...localSettings, heroMinHeight: Number(e.target.value) })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-black text-slate-700 mb-1.5">العنوان الرئيسي في الواجهة</label>
+                <input
+                  type="text"
+                  value={localSettings.heroTitle}
+                  onChange={(e) => setLocalSettings({ ...localSettings, heroTitle: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs sm:text-sm font-bold"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-black text-slate-700 mb-1.5">النص التعريفي في الواجهة</label>
+                <textarea
+                  rows={2}
+                  value={localSettings.heroSubtitle}
+                  onChange={(e) => setLocalSettings({ ...localSettings, heroSubtitle: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs sm:text-sm font-bold"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-black text-slate-700 mb-1.5">نص الزر الرئيسي الأول</label>
+                  <input
+                    type="text"
+                    value={localSettings.heroPrimaryBtnText || ''}
+                    onChange={(e) => setLocalSettings({ ...localSettings, heroPrimaryBtnText: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-slate-700 mb-1.5">نص زر الباقات الثاني</label>
+                  <input
+                    type="text"
+                    value={localSettings.heroSecondaryBtnText || ''}
+                    onChange={(e) => setLocalSettings({ ...localSettings, heroSecondaryBtnText: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-slate-700 mb-1.5">نص زر المذكرة الخاصة</label>
+                  <input
+                    type="text"
+                    value={localSettings.heroCustomBtnText || ''}
+                    onChange={(e) => setLocalSettings({ ...localSettings, heroCustomBtnText: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <input
+                    type="text"
+                    value={localSettings.trustTitle}
+                    onChange={(e) => setLocalSettings({ ...localSettings, trustTitle: e.target.value })}
+                    className="flex-1 px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-black"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLocalSettings({
+                        ...localSettings,
+                        trustPoints: [...(localSettings.trustPoints || []), 'ميزة جديدة للمعلمين']
+                      })
+                    }
+                    className="px-3.5 py-2 rounded-xl bg-blue-600 text-white text-xs font-black"
+                  >
+                    + نقطة
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {(localSettings.trustPoints || []).map((pt, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={pt}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setLocalSettings({
+                            ...localSettings,
+                            trustPoints: localSettings.trustPoints.map((p, i) => (i === idx ? val : p))
+                          });
+                        }}
+                        className="flex-1 px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLocalSettings({
+                            ...localSettings,
+                            trustPoints: localSettings.trustPoints.filter((_, i) => i !== idx)
+                          })
+                        }
+                        className="p-2 text-rose-600"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 3. إعدادات قسم «ما الجديد؟» وقسم «الأخبار ومذكرات قيد التجهيز» */}
+          {settingsSubTab === 'sections' && (
+            <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-5">
+              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                <span className="w-2.5 h-6 rounded-full bg-emerald-600" />
+                <h3 className="font-black text-slate-900 text-base">قسم «ما الجديد؟» وقسم «الأخبار ومذكرات قيد التجهيز»</h3>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs sm:text-sm font-black text-slate-800">تفعيل قسم «ما الجديد؟» في الرئيسية</span>
+                  <input
+                    type="checkbox"
+                    checked={!!localSettings.whatsNewEnabled}
+                    onChange={(e) => setLocalSettings({ ...localSettings, whatsNewEnabled: e.target.checked })}
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <input
+                    type="text"
+                    value={localSettings.whatsNewTitle}
+                    onChange={(e) => setLocalSettings({ ...localSettings, whatsNewTitle: e.target.value })}
+                    className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                  />
+                  <select
+                    value={localSettings.whatsNewMode || 'auto'}
+                    onChange={(e) => setLocalSettings({ ...localSettings, whatsNewMode: e.target.value })}
+                    className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                  >
+                    <option value="auto">اختيار تلقائي (الأحدث)</option>
+                    <option value="manual">اختيار يدوي محدد</option>
+                  </select>
+                  <input
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={localSettings.whatsNewCount || 4}
+                    onChange={(e) => setLocalSettings({ ...localSettings, whatsNewCount: Number(e.target.value) })}
+                    className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                  />
+                </div>
+                {localSettings.whatsNewMode === 'manual' && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {notebooks.map((nb) => {
+                      const checked = (localSettings.whatsNewIds || []).includes(nb.id);
+                      return (
+                        <label
+                          key={nb.id}
+                          className={`px-3 py-1.5 rounded-xl border text-xs font-bold cursor-pointer ${
+                            checked ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="hidden"
+                            checked={checked}
+                            onChange={() => {
+                              const cur = localSettings.whatsNewIds || [];
+                              setLocalSettings({
+                                ...localSettings,
+                                whatsNewIds: checked ? cur.filter((id) => id !== nb.id) : [...cur, nb.id]
+                              });
+                            }}
+                          />
+                          <span>{nb.title}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs sm:text-sm font-black text-slate-800">تفعيل قسم «أخبار المنصة ومذكرات قيد التجهيز»</span>
+                  <input
+                    type="checkbox"
+                    checked={!!localSettings.newsSectionEnabled}
+                    onChange={(e) => setLocalSettings({ ...localSettings, newsSectionEnabled: e.target.checked })}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={localSettings.newsSectionTitle || ''}
+                    onChange={(e) => setLocalSettings({ ...localSettings, newsSectionTitle: e.target.value })}
+                    className="flex-1 px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLocalSettings({
+                        ...localSettings,
+                        newsItems: [
+                          ...(localSettings.newsItems || []),
+                          {
+                            id: `news_${Date.now()}`,
+                            badge: 'قيد التجهيز',
+                            title: 'إصدار جديد قيد الإعداد',
+                            date: 'قريبًا',
+                            summary: 'تفاصيل الإصدار القادم...'
+                          }
+                        ]
+                      })
+                    }
+                    className="px-3.5 py-2 rounded-xl bg-amber-500 text-slate-950 text-xs font-black"
+                  >
+                    + إضافة خبر / إصدار
+                  </button>
+                </div>
+                <div className="space-y-2.5">
+                  {(localSettings.newsItems || []).map((item, idx) => (
+                    <div key={item.id} className="p-3 rounded-xl bg-white border border-slate-200 space-y-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <input
+                          type="text"
+                          placeholder="الشارة (قيد التجهيز)"
+                          value={item.badge}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setLocalSettings({
+                              ...localSettings,
+                              newsItems: localSettings.newsItems.map((n, i) => (i === idx ? { ...n, badge: val } : n))
+                            });
+                          }}
+                          className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold"
+                        />
+                        <input
+                          type="text"
+                          placeholder="عنوان الخبر"
+                          value={item.title}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setLocalSettings({
+                              ...localSettings,
+                              newsItems: localSettings.newsItems.map((n, i) => (i === idx ? { ...n, title: val } : n))
+                            });
+                          }}
+                          className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold"
+                        />
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="الموعد (قريبًا)"
+                            value={item.date}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setLocalSettings({
+                                ...localSettings,
+                                newsItems: localSettings.newsItems.map((n, i) => (i === idx ? { ...n, date: val } : n))
+                              });
+                            }}
+                            className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setLocalSettings({
+                                ...localSettings,
+                                newsItems: localSettings.newsItems.filter((_, i) => i !== idx)
+                              })
+                            }
+                            className="p-1.5 text-rose-600"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="وصف مختصر"
+                        value={item.summary}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setLocalSettings({
+                            ...localSettings,
+                            newsItems: localSettings.newsItems.map((n, i) => (i === idx ? { ...n, summary: val } : n))
+                          });
+                        }}
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 4. حقول السلة وروابط التواصل والنسخ الاحتياطي */}
+          {settingsSubTab === 'forms' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-black text-slate-900 text-sm sm:text-base">حقول نموذج طلب المعلم في السلة</h3>
                     <button
                       type="button"
                       onClick={() =>
                         setLocalSettings({
                           ...localSettings,
-                          trustPoints: localSettings.trustPoints.filter((_, i) => i !== idx)
+                          checkoutFields: [
+                            ...(localSettings.checkoutFields || []),
+                            { id: `fld_${Date.now()}`, label: 'حقل إضافي', type: 'text', placeholder: '', options: '', required: false, enabled: true }
+                          ]
                         })
                       }
-                      className="p-2 text-rose-600"
+                      className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-black"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      + حقل
                     </button>
                   </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* 3. إعدادات قسم «ما الجديد؟» وقسم «الأخبار ومذكرات قيد التجهيز» */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 space-y-5">
-            <h3 className="font-black text-slate-900 text-base">3. قسم «ما الجديد؟» وقسم «الأخبار ومذكرات قيد التجهيز»</h3>
-
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-slate-800">تفعيل قسم «ما الجديد؟» في الرئيسية</span>
-                <input
-                  type="checkbox"
-                  checked={!!localSettings.whatsNewEnabled}
-                  onChange={(e) => setLocalSettings({ ...localSettings, whatsNewEnabled: e.target.checked })}
-                />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <input
-                  type="text"
-                  value={localSettings.whatsNewTitle}
-                  onChange={(e) => setLocalSettings({ ...localSettings, whatsNewTitle: e.target.value })}
-                  className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
-                />
-                <select
-                  value={localSettings.whatsNewMode || 'auto'}
-                  onChange={(e) => setLocalSettings({ ...localSettings, whatsNewMode: e.target.value })}
-                  className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
-                >
-                  <option value="auto">اختيار تلقائي (الأحدث)</option>
-                  <option value="manual">اختيار يدوي محدد</option>
-                </select>
-                <input
-                  type="number"
-                  min={1}
-                  max={12}
-                  value={localSettings.whatsNewCount || 4}
-                  onChange={(e) => setLocalSettings({ ...localSettings, whatsNewCount: Number(e.target.value) })}
-                  className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
-                />
-              </div>
-              {localSettings.whatsNewMode === 'manual' && (
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {notebooks.map((nb) => {
-                    const checked = (localSettings.whatsNewIds || []).includes(nb.id);
-                    return (
-                      <label
-                        key={nb.id}
-                        className={`px-3 py-1.5 rounded-xl border text-xs font-bold cursor-pointer ${
-                          checked ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 border-slate-200'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          className="hidden"
-                          checked={checked}
-                          onChange={() => {
-                            const cur = localSettings.whatsNewIds || [];
-                            setLocalSettings({
-                              ...localSettings,
-                              whatsNewIds: checked ? cur.filter((id) => id !== nb.id) : [...cur, nb.id]
-                            });
-                          }}
-                        />
-                        <span>{nb.title}</span>
-                      </label>
-                    );
-                  })}
+                  <div className="space-y-2">
+                    {(localSettings.checkoutFields || []).map((f, idx) => (
+                      <div key={f.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex flex-col gap-0.5">
+                            <button
+                              type="button"
+                              disabled={idx === 0}
+                              onClick={() => {
+                                const arr = [...localSettings.checkoutFields];
+                                [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+                                setLocalSettings({ ...localSettings, checkoutFields: arr });
+                              }}
+                              className="p-0.5 rounded bg-white border disabled:opacity-30"
+                            >
+                              <ChevronUp className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={idx === (localSettings.checkoutFields || []).length - 1}
+                              onClick={() => {
+                                const arr = [...localSettings.checkoutFields];
+                                [arr[idx + 1], arr[idx]] = [arr[idx], arr[idx + 1]];
+                                setLocalSettings({ ...localSettings, checkoutFields: arr });
+                              }}
+                              className="p-0.5 rounded bg-white border disabled:opacity-30"
+                            >
+                              <ChevronDown className="w-3 h-3" />
+                            </button>
+                          </div>
+                          <input
+                            type="text"
+                            value={f.label}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setLocalSettings({
+                                ...localSettings,
+                                checkoutFields: localSettings.checkoutFields.map((it, i) =>
+                                  i === idx ? { ...it, label: val } : it
+                                )
+                              });
+                            }}
+                            className="flex-1 min-w-[140px] px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold"
+                          />
+                          <select
+                            value={f.type || 'text'}
+                            onChange={(e) =>
+                              setLocalSettings({
+                                ...localSettings,
+                                checkoutFields: localSettings.checkoutFields.map((it, i) =>
+                                  i === idx ? { ...it, type: e.target.value } : it
+                                )
+                              })
+                            }
+                            className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold"
+                          >
+                            <option value="text">نص</option>
+                            <option value="tel">رقم هاتف</option>
+                            <option value="select">قائمة منسدلة</option>
+                            <option value="textarea">ملاحظات طويلة</option>
+                          </select>
+                          <label className="text-xs font-bold flex items-center gap-1">
+                            <input
+                              type="checkbox"
+                              checked={!!f.required}
+                              onChange={(e) =>
+                                setLocalSettings({
+                                  ...localSettings,
+                                  checkoutFields: localSettings.checkoutFields.map((it, i) =>
+                                    i === idx ? { ...it, required: e.target.checked } : it
+                                  )
+                                })
+                              }
+                            />
+                            <span>إلزامي</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setLocalSettings({
+                                ...localSettings,
+                                checkoutFields: localSettings.checkoutFields.filter((_, i) => i !== idx)
+                              })
+                            }
+                            className="p-1 text-rose-600"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                        {f.type === 'select' && (
+                          <input
+                            type="text"
+                            placeholder="اكتب خيارات القائمة مفصولة بفاصلة (مثال: ترم أول، ترم ثاني، مراجعة)"
+                            value={f.options || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setLocalSettings({
+                                ...localSettings,
+                                checkoutFields: localSettings.checkoutFields.map((it, i) =>
+                                  i === idx ? { ...it, options: val } : it
+                                )
+                              });
+                            }}
+                            className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold"
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">رسالة تأكيد الطلب بعد الإرسال</label>
+                    <input
+                      type="text"
+                      value={localSettings.orderSuccessMessage || ''}
+                      onChange={(e) => setLocalSettings({ ...localSettings, orderSuccessMessage: e.target.value })}
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
+                    />
+                  </div>
                 </div>
-              )}
-            </div>
 
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-slate-800">تفعيل قسم «أخبار المنصة ومذكرات قيد التجهيز»</span>
-                <input
-                  type="checkbox"
-                  checked={!!localSettings.newsSectionEnabled}
-                  onChange={(e) => setLocalSettings({ ...localSettings, newsSectionEnabled: e.target.checked })}
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={localSettings.newsSectionTitle || ''}
-                  onChange={(e) => setLocalSettings({ ...localSettings, newsSectionTitle: e.target.value })}
-                  className="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
-                />
-                <button
-                  type="button"
-                  onClick={() =>
-                    setLocalSettings({
-                      ...localSettings,
-                      newsItems: [
-                        ...(localSettings.newsItems || []),
-                        {
-                          id: `news_${Date.now()}`,
-                          badge: 'قيد التجهيز',
-                          title: 'إصدار جديد قيد الإعداد',
-                          date: 'قريبًا',
-                          summary: 'تفاصيل الإصدار القادم...'
-                        }
-                      ]
-                    })
-                  }
-                  className="px-3.5 py-2 rounded-xl bg-amber-500 text-slate-950 text-xs font-black"
-                >
-                  + إضافة خبر / إصدار
-                </button>
-              </div>
-              <div className="space-y-2.5">
-                {(localSettings.newsItems || []).map((item, idx) => (
-                  <div key={item.id} className="p-3 rounded-xl bg-white border border-slate-200 space-y-2">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      <input
-                        type="text"
-                        placeholder="الشارة (قيد التجهيز)"
-                        value={item.badge}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setLocalSettings({
-                            ...localSettings,
-                            newsItems: localSettings.newsItems.map((n, i) => (i === idx ? { ...n, badge: val } : n))
-                          });
-                        }}
-                        className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold"
-                      />
-                      <input
-                        type="text"
-                        placeholder="عنوان الخبر"
-                        value={item.title}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setLocalSettings({
-                            ...localSettings,
-                            newsItems: localSettings.newsItems.map((n, i) => (i === idx ? { ...n, title: val } : n))
-                          });
-                        }}
-                        className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold"
-                      />
-                      <div className="flex gap-2">
+                <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-black text-slate-900 text-sm sm:text-base">روابط التواصل الاجتماعي</h3>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setLocalSettings({
+                          ...localSettings,
+                          socialLinks: [
+                            ...(localSettings.socialLinks || []),
+                            { id: `soc_${Date.now()}`, label: 'رابط جديد', url: 'https://' }
+                          ]
+                        })
+                      }
+                      className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-black"
+                    >
+                      + رابط
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {(localSettings.socialLinks || []).map((lnk, idx) => (
+                      <div key={lnk.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-2">
                         <input
                           type="text"
-                          placeholder="الموعد (قريبًا)"
-                          value={item.date}
+                          value={lnk.label}
                           onChange={(e) => {
                             const val = e.target.value;
                             setLocalSettings({
                               ...localSettings,
-                              newsItems: localSettings.newsItems.map((n, i) => (i === idx ? { ...n, date: val } : n))
+                              socialLinks: localSettings.socialLinks.map((it, i) =>
+                                i === idx ? { ...it, label: val } : it
+                              )
                             });
                           }}
-                          className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold"
+                          className="w-1/3 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold"
+                        />
+                        <input
+                          type="url"
+                          dir="ltr"
+                          value={lnk.url}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setLocalSettings({
+                              ...localSettings,
+                              socialLinks: localSettings.socialLinks.map((it, i) =>
+                                i === idx ? { ...it, url: val } : it
+                              )
+                            });
+                          }}
+                          className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-left"
                         />
                         <button
                           type="button"
                           onClick={() =>
                             setLocalSettings({
                               ...localSettings,
-                              newsItems: localSettings.newsItems.filter((_, i) => i !== idx)
+                              socialLinks: localSettings.socialLinks.filter((_, i) => i !== idx)
                             })
                           }
-                          className="p-1.5 text-rose-600"
+                          className="p-1 text-rose-600"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="وصف مختصر"
-                      value={item.summary}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setLocalSettings({
-                          ...localSettings,
-                          newsItems: localSettings.newsItems.map((n, i) => (i === idx ? { ...n, summary: val } : n))
-                        });
-                      }}
-                      className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold"
-                    />
+                    ))}
                   </div>
-                ))}
+                </div>
               </div>
-            </div>
-          </div>
 
-          {/* 4. حقول بيانات العميل في السلة وروابط التواصل */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-black text-slate-900 text-sm">4. حقول نموذج طلب المعلم في السلة</h3>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setLocalSettings({
-                      ...localSettings,
-                      checkoutFields: [
-                        ...(localSettings.checkoutFields || []),
-                        { id: `fld_${Date.now()}`, label: 'حقل إضافي', type: 'text', placeholder: '', options: '', required: false, enabled: true }
-                      ]
-                    })
-                  }
-                  className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-black"
-                >
-                  + حقل
-                </button>
+              {/* بنر المذكرة الخاصة ونص الفوتر */}
+              <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-black text-slate-900">بنر «طلب مذكرة بتصميم خاص» وتذييل الصفحة (Footer)</span>
+                  <input
+                    type="checkbox"
+                    checked={localSettings.customBannerEnabled !== false}
+                    onChange={(e) => setLocalSettings({ ...localSettings, customBannerEnabled: e.target.checked })}
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <input
+                    type="text"
+                    placeholder="عنوان البنر"
+                    value={localSettings.customBannerTitle || ''}
+                    onChange={(e) => setLocalSettings({ ...localSettings, customBannerTitle: e.target.value })}
+                    className="px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
+                  />
+                  <input
+                    type="text"
+                    placeholder="نص زر البنر"
+                    value={localSettings.customBannerBtnText || ''}
+                    onChange={(e) => setLocalSettings({ ...localSettings, customBannerBtnText: e.target.value })}
+                    className="px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
+                  />
+                </div>
+                <input
+                  type="text"
+                  placeholder="وصف البنر"
+                  value={localSettings.customBannerSubtitle || ''}
+                  onChange={(e) => setLocalSettings({ ...localSettings, customBannerSubtitle: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
+                />
+                <input
+                  type="text"
+                  placeholder="ملاحظة تذييل الصفحة (Footer)"
+                  value={localSettings.footerNote || ''}
+                  onChange={(e) => setLocalSettings({ ...localSettings, footerNote: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
+                />
               </div>
-              <div className="space-y-2">
-                {(localSettings.checkoutFields || []).map((f, idx) => (
-                  <div key={f.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="flex flex-col gap-0.5">
-                        <button
-                          type="button"
-                          disabled={idx === 0}
-                          onClick={() => {
-                            const arr = [...localSettings.checkoutFields];
-                            [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
-                            setLocalSettings({ ...localSettings, checkoutFields: arr });
-                          }}
-                          className="p-0.5 rounded bg-white border disabled:opacity-30"
-                        >
-                          <ChevronUp className="w-3 h-3" />
-                        </button>
-                        <button
-                          type="button"
-                          disabled={idx === (localSettings.checkoutFields || []).length - 1}
-                          onClick={() => {
-                            const arr = [...localSettings.checkoutFields];
-                            [arr[idx + 1], arr[idx]] = [arr[idx], arr[idx + 1]];
-                            setLocalSettings({ ...localSettings, checkoutFields: arr });
-                          }}
-                          className="p-0.5 rounded bg-white border disabled:opacity-30"
-                        >
-                          <ChevronDown className="w-3 h-3" />
-                        </button>
-                      </div>
-                      <input
-                        type="text"
-                        value={f.label}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setLocalSettings({
-                            ...localSettings,
-                            checkoutFields: localSettings.checkoutFields.map((it, i) =>
-                              i === idx ? { ...it, label: val } : it
-                            )
-                          });
-                        }}
-                        className="flex-1 min-w-[140px] px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold"
-                      />
-                      <select
-                        value={f.type || 'text'}
-                        onChange={(e) =>
-                          setLocalSettings({
-                            ...localSettings,
-                            checkoutFields: localSettings.checkoutFields.map((it, i) =>
-                              i === idx ? { ...it, type: e.target.value } : it
-                            )
-                          })
-                        }
-                        className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[11px] font-bold"
-                      >
-                        <option value="text">نص</option>
-                        <option value="tel">رقم هاتف</option>
-                        <option value="select">قائمة منسدلة</option>
-                        <option value="textarea">ملاحظات طويلة</option>
-                      </select>
-                      <label className="text-[11px] font-bold flex items-center gap-1">
-                        <input
-                          type="checkbox"
-                          checked={!!f.required}
-                          onChange={(e) =>
-                            setLocalSettings({
-                              ...localSettings,
-                              checkoutFields: localSettings.checkoutFields.map((it, i) =>
-                                i === idx ? { ...it, required: e.target.checked } : it
-                              )
-                            })
+
+              {/* النسخ الاحتياطي والاستعادة */}
+              <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-black text-slate-900 text-sm">النسخ الاحتياطي للإعدادات والبيانات (JSON)</h3>
+                  <p className="text-xs text-slate-500 font-bold">احفظ نسخة كاملة من إعداداتك على جهازك أو استعدها في أي وقت</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const blob = new Blob([JSON.stringify(localSettings, null, 2)], { type: 'application/json' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `el3bakera-settings-${new Date().toISOString().slice(0, 10)}.json`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      showToast('تم تنزيل ملف النسخة الاحتياطية');
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-black flex items-center gap-1.5"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>تنزيل نسخة احتياطية (JSON)</span>
+                  </button>
+                  <label className="px-4 py-2.5 rounded-xl border border-slate-300 hover:border-blue-500 text-xs font-black cursor-pointer flex items-center gap-1.5">
+                    <Upload className="w-4 h-4 text-blue-600" />
+                    <span>استعادة من ملف JSON</span>
+                    <input
+                      type="file"
+                      accept="application/json"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          try {
+                            const parsed = JSON.parse(ev.target.result);
+                            setLocalSettings((prev) => mergeAndNormalizeSettings(prev, parsed));
+                            showToast('تم تحميل الإعدادات من الملف — اضغط حفظ لتثبيتها');
+                          } catch {
+                            showToast('ملف JSON غير صالح', 'error');
                           }
-                        />
-                        <span>إلزامي</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setLocalSettings({
-                            ...localSettings,
-                            checkoutFields: localSettings.checkoutFields.filter((_, i) => i !== idx)
-                          })
-                        }
-                        className="p-1 text-rose-600"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                    {f.type === 'select' && (
-                      <input
-                        type="text"
-                        placeholder="اكتب خيارات القائمة مفصولة بفاصلة (مثال: ترم أول، ترم ثاني، مراجعة)"
-                        value={f.options || ''}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setLocalSettings({
-                            ...localSettings,
-                            checkoutFields: localSettings.checkoutFields.map((it, i) =>
-                              i === idx ? { ...it, options: val } : it
-                            )
-                          });
-                        }}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-[11px] font-bold"
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">رسالة تأكيد الطلب بعد الإرسال</label>
-                <input
-                  type="text"
-                  value={localSettings.orderSuccessMessage || ''}
-                  onChange={(e) => setLocalSettings({ ...localSettings, orderSuccessMessage: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
-                />
-              </div>
-            </div>
-
-            <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-black text-slate-900 text-sm">5. روابط التواصل الاجتماعي</h3>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setLocalSettings({
-                      ...localSettings,
-                      socialLinks: [
-                        ...(localSettings.socialLinks || []),
-                        { id: `soc_${Date.now()}`, label: 'رابط جديد', url: 'https://' }
-                      ]
-                    })
-                  }
-                  className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-black"
-                >
-                  + رابط
-                </button>
-              </div>
-              <div className="space-y-2">
-                {(localSettings.socialLinks || []).map((lnk, idx) => (
-                  <div key={lnk.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={lnk.label}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setLocalSettings({
-                          ...localSettings,
-                          socialLinks: localSettings.socialLinks.map((it, i) =>
-                            i === idx ? { ...it, label: val } : it
-                          )
-                        });
+                        };
+                        reader.readAsText(file);
                       }}
-                      className="w-1/3 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold"
                     />
-                    <input
-                      type="url"
-                      dir="ltr"
-                      value={lnk.url}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setLocalSettings({
-                          ...localSettings,
-                          socialLinks: localSettings.socialLinks.map((it, i) =>
-                            i === idx ? { ...it, url: val } : it
-                          )
-                        });
-                      }}
-                      className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-left"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setLocalSettings({
-                          ...localSettings,
-                          socialLinks: localSettings.socialLinks.filter((_, i) => i !== idx)
-                        })
-                      }
-                      className="p-1 text-rose-600"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+                  </label>
+                </div>
               </div>
             </div>
-          </div>
-
-          {/* 6. كوبون مكافأة الطلب القادم */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-black text-slate-900">6. كوبون مكافأة الطلب القادم التلقائي</span>
-              <input
-                type="checkbox"
-                checked={!!localSettings.nextOrderReward?.enabled}
-                onChange={(e) =>
-                  setLocalSettings({
-                    ...localSettings,
-                    nextOrderReward: { ...localSettings.nextOrderReward, enabled: e.target.checked }
-                  })
-                }
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">نسبة الخصم (%)</label>
-                <input
-                  type="number"
-                  value={localSettings.nextOrderReward?.discountPercent ?? 15}
-                  onChange={(e) =>
-                    setLocalSettings({
-                      ...localSettings,
-                      nextOrderReward: { ...localSettings.nextOrderReward, discountPercent: Number(e.target.value) }
-                    })
-                  }
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">مدة الصلاحية بالأيام (0 = مفتوح)</label>
-                <input
-                  type="number"
-                  value={localSettings.nextOrderReward?.validDays ?? 7}
-                  onChange={(e) =>
-                    setLocalSettings({
-                      ...localSettings,
-                      nextOrderReward: { ...localSettings.nextOrderReward, validDays: Number(e.target.value) }
-                    })
-                  }
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">بادئة الكود</label>
-                <input
-                  type="text"
-                  value={localSettings.nextOrderReward?.prefix ?? 'VIP'}
-                  onChange={(e) =>
-                    setLocalSettings({
-                      ...localSettings,
-                      nextOrderReward: { ...localSettings.nextOrderReward, prefix: e.target.value.toUpperCase() }
-                    })
-                  }
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-black uppercase"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* 7. بنر المذكرة الخاصة ونص الفوتر */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-black text-slate-900">7. بنر «طلب مذكرة بتصميم خاص» والفوتر</span>
-              <input
-                type="checkbox"
-                checked={localSettings.customBannerEnabled !== false}
-                onChange={(e) => setLocalSettings({ ...localSettings, customBannerEnabled: e.target.checked })}
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <input
-                type="text"
-                placeholder="عنوان البنر"
-                value={localSettings.customBannerTitle || ''}
-                onChange={(e) => setLocalSettings({ ...localSettings, customBannerTitle: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
-              />
-              <input
-                type="text"
-                placeholder="نص زر البنر"
-                value={localSettings.customBannerBtnText || ''}
-                onChange={(e) => setLocalSettings({ ...localSettings, customBannerBtnText: e.target.value })}
-                className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
-              />
-            </div>
-            <input
-              type="text"
-              placeholder="وصف البنر"
-              value={localSettings.customBannerSubtitle || ''}
-              onChange={(e) => setLocalSettings({ ...localSettings, customBannerSubtitle: e.target.value })}
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
-            />
-            <input
-              type="text"
-              placeholder="ملاحظة تذييل الصفحة (Footer)"
-              value={localSettings.footerNote || ''}
-              onChange={(e) => setLocalSettings({ ...localSettings, footerNote: e.target.value })}
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
-            />
-          </div>
+          )}
 
           <button
             type="button"
             onClick={handleSaveSettings}
             disabled={savingSettings}
-            className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-lg"
+            className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-black shadow-lg"
           >
             {savingSettings ? 'جاري حفظ الإعدادات...' : 'حفظ جميع الإعدادات الآن'}
           </button>
