@@ -95,10 +95,13 @@ if (activeFirebaseConfig && activeFirebaseConfig.apiKey) {
 class PlatformErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, errorMessage: '' };
   }
-  static getDerivedStateFromError() {
-    return { hasError: true };
+  static getDerivedStateFromError(error) {
+    return { hasError: true, errorMessage: error?.message || String(error || '') };
+  }
+  componentDidCatch(error) {
+    console.error('Platform runtime error:', error);
   }
   render() {
     if (this.state.hasError) {
@@ -108,13 +111,20 @@ class PlatformErrorBoundary extends React.Component {
             <AlertCircle className="w-12 h-12 text-amber-500 mx-auto" />
             <h2 className="text-xl font-black text-slate-900">حدث تعارض مؤقت في البيانات المخزنة</h2>
             <p className="text-sm text-slate-600">اضغط على الزر بالأسفل لإعادة ضبط الذاكرة المؤقتة وتشغيل المنصة فوراً.</p>
+            {this.state.errorMessage && (
+              <div className="p-2.5 rounded-xl bg-slate-100 text-[11px] text-slate-600 font-mono break-all" dir="ltr">
+                {this.state.errorMessage}
+              </div>
+            )}
             <button
               onClick={() => {
-                localStorage.removeItem('el3bakera_settings_v5');
-                localStorage.removeItem('el3bakera_products_v5');
+                try {
+                  localStorage.clear();
+                  indexedDB.deleteDatabase('el3bakera_persistent_db');
+                } catch {}
                 window.location.reload();
               }}
-              className="w-full py-3 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700"
+              className="w-full py-3 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 cursor-pointer"
             >
               إعادة تشغيل المنصة الآن
             </button>
@@ -748,10 +758,26 @@ function MuzakkiratiPlatformContent() {
     () => normalizeItems(settings.categories, DEFAULT_SETTINGS.categories, 'cat'),
     [settings.categories]
   );
+  const safeSocialLinks = useMemo(
+    () => (Array.isArray(settings.socialLinks) ? settings.socialLinks : DEFAULT_SETTINGS.socialLinks),
+    [settings.socialLinks]
+  );
+  const safeTrustFeatures = useMemo(
+    () => (Array.isArray(settings.trustFeatures) ? settings.trustFeatures : DEFAULT_SETTINGS.trustFeatures),
+    [settings.trustFeatures]
+  );
+  const safeUpcoming = useMemo(
+    () => (Array.isArray(settings.upcomingNotebooks) ? settings.upcomingNotebooks : []),
+    [settings.upcomingNotebooks]
+  );
+  const safeTestimonials = useMemo(
+    () => (Array.isArray(settings.testimonials) ? settings.testimonials : []),
+    [settings.testimonials]
+  );
 
   // المذكرات المرئية للعملاء (تستبعد المخفية)
   const visibleProducts = useMemo(
-    () => products.filter((p) => !p.hidden),
+    () => (Array.isArray(products) ? products : DEFAULT_PRODUCTS).filter((p) => p && !p.hidden),
     [products]
   );
 
@@ -1440,20 +1466,20 @@ function MuzakkiratiPlatformContent() {
       {settings.promoEnabled && (
         <div
           style={{
-            backgroundColor: settings.promoBgColor || '#0654d0',
-            color: settings.promoTextColor || '#fde047'
+            backgroundColor: safeText(settings.promoBgColor, '#0654d0'),
+            color: safeText(settings.promoTextColor, '#fde047')
           }}
           className="w-full py-2.5 px-4 text-center text-xs sm:text-sm font-bold flex flex-wrap items-center justify-center gap-2.5 shadow-sm"
         >
           <Sparkles className="w-4 h-4 shrink-0" />
-          <span>{settings.promoText}</span>
+          <span>{safeText(settings.promoText)}</span>
           {settings.promoCouponCode && (
             <button
               onClick={copyPromoCode}
               className="inline-flex items-center gap-1.5 bg-amber-300 text-slate-950 px-3 py-0.5 rounded-md font-black text-xs hover:bg-amber-200 transition cursor-pointer"
               title="اضغط لنسخ الكود"
             >
-              <span>{settings.promoCouponCode}</span>
+              <span>{safeText(settings.promoCouponCode)}</span>
               {copiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
           )}
@@ -1470,15 +1496,15 @@ function MuzakkiratiPlatformContent() {
           >
             <img
               src={resolvedLogo}
-              alt={settings.platformName}
+              alt={safeText(settings.platformName)}
               className="w-12 h-12 rounded-2xl object-cover shadow-md border border-slate-200"
             />
             <div>
               <h1 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
-                {settings.platformName}
+                {safeText(settings.platformName)}
               </h1>
               <p className="text-[11px] sm:text-xs text-slate-500 font-medium hidden sm:block">
-                {settings.platformTagline}
+                {safeText(settings.platformTagline)}
               </p>
             </div>
           </div>
@@ -1659,15 +1685,15 @@ function MuzakkiratiPlatformContent() {
                 {/* العمود الأيمن: النصوص والأزرار والإحصائيات */}
                 <div className="lg:col-span-7 space-y-6 text-right">
                   <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-400/15 border border-amber-400/30 text-amber-300 text-xs font-bold">
-                    <span>{settings.heroBadge}</span>
+                    <span>{safeText(settings.heroBadge)}</span>
                   </div>
 
                   <h2 className="text-2xl sm:text-4xl lg:text-[40px] font-black leading-tight text-white">
-                    {settings.heroTitle}
+                    {safeText(settings.heroTitle)}
                   </h2>
 
                   <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-2xl">
-                    {settings.heroSubtitle}
+                    {safeText(settings.heroSubtitle)}
                   </p>
 
                   <div className="flex flex-wrap items-center gap-3 pt-1">
@@ -1716,17 +1742,17 @@ function MuzakkiratiPlatformContent() {
                     </div>
 
                     <div className="space-y-2.5">
-                      {(settings.trustFeatures || DEFAULT_SETTINGS.trustFeatures).map((feat, idx) => (
+                      {safeTrustFeatures.map((feat, idx) => (
                         <div
                           key={feat.id || idx}
                           className="rounded-2xl bg-white/10 border border-white/10 px-4 py-3 flex items-start gap-3"
                         >
                           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                           <div>
-                            <div className="text-xs sm:text-sm font-bold text-white">{feat.title}</div>
+                            <div className="text-xs sm:text-sm font-bold text-white">{safeText(feat.title)}</div>
                             {feat.desc && (
                               <div className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
-                                {feat.desc}
+                                {safeText(feat.desc)}
                               </div>
                             )}
                           </div>
@@ -1798,7 +1824,7 @@ function MuzakkiratiPlatformContent() {
             </section>
 
             {/* ركن الإعلان عن المذكرات قيد التجهيز */}
-            {Array.isArray(settings.upcomingNotebooks) && settings.upcomingNotebooks.length > 0 && (
+            {safeUpcoming.length > 0 && (
               <section className="bg-gradient-to-l from-slate-900 via-[#0f2347] to-slate-900 rounded-3xl p-6 sm:p-8 text-white border border-slate-800 shadow-lg space-y-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
@@ -1820,7 +1846,7 @@ function MuzakkiratiPlatformContent() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {settings.upcomingNotebooks.map((item) => (
+                  {safeUpcoming.map((item) => (
                     <div
                       key={item.id}
                       className="rounded-2xl bg-white/10 border border-white/15 p-4 flex flex-col justify-between gap-3"
@@ -1966,12 +1992,12 @@ function MuzakkiratiPlatformContent() {
             </section>
 
             {/* ركن آراء وتقييمات المعلمين (نص وصور) */}
-            {Array.isArray(settings.testimonials) && settings.testimonials.length > 0 && (
+            {safeTestimonials.length > 0 && (
               <section className="space-y-5">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-xl sm:text-2xl font-black text-slate-900">
-                      {settings.testimonialsTitle || 'آراء وتقييمات المعلمين في مذكراتنا'}
+                      {safeText(settings.testimonialsTitle, 'آراء وتقييمات المعلمين في مذكراتنا')}
                     </h3>
                     <p className="text-xs text-slate-500 mt-1">
                       تجارب حقيقية لمعلمين اعتمدوا على مذكرات منصة العباقرة في فصولهم ومجموعاتهم
@@ -1985,7 +2011,7 @@ function MuzakkiratiPlatformContent() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {settings.testimonials.map((rev) => (
+                  {safeTestimonials.map((rev) => (
                     <div
                       key={rev.id}
                       className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-sm flex flex-col justify-between gap-4"
@@ -2006,7 +2032,7 @@ function MuzakkiratiPlatformContent() {
                           <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-50">
                             <img
                               src={rev.image}
-                              alt={rev.teacherName || 'تقييم معلم'}
+                              alt={safeText(rev.teacherName, 'تقييم معلم')}
                               className="w-full max-h-64 object-contain mx-auto"
                             />
                           </div>
@@ -2014,7 +2040,7 @@ function MuzakkiratiPlatformContent() {
 
                         {rev.text && (
                           <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
-                            "{rev.text}"
+                            "{safeText(rev.text)}"
                           </p>
                         )}
                       </div>
@@ -2022,13 +2048,13 @@ function MuzakkiratiPlatformContent() {
                       {(rev.teacherName || rev.role) && (
                         <div className="pt-3 border-t border-slate-100 flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 font-black text-xs flex items-center justify-center shrink-0">
-                            {(rev.teacherName || 'م').slice(0, 1)}
+                            {safeText(rev.teacherName, 'م').slice(0, 1)}
                           </div>
                           <div>
                             {rev.teacherName && (
-                              <div className="text-xs font-black text-slate-900">{rev.teacherName}</div>
+                              <div className="text-xs font-black text-slate-900">{safeText(rev.teacherName)}</div>
                             )}
-                            {rev.role && <div className="text-[11px] text-slate-500">{rev.role}</div>}
+                            {rev.role && <div className="text-[11px] text-slate-500">{safeText(rev.role)}</div>}
                           </div>
                         </div>
                       )}
@@ -3868,9 +3894,9 @@ function MuzakkiratiPlatformContent() {
       <footer className="bg-slate-950 text-slate-400 py-8 px-4 sm:px-6 lg:px-8 mt-12 border-t border-slate-900">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <img src={resolvedLogo} alt={settings.platformName} className="w-10 h-10 rounded-xl" />
+            <img src={resolvedLogo} alt={safeText(settings.platformName)} className="w-10 h-10 rounded-xl" />
             <div>
-              <div className="text-white font-black text-sm">{settings.platformName}</div>
+              <div className="text-white font-black text-sm">{safeText(settings.platformName)}</div>
               <div className="text-xs text-slate-400">
                 جميع المذكرات منسقة بأعلى جودة وجاهزة للطباعة والتسليم الفوري بصيغة PDF.
               </div>
@@ -3878,7 +3904,7 @@ function MuzakkiratiPlatformContent() {
           </div>
 
           <div className="flex flex-wrap items-center gap-4 text-xs font-bold">
-            {(settings.socialLinks || []).map((soc) => (
+            {safeSocialLinks.map((soc) => (
               <a
                 key={soc.id}
                 href={soc.url}
@@ -3886,7 +3912,7 @@ function MuzakkiratiPlatformContent() {
                 rel="noreferrer"
                 className="text-slate-300 hover:text-amber-400 transition"
               >
-                {soc.label}
+                {safeText(soc.label)}
               </a>
             ))}
           </div>
@@ -4198,7 +4224,7 @@ function MuzakkiratiPlatformContent() {
                 <ExternalLink className="w-4 h-4" />
               </a>
 
-              {(settings.socialLinks || []).map((soc) => (
+              {safeSocialLinks.map((soc) => (
                 <a
                   key={soc.id}
                   href={soc.url}
@@ -4206,7 +4232,7 @@ function MuzakkiratiPlatformContent() {
                   rel="noreferrer"
                   className="w-full p-3.5 rounded-2xl bg-slate-50 hover:bg-blue-50 border border-slate-200 text-slate-800 hover:text-blue-700 font-bold text-xs sm:text-sm flex items-center justify-between transition"
                 >
-                  <span>{soc.label}</span>
+                  <span>{safeText(soc.label)}</span>
                   <ExternalLink className="w-4 h-4 text-slate-400" />
                 </a>
               ))}
