@@ -5346,7 +5346,15 @@ function AdminDashboard({
                     {ord.customer && Object.keys(ord.customer).length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
                         {Object.entries(ord.customer)
-                          .filter(([k, v]) => k !== 'logo' && safeText(v).trim() && !String(v).startsWith('data:image/'))
+                          .filter(([k, v]) => {
+                            const strVal = safeText(v).trim();
+                            return (
+                              k !== 'logo' &&
+                              strVal &&
+                              !strVal.startsWith('data:image/') &&
+                              !strVal.toLowerCase().includes('fakepath')
+                            );
+                          })
                           .map(([k, v]) => {
                             const fieldDef = (localSettings.checkoutFields || []).find((f) => f.id === k);
                             return (
@@ -5360,6 +5368,14 @@ function AdminDashboard({
                           })}
                       </div>
                     )}
+
+                    {/* تنبيه للطلبات القديمة التي أُرسلت قبل تفعيل الرفع السحابي للشعار */}
+                    {!hasCloudLogo &&
+                      Object.values(ord.customer || {}).some((v) => safeText(v).toLowerCase().includes('fakepath')) && (
+                        <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] font-black text-amber-900">
+                          ملاحظة: هذا الطلب سُجّل قبل تفعيل ميزة الرفع السحابي للشعار؛ يمكنك استلام صورة الشعار من المعلم عبر واتساب.
+                        </div>
+                      )}
 
                     {/* عرض نص أو صورة شعار المعلم مع زر تنزيل مباشر */}
                     {(logoTxt || hasCloudLogo) && (
@@ -5381,14 +5397,23 @@ function AdminDashboard({
                         </div>
 
                         {logoImg ? (
-                          <a
-                            href={logoImg}
-                            download={`logo_${ord.customer?.teacherName || ord.orderCode || 'teacher'}.${isPngLogo ? 'png' : 'jpg'}`}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const link = document.createElement('a');
+                              link.href = logoImg;
+                              link.download = `logo_${ord.customer?.teacherName || ord.orderCode || 'teacher'}.${
+                                isPngLogo ? 'png' : 'jpg'
+                              }`;
+                              document.body.appendChild(link);
+                              link.click();
+                              document.body.removeChild(link);
+                            }}
                             className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black flex items-center gap-1.5 shadow transition"
                           >
                             <Download className="w-3.5 h-3.5" />
                             <span>تنزيل الشعار بالجودة الكاملة ({isPngLogo ? 'PNG شفاف' : 'JPG'})</span>
-                          </a>
+                          </button>
                         ) : hasCloudLogo ? (
                           <button
                             type="button"
