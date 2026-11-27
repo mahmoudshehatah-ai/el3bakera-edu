@@ -1173,29 +1173,25 @@ function MuzakkiratiApp() {
     setLoginError('');
     setLoginLoading(true);
     try {
-      if (!auth) throw new Error('auth/api-key-not-valid');
+      if (!auth) throw new Error('لم يتم تهيئة Firebase Auth');
       const cred = await signInWithEmailAndPassword(auth, adminEmailInput.trim(), adminPassInput);
       if (cred.user?.email?.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
         await signOut(auth);
         setLoginError('هذا الحساب غير مصرح له بالدخول إلى لوحة الإدارة.');
       } else {
+        setPreviewAdminUnlocked(false);
         setLoginModalOpen(false);
         setActiveView('admin');
-        showToast('مرحبًا بك في لوحة تحكم الإدارة');
+        showToast('تم الاتصال بالسحابة بالحساب الإداري بنجاح!');
       }
     } catch (err) {
-      const msg = `${err?.code || ''} ${err?.message || ''}`;
-      if (
-        (msg.includes('api-key') || msg.includes('network-request-failed')) &&
-        adminEmailInput.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase() &&
-        adminPassInput.trim().length >= 4
-      ) {
-        setPreviewAdminUnlocked(true);
-        setLoginModalOpen(false);
-        setActiveView('admin');
-        showToast('تم فتح لوحة الإدارة في وضع المعاينة');
+      const code = err?.code || '';
+      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') {
+        setLoginError('كلمة المرور غير صحيحة في Firebase. جرب «دخول سريع بحساب Google الإداري» بالأسفل.');
+      } else if (code === 'auth/operation-not-allowed') {
+        setLoginError('طريقة الدخول بالبريد غير مفعلة في Firebase Authentication — استخدم زر Google بالأسفل.');
       } else {
-        setLoginError(`تعذر تسجيل الدخول (${err?.code || 'بيانات غير صحيحة'})`);
+        setLoginError(`تعذر تسجيل الدخول السحابي: ${code || err?.message}`);
       }
     } finally {
       setLoginLoading(false);
@@ -1206,26 +1202,29 @@ function MuzakkiratiApp() {
     setLoginError('');
     setLoginLoading(true);
     try {
-      if (!auth) throw new Error('auth/api-key-not-valid');
+      if (!auth) throw new Error('لم يتم تهيئة Firebase Auth');
       const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
       const cred = await signInWithPopup(auth, provider);
       if (cred.user?.email?.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
         await signOut(auth);
-        setLoginError('هذا الحساب غير مصرح له بالدخول إلى لوحة الإدارة.');
+        setLoginError(`الحساب (${cred.user?.email}) غير مصرح له. يرجى اختيار (${ADMIN_EMAIL}).`);
       } else {
+        setPreviewAdminUnlocked(false);
         setLoginModalOpen(false);
         setActiveView('admin');
-        showToast('تم تسجيل الدخول بحساب Google الإداري');
+        showToast('تم تسجيل الدخول السحابي بحساب Google الإداري بنجاح!');
       }
     } catch (err) {
-      const msg = `${err?.code || ''} ${err?.message || ''}`;
-      if (msg.includes('api-key') || msg.includes('popup')) {
-        setPreviewAdminUnlocked(true);
-        setLoginModalOpen(false);
-        setActiveView('admin');
-        showToast('تم فتح لوحة الإدارة في وضع المعاينة');
+      const code = err?.code || '';
+      if (code === 'auth/unauthorized-domain') {
+        setLoginError(
+          `نطاق الموقع (${window.location.hostname}) غير مضاف في Firebase Console -> Authentication -> Settings -> Authorized domains.`
+        );
+      } else if (code === 'auth/operation-not-allowed') {
+        setLoginError('يرجى تفعيل موفر Google في Firebase Console -> Authentication -> Sign-in method.');
       } else {
-        setLoginError(`تعذر الدخول عبر Google (${err?.code || err?.message})`);
+        setLoginError(`تعذر الدخول عبر Google: ${code || err?.message}`);
       }
     } finally {
       setLoginLoading(false);
