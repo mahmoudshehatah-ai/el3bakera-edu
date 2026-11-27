@@ -447,7 +447,7 @@ function normalizeItems(rawList, fallbackList, prefix) {
   });
 }
 
-function compressImageFile(file, maxWidth = 650, quality = 0.72) {
+function compressImageFile(file, maxWidth = 550, quality = 0.65) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -477,7 +477,6 @@ function compressImageFile(file, maxWidth = 650, quality = 0.72) {
 // تقسيم وحفظ كل صورة في مستند منفصل في السحابة لتجنب تجاوز حد الـ 1MB في Firestore
 async function saveMediaAssetToCloud(dbInstance, appId, assetId, dataUrl) {
   if (!dbInstance) return;
-  // حفظ الصور داخل مسار config المفتوح بالفعل في قواعد الأمان لضمان عدم ظهور permission-denied
   const mediaCol = collection(dbInstance, 'artifacts', appId, 'public', 'data', 'config');
   const docId = `media_${assetId}`;
   if (!dataUrl) {
@@ -485,6 +484,10 @@ async function saveMediaAssetToCloud(dbInstance, appId, assetId, dataUrl) {
       await deleteDoc(doc(mediaCol, docId));
     } catch {}
     return;
+  }
+  // التأكد من أن حجم السلسلة النصية أقل من 750 كيلوبايت لضمان قبول Firestore لها دائماً
+  if (dataUrl.length > 750000) {
+    throw new Error('حجم الصورة كبير جداً، اختر صورة أصغر حجماً');
   }
   await setDoc(doc(mediaCol, docId), {
     assetId,
@@ -937,16 +940,16 @@ function MuzakkiratiPlatformContent() {
             const mergedCategories = Array.isArray(cloudData.categories)
               ? cloudData.categories.map((c) => {
                   const prevCat = (prev.categories || []).find((pc) => pc.id === c.id);
-                  return { ...c, coverImage: prevCat?.coverImage || c.coverImage || '' };
+                  return { ...c, coverImage: c.coverImage || prevCat?.coverImage || '' };
                 })
               : prev.categories;
             const merged = {
               ...prev,
               ...cloudData,
               categories: mergedCategories,
-              logoImage: prev.logoImage || cloudData.logoImage || '',
-              heroImage: prev.heroImage || cloudData.heroImage || '',
-              heroBgImage: prev.heroBgImage || cloudData.heroBgImage || ''
+              logoImage: cloudData.logoImage || prev.logoImage || '',
+              heroImage: cloudData.heroImage || prev.heroImage || '',
+              heroBgImage: cloudData.heroBgImage || prev.heroBgImage || ''
             };
             idbSet('settings_v5', merged);
             safeLocalSet('el3bakera_settings_v5', merged);
@@ -971,41 +974,39 @@ function MuzakkiratiPlatformContent() {
           }
         });
 
-        if (Object.keys(assetsMap).length > 0) {
-          setSettings((prev) => {
-            const updatedCategories = (prev.categories || []).map((c) => ({
-              ...c,
-              coverImage: assetsMap[`cat_${c.id}`] || c.coverImage || ''
-            }));
-            const merged = {
-              ...prev,
-              logoImage: assetsMap.logoImage || prev.logoImage || '',
-              heroImage: assetsMap.heroImage || prev.heroImage || '',
-              heroBgImage: assetsMap.heroBgImage || prev.heroBgImage || '',
-              categories: updatedCategories
-            };
-            idbSet('settings_v5', merged);
-            safeLocalSet('el3bakera_settings_v5', merged);
-            return merged;
-          });
+        setSettings((prev) => {
+          const updatedCategories = (prev.categories || []).map((c) => ({
+            ...c,
+            coverImage: assetsMap[`cat_${c.id}`] !== undefined ? assetsMap[`cat_${c.id}`] : (c.coverImage || '')
+          }));
+          const merged = {
+            ...prev,
+            logoImage: assetsMap.logoImage !== undefined ? assetsMap.logoImage : (prev.logoImage || ''),
+            heroImage: assetsMap.heroImage !== undefined ? assetsMap.heroImage : (prev.heroImage || ''),
+            heroBgImage: assetsMap.heroBgImage !== undefined ? assetsMap.heroBgImage : (prev.heroBgImage || ''),
+            categories: updatedCategories
+          };
+          idbSet('settings_v5', merged);
+          safeLocalSet('el3bakera_settings_v5', merged);
+          return merged;
+        });
 
-          setProducts((prev) => {
-            let changed = false;
-            const updated = prev.map((p) => {
-              const cloudCover = assetsMap[`prod_cover_${p.id}`];
-              if (cloudCover && cloudCover !== p.coverImage) {
-                changed = true;
-                return { ...p, coverImage: cloudCover };
-              }
-              return p;
-            });
-            if (changed) {
-              idbSet('products_v5', updated);
-              safeLocalSet('el3bakera_products_v5', stripHeavyProductMedia(updated));
+        setProducts((prev) => {
+          let changed = false;
+          const updated = prev.map((p) => {
+            const cloudCover = assetsMap[`prod_cover_${p.id}`];
+            if (cloudCover && cloudCover !== p.coverImage) {
+              changed = true;
+              return { ...p, coverImage: cloudCover };
             }
-            return updated;
+            return p;
           });
-        }
+          if (changed) {
+            idbSet('products_v5', updated);
+            safeLocalSet('el3bakera_products_v5', stripHeavyProductMedia(updated));
+          }
+          return updated;
+        });
       },
       () => {}
     );
@@ -1145,12 +1146,17 @@ function MuzakkiratiPlatformContent() {
         { merge: true }
       );
       await saveMediaAssetToCloud(db, PRIMARY_APP_ID, `prod_cover_${productObj.id}`, coverImage || '');
+      // حفظ كل صورة عينة في مستند منفصل حتى لا تتجاوز حد 1MB في Firestore أبداً
+      const samplesList = Array.isArray(sampleImages) ? sampleImages.slice(0, 6) : [];
+      for (let i = 0; i < samplesList.length; i++) {
+        await saveMediaAssetToCloud(db, PRIMARY_APP_ID, `prod_sample_${productObj.id}_${i}`, samplesList[i]);
+      }
       await setDoc(
         doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebook_samples', productObj.id),
         {
           notebookId: productObj.id,
           title: productObj.title,
-          sampleImages: (sampleImages || []).slice(0, 4),
+          sampleCount: samplesList.length,
           updatedAt: new Date().toISOString()
         },
         { merge: true }
@@ -1161,7 +1167,7 @@ function MuzakkiratiPlatformContent() {
     }
     setTimeout(() => {
       isSavingRef.current = false;
-    }, 2000);
+    }, 1500);
   };
 
   const filteredProducts = useMemo(() => {
@@ -2650,14 +2656,7 @@ function MuzakkiratiPlatformContent() {
                   <span>تصدير نسخة احتياطية</span>
                 </button>
                 <button
-                  onClick={() => {
-                    setIsAdminAuthenticated(false);
-                    try {
-                      localStorage.removeItem('el3bakera_admin_auth');
-                    } catch {}
-                    navigateToTab('home');
-                    showToast('تم تسجيل الخروج من لوحة الإدارة');
-                  }}
+                  onClick={handleAdminLogout}
                   className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black flex items-center gap-1.5 shadow cursor-pointer"
                 >
                   <Lock className="w-4 h-4" />
