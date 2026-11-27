@@ -2121,6 +2121,25 @@ export default function App() {
                         )}
                         <h3 className="text-lg font-black text-slate-900">{pkg.title}</h3>
                         {pkg.description && <p className="text-xs sm:text-sm text-slate-600 font-bold">{pkg.description}</p>}
+                        {Array.isArray(pkg.notebookIds) && pkg.notebookIds.length > 0 && (
+                          <div className="pt-2 space-y-1">
+                            <div className="text-[11px] font-black text-slate-500">تشمل الباقة ({pkg.notebookIds.length} مذكرات):</div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {pkg.notebookIds.map((nid) => {
+                                const foundNb = notebooks.find((n) => n.id === nid);
+                                if (!foundNb) return null;
+                                return (
+                                  <span
+                                    key={nid}
+                                    className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 text-[11px] font-bold"
+                                  >
+                                    ✓ {foundNb.title}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <div className="pt-4 border-t border-slate-100 space-y-3">
                         <div className="flex items-center gap-2">
@@ -3021,6 +3040,7 @@ function AdminDashboard({
   const [loadingEditSamples, setLoadingEditSamples] = useState(false);
   const [samplesTouched, setSamplesTouched] = useState(false);
   const [adminNbSearch, setAdminNbSearch] = useState('');
+  const [pkgNbSearch, setPkgNbSearch] = useState('');
   const [pkgForm, setPkgForm] = useState({
     id: '',
     title: '',
@@ -4150,42 +4170,191 @@ function AdminDashboard({
 
           {/* إدارة باقات التوفير */}
           <form onSubmit={handleSavePackage} className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-4">
-            <h3 className="text-base sm:text-lg font-black text-slate-900">إضافة باقة توفير مجمعة</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-              <input
-                type="text"
-                required
-                placeholder="اسم الباقة"
-                value={pkgForm.title}
-                onChange={(e) => setPkgForm({ ...pkgForm, title: e.target.value })}
-                className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
-              />
-              <input
-                type="number"
-                required
-                placeholder="سعر الباقة (ج.م)"
-                value={pkgForm.price}
-                onChange={(e) => setPkgForm({ ...pkgForm, price: e.target.value })}
-                className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
-              />
-              <input
-                type="number"
-                placeholder="السعر قبل الخصم (ج.م)"
-                value={pkgForm.oldPrice}
-                onChange={(e) => setPkgForm({ ...pkgForm, oldPrice: e.target.value, oldPriceManual: true })}
-                className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
-              />
-              <button type="submit" className="py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-black">
-                حفظ الباقة
-              </button>
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base sm:text-lg font-black text-slate-900">
+                {pkgForm.id ? 'تعديل باقة توفير حالية' : 'إضافة باقة توفير مجمعة'}
+              </h3>
+              {pkgForm.id && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPkgForm({
+                      id: '',
+                      title: '',
+                      description: '',
+                      price: '',
+                      oldPrice: '',
+                      oldPriceManual: false,
+                      notebookIds: []
+                    })
+                  }
+                  className="text-xs font-black text-rose-600 hover:underline"
+                >
+                  إلغاء التعديل
+                </button>
+              )}
             </div>
-            <input
-              type="text"
-              placeholder="وصف محتويات الباقة..."
-              value={pkgForm.description}
-              onChange={(e) => setPkgForm({ ...pkgForm, description: e.target.value })}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
-            />
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">اسم الباقة *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="مثال: باقة المراجعة النهائية للمرحلة الإعدادية"
+                  value={pkgForm.title}
+                  onChange={(e) => setPkgForm({ ...pkgForm, title: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">سعر الباقة بعد الخصم (ج.م) *</label>
+                <input
+                  type="number"
+                  required
+                  placeholder="مثال: 650"
+                  value={pkgForm.price}
+                  onChange={(e) => setPkgForm({ ...pkgForm, price: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  السعر قبل الخصم (يُحسب تلقائيًا من المذكرات المختارة)
+                </label>
+                <input
+                  type="number"
+                  placeholder="مثال: 800"
+                  value={pkgForm.oldPrice}
+                  onChange={(e) => setPkgForm({ ...pkgForm, oldPrice: e.target.value, oldPriceManual: true })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold"
+                />
+              </div>
+              <div className="sm:col-span-3">
+                <label className="block text-xs font-bold text-slate-700 mb-1">وصف ومميزات الباقة</label>
+                <textarea
+                  rows={2}
+                  placeholder="اكتب تفاصيل الباقة ومميزاتها..."
+                  value={pkgForm.description}
+                  onChange={(e) => setPkgForm({ ...pkgForm, description: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold"
+                />
+              </div>
+            </div>
+
+            {/* اختيار المذكرات المشمولة داخل الباقة */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-xs sm:text-sm font-black text-slate-900">
+                    اختر المذكرات المضمنة في الباقة ({pkgForm.notebookIds.length} مذكرة مختارة)
+                  </div>
+                  <p className="text-[11px] text-slate-500 font-bold">
+                    عند تحديد المذكرات يتم جمع أسعارها تلقائيًا في خانة «السعر قبل الخصم»
+                  </p>
+                </div>
+                <input
+                  type="text"
+                  value={pkgNbSearch}
+                  onChange={(e) => setPkgNbSearch(e.target.value)}
+                  placeholder="ابحث لاختيار مذكرة..."
+                  className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold w-56"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-60 overflow-y-auto p-1">
+                {notebooks
+                  .filter((nb) => {
+                    if (!pkgNbSearch.trim()) return true;
+                    return `${nb.title} ${nb.subject}`.toLowerCase().includes(pkgNbSearch.trim().toLowerCase());
+                  })
+                  .map((nb) => {
+                    const checked = pkgForm.notebookIds.includes(nb.id);
+                    return (
+                      <label
+                        key={nb.id}
+                        className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between gap-2 cursor-pointer transition ${
+                          checked
+                            ? 'bg-emerald-50 border-emerald-400 text-emerald-950'
+                            : 'bg-white border-slate-200 text-slate-800 hover:border-blue-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => togglePackageNotebook(nb.id)}
+                            className="w-4 h-4 shrink-0"
+                          />
+                          <span className="truncate">{nb.title}</span>
+                        </div>
+                        <span className="text-[11px] font-black text-blue-600 shrink-0">{nb.price} ج.م</span>
+                      </label>
+                    );
+                  })}
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="px-6 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-black shadow"
+            >
+              {pkgForm.id ? 'حفظ تعديلات الباقة' : 'حفظ الباقة التوفيرية'}
+            </button>
+
+            {/* قائمة الباقات المضافة حاليًا */}
+            {packages.length > 0 && (
+              <div className="pt-4 border-t border-slate-100 space-y-2.5">
+                <div className="text-xs sm:text-sm font-black text-slate-900">
+                  الباقات التوفيرية المضافة ({packages.length})
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {packages.map((pkg) => (
+                    <div
+                      key={pkg.id}
+                      className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-sm font-black text-slate-900 truncate">{pkg.title}</div>
+                        <div className="text-xs text-slate-600 font-bold">
+                          السعر: {pkg.price} ج.م
+                          {Number(pkg.oldPrice) > Number(pkg.price) ? ` (بدلاً من ${pkg.oldPrice} ج.م)` : ''}
+                          {Array.isArray(pkg.notebookIds) && pkg.notebookIds.length > 0
+                            ? ` • تشمل ${pkg.notebookIds.length} مذكرات`
+                            : ''}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPkgForm({
+                              id: pkg.id,
+                              title: pkg.title || '',
+                              description: pkg.description || '',
+                              price: String(pkg.price || ''),
+                              oldPrice: pkg.oldPrice ? String(pkg.oldPrice) : '',
+                              oldPriceManual: false,
+                              notebookIds: Array.isArray(pkg.notebookIds) ? pkg.notebookIds : []
+                            })
+                          }
+                          className="px-3 py-1.5 rounded-xl bg-blue-100 text-blue-800 text-xs font-black"
+                        >
+                          تعديل
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteDoc(publicDoc('packages', pkg.id))}
+                          className="px-3 py-1.5 rounded-xl bg-rose-100 text-rose-700 text-xs font-black"
+                        >
+                          حذف
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </form>
         </div>
       )}
