@@ -1663,9 +1663,10 @@ export default function App() {
             <section
               style={{
                 minHeight: `${Number(settings.heroMinHeight) || 460}px`,
-                backgroundImage: settings.heroImage ? `url(${settings.heroImage})` : undefined
+                backgroundImage: settings.heroImage ? `url(${settings.heroImage})` : undefined,
+                backgroundSize: settings.heroImage ? '100% 100%' : undefined
               }}
-              className="relative bg-slate-950 bg-contain bg-no-repeat bg-center text-white flex items-center overflow-hidden"
+              className="relative bg-slate-950 bg-no-repeat bg-center text-white flex items-center overflow-hidden"
             >
               <div
                 style={{ backgroundColor: `rgba(11, 20, 42, ${settings.heroImage ? overlayAlpha : 0.96})` }}
