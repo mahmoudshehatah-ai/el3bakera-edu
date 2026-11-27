@@ -371,6 +371,13 @@ const DEFAULT_SETTINGS = {
   nextOrderRewardMaxDiscount: 0,
   nextOrderRewardDays: 7,
   nextOrderRewardPrefix: 'VIP',
+  quantityDiscountEnabled: false,
+  quantityDiscountMinCount: 2,
+  quantityDiscountType: 'fixed',
+  quantityDiscountValue: 30,
+  quantityDiscountMaxAmount: 0,
+  quantityDiscountScope: 'all',
+  quantityDiscountNotebookIds: [],
   checkoutFields: [
     { id: 'teacherName', label: 'اسم المعلم (كما سيُكتب على المذكرة)', type: 'text', required: true, enabled: true, placeholder: 'مثال: أ/ محمود شحاتة' },
     { id: 'phone', label: 'رقم الواتساب للتواصل والتسليم', type: 'tel', required: true, enabled: true, placeholder: '010xxxxxxxx' },
@@ -1346,6 +1353,57 @@ export default function App() {
     [cart]
   );
 
+  // حساب خصم الكميات التلقائي عند شراء أكثر من مذكرة
+  const quantityDiscountInfo = useMemo(() => {
+    if (!settings.quantityDiscountEnabled || cart.length === 0) {
+      return { amount: 0, eligibleCount: 0, remainingToQualify: 0, minCount: 2 };
+    }
+    const minCount = Math.max(2, Number(settings.quantityDiscountMinCount) || 2);
+    const scope = settings.quantityDiscountScope || 'all';
+    const targetIds = Array.isArray(settings.quantityDiscountNotebookIds) ? settings.quantityDiscountNotebookIds : [];
+
+    let eligibleCount = 0;
+    let eligibleSubtotal = 0;
+
+    cart.forEach((item) => {
+      const isPackage = String(item.id || '').startsWith('pkg_');
+      if (isPackage) return;
+      const isIncluded = scope === 'all' || targetIds.includes(item.id);
+      if (isIncluded) {
+        const qty = Number(item.qty) || 1;
+        eligibleCount += qty;
+        eligibleSubtotal += (Number(item.price) || 0) * qty;
+      }
+    });
+
+    if (eligibleCount < minCount || eligibleSubtotal <= 0) {
+      return {
+        amount: 0,
+        eligibleCount,
+        remainingToQualify: eligibleCount > 0 ? Math.max(0, minCount - eligibleCount) : minCount,
+        minCount
+      };
+    }
+
+    const dType = settings.quantityDiscountType || 'fixed';
+    const dVal = Number(settings.quantityDiscountValue) || 0;
+    let discount = dType === 'percent' ? Math.round((eligibleSubtotal * dVal) / 100) : dVal;
+    const maxCap = Number(settings.quantityDiscountMaxAmount) || 0;
+    if (maxCap > 0) discount = Math.min(discount, maxCap);
+    discount = Math.min(eligibleSubtotal, Math.max(0, discount));
+
+    return { amount: discount, eligibleCount, remainingToQualify: 0, minCount };
+  }, [
+    cart,
+    settings.quantityDiscountEnabled,
+    settings.quantityDiscountMinCount,
+    settings.quantityDiscountType,
+    settings.quantityDiscountValue,
+    settings.quantityDiscountMaxAmount,
+    settings.quantityDiscountScope,
+    settings.quantityDiscountNotebookIds
+  ]);
+
   const couponDiscountAmount = useMemo(() => {
     if (!appliedCoupon || cartSubtotal <= 0) return 0;
 
@@ -1380,7 +1438,7 @@ export default function App() {
     return Math.min(eligibleSubtotal, discount);
   }, [appliedCoupon, cartSubtotal, cart]);
 
-  const cartFinalTotal = Math.max(0, cartSubtotal - couponDiscountAmount);
+  const cartFinalTotal = Math.max(0, cartSubtotal - quantityDiscountInfo.amount - couponDiscountAmount);
 
   const handleApplyCoupon = () => {
     const code = couponInput.trim().toUpperCase();
@@ -1474,7 +1532,8 @@ export default function App() {
         customer: customerForm,
         items: cart.map((i) => ({ id: i.id, title: i.title, price: i.price, qty: i.qty || 1 })),
         subtotal: cartSubtotal,
-        discount: couponDiscountAmount,
+        quantityDiscount: quantityDiscountInfo.amount,
+        discount: couponDiscountAmount + quantityDiscountInfo.amount,
         couponCode: appliedCoupon?.code || '',
         total: cartFinalTotal,
         rewardCoupon: generatedRewardCode,
@@ -2893,14 +2952,33 @@ export default function App() {
                     </button>
                   </div>
 
+                  {/* شريط تشجيعي لخصم الكميات */}
+                  {settings.quantityDiscountEnabled && quantityDiscountInfo.remainingToQualify > 0 && (
+                    <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-xs font-black text-amber-950 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                      <span>
+                        أضف {quantityDiscountInfo.remainingToQualify}{' '}
+                        {quantityDiscountInfo.remainingToQualify === 1 ? 'مذكرة إضافية' : 'مذكرات إضافية'} من المذكرات المشمولة لتحصل تلقائيًا على خصم{' '}
+                        {settings.quantityDiscountValue}
+                        {settings.quantityDiscountType === 'percent' ? '%' : ' ج.م'}!
+                      </span>
+                    </div>
+                  )}
+
                   <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5 text-xs sm:text-sm font-black">
                     <div className="flex justify-between text-slate-600">
                       <span>المجموع الفرعي:</span>
                       <span>{cartSubtotal} ج.م</span>
                     </div>
+                    {quantityDiscountInfo.amount > 0 && (
+                      <div className="flex justify-between text-blue-600">
+                        <span>خصم شراء {quantityDiscountInfo.eligibleCount} مذكرات:</span>
+                        <span>- {quantityDiscountInfo.amount} ج.م</span>
+                      </div>
+                    )}
                     {couponDiscountAmount > 0 && (
                       <div className="flex justify-between text-emerald-600">
-                        <span>الخصم ({appliedCoupon?.code}):</span>
+                        <span>خصم الكوبون ({appliedCoupon?.code}):</span>
                         <span>- {couponDiscountAmount} ج.م</span>
                       </div>
                     )}
@@ -3417,6 +3495,9 @@ function AdminDashboard({
     active: true
   });
   const [couponNbSearch, setCouponNbSearch] = useState('');
+  const [qtyDiscountNbSearch, setQtyDiscountNbSearch] = useState('');
+
+  const saveAllSettingsToCloud = async (updatedObj) => {
     setSavingSettings(true);
     try {
       const safeLogo = await shrinkDataUrlIfNeeded(updatedObj.logoImage || '', 260000);
@@ -4490,6 +4571,160 @@ function AdminDashboard({
       {/* ===================================================================== */}
       {activeTab === 'offers' && (
         <div className="space-y-6">
+          {/* خصم الكميات التلقائي عند شراء أكثر من مذكرة */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={Boolean(localSettings.quantityDiscountEnabled)}
+                  onChange={(e) => setLocalSettings({ ...localSettings, quantityDiscountEnabled: e.target.checked })}
+                  className="w-5 h-5"
+                />
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900">
+                    خصم تلقائي عند شراء أكثر من مذكرة (خصم الكميات)
+                  </h3>
+                  <p className="text-xs text-slate-500 font-bold">
+                    يُطبّق تلقائيًا داخل السلة عندما يطلب العميل العدد المحدد من المذكرات المشمولة دون الحاجة لكود
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={savingSettings}
+                onClick={() => saveAllSettingsToCloud(localSettings)}
+                className="px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-black shadow"
+              >
+                {savingSettings ? 'جاري الحفظ...' : 'حفظ إعدادات خصم الكميات'}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">الحد الأدنى لعدد المذكرات</label>
+                <input
+                  type="number"
+                  min={2}
+                  value={localSettings.quantityDiscountMinCount ?? 2}
+                  onChange={(e) =>
+                    setLocalSettings({ ...localSettings, quantityDiscountMinCount: Math.max(2, Number(e.target.value)) })
+                  }
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-black"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">نوع الخصم</label>
+                <select
+                  value={localSettings.quantityDiscountType || 'fixed'}
+                  onChange={(e) => setLocalSettings({ ...localSettings, quantityDiscountType: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-bold"
+                >
+                  <option value="fixed">مبلغ ثابت (ج.م)</option>
+                  <option value="percent">نسبة مئوية (%)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  قيمة الخصم ({localSettings.quantityDiscountType === 'percent' ? '%' : 'ج.م'})
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={localSettings.quantityDiscountValue ?? 30}
+                  onChange={(e) => setLocalSettings({ ...localSettings, quantityDiscountValue: Number(e.target.value) })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-black"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">الحد الأقصى للخصم (ج.م)</label>
+                <input
+                  type="number"
+                  min={0}
+                  placeholder="0 = بدون حد"
+                  value={localSettings.quantityDiscountMaxAmount ?? 0}
+                  onChange={(e) =>
+                    setLocalSettings({ ...localSettings, quantityDiscountMaxAmount: Number(e.target.value) })
+                  }
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">المذكرات المشمولة بالخصم</label>
+                <select
+                  value={localSettings.quantityDiscountScope || 'all'}
+                  onChange={(e) => setLocalSettings({ ...localSettings, quantityDiscountScope: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-black text-blue-700"
+                >
+                  <option value="all">جميع مذكرات المنصة</option>
+                  <option value="selected">مذكرات محددة فقط</option>
+                </select>
+              </div>
+            </div>
+
+            {localSettings.quantityDiscountScope === 'selected' && (
+              <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-xs sm:text-sm font-black text-slate-900">
+                      حدد المذكرات التي يدخل شراؤها ضمن خصم الكميات ({localSettings.quantityDiscountNotebookIds?.length || 0} مذكرة مختارة):
+                    </div>
+                    <p className="text-[11px] text-slate-600 font-bold">
+                      عند شراء {localSettings.quantityDiscountMinCount || 2} مذكرات أو أكثر من القائمة المحددة أدناه يُطبق الخصم تلقائيًا.
+                    </p>
+                  </div>
+                  <input
+                    type="text"
+                    value={qtyDiscountNbSearch}
+                    onChange={(e) => setQtyDiscountNbSearch(e.target.value)}
+                    placeholder="ابحث باسم المذكرة..."
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold w-56"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-56 overflow-y-auto p-1">
+                  {notebooks
+                    .filter((nb) => {
+                      if (!qtyDiscountNbSearch.trim()) return true;
+                      return `${nb.title} ${nb.subject}`.toLowerCase().includes(qtyDiscountNbSearch.trim().toLowerCase());
+                    })
+                    .map((nb) => {
+                      const isChecked = (localSettings.quantityDiscountNotebookIds || []).includes(nb.id);
+                      return (
+                        <label
+                          key={nb.id}
+                          className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between gap-2 cursor-pointer transition ${
+                            isChecked
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white border-slate-200 text-slate-800 hover:border-blue-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                const current = localSettings.quantityDiscountNotebookIds || [];
+                                const next = isChecked
+                                  ? current.filter((id) => id !== nb.id)
+                                  : [...current, nb.id];
+                                setLocalSettings({ ...localSettings, quantityDiscountNotebookIds: next });
+                              }}
+                              className="w-4 h-4 shrink-0"
+                            />
+                            <span className="truncate">{nb.title}</span>
+                          </div>
+                          <span className={`text-[11px] font-black shrink-0 ${isChecked ? 'text-white/90' : 'text-blue-600'}`}>
+                            {nb.price} ج.م
+                          </span>
+                        </label>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* إدارة كوبونات الخصم */}
           <form onSubmit={handleSaveCoupon} className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
