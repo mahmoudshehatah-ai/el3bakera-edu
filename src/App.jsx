@@ -78,13 +78,35 @@ const safeText = (val, fallback = '') => {
 // استخراج كافة مصفوفات الصور من أي كائن مذكرة مهما اختلف اسم الحقل (sampleImages, samples, images, pages)
 const extractSampleImages = (obj) => {
   if (!obj || typeof obj !== 'object') return [];
+  const parseIfJson = (val) => {
+    if (typeof val === 'string' && (val.trim().startsWith('[') || val.trim().startsWith('{'))) {
+      try {
+        return JSON.parse(val);
+      } catch (e) {
+        return val;
+      }
+    }
+    return val;
+  };
+
   const candidates = [
-    obj.sampleImages,
-    obj.samples,
-    obj.images,
-    obj.gallery,
-    obj.pages,
-    obj.previewImages
+    parseIfJson(obj.sampleImages),
+    parseIfJson(obj.samples),
+    parseIfJson(obj.images),
+    parseIfJson(obj.gallery),
+    parseIfJson(obj.pages),
+    parseIfJson(obj.previewImages),
+    [
+      obj.sample1,
+      obj.sample2,
+      obj.sample3,
+      obj.sample4,
+      obj.img1,
+      obj.img2,
+      obj.img3,
+      obj.image1,
+      obj.image2
+    ]
   ];
   const collected = [];
   for (const list of candidates) {
@@ -567,6 +589,7 @@ export default function App() {
   // لوحة الإدارة
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [isAdminLoginModalOpen, setIsAdminLoginModalOpen] = useState(false);
+  const [logoClickCount, setLogoClickCount] = useState(0);
   const [adminUsernameInput, setAdminUsernameInput] = useState('admin@el3bakera.com');
   const [pinInput, setPinInput] = useState('');
   const [showPinText, setShowPinText] = useState(false);
@@ -676,7 +699,20 @@ export default function App() {
     };
     initAuth();
     const unsubAuth = onAuthStateChanged(auth, (u) => setUser(u));
-    return () => unsubAuth();
+
+    // فتح نافذة الإدارة فقط عبر الرابط #admin
+    const handleHashCheck = () => {
+      if (window.location.hash === '#admin') {
+        setIsAdminLoginModalOpen(true);
+      }
+    };
+    handleHashCheck();
+    window.addEventListener('hashchange', handleHashCheck);
+
+    return () => {
+      unsubAuth();
+      window.removeEventListener('hashchange', handleHashCheck);
+    };
   }, []);
 
   useEffect(() => {
@@ -707,133 +743,148 @@ export default function App() {
       () => {}
     );
 
-    // 2. استرداد الصور والبيانات المحفوظة في المسارات السحابية السابقة تلقائياً
+    // 2. استرداد الصور والبيانات المحفوظة في كافة معرفات التطبيق والمسارات السحابية السابقة تلقائياً
     const recoverCloudAssets = async () => {
+      const candidateAppIds = Array.from(new Set([appId, 'default-app-id', 'el3bakera-app']));
       try {
-        // فحص الإعدادات القديمة في السحابة لاستعادة الشعار والبانر وأغلفة الأقسام
-        const legacySettingsPaths = [
-          doc(db, 'artifacts', appId, 'public', 'data', 'platform_settings', 'main'),
-          doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'main')
-        ];
-        for (const ref of legacySettingsPaths) {
-          const sSnap = await getDoc(ref).catch(() => null);
-          if (sSnap && sSnap.exists()) {
-            const d = sSnap.data() || {};
-            setSettings((prev) => ({
-              ...prev,
-              ...d,
-              logoImage: isValidImageSrc(d.logoImage) ? d.logoImage : prev.logoImage,
-              heroImage: isValidImageSrc(d.heroImage) ? d.heroImage : prev.heroImage,
-              categories: normalizeListItems(d.categories, prev.categories, 'cat').map((c, i) => ({
-                ...c,
-                coverImage: isValidImageSrc(c.coverImage)
-                  ? c.coverImage
-                  : prev.categories[i]?.coverImage
-              }))
-            }));
+        for (const targetAppId of candidateAppIds) {
+          // فحص الإعدادات القديمة في السحابة لاستعادة الشعار والبانر وأغلفة الأقسام
+          const legacySettingsPaths = [
+            doc(db, 'artifacts', targetAppId, 'public', 'data', 'platform_settings', 'main'),
+            doc(db, 'artifacts', targetAppId, 'public', 'data', 'platform_settings_v4', 'main'),
+            doc(db, 'artifacts', targetAppId, 'public', 'data', 'settings', 'main')
+          ];
+          for (const ref of legacySettingsPaths) {
+            const sSnap = await getDoc(ref).catch(() => null);
+            if (sSnap && sSnap.exists()) {
+              const d = sSnap.data() || {};
+              setSettings((prev) => ({
+                ...prev,
+                ...d,
+                logoImage: isValidImageSrc(d.logoImage) ? d.logoImage : prev.logoImage,
+                heroImage: isValidImageSrc(d.heroImage) ? d.heroImage : prev.heroImage,
+                categories: normalizeListItems(d.categories, prev.categories, 'cat').map((c, i) => ({
+                  ...c,
+                  coverImage: isValidImageSrc(c.coverImage)
+                    ? c.coverImage
+                    : prev.categories[i]?.coverImage
+                }))
+              }));
+            }
           }
-        }
 
-        // فحص مستندات الوسائط (الشعار والبانر وصور الأقسام)
-        const mediaCollections = ['platform_media_v4', 'platform_media', 'media'];
-        for (const colName of mediaCollections) {
-          const mColSnap = await getDocs(
-            collection(db, 'artifacts', appId, 'public', 'data', colName)
-          ).catch(() => null);
-          if (mColSnap && !mColSnap.empty) {
-            mColSnap.forEach((mDoc) => {
-              const mData = mDoc.data() || {};
-              const imgUrl = mData.imageData || mData.url || mData.data;
-              if (!isValidImageSrc(imgUrl)) return;
-              if (mDoc.id.includes('logo')) {
-                setSettings((prev) => ({ ...prev, logoImage: imgUrl }));
-              } else if (mDoc.id.includes('hero') || mDoc.id.includes('banner')) {
-                setSettings((prev) => ({ ...prev, heroImage: imgUrl }));
-              } else if (mDoc.id.startsWith('cat_')) {
-                setSettings((prev) => ({
-                  ...prev,
-                  categories: prev.categories.map((c) =>
-                    c.id === mDoc.id ? { ...c, coverImage: imgUrl } : c
-                  )
-                }));
-              }
-            });
-          }
-        }
-
-        // فحص المذكرات المحفوظة في السحابة لاستعادة صور الأغلفة والعينات
-        const nbCollections = ['notebooks', 'products', 'notebooks_v4', 'notebooks_v3', 'notebooks_v2', 'items'];
-        for (const colName of nbCollections) {
-          const nbSnap = await getDocs(
-            collection(db, 'artifacts', appId, 'public', 'data', colName)
-          ).catch(() => null);
-          if (nbSnap && !nbSnap.empty) {
-            const cloudNotebooks = [];
-            nbSnap.forEach((d) => cloudNotebooks.push({ id: d.id, ...d.data() }));
-            if (cloudNotebooks.length > 0) {
-              setProducts((prev) => {
-                const merged = [...prev];
-                cloudNotebooks.forEach((cn) => {
-                  const idx = merged.findIndex((p) => p.id === cn.id || p.title === cn.title);
-                  const recoveredSamples = extractSampleImages(cn);
-                  const recoveredCover =
-                    cn.coverImage || cn.cover || cn.image || cn.thumbnail || '';
-                  if (idx >= 0) {
-                    merged[idx] = {
-                      ...merged[idx],
-                      ...cn,
-                      coverImage: isValidImageSrc(recoveredCover)
-                        ? recoveredCover
-                        : merged[idx].coverImage,
-                      sampleImages:
-                        recoveredSamples.length > 0
-                          ? recoveredSamples
-                          : extractSampleImages(merged[idx])
-                    };
-                  } else {
-                    merged.push({
-                      ...cn,
-                      coverImage: isValidImageSrc(recoveredCover) ? recoveredCover : '',
-                      sampleImages: recoveredSamples
-                    });
+          // فحص مستندات الوسائط (الشعار والبانر وصور الأقسام والعينات)
+          const mediaCollections = ['platform_media_v4', 'platform_media', 'media'];
+          for (const colName of mediaCollections) {
+            const mColSnap = await getDocs(
+              collection(db, 'artifacts', targetAppId, 'public', 'data', colName)
+            ).catch(() => null);
+            if (mColSnap && !mColSnap.empty) {
+              mColSnap.forEach((mDoc) => {
+                const mData = mDoc.data() || {};
+                const imgUrl = mData.imageData || mData.url || mData.data;
+                if (mDoc.id.includes('logo') && isValidImageSrc(imgUrl)) {
+                  setSettings((prev) => ({ ...prev, logoImage: imgUrl }));
+                } else if ((mDoc.id.includes('hero') || mDoc.id.includes('banner')) && isValidImageSrc(imgUrl)) {
+                  setSettings((prev) => ({ ...prev, heroImage: imgUrl }));
+                } else if (mDoc.id.startsWith('cat_') && isValidImageSrc(imgUrl)) {
+                  setSettings((prev) => ({
+                    ...prev,
+                    categories: prev.categories.map((c) =>
+                      c.id === mDoc.id ? { ...c, coverImage: imgUrl } : c
+                    )
+                  }));
+                } else if (mDoc.id.startsWith('samples_')) {
+                  const nbId = mDoc.id.replace('samples_', '');
+                  const recoveredList = extractSampleImages(mData);
+                  if (recoveredList.length > 0) {
+                    setProducts((prev) =>
+                      prev.map((p) =>
+                        p.id === nbId
+                          ? { ...p, sampleImages: Array.from(new Set([...(p.sampleImages || []), ...recoveredList])) }
+                          : p
+                      )
+                    );
                   }
-                });
-                return merged;
+                }
               });
             }
           }
-        }
 
-        // فحص مجموعات العينات المنفصلة في السحابة إن وُجدت
-        const sampleCollections = ['samples', 'notebook_samples', 'product_samples'];
-        for (const sCol of sampleCollections) {
-          const sSnap = await getDocs(
-            collection(db, 'artifacts', appId, 'public', 'data', sCol)
-          ).catch(() => null);
-          if (sSnap && !sSnap.empty) {
-            const byNotebook = {};
-            sSnap.forEach((docItem) => {
-              const d = docItem.data() || {};
-              const nbId = d.notebookId || d.productId || d.parentId || docItem.id;
-              const imgs = extractSampleImages(d);
-              const single = d.url || d.imageData || d.image || d.data;
-              if (isValidImageSrc(single)) imgs.push(single);
-              if (imgs.length > 0) {
-                byNotebook[nbId] = [...(byNotebook[nbId] || []), ...imgs];
-              }
-            });
-            setProducts((prev) =>
-              prev.map((p) =>
-                byNotebook[p.id]
-                  ? {
-                      ...p,
-                      sampleImages: Array.from(
-                        new Set([...(p.sampleImages || []), ...byNotebook[p.id]])
-                      )
+          // فحص المذكرات المحفوظة في السحابة لاستعادة صور الأغلفة والعينات
+          const nbCollections = ['notebooks', 'products', 'notebooks_v4', 'notebooks_v3', 'notebooks_v2', 'items'];
+          for (const colName of nbCollections) {
+            const nbSnap = await getDocs(
+              collection(db, 'artifacts', targetAppId, 'public', 'data', colName)
+            ).catch(() => null);
+            if (nbSnap && !nbSnap.empty) {
+              const cloudNotebooks = [];
+              nbSnap.forEach((d) => cloudNotebooks.push({ id: d.id, ...d.data() }));
+              if (cloudNotebooks.length > 0) {
+                setProducts((prev) => {
+                  const merged = [...prev];
+                  cloudNotebooks.forEach((cn) => {
+                    const idx = merged.findIndex((p) => p.id === cn.id || p.title === cn.title);
+                    const recoveredSamples = extractSampleImages(cn);
+                    const recoveredCover =
+                      cn.coverImage || cn.cover || cn.image || cn.thumbnail || '';
+                    if (idx >= 0) {
+                      merged[idx] = {
+                        ...merged[idx],
+                        ...cn,
+                        coverImage: isValidImageSrc(recoveredCover)
+                          ? recoveredCover
+                          : merged[idx].coverImage,
+                        sampleImages:
+                          recoveredSamples.length > 0
+                            ? Array.from(new Set([...(merged[idx].sampleImages || []), ...recoveredSamples]))
+                            : extractSampleImages(merged[idx])
+                      };
+                    } else {
+                      merged.push({
+                        ...cn,
+                        coverImage: isValidImageSrc(recoveredCover) ? recoveredCover : '',
+                        sampleImages: recoveredSamples
+                      });
                     }
-                  : p
-              )
-            );
+                  });
+                  return merged;
+                });
+              }
+            }
+          }
+
+          // فحص مجموعات العينات المنفصلة في السحابة إن وُجدت
+          const sampleCollections = ['samples', 'notebook_samples', 'product_samples'];
+          for (const sCol of sampleCollections) {
+            const sSnap = await getDocs(
+              collection(db, 'artifacts', targetAppId, 'public', 'data', sCol)
+            ).catch(() => null);
+            if (sSnap && !sSnap.empty) {
+              const byNotebook = {};
+              sSnap.forEach((docItem) => {
+                const d = docItem.data() || {};
+                const nbId = d.notebookId || d.productId || d.parentId || docItem.id;
+                const imgs = extractSampleImages(d);
+                const single = d.url || d.imageData || d.image || d.data;
+                if (isValidImageSrc(single)) imgs.push(single);
+                if (imgs.length > 0) {
+                  byNotebook[nbId] = [...(byNotebook[nbId] || []), ...imgs];
+                }
+              });
+              setProducts((prev) =>
+                prev.map((p) =>
+                  byNotebook[p.id]
+                    ? {
+                        ...p,
+                        sampleImages: Array.from(
+                          new Set([...(p.sampleImages || []), ...byNotebook[p.id]])
+                        )
+                      }
+                    : p
+                )
+              );
+            }
           }
         }
       } catch (err) {
@@ -1273,20 +1324,22 @@ export default function App() {
     }
 
     if (editingProduct) {
-      setProducts((prev) =>
-        prev.map((p) =>
-          p.id === editingProduct.id
-            ? {
-                ...p,
-                ...newProduct,
-                price: Number(newProduct.price) || 0,
-                oldPrice: Number(newProduct.oldPrice) || 0
-              }
-            : p
-        )
-      );
+      const updatedProd = {
+        ...editingProduct,
+        ...newProduct,
+        price: Number(newProduct.price) || 0,
+        oldPrice: Number(newProduct.oldPrice) || 0
+      };
+      setProducts((prev) => prev.map((p) => (p.id === editingProduct.id ? updatedProd : p)));
+      if (user && db && Array.isArray(updatedProd.sampleImages) && updatedProd.sampleImages.length > 0) {
+        setDoc(
+          doc(db, 'artifacts', appId, 'public', 'data', 'platform_media_v4', `samples_${updatedProd.id}`),
+          { sampleImages: JSON.stringify(updatedProd.sampleImages), updatedAt: serverTimestamp() },
+          { merge: true }
+        ).catch(() => {});
+      }
       setEditingProduct(null);
-      showToast('تم تحديث بيانات المذكرة بنجاح');
+      showToast('تم تحديث بيانات المذكرة وصور العينات بنجاح');
     } else {
       const created = {
         ...newProduct,
@@ -1300,6 +1353,13 @@ export default function App() {
         ]
       };
       setProducts((prev) => [created, ...prev]);
+      if (user && db && Array.isArray(created.sampleImages) && created.sampleImages.length > 0) {
+        setDoc(
+          doc(db, 'artifacts', appId, 'public', 'data', 'platform_media_v4', `samples_${created.id}`),
+          { sampleImages: JSON.stringify(created.sampleImages), updatedAt: serverTimestamp() },
+          { merge: true }
+        ).catch(() => {});
+      }
       showToast('تمت إضافة المذكرة الجديدة للمتجر');
     }
 
@@ -1430,9 +1490,22 @@ export default function App() {
       {/* الهيدر الرئيسي */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-lg border-b border-slate-200/80 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
-          {/* الشعار واسم المنصة */}
+          {/* الشعار واسم المنصة (5 ضغطات متتالية تفتح بوابة الإدارة سرياً) */}
           <button
-            onClick={() => setActiveTab('store')}
+            onClick={() => {
+              setActiveTab('store');
+              const nextCount = logoClickCount + 1;
+              if (nextCount >= 5) {
+                setLogoClickCount(0);
+                if (isAdminAuthenticated) {
+                  setActiveTab('admin');
+                } else {
+                  setIsAdminLoginModalOpen(true);
+                }
+              } else {
+                setLogoClickCount(nextCount);
+              }
+            }}
             className="flex items-center gap-3 text-right group cursor-pointer focus:outline-none"
           >
             <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 shadow-sm flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
@@ -3678,20 +3751,6 @@ export default function App() {
                   {link.label}
                 </a>
               ))}
-            <button
-              type="button"
-              onClick={() => {
-                if (isAdminAuthenticated) {
-                  setActiveTab('admin');
-                } else {
-                  setIsAdminLoginModalOpen(true);
-                }
-              }}
-              className="text-slate-600 hover:text-slate-300 transition cursor-pointer"
-              title="دخول الإدارة"
-            >
-              الإدارة
-            </button>
           </div>
         </div>
       </footer>
