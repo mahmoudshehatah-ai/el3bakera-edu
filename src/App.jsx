@@ -323,55 +323,7 @@ const DEFAULT_PRODUCTS = [
 
 const DEFAULT_BUNDLES = [
   {
-    id: 'bnd_prep_all',
-    title: 'باقة مراجعات التقفيل الشاملة للمرحلة الإعدادية',
-    subtitle: 'تشمل بنوك المراجعة وبوكليتات الاختبارات للصفوف الأول والثاني والثالث الإعدادي (5 مذكرات كاملة)',
-    productIds: ['nb_1795789801', 'nb_1795789802', 'nb_1795789803', 'nb_1795789804', 'nb_1795789805'],
-    price: 649,
-    originalPrice: 794,
-    badge: 'وفر 145 ج.م دفعة واحدة',
-    coverImage: ''
-  }
-];
-
-const DEFAULT_COUPONS = [
-  { id: 'cp_m20', code: 'M20', discountPercent: 15, maxDiscount: 200, active: true },
-  { id: 'cp_next15', code: 'NEXT15', discountPercent: 15, maxDiscount: 150, active: true },
-  { id: 'cp_vip1', code: 'VIP7906', discountPercent: 20, maxDiscount: 250, active: true }
-];
-
-// ============================================================================
-// دوال مساعدة لتطبيع البيانات وضغط الصور
-// ============================================================================
-const safeText = (val, fallback = '') => {
-  if (val === null || val === undefined) return fallback;
-  if (typeof val === 'string' || typeof val === 'number') return String(val);
-  if (typeof val === 'object') return val.name || val.title || val.label || fallback;
-  return fallback;
-};
-
-function normalizeItems(list, fallbackList, type = 'generic') {
-  const source = Array.isArray(list) && list.length > 0 ? list : fallbackList;
-  return source.map((item, idx) => {
-    if (typeof item === 'string') {
-      return {
-        id: `${type}_${idx}`,
-        name: item,
-        subtitle: '',
-        coverImage: ''
-      };
-    }
-    return {
-      ...item,
-      id: item.id || `${type}_${idx}`,
-      name: safeText(item.name || item.title || item.label, `عنصر ${idx + 1}`),
-      subtitle: safeText(item.subtitle || item.description, ''),
-      coverImage: item.coverImage || ''
-    };
-  });
-}
-
-function compressImageFile(file, maxWidth = 900, quality = 0.8) {
+function compressImageFile(file, maxWidth = 650, quality = 0.72) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -395,6 +347,54 @@ function compressImageFile(file, maxWidth = 900, quality = 0.8) {
     };
     reader.onerror = reject;
     reader.readAsDataURL(file);
+  });
+}
+
+// مخزن IndexedDB غير محدود السعة لمنع فشل الحفظ بسبب حد الـ 5MB في localStorage
+const IDB_NAME = 'el3bakera_persistent_db';
+const IDB_STORE = 'kv_store';
+
+function idbSet(key, val) {
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains(IDB_STORE)) {
+          req.result.createObjectStore(IDB_STORE);
+        }
+      };
+      req.onsuccess = () => {
+        const tx = req.result.transaction(IDB_STORE, 'readwrite');
+        tx.objectStore(IDB_STORE).put(val, key);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      };
+      req.onerror = () => resolve(false);
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
+function idbGet(key) {
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains(IDB_STORE)) {
+          req.result.createObjectStore(IDB_STORE);
+        }
+      };
+      req.onsuccess = () => {
+        const tx = req.result.transaction(IDB_STORE, 'readonly');
+        const getReq = tx.objectStore(IDB_STORE).get(key);
+        getReq.onsuccess = () => resolve(getReq.result ?? null);
+        getReq.onerror = () => resolve(null);
+      };
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
   });
 }
 
@@ -536,6 +536,27 @@ function MuzakkiratiPlatformContent() {
   const logoTapCountRef = useRef(0);
   const logoTapTimerRef = useRef(null);
   const isSavingRef = useRef(false);
+
+  // تحميل البيانات من IndexedDB غير المحدود فور فتح الصفحة
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const [idbSettings, idbProducts, idbBundles, idbCoupons] = await Promise.all([
+        idbGet('settings_v5'),
+        idbGet('products_v5'),
+        idbGet('bundles_v5'),
+        idbGet('coupons_v5')
+      ]);
+      if (!mounted) return;
+      if (idbSettings) setSettings((prev) => ({ ...prev, ...idbSettings }));
+      if (Array.isArray(idbProducts) && idbProducts.length > 0) setProducts(idbProducts);
+      if (Array.isArray(idbBundles) && idbBundles.length > 0) setBundles(idbBundles);
+      if (Array.isArray(idbCoupons) && idbCoupons.length > 0) setCoupons(idbCoupons);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // نماذج الإضافة والتعديل في لوحة الإدارة
   const [editingProductId, setEditingProductId] = useState(null);
@@ -789,20 +810,62 @@ function MuzakkiratiPlatformContent() {
       categories: updatedSettings.categories || normalizedCategories
     };
     setSettings(cleanSettings);
+    await idbSet('settings_v5', cleanSettings);
     try {
       localStorage.setItem('el3bakera_settings_v5', JSON.stringify(cleanSettings));
     } catch {}
     if (db) {
       try {
+        // فصل الصور الكبيرة في مستند media منفصل لتجنب تجاوز حد 1MB في Firestore
+        const { logoImage, heroImage, heroBgImage, ...lightSettings } = cleanSettings;
         await setDoc(
           doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'main'),
-          cleanSettings,
+          lightSettings,
+          { merge: true }
+        );
+        await setDoc(
+          doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'media'),
+          {
+            logoImage: logoImage || '',
+            heroImage: heroImage || '',
+            heroBgImage: heroBgImage || ''
+          },
           { merge: true }
         );
       } catch (e) {
         console.warn('Cloud settings save warning:', e);
         showToast('تعذر الحفظ في السحابة — تأكد من قواعد أمان Firebase أو إعدادات الربط', 'error');
       }
+    }
+    setTimeout(() => {
+      isSavingRef.current = false;
+    }, 3000);
+  };
+
+  const saveProductToCloud = async (productObj) => {
+    if (!db) return;
+    isSavingRef.current = true;
+    try {
+      const { sampleImages, ...lightProduct } = productObj;
+      await setDoc(
+        doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebooks', productObj.id),
+        lightProduct,
+        { merge: true }
+      );
+      await setDoc(
+        doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebook_samples', productObj.id),
+        {
+          notebookId: productObj.id,
+          title: productObj.title,
+          coverImage: productObj.coverImage || '',
+          sampleImages: sampleImages || [],
+          updatedAt: new Date().toISOString()
+        },
+        { merge: true }
+      );
+    } catch (e) {
+      console.warn('Cloud product save warning:', e);
+      showToast('تعذر مزامنة المذكرة مع السحابة — تم الحفظ في ذاكرة المتصفح', 'error');
     }
     setTimeout(() => {
       isSavingRef.current = false;
@@ -1031,7 +1094,10 @@ function MuzakkiratiPlatformContent() {
       : [productObj, ...products];
 
     setProducts(nextProducts);
-    localStorage.setItem('el3bakera_products_v5', JSON.stringify(nextProducts));
+    await idbSet('products_v5', nextProducts);
+    try {
+      localStorage.setItem('el3bakera_products_v5', JSON.stringify(nextProducts));
+    } catch {}
     await saveProductToCloud(productObj);
 
     setEditingProductId(null);
@@ -1059,7 +1125,10 @@ function MuzakkiratiPlatformContent() {
     const updatedProduct = { ...product, hidden: !product.hidden };
     const nextProducts = products.map((p) => (p.id === product.id ? updatedProduct : p));
     setProducts(nextProducts);
-    localStorage.setItem('el3bakera_products_v5', JSON.stringify(nextProducts));
+    await idbSet('products_v5', nextProducts);
+    try {
+      localStorage.setItem('el3bakera_products_v5', JSON.stringify(nextProducts));
+    } catch {}
     await saveProductToCloud(updatedProduct);
     showToast(updatedProduct.hidden ? 'تم إخفاء المذكرة عن العملاء' : 'تم إظهار المذكرة للعملاء');
   };
@@ -1067,7 +1136,10 @@ function MuzakkiratiPlatformContent() {
   const handleDeleteProduct = async (id) => {
     const nextProducts = products.filter((p) => p.id !== id);
     setProducts(nextProducts);
-    localStorage.setItem('el3bakera_products_v5', JSON.stringify(nextProducts));
+    await idbSet('products_v5', nextProducts);
+    try {
+      localStorage.setItem('el3bakera_products_v5', JSON.stringify(nextProducts));
+    } catch {}
     if (db) {
       try {
         await deleteDoc(doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebooks', id));
@@ -1083,14 +1155,13 @@ function MuzakkiratiPlatformContent() {
       grades: normalizedGrades,
       categories: normalizedCategories
     });
+    await idbSet('products_v5', products);
+    await idbSet('bundles_v5', bundles);
+    await idbSet('coupons_v5', coupons);
     if (db) {
       try {
         for (const prod of products) {
-          await setDoc(
-            doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebooks', prod.id),
-            prod,
-            { merge: true }
-          );
+          await saveProductToCloud(prod);
         }
         for (const cp of coupons) {
           await setDoc(
