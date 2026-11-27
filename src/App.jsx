@@ -1428,145 +1428,188 @@ export default function App() {
         </div>
       )}
 
-      {/* الشريط الإعلاني العلوي */}
-      {settings.promoEnabled !== false && settings.promoText && (
-        <div
-          style={{
-            backgroundColor: settings.promoBgColor || '#0f172a',
-            color: settings.promoTextColor || '#ffffff'
-          }}
-          className="w-full px-3 py-2 text-center text-xs sm:text-sm font-black flex flex-wrap items-center justify-center gap-2 shadow-sm"
-        >
-          <span>{safeText(settings.promoText)}</span>
-          {settings.promoCouponCode && (
-            <button
-              type="button"
-              onClick={() => {
-                navigator.clipboard?.writeText(settings.promoCouponCode);
-                showToast(`تم نسخ كود الخصم: ${settings.promoCouponCode}`);
-              }}
-              className="px-3 py-0.5 rounded-full bg-amber-400 text-slate-950 text-xs font-black shadow hover:bg-amber-300 transition"
-            >
-              كود: {settings.promoCouponCode} (اضغط للنسخ)
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* الهيدر الرئيسي المتجاوب */}
-      <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur border-b border-slate-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-2.5">
-          {/* الشعار واسم المنصة */}
+      {/* حاوية مثبتة دائمًا بالأعلى تجمع الشريط الإعلاني والهيدر بشكل مضغوط وعصري */}
+      <div className="sticky top-0 z-40 w-full shadow-md">
+        {/* الشريط الإعلاني العلوي المضغوط */}
+        {settings.promoEnabled !== false && settings.promoText && (
           <div
-            onClick={handleLogoSecretClick}
-            className="flex items-center gap-2.5 cursor-pointer select-none min-w-0 max-w-full"
+            style={{
+              backgroundColor: settings.promoBgColor || '#0f172a',
+              color: settings.promoTextColor || '#ffffff'
+            }}
+            className="w-full px-2.5 sm:px-4 py-1 sm:py-1.5 text-center text-[11px] sm:text-xs font-black flex items-center justify-center gap-1.5 sm:gap-2"
           >
-            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-slate-900 border border-slate-200 shadow-sm overflow-hidden flex items-center justify-center shrink-0">
-              {settings.logoImage ? (
-                <img src={settings.logoImage} alt={settings.platformName} className="w-full h-full object-cover" />
-              ) : (
-                <BookOpen className="w-6 h-6 text-amber-400" />
-              )}
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-sm sm:text-lg font-black text-slate-900 leading-tight truncate">
-                {safeText(settings.platformName)}
-              </h1>
-              {settings.platformTagline && (
-                <p className="text-[11px] sm:text-xs text-slate-500 font-bold truncate max-w-[220px] sm:max-w-md">
-                  {safeText(settings.platformTagline)}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* أزرار التنقل */}
-          <nav className="flex flex-wrap items-center gap-1.5 sm:gap-2 w-full sm:w-auto justify-center sm:justify-end">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveView('home');
-                setSelectedCategoryId('');
-                setSelectedStageId('');
-                setSelectedGradeId('');
-              }}
-              className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-black transition ${
-                activeView === 'home' ? `${theme.primaryBg} text-white shadow-sm` : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              الرئيسية
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveView('library')}
-              className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-black transition ${
-                activeView === 'library' ? `${theme.primaryBg} text-white shadow-sm` : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              المذكرات
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveView('offers')}
-              className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-black transition ${
-                activeView === 'offers' ? `${theme.primaryBg} text-white shadow-sm` : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              العروض والباقات
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveView('track')}
-              className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-black transition ${
-                activeView === 'track' ? `${theme.primaryBg} text-white shadow-sm` : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              تتبع طلبك
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setContactModalOpen(true)}
-              className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-black flex items-center gap-1.5 shadow-sm transition"
-            >
-              <MessageCircle className="w-4 h-4" />
-              <span>تواصل معنا</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setCartOpen(true)}
-              className="relative px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-black flex items-center gap-1.5 shadow-sm transition"
-            >
-              <ShoppingCart className="w-4 h-4 text-amber-400" />
-              <span>السلة</span>
-              {cart.length > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[11px] font-black">
-                  {cart.reduce((s, i) => s + (i.qty || 1), 0)}
-                </span>
-              )}
-            </button>
-
-            {isAdmin && (
+            <span className="truncate max-w-[68vw] sm:max-w-none">{safeText(settings.promoText)}</span>
+            {settings.promoCouponCode && (
               <button
                 type="button"
-                onClick={() => setActiveView('admin')}
-                className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-black flex items-center gap-1.5 transition ${
-                  activeView === 'admin'
-                    ? 'bg-amber-400 text-slate-950 shadow'
-                    : 'bg-amber-100 text-amber-950 hover:bg-amber-200'
-                }`}
+                onClick={() => {
+                  navigator.clipboard?.writeText(settings.promoCouponCode);
+                  showToast(`تم نسخ كود الخصم: ${settings.promoCouponCode}`);
+                }}
+                className="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] sm:text-xs font-black shadow hover:bg-amber-300 transition shrink-0"
               >
-                <ShieldCheck className="w-4 h-4" />
-                <span>الإدارة</span>
+                {settings.promoCouponCode}
               </button>
             )}
-          </nav>
-        </div>
-      </header>
+          </div>
+        )}
+
+        {/* الهيدر الرئيسي الرشيق والمتجاوب */}
+        <header className="w-full bg-white/95 backdrop-blur-md border-b border-slate-200/90">
+          <div className="max-w-7xl mx-auto px-2.5 sm:px-6 py-1.5 sm:py-2.5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-1.5 sm:gap-3">
+            {/* الصف العلوي: الشعار واسم المنصة + أزرار التواصل والسلة */}
+            <div className="flex items-center justify-between gap-2 min-w-0">
+              <div
+                onClick={handleLogoSecretClick}
+                className="flex items-center gap-2 sm:gap-2.5 cursor-pointer select-none min-w-0"
+              >
+                <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-gradient-to-br from-slate-900 to-blue-950 border border-amber-400/50 shadow-sm overflow-hidden flex items-center justify-center shrink-0">
+                  {settings.logoImage ? (
+                    <img src={settings.logoImage} alt={settings.platformName} className="w-full h-full object-cover" />
+                  ) : (
+                    <BookOpen className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <h1 className="text-xs sm:text-lg font-black bg-gradient-to-l from-blue-950 via-blue-700 to-indigo-700 bg-clip-text text-transparent leading-tight truncate">
+                    {safeText(settings.platformName)}
+                  </h1>
+                  {settings.platformTagline && (
+                    <p className="hidden sm:block text-xs text-slate-500 font-bold truncate max-w-md">
+                      {safeText(settings.platformTagline)}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* أزرار سريعة على الهاتف (تواصل + السلة + الإدارة) */}
+              <div className="flex lg:hidden items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setContactModalOpen(true)}
+                  className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black flex items-center gap-1 shadow-sm"
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                  <span>تواصل</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCartOpen(true)}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-black flex items-center gap-1 shadow-sm"
+                >
+                  <ShoppingCart className="w-3.5 h-3.5 text-amber-400" />
+                  <span>السلة</span>
+                  {cart.length > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black">
+                      {cart.reduce((s, i) => s + (i.qty || 1), 0)}
+                    </span>
+                  )}
+                </button>
+
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveView('admin')}
+                    className={`px-2 py-1.5 rounded-xl text-[11px] font-black flex items-center gap-1 ${
+                      activeView === 'admin' ? 'bg-amber-400 text-slate-950' : 'bg-amber-100 text-amber-950'
+                    }`}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* شريط التنقل الرشيق (سطر واحد على الهاتف وبدون أي تمدد رأسي) */}
+            <nav className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto pb-0.5 lg:pb-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveView('home');
+                  setSelectedCategoryId('');
+                  setSelectedStageId('');
+                  setSelectedGradeId('');
+                }}
+                className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-sm font-black whitespace-nowrap transition ${
+                  activeView === 'home' ? `${theme.primaryBg} text-white shadow-sm` : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                الرئيسية
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveView('library')}
+                className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-sm font-black whitespace-nowrap transition ${
+                  activeView === 'library' ? `${theme.primaryBg} text-white shadow-sm` : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                المذكرات
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveView('offers')}
+                className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-sm font-black whitespace-nowrap transition ${
+                  activeView === 'offers' ? `${theme.primaryBg} text-white shadow-sm` : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                العروض والباقات
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveView('track')}
+                className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-sm font-black whitespace-nowrap transition ${
+                  activeView === 'track' ? `${theme.primaryBg} text-white shadow-sm` : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                تتبع طلبك
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setContactModalOpen(true)}
+                className="hidden lg:flex px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-black items-center gap-1.5 shadow-sm transition whitespace-nowrap"
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span>تواصل معنا</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCartOpen(true)}
+                className="hidden lg:flex relative px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-black items-center gap-1.5 shadow-sm transition whitespace-nowrap"
+              >
+                <ShoppingCart className="w-4 h-4 text-amber-400" />
+                <span>السلة</span>
+                {cart.length > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[11px] font-black">
+                    {cart.reduce((s, i) => s + (i.qty || 1), 0)}
+                  </span>
+                )}
+              </button>
+
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setActiveView('admin')}
+                  className={`hidden lg:flex px-3.5 py-2 rounded-xl text-sm font-black items-center gap-1.5 transition whitespace-nowrap ${
+                    activeView === 'admin'
+                      ? 'bg-amber-400 text-slate-950 shadow'
+                      : 'bg-amber-100 text-amber-950 hover:bg-amber-200'
+                  }`}
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>الإدارة</span>
+                </button>
+              )}
+            </nav>
+          </div>
+        </header>
+      </div>
 
       {/* المحتوى الرئيسي حسب الصفحة النشطة */}
       <main className="flex-1 w-full">
