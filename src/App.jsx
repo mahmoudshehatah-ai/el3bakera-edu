@@ -83,6 +83,8 @@ const LOCAL_API_KEY_STORAGE = 'el3bakera_firebase_web_api_key_v1';
 const LOCAL_SETTINGS_KEY = 'el3bakera_settings_backup_v4';
 const LOCAL_NOTEBOOKS_KEY = 'el3bakera_notebooks_backup_v4';
 const LOCAL_SAMPLES_KEY = 'el3bakera_samples_backup_v4';
+const LOCAL_PACKAGES_KEY = 'el3bakera_packages_backup_v4';
+const LOCAL_COUPONS_KEY = 'el3bakera_coupons_backup_v4';
 
 const LEGACY_NOTEBOOK_KEYS = [
   'el3bakera_notebooks_backup_v4',
@@ -650,8 +652,22 @@ export default function App() {
     }
   });
 
-  const [packages, setPackages] = useState([]);
-  const [coupons, setCoupons] = useState([]);
+  const [packages, setPackages] = useState(() => {
+    try {
+      const raw = localStorage.getItem(LOCAL_PACKAGES_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [coupons, setCoupons] = useState(() => {
+    try {
+      const raw = localStorage.getItem(LOCAL_COUPONS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
   const [orders, setOrders] = useState([]);
 
   const [activeView, setActiveView] = useState('home');
@@ -1023,17 +1039,79 @@ export default function App() {
       () => {}
     );
 
+    const mergeAndSetPackages = (docsList) => {
+      const pkgMap = new Map();
+      (docsList || []).forEach((p) => {
+        if (p && p.id) pkgMap.set(p.id, p);
+      });
+      const finalPkgs = Array.from(pkgMap.values());
+      setPackages(finalPkgs);
+      try {
+        localStorage.setItem(LOCAL_PACKAGES_KEY, JSON.stringify(finalPkgs));
+      } catch {
+        // تجاهل
+      }
+    };
+
+    const mergeAndSetCoupons = (docsList) => {
+      const cpMap = new Map();
+      (docsList || []).forEach((c) => {
+        if (c && c.id) cpMap.set(c.id, c);
+      });
+      const finalCps = Array.from(cpMap.values());
+      setCoupons(finalCps);
+      try {
+        localStorage.setItem(LOCAL_COUPONS_KEY, JSON.stringify(finalCps));
+      } catch {
+        // تجاهل
+      }
+    };
+
+    // جلب فوري للباقات والكوبونات من جميع المسارات (حتى بدون مصادقة)
+    (async () => {
+      try {
+        const [pkgSnap, legPkgSnap, cpSnap, legCpSnap, mainSetSnap] = await Promise.all([
+          getDocs(publicCol('packages')).catch(() => null),
+          getDocs(legacyPublicCol('packages')).catch(() => null),
+          getDocs(publicCol('coupons')).catch(() => null),
+          getDocs(legacyPublicCol('coupons')).catch(() => null),
+          getDoc(publicDoc('settings', 'main')).catch(() => null)
+        ]);
+        const embeddedPkgs = mainSetSnap?.exists() && Array.isArray(mainSetSnap.data()?.cachedPackages)
+          ? mainSetSnap.data().cachedPackages
+          : [];
+        const embeddedCps = mainSetSnap?.exists() && Array.isArray(mainSetSnap.data()?.cachedCoupons)
+          ? mainSetSnap.data().cachedCoupons
+          : [];
+        const allPkgs = [
+          ...embeddedPkgs,
+          ...(legPkgSnap ? legPkgSnap.docs.map((d) => ({ id: d.id, ...d.data() })) : []),
+          ...(pkgSnap ? pkgSnap.docs.map((d) => ({ id: d.id, ...d.data() })) : [])
+        ];
+        if (allPkgs.length > 0) mergeAndSetPackages(allPkgs);
+
+        const allCps = [
+          ...embeddedCps,
+          ...(legCpSnap ? legCpSnap.docs.map((d) => ({ id: d.id, ...d.data() })) : []),
+          ...(cpSnap ? cpSnap.docs.map((d) => ({ id: d.id, ...d.data() })) : [])
+        ];
+        if (allCps.length > 0) mergeAndSetCoupons(allCps);
+      } catch {
+        // تجاهل
+      }
+    })();
+
     const unsubPackages = onSnapshot(
       publicCol('packages'),
       (snap) => {
-        setPackages(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        mergeAndSetPackages(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       },
       () => {}
     );
     const unsubCoupons = onSnapshot(
       publicCol('coupons'),
       (snap) => {
-        setCoupons(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        mergeAndSetCoupons(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       },
       () => {}
     );
@@ -2178,7 +2256,7 @@ export default function App() {
                 <p className="text-xs text-slate-500 font-bold">يمكنك تصفح مكتبة المذكرات الفردية والاستفادة من كوبونات الخصم.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {packages.map((pkg) => {
                   const hasOld = Number(pkg.oldPrice) > Number(pkg.price) && Number(pkg.oldPrice) > 0;
                   const saved = hasOld ? Number(pkg.oldPrice) - Number(pkg.price) : 0;
@@ -2190,16 +2268,18 @@ export default function App() {
                   return (
                     <div
                       key={pkg.id}
-                      className="group bg-white rounded-3xl border border-slate-200 hover:border-blue-400 shadow-sm hover:shadow-2xl transition-all duration-300 overflow-hidden flex flex-col justify-between"
+                      className="group bg-white rounded-3xl border-2 border-slate-200/90 hover:border-amber-400 shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden flex flex-col justify-between"
                     >
                       <div>
-                        {/* شريط علوي للباقة */}
-                        <div className="bg-gradient-to-l from-slate-900 via-blue-950 to-slate-900 px-5 py-4 text-white flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <div className="w-9 h-9 rounded-xl bg-amber-400/20 border border-amber-400/40 flex items-center justify-center text-amber-300 shrink-0">
-                              <Package className="w-5 h-5" />
+                        {/* شريط علوي ملكي للباقة */}
+                        <div className="bg-gradient-to-l from-slate-950 via-blue-950 to-slate-900 px-5 py-3.5 text-white flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center shrink-0 shadow">
+                              <Package className="w-4 h-4" />
                             </div>
-                            <span className="text-xs font-black text-slate-200">باقة توفير مجمّعة</span>
+                            <span className="text-xs sm:text-sm font-black text-amber-300">
+                              باقة توفير شاملة • {includedNotebooks.length} مذكرات
+                            </span>
                           </div>
                           {saved > 0 && (
                             <span className="px-3 py-1 rounded-full bg-emerald-500 text-white text-xs font-black shadow">
@@ -2209,27 +2289,48 @@ export default function App() {
                         </div>
 
                         <div className="p-5 sm:p-6 space-y-4">
-                          <div className="space-y-1.5">
-                            <h3 className="text-lg sm:text-xl font-black text-slate-900 leading-snug">
-                              {safeText(pkg.title)}
-                            </h3>
-                            {pkg.description && (
-                              <p className="text-xs sm:text-sm text-slate-600 font-bold leading-relaxed">
-                                {safeText(pkg.description)}
-                              </p>
+                          {/* عنوان ووصف الباقة مع معاينة مصغرة للأغلفة */}
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="space-y-1.5 flex-1">
+                              <h3 className="text-lg sm:text-xl font-black text-slate-900 leading-snug">
+                                {safeText(pkg.title)}
+                              </h3>
+                              {pkg.description && (
+                                <p className="text-xs sm:text-sm text-slate-600 font-bold leading-relaxed">
+                                  {safeText(pkg.description)}
+                                </p>
+                              )}
+                            </div>
+
+                            {includedNotebooks.some((n) => n.coverImage) && (
+                              <div className="hidden sm:flex items-center -space-x-3 space-x-reverse shrink-0">
+                                {includedNotebooks
+                                  .filter((n) => n.coverImage)
+                                  .slice(0, 3)
+                                  .map((n, i) => (
+                                    <img
+                                      key={`${n.id}_cov_${i}`}
+                                      src={n.coverImage}
+                                      alt={n.title}
+                                      className="w-12 h-16 rounded-xl object-cover border-2 border-white shadow-md"
+                                    />
+                                  ))}
+                              </div>
                             )}
                           </div>
 
+                          {/* جدول محتويات الباقة الأنيق والمنظم */}
                           {includedNotebooks.length > 0 && (
-                            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
-                              <div className="flex items-center justify-between text-xs font-black text-slate-800 border-b border-slate-200/70 pb-2">
+                            <div className="rounded-2xl border border-slate-200 overflow-hidden bg-slate-50/60">
+                              <div className="px-4 py-2.5 bg-slate-100/90 border-b border-slate-200 flex items-center justify-between text-xs font-black text-slate-800">
                                 <span className="flex items-center gap-1.5">
                                   <BookOpen className="w-3.5 h-3.5 text-blue-600" />
-                                  <span>محتويات الباقة ({includedNotebooks.length} مذكرات)</span>
+                                  <span>المذكرات المشمولة داخل الباقة</span>
                                 </span>
-                                <span className="text-[11px] text-blue-600">اضغط للمعاينة</span>
+                                <span className="text-[11px] text-slate-500">{includedNotebooks.length} مذكرات</span>
                               </div>
-                              <div className="space-y-2">
+
+                              <div className="divide-y divide-slate-200/80 bg-white">
                                 {includedNotebooks.map((foundNb, idx) => (
                                   <div
                                     key={`${foundNb.id}_${idx}`}
@@ -2238,18 +2339,18 @@ export default function App() {
                                       setPreviewPageIdx(0);
                                       setPreviewZoom(1);
                                     }}
-                                    className="p-2.5 rounded-xl bg-white hover:bg-blue-50/80 border border-slate-200 hover:border-blue-300 flex items-center justify-between gap-2.5 cursor-pointer transition shadow-2xs"
+                                    className="px-3.5 py-2.5 hover:bg-blue-50/70 flex items-center justify-between gap-3 cursor-pointer transition"
                                   >
-                                    <div className="flex items-start gap-2 min-w-0 flex-1">
-                                      <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-black flex items-center justify-center shrink-0 mt-0.5">
+                                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                      <span className="w-6 h-6 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 text-xs font-black flex items-center justify-center shrink-0">
                                         {idx + 1}
                                       </span>
                                       <div className="min-w-0 flex-1">
-                                        <div className="text-xs font-black text-slate-900 leading-snug">
+                                        <div className="text-xs sm:text-sm font-black text-slate-900 leading-snug">
                                           {foundNb.title}
                                         </div>
                                         {(foundNb.subject || foundNb.pagesCount) && (
-                                          <div className="text-[11px] text-slate-500 font-bold mt-0.5">
+                                          <div className="text-[11px] text-slate-500 font-bold">
                                             {[foundNb.subject, foundNb.pagesCount ? `${foundNb.pagesCount} صفحة` : '']
                                               .filter(Boolean)
                                               .join(' • ')}
@@ -2257,10 +2358,14 @@ export default function App() {
                                         )}
                                       </div>
                                     </div>
-                                    <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 text-[11px] font-black flex items-center gap-1 shrink-0">
-                                      <Eye className="w-3 h-3" />
+
+                                    <button
+                                      type="button"
+                                      className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-blue-600 text-slate-700 hover:text-white text-[11px] font-black flex items-center gap-1 shrink-0 transition"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" />
                                       <span>معاينة</span>
-                                    </span>
+                                    </button>
                                   </div>
                                 ))}
                               </div>
@@ -2269,25 +2374,18 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* قسم السعر وزر الإضافة للسلة */}
-                      <div className="px-5 sm:px-6 pb-5 sm:pb-6 pt-4 bg-slate-50/70 border-t border-slate-200/80 space-y-3">
-                        <div className="flex items-baseline justify-between gap-2">
-                          <div>
-                            <div className="text-[11px] font-bold text-slate-500">سعر الباقة بالكامل:</div>
-                            <div className="flex items-baseline gap-2">
-                              <span className="text-2xl sm:text-3xl font-black text-blue-600">{pkg.price} ج.م</span>
-                              {hasOld && (
-                                <span className="text-sm text-slate-400 line-through font-bold">
-                                  {pkg.oldPrice} ج.م
-                                </span>
-                              )}
-                            </div>
+                      {/* شريط السعر وزر الإضافة للسلة */}
+                      <div className="px-5 sm:px-6 py-4 bg-gradient-to-l from-slate-50 to-blue-50/40 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <div className="text-[11px] font-bold text-slate-500">سعر الباقة بالكامل:</div>
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-2xl sm:text-3xl font-black text-blue-600">{pkg.price} ج.م</span>
+                            {hasOld && (
+                              <span className="text-sm text-slate-400 line-through font-bold">
+                                {pkg.oldPrice} ج.م
+                              </span>
+                            )}
                           </div>
-                          {saved > 0 && (
-                            <span className="px-2.5 py-1 rounded-xl bg-emerald-100 text-emerald-800 text-xs font-black">
-                              توفير {saved} ج.م
-                            </span>
-                          )}
                         </div>
 
                         <button
@@ -2295,10 +2393,10 @@ export default function App() {
                           onClick={() =>
                             addToCart({ id: `pkg_${pkg.id}`, title: `باقة: ${pkg.title}`, price: pkg.price })
                           }
-                          className={`w-full py-3.5 rounded-2xl ${theme.primaryBg} text-white text-sm font-black shadow-lg flex items-center justify-center gap-2 transition`}
+                          className={`px-6 py-3.5 rounded-2xl ${theme.primaryBg} text-white text-xs sm:text-sm font-black shadow-lg flex items-center justify-center gap-2 transition shrink-0`}
                         >
                           <ShoppingCart className="w-4 h-4" />
-                          <span>أضف الباقة للسلة الآن</span>
+                          <span>أضف الباقة للسلة</span>
                         </button>
                       </div>
                     </div>
@@ -3237,12 +3335,33 @@ function AdminDashboard({
       }
 
       const syncStamp = Date.now();
+      const compactPackages = packages.map((p) => ({
+        id: p.id,
+        title: p.title || '',
+        description: p.description || '',
+        price: Number(p.price) || 0,
+        oldPrice: Number(p.oldPrice) || 0,
+        notebookIds: Array.isArray(p.notebookIds) ? p.notebookIds : []
+      }));
+      const compactCoupons = coupons.map((c) => ({
+        id: c.id,
+        code: c.code || '',
+        type: c.type || 'percent',
+        value: Number(c.value) || 0,
+        maxDiscount: Number(c.maxDiscount) || 0,
+        minOrder: Number(c.minOrder) || 0,
+        expiresAt: c.expiresAt || '',
+        active: c.active !== false
+      }));
+
       const mainPayload = {
         ...updatedObj,
         logoImage: '',
         heroImage: '',
         heroMobileImage: '',
         categories: cleanCategories,
+        cachedPackages: compactPackages,
+        cachedCoupons: compactCoupons,
         syncVersion: syncStamp,
         updatedAt: serverTimestamp()
       };
@@ -3462,13 +3581,25 @@ function AdminDashboard({
         notebookIds: pkgForm.notebookIds,
         updatedAt: serverTimestamp()
       };
-      if (pkgForm.id) {
-        await updateDoc(publicDoc('packages', pkgForm.id), data);
+      let savedId = pkgForm.id;
+      if (savedId) {
+        await updateDoc(publicDoc('packages', savedId), data);
+        await setDoc(legacyPublicDoc('packages', savedId), data, { merge: true }).catch(() => {});
       } else {
-        await addDoc(publicCol('packages'), { ...data, createdAt: serverTimestamp() });
+        const created = await addDoc(publicCol('packages'), { ...data, createdAt: serverTimestamp() });
+        savedId = created.id;
+        await setDoc(legacyPublicDoc('packages', savedId), { ...data, createdAt: serverTimestamp() }, { merge: true }).catch(() => {});
       }
+      const nextPkgs = pkgForm.id
+        ? packages.map((p) => (p.id === savedId ? { ...p, ...data, id: savedId } : p))
+        : [...packages, { ...data, id: savedId }];
+      await setDoc(
+        publicDoc('settings', 'main'),
+        { cachedPackages: nextPkgs, syncVersion: Date.now() },
+        { merge: true }
+      ).catch(() => {});
       setPkgForm({ id: '', title: '', description: '', price: '', oldPrice: '', oldPriceManual: false, notebookIds: [] });
-      showToast('تم حفظ الباقة التوفيرية بنجاح!');
+      showToast('تم حفظ الباقة التوفيرية وتعميمها على العملاء بنجاح!');
     } catch (err) {
       showToast(`خطأ: ${err?.message || ''}`, 'error');
     }
@@ -3489,11 +3620,21 @@ function AdminDashboard({
         active: couponForm.active !== false,
         updatedAt: serverTimestamp()
       };
-      if (couponForm.id) {
-        await updateDoc(publicDoc('coupons', couponForm.id), data);
+      let savedId = couponForm.id;
+      if (savedId) {
+        await updateDoc(publicDoc('coupons', savedId), data);
       } else {
-        await addDoc(publicCol('coupons'), { ...data, usedCount: 0, createdAt: serverTimestamp() });
+        const created = await addDoc(publicCol('coupons'), { ...data, usedCount: 0, createdAt: serverTimestamp() });
+        savedId = created.id;
       }
+      const nextCps = couponForm.id
+        ? coupons.map((c) => (c.id === savedId ? { ...c, ...data, id: savedId } : c))
+        : [...coupons, { ...data, id: savedId, usedCount: 0 }];
+      await setDoc(
+        publicDoc('settings', 'main'),
+        { cachedCoupons: nextCps, syncVersion: Date.now() },
+        { merge: true }
+      ).catch(() => {});
       setCouponForm({
         id: '',
         code: '',
@@ -3505,7 +3646,7 @@ function AdminDashboard({
         expiresAt: '',
         active: true
       });
-      showToast('تم حفظ كوبون الخصم بنجاح!');
+      showToast('تم حفظ كوبون الخصم وتعميمه على العملاء بنجاح!');
     } catch (err) {
       showToast(`خطأ: ${err?.message || ''}`, 'error');
     }
@@ -4497,7 +4638,17 @@ function AdminDashboard({
                         </button>
                         <button
                           type="button"
-                          onClick={() => deleteDoc(publicDoc('packages', pkg.id))}
+                          onClick={async () => {
+                            await deleteDoc(publicDoc('packages', pkg.id));
+                            await deleteDoc(legacyPublicDoc('packages', pkg.id)).catch(() => {});
+                            const remaining = packages.filter((p) => p.id !== pkg.id);
+                            await setDoc(
+                              publicDoc('settings', 'main'),
+                              { cachedPackages: remaining, syncVersion: Date.now() },
+                              { merge: true }
+                            ).catch(() => {});
+                            showToast('تم حذف الباقة.');
+                          }}
                           className="px-3 py-1.5 rounded-xl bg-rose-100 text-rose-700 text-xs font-black"
                         >
                           حذف
