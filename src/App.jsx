@@ -2158,16 +2158,20 @@ export default function App() {
       {/* نافذة معاينة المذكرة والعينات */}
       {/* ===================================================================== */}
       {previewNotebook && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
+        <div
+          className={`fixed inset-0 z-50 backdrop-blur-sm flex items-center justify-center ${
+            previewFullscreen ? 'bg-slate-950 p-0 z-[70]' : 'bg-slate-950/80 p-2 sm:p-4'
+          }`}
+        >
           <div
-            className={`bg-white flex flex-col overflow-hidden shadow-2xl ${
+            className={`flex flex-col overflow-hidden shadow-2xl ${
               previewFullscreen
-                ? 'w-full h-full rounded-none'
-                : 'w-full max-w-4xl max-h-[92vh] rounded-3xl border border-slate-200'
+                ? 'w-screen h-screen bg-slate-950 rounded-none border-0'
+                : 'w-full max-w-4xl max-h-[92vh] bg-white rounded-3xl border border-slate-200'
             }`}
           >
             {/* رأس نافذة المعاينة */}
-            <div className="bg-slate-900 text-white px-3 sm:px-5 py-3 flex items-center justify-between gap-2 shrink-0">
+            <div className="bg-slate-900 text-white px-3 sm:px-5 py-3 flex items-center justify-between gap-2 shrink-0 border-b border-white/10">
               <div className="min-w-0">
                 <h3 className="text-sm sm:text-base font-black truncate">{previewNotebook.title}</h3>
                 <p className="text-[11px] sm:text-xs text-slate-300 font-bold truncate">
@@ -2197,9 +2201,14 @@ export default function App() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPreviewFullscreen((f) => !f)}
-                  className="p-2 rounded-xl bg-white/10 hover:bg-white/20"
-                  title="ملء الشاشة"
+                  onClick={() => {
+                    setPreviewFullscreen((f) => !f);
+                    setPreviewZoom(1);
+                  }}
+                  className={`p-2 rounded-xl transition ${
+                    previewFullscreen ? 'bg-amber-400 text-slate-950' : 'bg-white/10 hover:bg-white/20 text-white'
+                  }`}
+                  title={previewFullscreen ? 'إنهاء ملء الشاشة' : 'عرض العينة في كامل الشاشة'}
                 >
                   {previewFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
                 </button>
@@ -2218,75 +2227,27 @@ export default function App() {
               </div>
             </div>
 
-            {/* التنبيهات العامة المنفصلة (أعلى العينات) */}
-            {settings.globalAlertsPosition !== 'preview_bottom' &&
-              settings.globalAlertsPosition !== 'home_top' &&
-              previewGlobalNotices.length > 0 && <UnifiedNoticeBox items={previewGlobalNotices} compact />}
-
-            {/* التنبيه الخاص بالمذكرة (أعلى العينات) */}
-            {previewNotebook.noticePosition === 'top' && previewNotebookNotice && (
-              <UnifiedNoticeBox items={previewNotebookNotice} compact />
-            )}
-
-            {/* تفاصيل المذكرة */}
-            {(previewNotebook.subtitle || previewNotebook.badgeText) && (
-              <div className="px-3 sm:px-5 py-2 bg-white border-b border-slate-100 space-y-1 shrink-0">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {previewNotebook.badgeText && (
-                    <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[11px] font-black">
-                      {previewNotebook.badgeText}
-                    </span>
-                  )}
-                  {previewNotebook.subject && (
-                    <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-bold">
-                      المادة: {previewNotebook.subject}
-                    </span>
-                  )}
-                  {previewNotebook.pagesCount && (
-                    <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-bold">
-                      عدد الصفحات: {previewNotebook.pagesCount} صفحة
-                    </span>
-                  )}
-                </div>
-                {previewNotebook.subtitle && (
-                  <p className="text-xs text-slate-700 font-bold leading-relaxed line-clamp-3">
-                    {previewNotebook.subtitle}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* التنبيه الخاص بالمذكرة (أسفل التفاصيل ومباشرة قبل العينات) */}
-            {previewNotebook.noticePosition === 'below_details' && previewNotebookNotice && (
-              <UnifiedNoticeBox items={previewNotebookNotice} compact />
-            )}
-
-            {/* منطقة عرض صور العينات */}
-            <div
-              onTouchStart={(e) => {
-                touchStartXRef.current = e.touches?.[0]?.clientX ?? null;
-              }}
-              onTouchEnd={(e) => {
-                if (touchStartXRef.current === null || previewSamplesList.length <= 1) return;
-                const diff = (e.changedTouches?.[0]?.clientX ?? 0) - touchStartXRef.current;
-                if (Math.abs(diff) > 40) {
-                  if (diff > 0) {
-                    setPreviewPageIdx((i) => (i + 1) % previewSamplesList.length);
-                  } else {
-                    setPreviewPageIdx((i) => (i - 1 + previewSamplesList.length) % previewSamplesList.length);
+            {previewFullscreen ? (
+              /* وضع ملء الشاشة الكامل للعينة فقط */
+              <div
+                onTouchStart={(e) => {
+                  touchStartXRef.current = e.touches?.[0]?.clientX ?? null;
+                }}
+                onTouchEnd={(e) => {
+                  if (touchStartXRef.current === null || previewSamplesList.length <= 1) return;
+                  const diff = (e.changedTouches?.[0]?.clientX ?? 0) - touchStartXRef.current;
+                  if (Math.abs(diff) > 40) {
+                    if (diff > 0) {
+                      setPreviewPageIdx((i) => (i + 1) % previewSamplesList.length);
+                    } else {
+                      setPreviewPageIdx((i) => (i - 1 + previewSamplesList.length) % previewSamplesList.length);
+                    }
                   }
-                }
-                touchStartXRef.current = null;
-              }}
-              className="relative flex-1 bg-slate-100 overflow-auto flex items-center justify-center p-2 sm:p-4 min-h-[300px]"
-            >
-              {loadingSamples ? (
-                <div className="flex flex-col items-center gap-2 text-slate-600">
-                  <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-                  <span className="text-xs font-black">جاري تحميل صفحات العينة...</span>
-                </div>
-              ) : previewSamplesList.length > 0 ? (
-                <div className="w-full h-full flex items-center justify-center">
+                  touchStartXRef.current = null;
+                }}
+                className="relative flex-1 w-full h-full bg-slate-950 overflow-auto flex items-center justify-center p-1 sm:p-3"
+              >
+                {previewSamplesList.length > 0 ? (
                   <img
                     src={previewSamplesList[previewPageIdx] || previewSamplesList[0]}
                     alt={`عينة ${previewPageIdx + 1}`}
@@ -2299,260 +2260,178 @@ export default function App() {
                       transform: previewZoom !== 1 ? `scale(${previewZoom})` : undefined,
                       transformOrigin: 'center center'
                     }}
-                    className={`w-auto h-auto max-w-full ${
-                      previewFullscreen ? 'max-h-[82vh]' : 'max-h-[58vh] sm:max-h-[65vh]'
-                    } object-contain rounded-xl shadow-md transition-transform`}
+                    className="w-auto h-auto max-w-full max-h-[calc(100vh-64px)] object-contain transition-transform"
                   />
-                </div>
-              ) : (
-                <p className="text-xs sm:text-sm font-bold text-slate-500">لا توجد صور عينات مرفوعة لهذه المذكرة.</p>
-              )}
+                ) : (
+                  <p className="text-sm font-bold text-slate-400">لا توجد صور عينات مرفوعة لهذه المذكرة.</p>
+                )}
 
-              {previewSamplesList.length > 1 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setPreviewPageIdx((i) => (i - 1 + previewSamplesList.length) % previewSamplesList.length)}
-                    className="fixed sm:absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-900/80 hover:bg-slate-900 text-white flex items-center justify-center shadow-lg"
-                  >
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPreviewPageIdx((i) => (i + 1) % previewSamplesList.length)}
-                    className="fixed sm:absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-900/80 hover:bg-slate-900 text-white flex items-center justify-center shadow-lg"
-                  >
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
-                </>
-              )}
-            </div>
-
-            {/* التنبيه الخاص بالمذكرة (أسفل العينات) */}
-            {previewNotebook.noticePosition === 'bottom' && previewNotebookNotice && (
-              <UnifiedNoticeBox items={previewNotebookNotice} compact />
-            )}
-
-            {/* التنبيهات العامة المنفصلة (أسفل العينات) */}
-            {settings.globalAlertsPosition === 'preview_bottom' && previewGlobalNotices.length > 0 && (
-              <UnifiedNoticeBox items={previewGlobalNotices} compact />
-            )}
-
-            {/* شريط الإجراءات السفلي داخل المعاينة */}
-            <div className="bg-white border-t border-slate-200 px-3 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-2 shrink-0">
-              <div className="flex items-center gap-2">
-                <span className={`text-lg sm:text-xl font-black ${theme.primaryText}`}>{previewNotebook.price} ج.م</span>
-                {Number(previewNotebook.oldPrice) > Number(previewNotebook.price) && (
+                {previewSamplesList.length > 1 && (
                   <>
-                    <span className="text-xs text-slate-400 line-through font-bold">{previewNotebook.oldPrice} ج.م</span>
-                    <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-xs font-black">
-                      وفّر {Number(previewNotebook.oldPrice) - Number(previewNotebook.price)} ج.م
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewPageIdx((i) => (i - 1 + previewSamplesList.length) % previewSamplesList.length)}
+                      className="fixed right-3 sm:right-6 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/20 hover:bg-white/35 text-white backdrop-blur flex items-center justify-center shadow-xl"
+                    >
+                      <ChevronRight className="w-6 h-6" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewPageIdx((i) => (i + 1) % previewSamplesList.length)}
+                      className="fixed left-3 sm:left-6 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/20 hover:bg-white/35 text-white backdrop-blur flex items-center justify-center shadow-xl"
+                    >
+                      <ChevronLeft className="w-6 h-6" />
+                    </button>
                   </>
                 )}
               </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                {previewNotebook.driveLink && (
-                  <a
-                    href={previewNotebook.driveLink}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{ backgroundColor: previewNotebook.driveBtnColor || '#059669' }}
-                    className="px-4 py-2.5 rounded-2xl text-white text-xs sm:text-sm font-black flex items-center gap-1.5 shadow"
+            ) : (
+              /* الوضع الافتراضي: صفحة العينة كاملة أولاً ثم التفاصيل والتنبيهات أسفلها */
+              <>
+                <div className="flex-1 overflow-y-auto bg-slate-100">
+                  {/* 1. صفحة العينة كاملة في مقدمة النافذة */}
+                  <div
+                    onTouchStart={(e) => {
+                      touchStartXRef.current = e.touches?.[0]?.clientX ?? null;
+                    }}
+                    onTouchEnd={(e) => {
+                      if (touchStartXRef.current === null || previewSamplesList.length <= 1) return;
+                      const diff = (e.changedTouches?.[0]?.clientX ?? 0) - touchStartXRef.current;
+                      if (Math.abs(diff) > 40) {
+                        if (diff > 0) {
+                          setPreviewPageIdx((i) => (i + 1) % previewSamplesList.length);
+                        } else {
+                          setPreviewPageIdx((i) => (i - 1 + previewSamplesList.length) % previewSamplesList.length);
+                        }
+                      }
+                      touchStartXRef.current = null;
+                    }}
+                    className="relative w-full bg-slate-100 flex items-center justify-center p-2.5 sm:p-4 border-b border-slate-200/80 min-h-[280px]"
                   >
-                    <ExternalLink className="w-4 h-4" />
-                    <span>معاينة PDF على Drive</span>
-                  </a>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    addToCart(previewNotebook);
-                    setPreviewNotebook(null);
-                    setCartOpen(true);
-                  }}
-                  className={`px-5 py-2.5 rounded-2xl ${theme.primaryBg} text-white text-xs sm:text-sm font-black shadow`}
-                >
-                  اطلب المذكرة الآن
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+                    {loadingSamples ? (
+                      <div className="flex flex-col items-center gap-2 text-slate-600 py-12">
+                        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                        <span className="text-xs font-black">جاري تحميل صفحات العينة...</span>
+                      </div>
+                    ) : previewSamplesList.length > 0 ? (
+                      <img
+                        src={previewSamplesList[previewPageIdx] || previewSamplesList[0]}
+                        alt={`عينة ${previewPageIdx + 1}`}
+                        onError={(e) => {
+                          if (previewNotebook?.coverImage && e.currentTarget.src !== previewNotebook.coverImage) {
+                            e.currentTarget.src = previewNotebook.coverImage;
+                          }
+                        }}
+                        style={{
+                          transform: previewZoom !== 1 ? `scale(${previewZoom})` : undefined,
+                          transformOrigin: 'center center'
+                        }}
+                        className="w-auto h-auto max-w-full max-h-[66vh] sm:max-h-[72vh] object-contain rounded-xl shadow-md transition-transform"
+                      />
+                    ) : (
+                      <p className="text-xs sm:text-sm font-bold text-slate-500 py-10">
+                        لا توجد صور عينات مرفوعة لهذه المذكرة.
+                      </p>
+                    )}
 
-      {/* ===================================================================== */}
-      {/* نافذة سلة الطلبات */}
-      {/* ===================================================================== */}
-      {cartOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex justify-end">
-          <div className="w-full max-w-md bg-white h-full overflow-y-auto p-5 flex flex-col justify-between space-y-5 shadow-2xl">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h3 className="text-lg font-black text-slate-900">سلة الطلبات ({cart.length})</h3>
-                <button type="button" onClick={() => setCartOpen(false)} className="p-2 rounded-xl bg-slate-100">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {lastCreatedOrder && cart.length === 0 && (
-                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-2">
-                  <div className="text-sm font-black text-emerald-900">{safeText(settings.orderSuccessMessage)}</div>
-                  <div className="text-xs font-black text-slate-800">رقم طلبك: {lastCreatedOrder.orderCode}</div>
-                  {lastCreatedOrder.rewardCoupon && (
-                    <div className="text-xs font-black text-amber-900 bg-amber-100 px-3 py-1.5 rounded-xl">
-                      هدية لطلبك القادم: كود خصم {lastCreatedOrder.rewardCoupon}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {cart.length === 0 ? (
-                <p className="text-xs sm:text-sm text-slate-500 font-bold text-center py-8">السلة فارغة حاليًا.</p>
-              ) : (
-                <>
-                  <div className="space-y-2.5">
-                    {cart.map((item) => (
-                      <div key={item.id} className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="text-xs sm:text-sm font-black text-slate-900 truncate">{item.title}</div>
-                          <div className="text-xs text-blue-600 font-bold">{item.price} ج.م</div>
-                        </div>
+                    {previewSamplesList.length > 1 && (
+                      <>
                         <button
                           type="button"
-                          onClick={() => setCart((prev) => prev.filter((x) => x.id !== item.id))}
-                          className="p-1.5 rounded-xl bg-rose-100 text-rose-700"
+                          onClick={() => setPreviewPageIdx((i) => (i - 1 + previewSamplesList.length) % previewSamplesList.length)}
+                          className="absolute right-3 sm:right-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-900/80 hover:bg-slate-900 text-white flex items-center justify-center shadow-lg"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <ChevronRight className="w-5 h-5" />
                         </button>
-                      </div>
-                    ))}
+                        <button
+                          type="button"
+                          onClick={() => setPreviewPageIdx((i) => (i + 1) % previewSamplesList.length)}
+                          className="absolute left-3 sm:left-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-slate-900/80 hover:bg-slate-900 text-white flex items-center justify-center shadow-lg"
+                        >
+                          <ChevronLeft className="w-5 h-5" />
+                        </button>
+                      </>
+                    )}
                   </div>
 
-                  {/* كود الخصم */}
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={couponInput}
-                      onChange={(e) => setCouponInput(e.target.value)}
-                      placeholder="هل لديك كود خصم؟"
-                      className="flex-1 px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-black uppercase"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleApplyCoupon}
-                      className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-black"
-                    >
-                      تطبيق
-                    </button>
-                  </div>
+                  {/* 2. التنبيهات العامة والخاصة وتفاصيل المذكرة أسفل صفحة العينة */}
+                  <div className="bg-white divide-y divide-slate-100">
+                    {settings.globalAlertsPosition !== 'home_top' && previewGlobalNotices.length > 0 && (
+                      <UnifiedNoticeBox items={previewGlobalNotices} compact />
+                    )}
 
-                  {/* نموذج بيانات المعلم */}
-                  <form onSubmit={handleSubmitOrder} className="space-y-3 pt-2 border-t border-slate-100">
-                    {(settings.checkoutFields || [])
-                      .filter((f) => f.enabled !== false)
-                      .map((field) => (
-                        <div key={field.id}>
-                          <label className="block text-xs font-bold text-slate-700 mb-1">
-                            {field.label} {field.required ? '*' : ''}
-                          </label>
-                          {field.type === 'textarea' ? (
-                            <textarea
-                              rows={2}
-                              required={Boolean(field.required)}
-                              placeholder={field.placeholder || ''}
-                              value={customerForm[field.id] || ''}
-                              onChange={(e) => setCustomerForm({ ...customerForm, [field.id]: e.target.value })}
-                              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold"
-                            />
-                          ) : (
-                            <input
-                              type={field.type || 'text'}
-                              required={Boolean(field.required)}
-                              placeholder={field.placeholder || ''}
-                              value={customerForm[field.id] || ''}
-                              onChange={(e) => setCustomerForm({ ...customerForm, [field.id]: e.target.value })}
-                              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold"
-                            />
+                    {previewNotebookNotice && <UnifiedNoticeBox items={previewNotebookNotice} compact />}
+
+                    {(previewNotebook.subtitle || previewNotebook.badgeText || previewNotebook.subject || previewNotebook.pagesCount) && (
+                      <div className="px-3 sm:px-5 py-3.5 space-y-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {previewNotebook.badgeText && (
+                            <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[11px] font-black">
+                              {previewNotebook.badgeText}
+                            </span>
+                          )}
+                          {previewNotebook.subject && (
+                            <span className="px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-bold">
+                              المادة: {previewNotebook.subject}
+                            </span>
+                          )}
+                          {previewNotebook.pagesCount && (
+                            <span className="px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-bold">
+                              عدد الصفحات: {previewNotebook.pagesCount} صفحة
+                            </span>
                           )}
                         </div>
-                      ))}
-
-                    <div className="p-3.5 rounded-2xl bg-slate-900 text-white space-y-1 text-xs font-bold">
-                      <div className="flex justify-between">
-                        <span>المجموع الفرعي:</span>
-                        <span>{cartSubtotal} ج.م</span>
+                        {previewNotebook.subtitle && (
+                          <p className="text-xs sm:text-sm text-slate-700 font-bold leading-relaxed">
+                            {previewNotebook.subtitle}
+                          </p>
+                        )}
                       </div>
-                      {couponDiscountAmount > 0 && (
-                        <div className="flex justify-between text-emerald-400">
-                          <span>قيمة الخصم:</span>
-                          <span>- {couponDiscountAmount} ج.م</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between text-sm font-black pt-1 border-t border-white/15">
-                        <span>الإجمالي النهائي:</span>
-                        <span>{cartFinalTotal} ج.م</span>
-                      </div>
-                    </div>
+                    )}
+                  </div>
+                </div>
 
+                {/* شريط الإجراءات السفلي داخل المعاينة */}
+                <div className="bg-white border-t border-slate-200 px-3 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-2 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-lg sm:text-xl font-black ${theme.primaryText}`}>{previewNotebook.price} ج.م</span>
+                    {Number(previewNotebook.oldPrice) > Number(previewNotebook.price) && (
+                      <>
+                        <span className="text-xs text-slate-400 line-through font-bold">{previewNotebook.oldPrice} ج.م</span>
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-xs font-black">
+                          وفّر {Number(previewNotebook.oldPrice) - Number(previewNotebook.price)} ج.م
+                        </span>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {previewNotebook.driveLink && (
+                      <a
+                        href={previewNotebook.driveLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ backgroundColor: previewNotebook.driveBtnColor || '#059669' }}
+                        className="px-4 py-2.5 rounded-2xl text-white text-xs sm:text-sm font-black flex items-center gap-1.5 shadow"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                        <span>معاينة PDF على Drive</span>
+                      </a>
+                    )}
                     <button
-                      type="submit"
-                      disabled={submittingOrder}
-                      className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-black shadow-lg"
+                      type="button"
+                      onClick={() => {
+                        addToCart(previewNotebook);
+                        setPreviewNotebook(null);
+                        setCartOpen(true);
+                      }}
+                      className={`px-5 py-2.5 rounded-2xl ${theme.primaryBg} text-white text-xs sm:text-sm font-black shadow`}
                     >
-                      {submittingOrder ? 'جاري تسجيل الطلب...' : 'إرسال تفاصيل الطلب على واتساب'}
+                      اطلب المذكرة الآن
                     </button>
-                  </form>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ===================================================================== */}
-      {/* نافذة تواصل معنا */}
-      {/* ===================================================================== */}
-      {contactModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white rounded-3xl p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-black text-slate-900">تواصل معنا مباشرة</h3>
-              <button type="button" onClick={() => setContactModalOpen(false)} className="p-2 rounded-xl bg-slate-100">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <p className="text-xs sm:text-sm text-slate-600 font-bold">
-              للاستفسار أو طلب مذكرة مخصصة باسمك وشعارك، تواصل معنا عبر واتساب أو قنواتنا الرسمية:
-            </p>
-            <a
-              href={`https://wa.me/${String(settings.whatsappNumber || '201000000000').replace(/[^0-9]/g, '')}`}
-              target="_blank"
-              rel="noreferrer"
-              className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-black flex items-center justify-center gap-2 shadow"
-            >
-              <MessageCircle className="w-5 h-5" />
-              <span>محادثة مباشرة عبر واتساب</span>
-            </a>
-            {(settings.socialLinks || []).length > 0 && (
-              <div className="space-y-2 pt-2">
-                {settings.socialLinks.map((soc) => (
-                  <a
-                    key={soc.id}
-                    href={soc.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="p-3 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 flex items-center justify-between text-xs sm:text-sm font-black text-slate-800"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      {getSocialIcon(soc.platform, soc.url)}
-                      <span>{soc.label}</span>
-                    </div>
-                    <ExternalLink className="w-4 h-4 text-slate-400" />
-                  </a>
-                ))}
-              </div>
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </div>
