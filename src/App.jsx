@@ -3032,13 +3032,37 @@ function AdminDashboard({
       }
 
       if (Array.isArray(nbForm.samples)) {
-        await setDoc(
-          publicDoc('notebook_samples', targetId),
-          { samples: nbForm.samples, updatedAt: serverTimestamp() },
-          { merge: true }
+        const shrunkSamples = await Promise.all(
+          nbForm.samples.map((s) => shrinkDataUrlIfNeeded(s, 450000))
         );
+        const writePromises = [
+          setDoc(
+            publicDoc('notebook_samples', targetId),
+            {
+              samples: [],
+              totalPages: shrunkSamples.length,
+              noticeText: nbForm.noticeText.trim(),
+              updatedAt: serverTimestamp()
+            },
+            { merge: true }
+          )
+        ];
+        shrunkSamples.forEach((imgData, idx) => {
+          writePromises.push(
+            setDoc(
+              publicDoc('notebook_samples', `${targetId}_p${idx}`),
+              { image: imgData, pageIndex: idx, parentId: targetId, updatedAt: serverTimestamp() },
+              { merge: true }
+            )
+          );
+        });
+        for (let oldIdx = shrunkSamples.length; oldIdx < 24; oldIdx++) {
+          writePromises.push(deleteDoc(publicDoc('notebook_samples', `${targetId}_p${oldIdx}`)).catch(() => {}));
+        }
+        await Promise.all(writePromises);
+
         setSamplesMap((prev) => {
-          const next = { ...prev, [targetId]: nbForm.samples };
+          const next = { ...prev, [targetId]: shrunkSamples };
           try {
             localStorage.setItem(LOCAL_SAMPLES_KEY, JSON.stringify(next));
           } catch {
