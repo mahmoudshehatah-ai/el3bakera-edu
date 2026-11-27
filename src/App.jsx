@@ -664,6 +664,8 @@ export default function App() {
   const [logoClickCount, setLogoClickCount] = useState(0);
   const [toast, setToast] = useState(null);
   const isPoppingHistoryRef = useRef(false);
+  const topHeaderRef = useRef(null);
+  const [topHeaderHeight, setTopHeaderHeight] = useState(0);
 
   const isAdmin = Boolean(firebaseUser && firebaseUser.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase());
   const theme = THEME_PALETTES[settings.primaryTheme] || THEME_PALETTES.royal;
@@ -1409,6 +1411,21 @@ export default function App() {
 
   const overlayAlpha = Math.min(0.95, Math.max(0.1, Number(settings.heroOverlayOpacity ?? 65) / 100));
 
+  useEffect(() => {
+    const updateHeaderHeight = () => {
+      if (topHeaderRef.current) {
+        setTopHeaderHeight(topHeaderRef.current.offsetHeight || 0);
+      }
+    };
+    updateHeaderHeight();
+    window.addEventListener('resize', updateHeaderHeight);
+    const timer = setTimeout(updateHeaderHeight, 150);
+    return () => {
+      window.removeEventListener('resize', updateHeaderHeight);
+      clearTimeout(timer);
+    };
+  }, [settings.promoEnabled, settings.promoText, settings.platformName, settings.platformTagline, isAdmin, cart.length]);
+
   return (
     <div
       dir="rtl"
@@ -1429,7 +1446,7 @@ export default function App() {
       )}
 
       {/* حاوية مثبتة دائمًا بالأعلى تجمع الشريط الإعلاني والهيدر بشكل مضغوط وعصري */}
-      <div className="sticky top-0 z-40 w-full shadow-md">
+      <div ref={topHeaderRef} className="fixed top-0 right-0 left-0 z-40 w-full shadow-md">
         {/* الشريط الإعلاني العلوي المضغوط */}
         {settings.promoEnabled !== false && settings.promoText && (
           <div
@@ -1610,6 +1627,9 @@ export default function App() {
           </div>
         </header>
       </div>
+
+      {/* فاصل علوي يساوي ارتفاع الهيدر المثبّت حتى لا يختفي أي محتوى تحته */}
+      <div style={{ height: `${topHeaderHeight || 88}px` }} className="w-full shrink-0" />
 
       {/* المحتوى الرئيسي حسب الصفحة النشطة */}
       <main className="flex-1 w-full">
