@@ -578,6 +578,9 @@ function normalizeNotebook(id, data) {
     sortOrder: typeof d.sortOrder === 'number' ? d.sortOrder : 999,
     driveLink: safeText(d.driveLink || d.googleDriveLink || d.pdfLink || d.sampleUrl, ''),
     driveBtnColor: safeText(d.driveBtnColor, '#059669'),
+    detailsPosition: ['default', 'above_samples', 'below_samples', 'hidden'].includes(d.detailsPosition)
+      ? d.detailsPosition
+      : 'default',
     noticeEnabled: d.noticeEnabled !== false,
     noticeText: notice,
     noticeColor: safeText(d.noticeColor, 'amber'),
@@ -2202,9 +2205,14 @@ export default function App() {
         const showNbNoticeInThisView =
           previewNotebookNotice &&
           (!previewFullscreen || previewNotebook.noticeShowInFullscreen);
+        const nbCustomDetailsPos =
+          previewNotebook.detailsPosition && previewNotebook.detailsPosition !== 'default'
+            ? previewNotebook.detailsPosition
+            : settings.previewDetailsPosition || 'above_samples';
         const showDetailsInThisView =
-          !previewFullscreen || settings.previewDetailsShowInFullscreen;
-        const detailsPos = settings.previewDetailsPosition || 'above_samples';
+          nbCustomDetailsPos !== 'hidden' &&
+          (!previewFullscreen || settings.previewDetailsShowInFullscreen);
+        const detailsPos = nbCustomDetailsPos;
 
         const detailsBlock = showDetailsInThisView && (
           <div className="px-3.5 sm:px-5 py-2.5 bg-white border-b border-slate-200/80 space-y-1.5 shrink-0">
@@ -2998,6 +3006,7 @@ function AdminDashboard({
     badgeText: '',
     driveLink: '',
     driveBtnColor: '#059669',
+    detailsPosition: 'default',
     noticeEnabled: true,
     noticeText: '',
     noticeColor: 'amber',
@@ -3131,6 +3140,7 @@ function AdminDashboard({
         badgeText: nbForm.badgeText.trim(),
         driveLink: nbForm.driveLink.trim(),
         driveBtnColor: nbForm.driveBtnColor || '#059669',
+        detailsPosition: nbForm.detailsPosition || 'default',
         noticeEnabled: nbForm.noticeEnabled !== false,
         noticeText: nbForm.noticeText.trim(),
         noticeColor: nbForm.noticeColor || 'amber',
@@ -3443,15 +3453,6 @@ function AdminDashboard({
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">وصف مختصر</label>
-                <input
-                  type="text"
-                  value={nbForm.subtitle}
-                  onChange={(e) => setNbForm({ ...nbForm, subtitle: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold"
-                />
-              </div>
-              <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">الشارة المميزة أعلى الغلاف</label>
                 <input
                   type="text"
@@ -3459,6 +3460,31 @@ function AdminDashboard({
                   value={nbForm.badgeText}
                   onChange={(e) => setNbForm({ ...nbForm, badgeText: e.target.value })}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">موضع تفاصيل هذه المذكرة في المعاينة</label>
+                <select
+                  value={nbForm.detailsPosition || 'default'}
+                  onChange={(e) => setNbForm({ ...nbForm, detailsPosition: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-bold"
+                >
+                  <option value="default">حسب الإعداد العام للمنصة</option>
+                  <option value="above_samples">فوق صفحات المعاينة</option>
+                  <option value="below_samples">أسفل صفحات المعاينة</option>
+                  <option value="hidden">إخفاء تفاصيل هذه المذكرة</option>
+                </select>
+              </div>
+              <div className="sm:col-span-2 lg:col-span-3">
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  وصف وتفاصيل المذكرة (اكتب المحتويات والمميزات بحرية في عدة أسطر)
+                </label>
+                <textarea
+                  rows={4}
+                  placeholder="اكتب وصف المذكرة ومحتوياتها وعدد النماذج والتدريبات بالتفصيل..."
+                  value={nbForm.subtitle}
+                  onChange={(e) => setNbForm({ ...nbForm, subtitle: e.target.value })}
+                  className="w-full px-4 py-3 rounded-2xl border border-slate-200 text-xs sm:text-sm font-bold leading-relaxed resize-y min-h-[110px]"
                 />
               </div>
 
