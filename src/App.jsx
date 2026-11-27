@@ -308,7 +308,8 @@ const DEFAULT_SETTINGS = {
     'نوفر للمعلمين مذكرات دراسية منسقة باحترافية ومحدثة وفق أحدث المناهج بصيغة PDF عالية الدقة، مع إضافة بياناتك الخاصة جاهزة للطباعة الفورية.',
   heroPrimaryBtnText: 'تصفح المذكرات الدراسية',
   heroSecondaryBtnText: 'العروض وباقات التوفير',
-  heroCustomBtnText: 'اطلب مذكرة مخصصة',
+  heroCustomBtnText: 'اطلب إعداد مذكرة خاصة',
+  heroCustomBtnColor: '#facc15',
   showHeroCustomBtn: true,
   promoEnabled: true,
   promoText: 'عرض خاص للمعلمين: خصم 15% على جميع مذكرات الترم + إضافة الشعار مجانًا لفترة محدودة!',
@@ -1762,9 +1763,10 @@ export default function App() {
                         <button
                           type="button"
                           onClick={() => setContactModalOpen(true)}
-                          className="px-4 sm:px-6 py-3 sm:py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs sm:text-sm font-black shadow-lg transition text-center"
+                          style={{ backgroundColor: settings.heroCustomBtnColor || '#facc15' }}
+                          className="px-4 sm:px-6 py-3 sm:py-3.5 rounded-2xl hover:opacity-95 text-slate-950 text-xs sm:text-sm font-black shadow-lg transition text-center"
                         >
-                          {safeText(settings.heroCustomBtnText, 'اطلب مذكرة مخصصة')}
+                          {safeText(settings.heroCustomBtnText, 'اطلب إعداد مذكرة خاصة')}
                         </button>
                       )}
                     </div>
@@ -1788,6 +1790,104 @@ export default function App() {
                 </div>
               </div>
             </section>
+
+            {/* الأقسام الدراسية الرئيسية في الصفحة الرئيسية */}
+            <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-black text-slate-900">تصفح الأقسام الدراسية</h2>
+                  <p className="text-xs sm:text-sm text-slate-500 font-bold">اختر القسم الدراسي لعرض المراحل والصفوف والمذكرات</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategoryId('');
+                    setSelectedStageId('');
+                    setSelectedGradeId('');
+                    setActiveView('library');
+                  }}
+                  className="text-xs sm:text-sm font-black text-blue-600 hover:underline"
+                >
+                  عرض جميع المذكرات ({visibleNotebooks.length})
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {(settings.categories || []).map((cat) => {
+                  const catCount = countNotebooksInCategory(cat);
+                  return (
+                    <div
+                      key={cat.id}
+                      onClick={() => {
+                        setSelectedCategoryId(cat.id);
+                        setSelectedStageId('');
+                        setSelectedGradeId('');
+                        setActiveView('library');
+                      }}
+                      className="group bg-white rounded-3xl border border-slate-200 hover:border-blue-400 overflow-hidden shadow-sm hover:shadow-xl cursor-pointer transition flex flex-col justify-between"
+                    >
+                      <div className="relative h-44 bg-gradient-to-br from-slate-900 to-blue-950 flex items-center justify-center overflow-hidden">
+                        {cat.image ? (
+                          <img
+                            src={cat.image}
+                            alt={cat.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                          />
+                        ) : (
+                          <BookOpen className="w-12 h-12 text-amber-400/90" />
+                        )}
+                      </div>
+                      <div className="p-5 flex items-center justify-between gap-3">
+                        <div>
+                          <h3 className="text-base sm:text-lg font-black text-slate-900">{safeText(cat.name)}</h3>
+                          <p className="text-xs text-slate-500 font-bold mt-0.5">{catCount} مذكرة متاحة</p>
+                        </div>
+                        <span className={`px-3.5 py-2 rounded-xl ${theme.primaryBg} text-white text-xs font-black`}>
+                          تصفح
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* قسم ما الجديد؟ أحدث المذكرات */}
+            {settings.whatsNewEnabled !== false && whatsNewNotebooks.length > 0 && (
+              <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-black text-slate-900">
+                      {safeText(settings.whatsNewTitle, 'ما الجديد؟ أحدث المذكرات والإصدارات')}
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveView('library')}
+                    className="text-xs sm:text-sm font-black text-blue-600 hover:underline"
+                  >
+                    عرض الكل
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                  {whatsNewNotebooks.map((nb) => (
+                    <NotebookCard
+                      key={nb.id}
+                      nb={nb}
+                      theme={theme}
+                      settings={settings}
+                      onPreview={() => {
+                        setPreviewNotebook(nb);
+                        setPreviewPageIdx(0);
+                        setPreviewZoom(1);
+                      }}
+                      onAdd={() => addToCart(nb)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
 
             {/* قسم الإعلان عن القادم وأخبار المنصة */}
             {settings.newsSectionEnabled !== false && Array.isArray(settings.newsItems) && settings.newsItems.length > 0 && (
@@ -4810,6 +4910,47 @@ function AdminDashboard({
                     onChange={(e) => setLocalSettings({ ...localSettings, heroSubtitle: e.target.value })}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold"
                   />
+                </div>
+
+                {/* التحكم الكامل في زر طلب إعداد مذكرة خاصة */}
+                <div className="sm:col-span-2 p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-black text-slate-900">التحكم في زر «اطلب إعداد مذكرة خاصة»</span>
+                    <label className="flex items-center gap-2 text-xs font-black text-slate-800 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={localSettings.showHeroCustomBtn !== false}
+                        onChange={(e) => setLocalSettings({ ...localSettings, showHeroCustomBtn: e.target.checked })}
+                        className="w-4 h-4"
+                      />
+                      <span>إظهار الزر في الواجهة الرئيسية</span>
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-bold text-slate-700 mb-1">النص المكتوب على الزر</label>
+                      <input
+                        type="text"
+                        value={localSettings.heroCustomBtnText ?? 'اطلب إعداد مذكرة خاصة'}
+                        onChange={(e) => setLocalSettings({ ...localSettings, heroCustomBtnText: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">لون الزر</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={localSettings.heroCustomBtnColor || '#facc15'}
+                          onChange={(e) => setLocalSettings({ ...localSettings, heroCustomBtnColor: e.target.value })}
+                          className="w-12 h-10 rounded-xl border border-slate-200 cursor-pointer"
+                        />
+                        <span className="text-xs font-bold text-slate-500">
+                          {localSettings.heroCustomBtnColor || '#facc15'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
