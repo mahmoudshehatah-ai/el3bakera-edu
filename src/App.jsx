@@ -313,6 +313,8 @@ const DEFAULT_SETTINGS = {
   promoEnabled: true,
   promoText: 'عرض خاص للمعلمين: خصم 15% على جميع مذكرات الترم + إضافة الشعار مجانًا لفترة محدودة!',
   promoCouponCode: 'OPEN15',
+  promoDiscountPercent: 15,
+  promoMaxDiscount: 0,
   promoBgColor: '#0f172a',
   promoTextColor: '#ffffff',
   globalAlertsEnabled: true,
@@ -360,6 +362,7 @@ const DEFAULT_SETTINGS = {
   orderSuccessMessage: 'تم تسجيل طلبك بنجاح! احتفظ برقم الطلب لمتابعة حالة التجهيز.',
   nextOrderRewardEnabled: true,
   nextOrderRewardPercent: 15,
+  nextOrderRewardMaxDiscount: 0,
   nextOrderRewardDays: 7,
   nextOrderRewardPrefix: 'VIP',
   checkoutFields: [
@@ -1223,10 +1226,17 @@ export default function App() {
   const couponDiscountAmount = useMemo(() => {
     if (!appliedCoupon || cartSubtotal <= 0) return 0;
     if (appliedCoupon.minOrder && cartSubtotal < Number(appliedCoupon.minOrder)) return 0;
+    let discount = 0;
     if (appliedCoupon.type === 'fixed') {
-      return Math.min(cartSubtotal, Number(appliedCoupon.value) || 0);
+      discount = Math.min(cartSubtotal, Number(appliedCoupon.value) || 0);
+    } else {
+      discount = Math.round((cartSubtotal * (Number(appliedCoupon.value) || 0)) / 100);
     }
-    return Math.round((cartSubtotal * (Number(appliedCoupon.value) || 0)) / 100);
+    const maxCap = Number(appliedCoupon.maxDiscount) || 0;
+    if (maxCap > 0) {
+      discount = Math.min(discount, maxCap);
+    }
+    return Math.min(cartSubtotal, discount);
   }, [appliedCoupon, cartSubtotal]);
 
   const cartFinalTotal = Math.max(0, cartSubtotal - couponDiscountAmount);
@@ -1235,7 +1245,13 @@ export default function App() {
     const code = couponInput.trim().toUpperCase();
     if (!code) return;
     if (settings.promoEnabled && settings.promoCouponCode && code === settings.promoCouponCode.trim().toUpperCase()) {
-      setAppliedCoupon({ code, type: 'percent', value: 15, minOrder: 0 });
+      setAppliedCoupon({
+        code,
+        type: 'percent',
+        value: Number(settings.promoDiscountPercent) || 15,
+        maxDiscount: Number(settings.promoMaxDiscount) || 0,
+        minOrder: 0
+      });
       showToast(`تم تفعيل كود الخصم ${code} بنجاح!`);
       return;
     }
@@ -1277,6 +1293,7 @@ export default function App() {
           code: generatedRewardCode,
           type: 'percent',
           value: Number(settings.nextOrderRewardPercent) || 15,
+          maxDiscount: Number(settings.nextOrderRewardMaxDiscount) || 0,
           minOrder: 0,
           maxUses: 1,
           usedCount: 0,
@@ -2897,6 +2914,7 @@ function AdminDashboard({
     code: '',
     type: 'percent',
     value: '',
+    maxDiscount: '',
     minOrder: '',
     maxUses: '',
     expiresAt: '',
@@ -3172,6 +3190,7 @@ function AdminDashboard({
         code: couponForm.code.trim().toUpperCase(),
         type: couponForm.type,
         value: Number(couponForm.value) || 0,
+        maxDiscount: Number(couponForm.maxDiscount) || 0,
         minOrder: Number(couponForm.minOrder) || 0,
         maxUses: Number(couponForm.maxUses) || 0,
         expiresAt: couponForm.expiresAt || '',
@@ -3183,7 +3202,17 @@ function AdminDashboard({
       } else {
         await addDoc(publicCol('coupons'), { ...data, usedCount: 0, createdAt: serverTimestamp() });
       }
-      setCouponForm({ id: '', code: '', type: 'percent', value: '', minOrder: '', maxUses: '', expiresAt: '', active: true });
+      setCouponForm({
+        id: '',
+        code: '',
+        type: 'percent',
+        value: '',
+        maxDiscount: '',
+        minOrder: '',
+        maxUses: '',
+        expiresAt: '',
+        active: true
+      });
       showToast('تم حفظ كوبون الخصم بنجاح!');
     } catch (err) {
       showToast(`خطأ: ${err?.message || ''}`, 'error');
@@ -4120,6 +4149,14 @@ function AdminDashboard({
               />
               <input
                 type="number"
+                min="0"
+                placeholder="الحد الأقصى لمبلغ الخصم (ج.م - 0 = بلا حد)"
+                value={couponForm.maxDiscount}
+                onChange={(e) => setCouponForm({ ...couponForm, maxDiscount: e.target.value })}
+                className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold"
+              />
+              <input
+                type="number"
                 placeholder="الحد الأدنى للطلب (ج.م - اختياري)"
                 value={couponForm.minOrder}
                 onChange={(e) => setCouponForm({ ...couponForm, minOrder: e.target.value })}
@@ -4136,7 +4173,7 @@ function AdminDashboard({
                 type="datetime-local"
                 value={couponForm.expiresAt}
                 onChange={(e) => setCouponForm({ ...couponForm, expiresAt: e.target.value })}
-                className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold"
+                className="sm:col-span-2 px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold"
               />
             </div>
 
@@ -4154,7 +4191,9 @@ function AdminDashboard({
                     <div>
                       <span className="text-sm font-black text-slate-900">{c.code}</span>
                       <span className="text-xs text-slate-600 font-bold mr-2">
-                        • خصم {c.value} {c.type === 'fixed' ? 'ج.م' : '%'} (مستخدم {c.usedCount || 0} مرة)
+                        • خصم {c.value} {c.type === 'fixed' ? 'ج.م' : '%'}
+                        {Number(c.maxDiscount) > 0 ? ` (بحد أقصى ${c.maxDiscount} ج.م)` : ''}
+                        {' '}(مستخدم {c.usedCount || 0} مرة)
                       </span>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
@@ -4175,6 +4214,7 @@ function AdminDashboard({
                             code: c.code,
                             type: c.type || 'percent',
                             value: String(c.value),
+                            maxDiscount: c.maxDiscount ? String(c.maxDiscount) : '',
                             minOrder: c.minOrder ? String(c.minOrder) : '',
                             maxUses: c.maxUses ? String(c.maxUses) : '',
                             expiresAt: c.expiresAt || '',
@@ -4199,10 +4239,15 @@ function AdminDashboard({
             )}
           </form>
 
-          {/* إعدادات كوبون مكافأة الطلب القادم التلقائي */}
+          {/* مكافأة الطلب القادم التلقائية */}
           <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-black text-slate-900">كوبون مكافأة الطلب القادم التلقائي</h3>
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-slate-900">مكافأة الطلب القادم التلقائية</h3>
+                <p className="text-xs text-slate-500 font-bold">
+                  يولّد النظام تلقائيًا كود خصم خاص لكل معلم بعد إتمام طلبه لتشجيعه على الطلب مرة أخرى
+                </p>
+              </div>
               <input
                 type="checkbox"
                 checked={localSettings.nextOrderRewardEnabled !== false}
@@ -4210,13 +4255,25 @@ function AdminDashboard({
                 className="w-5 h-5"
               />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">نسبة الخصم (%)</label>
                 <input
                   type="number"
                   value={localSettings.nextOrderRewardPercent || 15}
                   onChange={(e) => setLocalSettings({ ...localSettings, nextOrderRewardPercent: Number(e.target.value) })}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">الحد الأقصى للخصم (ج.م - 0 = بلا حد)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={localSettings.nextOrderRewardMaxDiscount ?? 0}
+                  onChange={(e) =>
+                    setLocalSettings({ ...localSettings, nextOrderRewardMaxDiscount: Number(e.target.value) })
+                  }
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold"
                 />
               </div>
@@ -4515,7 +4572,7 @@ function AdminDashboard({
                   />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-                  <div className="sm:col-span-6">
+                  <div className="sm:col-span-5">
                     <label className="block text-xs font-bold text-slate-700 mb-1">النص المكتوب على الشريط</label>
                     <input
                       type="text"
@@ -4524,13 +4581,24 @@ function AdminDashboard({
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-bold"
                     />
                   </div>
-                  <div className="sm:col-span-3">
+                  <div className="sm:col-span-2">
                     <label className="block text-xs font-bold text-slate-700 mb-1">كود الكوبون</label>
                     <input
                       type="text"
                       value={localSettings.promoCouponCode || ''}
                       onChange={(e) => setLocalSettings({ ...localSettings, promoCouponCode: e.target.value })}
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-black uppercase"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-bold text-slate-700 mb-1">أقصى خصم (ج.م)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="0 = بلا حد"
+                      value={localSettings.promoMaxDiscount ?? 0}
+                      onChange={(e) => setLocalSettings({ ...localSettings, promoMaxDiscount: Number(e.target.value) })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-bold"
                     />
                   </div>
                   <div className="sm:col-span-3 flex items-center gap-3">
