@@ -50,23 +50,28 @@ import {
 } from 'firebase/firestore';
 
 // ============================================================================
-// تهيئة Firebase الآمنة (تعمل في المعاينة وعلى Vercel دون أي تعطل)
+// تهيئة Firebase الآمنة المربوطة مباشرة بمشروع el3bakera-edu لجميع العملاء
 // ============================================================================
 const PRIMARY_APP_ID = 'el3bakera-edu';
 
+const DEFAULT_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD_du5VY8nJGDJ169Fof9EAlI9x2W2d-14",
+  authDomain: "el3bakera-edu.firebaseapp.com",
+  projectId: "el3bakera-edu",
+  storageBucket: "el3bakera-edu.firebasestorage.app",
+  messagingSenderId: "74663879858",
+  appId: "1:74663879858:web:4327c0ea1b825dd6c615ab"
+};
+
 function resolveFirebaseConfig() {
   try {
-    if (typeof window !== 'undefined' && window.__firebase_config) {
-      return typeof window.__firebase_config === 'string'
-        ? JSON.parse(window.__firebase_config)
-        : window.__firebase_config;
+    const saved = localStorage.getItem('el3bakera_custom_firebase_config');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed && parsed.apiKey) return parsed;
     }
   } catch {}
-  try {
-    const saved = localStorage.getItem('el3bakera_custom_firebase_config');
-    if (saved) return JSON.parse(saved);
-  } catch {}
-  return null;
+  return DEFAULT_FIREBASE_CONFIG;
 }
 
 const activeFirebaseConfig = resolveFirebaseConfig();
