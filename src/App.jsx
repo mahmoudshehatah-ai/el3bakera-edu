@@ -3844,7 +3844,7 @@ function AdminDashboard({
                               getDoc(legacyPublicDoc('notebook_samples', nb.id)).catch(() => null),
                               ...pageIds.map((pid) => getDoc(publicDoc('notebook_samples', pid)).catch(() => null))
                             ]);
-                            const loaded = [...existingSamples];
+                            const loaded = [];
                             const collectFromSnap = (snap) => {
                               if (!snap || !snap.exists()) return;
                               extractAnyImagesFromDoc(snap.data() || {}).forEach((im) => {
@@ -3853,12 +3853,15 @@ function AdminDashboard({
                                 }
                               });
                             };
-                            collectFromSnap(mainSnap);
                             pageSnaps.forEach(collectFromSnap);
-                            collectFromSnap(legacySnap);
-                            if (loaded.length > 0) {
-                              setNbForm((prev) => (prev.id === nb.id ? { ...prev, samples: loaded } : prev));
-                              setSamplesMap((prev) => ({ ...prev, [nb.id]: loaded }));
+                            if (loaded.length === 0) {
+                              collectFromSnap(mainSnap);
+                              collectFromSnap(legacySnap);
+                            }
+                            const finalLoaded = loaded.length > 0 ? loaded : existingSamples;
+                            if (finalLoaded.length > 0) {
+                              setNbForm((prev) => (prev.id === nb.id ? { ...prev, samples: finalLoaded } : prev));
+                              setSamplesMap((prev) => ({ ...prev, [nb.id]: finalLoaded }));
                             }
                           } finally {
                             setLoadingEditSamples(false);
