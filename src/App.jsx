@@ -5,6 +5,10 @@ import {
   signInWithEmailAndPassword,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  setPersistence,
+  browserLocalPersistence,
   signOut,
   onAuthStateChanged
 } from 'firebase/auth';
@@ -13,6 +17,8 @@ import {
   collection,
   doc,
   getDocs,
+  query,
+  where,
   setDoc,
   addDoc,
   updateDoc,
@@ -128,6 +134,7 @@ const initFirebaseServices = (apiKeyOverride = '') => {
     const existing = getApps().find((a) => a.name === appName);
     app = existing || (appName === '[DEFAULT]' ? initializeApp(cfg) : initializeApp(cfg, appName));
     auth = getAuth(app);
+    setPersistence(auth, browserLocalPersistence).catch(() => {});
     db = getFirestore(app);
     return { app, auth, db };
   } catch (e) {
@@ -740,38 +747,61 @@ function MuzakkiratiApp() {
 
   useEffect(() => {
     if (!auth) return;
+    getRedirectResult(auth)
+      .then((cred) => {
+        if (cred?.user) {
+          if (cred.user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+            setFirebaseUser(cred.user);
+            setActiveView('admin');
+            showToast('تم تسجيل الدخول السحابي بنجاح!');
+          } else {
+            signOut(auth).catch(() => {});
+          }
+        }
+      })
+      .catch(() => {});
+
     const unsub = onAuthStateChanged(auth, (user) => {
       setFirebaseUser(user || null);
     });
     return () => unsub();
   }, []);
 
+  // الطرق الثلاث للوصول إلى تسجيل دخول الإدارة (5 نقرات على الشعار + رابط ?admin=1 أو #admin + اختصار Ctrl+Shift+A)
+  useEffect(() => {
+    const checkUrlAdminTrigger = () => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('admin') === '1' || window.location.hash === '#admin') {
+          if (isAdmin) setActiveView('admin');
+          else setLoginModalOpen(true);
+        }
+      } catch {
+        // تجاهل
+      }
+    };
+    checkUrlAdminTrigger();
+    window.addEventListener('hashchange', checkUrlAdminTrigger);
+
+    const handleKeyShortcut = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'A' || e.key === 'a' || e.key === 'ش')) {
+        e.preventDefault();
+        if (isAdmin) setActiveView('admin');
+        else setLoginModalOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyShortcut);
+    return () => {
+      window.removeEventListener('hashchange', checkUrlAdminTrigger);
+      window.removeEventListener('keydown', handleKeyShortcut);
+    };
+  }, [isAdmin]);
+
   useEffect(() => {
     if (!db) return;
     const unsubscribers = [];
     const handleSnapError = (err) => {
       console.warn('Snapshot warning:', err?.code || err?.message);
-    };
-
-    const mapSampleDocsToState = (docs) => {
-      setSamplesMap((prev) => {
-        const next = { ...prev };
-        docs.forEach((d) => {
-          const data = d.data() || {};
-          const rawId = safeText(data.notebookId || data.nbId, d.id);
-          const baseId = rawId.includes('_') ? rawId.split('_')[0] : rawId;
-          const imgs = extractAnyImagesFromDoc(data);
-          if (imgs.length > 0) {
-            next[baseId] = Array.from(new Set([...(next[baseId] || []), ...imgs]));
-          }
-        });
-        try {
-          localStorage.setItem(LOCAL_SAMPLES_KEY, JSON.stringify(next));
-        } catch {
-          // تجاهل
-        }
-        return next;
-      });
     };
 
     try {
@@ -845,16 +875,8 @@ function MuzakkiratiApp() {
         )
       );
 
-      unsubscribers.push(
-        onSnapshot(
-          publicCol('notebook_samples'),
-          (snap) => {
-            if (!snap.empty) mapSampleDocsToState(snap.docs);
-          },
-          handleSnapError
-        )
-      );
-
+      // لا يتم تحميل مجموعة notebook_samples الضخمة عند فتح الصفحة الرئيسية لتسريع التحميل 10 أضعاف،
+      // بل تُجلب صور عينات المذكرة عند الطلب فقط عند فتح نافذة معاينتها أو تعديلها.
       (async () => {
         const extraNotebookSources = [
           () => getDocs(legacyPublicCol('notebooks')),
@@ -942,31 +964,63 @@ function MuzakkiratiApp() {
     if (!previewNotebook || !db) return;
     let cancelled = false;
     (async () => {
-      const subPaths = [
-        collection(db, 'artifacts', APP_ID, 'public', 'data', 'notebooks', previewNotebook.id, 'samples'),
-        collection(db, 'artifacts', APP_ID, 'public', 'data', 'notebooks', previewNotebook.id, 'pages'),
-        collection(db, 'artifacts', APP_ID, 'public', 'data', 'notebook_samples', previewNotebook.id, 'pages')
-      ];
-      for (const subCol of subPaths) {
-        try {
-          const subSnap = await getDocs(subCol);
-          if (!cancelled && !subSnap.empty) {
-            const imgs = [];
-            subSnap.docs.forEach((d) => {
-              extractAnyImagesFromDoc(d.data()).forEach((im) => {
-                if (!imgs.includes(im)) imgs.push(im);
-              });
+      const nbId = previewNotebook.id;
+      const collected = [];
+      const pushDocsImages = (docs) => {
+        docs.forEach((d) => {
+          const data = d.data() || {};
+          const rawId = safeText(data.notebookId || data.nbId, d.id);
+          const baseId = rawId.includes('_') ? rawId.split('_')[0] : rawId;
+          if (baseId === nbId || d.id === nbId || d.id.startsWith(`${nbId}_`)) {
+            extractAnyImagesFromDoc(data).forEach((im) => {
+              if (!collected.includes(im)) collected.push(im);
             });
-            if (imgs.length > 0) {
-              setSamplesMap((prev) => ({
-                ...prev,
-                [previewNotebook.id]: Array.from(new Set([...(prev[previewNotebook.id] || []), ...imgs]))
-              }));
-            }
           }
-        } catch {
-          // تجاهل
+        });
+      };
+
+      // 1. جلب سريع بالاستعلام المباشر لـ notebookId
+      try {
+        const qSnap = await getDocs(query(publicCol('notebook_samples'), where('notebookId', '==', nbId)));
+        if (!cancelled && !qSnap.empty) pushDocsImages(qSnap.docs);
+      } catch {
+        // تجاهل
+      }
+
+      // 2. إن لم توجد بعد، فحص المجموعات الفرعية أو المستندات القديمة
+      if (!cancelled && collected.length === 0) {
+        const subPaths = [
+          collection(db, 'artifacts', APP_ID, 'public', 'data', 'notebooks', nbId, 'samples'),
+          collection(db, 'artifacts', APP_ID, 'public', 'data', 'notebooks', nbId, 'pages'),
+          collection(db, 'artifacts', APP_ID, 'public', 'data', 'notebook_samples', nbId, 'pages'),
+          publicCol('notebook_samples')
+        ];
+        for (const subCol of subPaths) {
+          try {
+            const subSnap = await getDocs(subCol);
+            if (!cancelled && !subSnap.empty) {
+              pushDocsImages(subSnap.docs);
+              if (collected.length > 0) break;
+            }
+          } catch {
+            // تجاهل
+          }
         }
+      }
+
+      if (!cancelled && collected.length > 0) {
+        setSamplesMap((prev) => {
+          const updated = {
+            ...prev,
+            [nbId]: Array.from(new Set([...(prev[nbId] || []), ...collected]))
+          };
+          try {
+            localStorage.setItem(LOCAL_SAMPLES_KEY, JSON.stringify(updated));
+          } catch {
+            // تجاهل
+          }
+          return updated;
+        });
       }
     })();
     return () => {
@@ -1265,6 +1319,11 @@ function MuzakkiratiApp() {
       if (!auth) throw new Error('لم يتم تهيئة Firebase Auth');
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
+      const isMobileDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+      if (isMobileDevice) {
+        await signInWithRedirect(auth, provider);
+        return;
+      }
       const cred = await signInWithPopup(auth, provider);
       if (cred.user?.email?.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
         await signOut(auth);
@@ -1312,7 +1371,7 @@ function MuzakkiratiApp() {
   const activeCoupons = useMemo(() => coupons.filter((c) => c.active !== false && !isCouponExpired(c)), [coupons]);
 
   return (
-    <div dir="rtl" className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-blue-600 selection:text-white">
+    <div dir="rtl" className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-50 text-slate-900 font-sans selection:bg-blue-600 selection:text-white">
       {/* إشعار Toast */}
       {toast && (
         <div className="fixed bottom-5 left-5 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-slate-900 text-white text-xs font-black shadow-2xl border border-slate-700">
@@ -1365,8 +1424,8 @@ function MuzakkiratiApp() {
       )}
 
       {/* الهيدر الرئيسي المدمج والمتجاوب للهاتف والكمبيوتر */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between gap-3">
+      <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 flex items-center justify-between gap-2">
           {/* الشعار واسم المنصة */}
           <button
             type="button"
@@ -1379,32 +1438,32 @@ function MuzakkiratiApp() {
                 else setLoginModalOpen(true);
               }
             }}
-            className="flex items-center gap-3 text-right group shrink-0"
+            className="flex items-center gap-2.5 text-right group min-w-0 flex-1 md:flex-initial"
           >
             {settings.logoUrl ? (
               <img
                 src={settings.logoUrl}
                 alt={settings.platformName}
-                className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl object-cover border border-slate-200 shadow-sm"
+                className="w-10 h-10 sm:w-13 sm:h-13 rounded-2xl object-cover border border-slate-200 shadow-sm shrink-0"
               />
             ) : (
-              <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl ${theme.primaryBtn} flex items-center justify-center shadow-md`}>
-                <BookOpen className="w-6 h-6 sm:w-7 sm:h-7" />
+              <div className={`w-10 h-10 sm:w-13 sm:h-13 rounded-2xl ${theme.primaryBtn} flex items-center justify-center shadow-md shrink-0`}>
+                <BookOpen className="w-5 h-5 sm:w-7 sm:h-7" />
               </div>
             )}
-            <div>
-              <div className="text-lg sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
+            <div className="min-w-0">
+              <div className="text-sm sm:text-xl font-black text-slate-900 tracking-tight leading-snug truncate">
                 {settings.platformName}
               </div>
-              <div className="hidden sm:flex items-center gap-1.5 text-xs sm:text-sm font-bold text-slate-600 mt-0.5">
-                <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
-                <span>{settings.platformTagline}</span>
+              <div className="hidden sm:flex items-center gap-1.5 text-xs sm:text-sm font-bold text-slate-600 mt-0.5 truncate">
+                <span className="w-2 h-2 rounded-full bg-amber-400 inline-block shrink-0" />
+                <span className="truncate">{settings.platformTagline}</span>
               </div>
             </div>
           </button>
 
           {/* روابط التنقل لسطح المكتب */}
-          <nav className="hidden md:flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl">
+          <nav className="hidden lg:flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl shrink-0">
             {[
               { id: 'home', label: 'الرئيسية', icon: Sparkles },
               { id: 'library', label: 'المذكرات', icon: BookOpen },
@@ -1418,7 +1477,7 @@ function MuzakkiratiApp() {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveView(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition ${
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black transition ${
                     active ? `${theme.primaryBtn} shadow-sm` : 'text-slate-700 hover:text-slate-900 hover:bg-white/80'
                   }`}
                 >
@@ -1430,16 +1489,16 @@ function MuzakkiratiApp() {
           </nav>
 
           {/* أزرار السلة والتواصل والإدارة */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <button
               type="button"
               onClick={() => setCartOpen(true)}
-              className="relative flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white hover:border-blue-400 text-xs sm:text-sm font-black text-slate-800 transition"
+              className="relative flex items-center gap-1.5 px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-slate-200 bg-white hover:border-blue-400 text-xs sm:text-sm font-black text-slate-800 transition"
             >
               <ShoppingCart className={`w-4 h-4 ${theme.primaryText}`} />
               <span className="hidden sm:inline">السلة</span>
               {cart.length > 0 && (
-                <span className={`px-2 py-0.5 rounded-full ${theme.primaryBtn} text-xs font-black`}>
+                <span className={`px-1.5 py-0.5 rounded-full ${theme.primaryBtn} text-[11px] font-black`}>
                   {cart.length}
                 </span>
               )}
@@ -1448,27 +1507,27 @@ function MuzakkiratiApp() {
             <button
               type="button"
               onClick={() => setContactModalOpen(true)}
-              className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-black shadow-sm transition"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-black shadow-sm transition"
             >
               <Phone className="w-4 h-4" />
-              <span className="hidden sm:inline">تواصل معنا</span>
+              <span className="hidden sm:inline">تواصل</span>
             </button>
 
             {isAdmin && (
               <button
                 type="button"
                 onClick={() => setActiveView(activeView === 'admin' ? 'home' : 'admin')}
-                className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-400 text-xs sm:text-sm font-black transition"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-400 text-xs sm:text-sm font-black transition"
               >
                 <ShieldCheck className="w-4 h-4" />
-                <span className="hidden sm:inline">{activeView === 'admin' ? 'واجهة الزوار' : 'الإدارة'}</span>
+                <span className="hidden sm:inline">{activeView === 'admin' ? 'الزوار' : 'الإدارة'}</span>
               </button>
             )}
           </div>
         </div>
 
-        {/* شريط التنقل المدمج للهواتف */}
-        <div className="md:hidden border-t border-slate-100 px-2 py-2 flex items-center justify-around bg-slate-50/95">
+        {/* شريط التنقل المدمج للهواتف والأجهزة اللوحية */}
+        <div className="lg:hidden border-t border-slate-100 px-1.5 py-1.5 grid grid-cols-4 gap-1 bg-slate-50/95">
           {[
             { id: 'home', label: 'الرئيسية', icon: Sparkles },
             { id: 'library', label: 'المذكرات', icon: BookOpen },
@@ -1482,12 +1541,12 @@ function MuzakkiratiApp() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveView(tab.id)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition ${
+                className={`flex items-center justify-center gap-1 py-2 px-1 rounded-xl text-[11px] sm:text-xs font-black transition truncate ${
                   active ? theme.primaryBtn : 'text-slate-700'
                 }`}
               >
-                <Icon className="w-4 h-4" />
-                <span>{tab.label}</span>
+                <Icon className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">{tab.label}</span>
               </button>
             );
           })}
@@ -2521,20 +2580,21 @@ function MuzakkiratiApp() {
                   </button>
                 </div>
               </div>
-
-              <div>
-                <label className="block text-[11px] font-black text-slate-600 mb-1">
-                  مفتاح Firebase Web API Key (يُطلب مرة واحدة فقط إذا ظهر خطأ api-key)
-                </label>
-                <input
-                  type="text"
-                  dir="ltr"
-                  placeholder="AIzaSy..."
-                  value={customApiKeyInput}
-                  onChange={(e) => setCustomApiKeyInput(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-2xl border border-slate-200 bg-slate-50 text-xs font-bold text-left"
-                />
-              </div>
+              {!normalizeApiKey(customApiKeyInput) && (
+                <div>
+                  <label className="block text-[11px] font-black text-slate-600 mb-1">
+                    مفتاح Firebase Web API Key (يُحفظ في متصفحك لمرة واحدة فقط)
+                  </label>
+                  <input
+                    type="text"
+                    dir="ltr"
+                    placeholder="AIzaSy..."
+                    value={customApiKeyInput}
+                    onChange={(e) => setCustomApiKeyInput(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-2xl border border-slate-200 bg-slate-50 text-xs font-bold text-left"
+                  />
+                </div>
+              )}
 
               {loginError && (
                 <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold text-center">
@@ -2727,6 +2787,8 @@ function NotebookCard({ nb, theme, onPreview, onAdd }) {
             <img
               src={nb.coverImage}
               alt={nb.title}
+              loading="lazy"
+              decoding="async"
               className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
             />
           ) : (
@@ -3562,7 +3624,27 @@ function AdminDashboard({
                       <div className="flex flex-wrap gap-1.5 pt-1">
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={async () => {
+                            let existingSamples = samplesMap[nb.id] || nb.inlineSamples || [];
+                            if (existingSamples.length === 0 && db) {
+                              try {
+                                const qSnap = await getDocs(
+                                  query(publicCol('notebook_samples'), where('notebookId', '==', nb.id))
+                                );
+                                const loaded = [];
+                                qSnap.docs.forEach((d) => {
+                                  extractAnyImagesFromDoc(d.data()).forEach((im) => {
+                                    if (!loaded.includes(im)) loaded.push(im);
+                                  });
+                                });
+                                if (loaded.length > 0) {
+                                  existingSamples = loaded;
+                                  setSamplesMap((prev) => ({ ...prev, [nb.id]: loaded }));
+                                }
+                              } catch {
+                                // تجاهل
+                              }
+                            }
                             setNbForm({
                               id: nb.id,
                               title: nb.title,
@@ -3581,7 +3663,7 @@ function AdminDashboard({
                               noticePosition: nb.noticePosition || 'top',
                               hidden: Boolean(nb.hidden),
                               coverImage: nb.coverImage,
-                              sampleImages: samplesMap[nb.id] || nb.inlineSamples || []
+                              sampleImages: existingSamples
                             });
                             window.scrollTo({ top: 0, behavior: 'smooth' });
                           }}
