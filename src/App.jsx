@@ -1452,9 +1452,10 @@ export default function App() {
             backgroundColor: safeText(settings.promoBgColor, '#0f172a'),
             color: safeText(settings.promoTextColor, '#ffffff')
           }}
-          className="w-full py-2.5 px-3 text-center text-xs sm:text-sm font-black transition-colors"
+          className="w-full py-3 px-4 text-center text-sm sm:text-base font-black transition-colors shadow-sm"
         >
-          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-center gap-2">
+          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-center gap-2.5">
+            <Sparkles className="w-4 h-4 text-amber-300 shrink-0 hidden sm:inline" />
             <span>{safeText(settings.promoText)}</span>
             {safeText(settings.promoCouponCode) && (
               <button
@@ -1465,7 +1466,7 @@ export default function App() {
                   setCouponInput(codeStr);
                   showToast(`تم نسخ كود الخصم: ${codeStr}`);
                 }}
-                className="px-3 py-1 rounded-full bg-amber-400 text-slate-950 text-xs font-black hover:bg-amber-300 transition shadow-sm"
+                className="px-3.5 py-1 rounded-full bg-amber-400 text-slate-950 text-xs sm:text-sm font-black hover:bg-amber-300 transition shadow"
               >
                 كود: {safeText(settings.promoCouponCode)} (اضغط للنسخ)
               </button>
@@ -1474,129 +1475,136 @@ export default function App() {
         </div>
       )}
 
-      {/* الهيدر الرئيسي المتجاوب مع الهاتف والكمبيوتر */}
-      <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-2.5">
+      {/* الهيدر الرئيسي المطور */}
+      <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 sm:py-4 flex flex-col lg:flex-row items-center justify-between gap-3.5">
           {/* الشعار واسم المنصة */}
-          <div className="flex items-center gap-2.5 min-w-0 max-w-full">
-            <button
-              type="button"
-              onClick={handleLogoSecretClick}
-              title={safeText(settings.platformName)}
-              className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center overflow-hidden shadow-md shrink-0 border border-slate-200"
-            >
-              {settings.logoImage ? (
-                <img src={settings.logoImage} alt={safeText(settings.platformName)} className="w-full h-full object-cover" />
-              ) : (
-                <BookOpen className="w-6 h-6 text-amber-400" />
-              )}
-            </button>
-            <div
-              onClick={() => setActiveView('home')}
-              className="cursor-pointer min-w-0 flex-1"
-            >
-              <h1 className="text-base sm:text-xl font-black text-slate-900 truncate leading-tight">
-                {safeText(settings.platformName, 'منصة العباقرة للمذكرات التعليمية')}
-              </h1>
-              <p className="text-[11px] sm:text-xs text-slate-500 font-bold truncate">
-                {safeText(settings.platformTagline)}
-              </p>
+          <div className="flex items-center gap-3.5 w-full lg:w-auto justify-between lg:justify-start">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <button
+                type="button"
+                onClick={handleLogoSecretClick}
+                title={safeText(settings.platformName)}
+                className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-slate-900 text-white flex items-center justify-center overflow-hidden shadow-lg shrink-0 ring-2 ring-amber-400/50 hover:scale-105 transition"
+              >
+                {settings.logoImage ? (
+                  <img src={settings.logoImage} alt={safeText(settings.platformName)} className="w-full h-full object-cover" />
+                ) : (
+                  <BookOpen className="w-7 h-7 text-amber-400" />
+                )}
+              </button>
+              <div
+                onClick={() => setActiveView('home')}
+                className="cursor-pointer min-w-0 space-y-1"
+              >
+                <h1 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight leading-snug">
+                  {safeText(settings.platformName, 'منصة العباقرة للمذكرات التعليمية')}
+                </h1>
+                <div className="flex items-center gap-1.5 text-xs sm:text-sm text-slate-600 font-bold">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                  <span className="leading-snug">{safeText(settings.platformTagline)}</span>
+                </div>
+              </div>
             </div>
           </div>
 
           {/* أزرار التنقل الرئيسية */}
-          <nav className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-            <button
-              type="button"
-              onClick={() => setActiveView('home')}
-              className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-black transition ${
-                activeView === 'home' ? `${theme.primaryBg} text-white shadow-sm` : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              الرئيسية
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedCategoryId('');
-                setSelectedStageId('');
-                setSelectedGradeId('');
-                setActiveView('library');
-              }}
-              className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-black transition ${
-                activeView === 'library' ? `${theme.primaryBg} text-white shadow-sm` : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              المذكرات
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveView('offers')}
-              className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-black transition ${
-                activeView === 'offers' ? `${theme.primaryBg} text-white shadow-sm` : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              العروض والباقات
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveView('track')}
-              className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-black transition ${
-                activeView === 'track' ? `${theme.primaryBg} text-white shadow-sm` : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              تتبع طلبك
-            </button>
-            <button
-              type="button"
-              onClick={() => setContactModalOpen(true)}
-              className="px-3 py-2 rounded-xl text-xs sm:text-sm font-black bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 transition shadow-sm"
-            >
-              <MessageCircle className="w-4 h-4" />
-              <span>تواصل معنا</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setCartOpen(true)}
-              className="relative px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black bg-slate-900 hover:bg-slate-800 text-white flex items-center gap-1.5 transition shadow-sm"
-            >
-              <ShoppingCart className="w-4 h-4 text-amber-400" />
-              <span>السلة</span>
-              {cart.length > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-xs font-black">
-                  {cart.length}
-                </span>
-              )}
-            </button>
-            {isAdmin && (
+          <div className="flex flex-wrap items-center justify-center lg:justify-end gap-2 w-full lg:w-auto">
+            <nav className="flex flex-wrap items-center justify-center gap-1.5 bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200/80">
               <button
                 type="button"
-                onClick={() => setActiveView('admin')}
-                className="px-3 py-2 rounded-xl text-xs sm:text-sm font-black bg-amber-400 hover:bg-amber-300 text-slate-950 flex items-center gap-1 transition shadow-sm"
+                onClick={() => setActiveView('home')}
+                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black flex items-center gap-1.5 transition ${
+                  activeView === 'home'
+                    ? `${theme.primaryBg} text-white shadow-sm`
+                    : 'text-slate-700 hover:bg-white hover:text-slate-900'
+                }`}
               >
-                <ShieldCheck className="w-4 h-4" />
-                <span>الإدارة</span>
+                <Sparkles className="w-4 h-4" />
+                <span>الرئيسية</span>
               </button>
-            )}
-          </nav>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCategoryId('');
+                  setSelectedStageId('');
+                  setSelectedGradeId('');
+                  setActiveView('library');
+                }}
+                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black flex items-center gap-1.5 transition ${
+                  activeView === 'library'
+                    ? `${theme.primaryBg} text-white shadow-sm`
+                    : 'text-slate-700 hover:bg-white hover:text-slate-900'
+                }`}
+              >
+                <BookOpen className="w-4 h-4" />
+                <span>المذكرات</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveView('offers')}
+                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black flex items-center gap-1.5 transition ${
+                  activeView === 'offers'
+                    ? `${theme.primaryBg} text-white shadow-sm`
+                    : 'text-slate-700 hover:bg-white hover:text-slate-900'
+                }`}
+              >
+                <Tag className="w-4 h-4" />
+                <span>العروض والباقات</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveView('track')}
+                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-black flex items-center gap-1.5 transition ${
+                  activeView === 'track'
+                    ? `${theme.primaryBg} text-white shadow-sm`
+                    : 'text-slate-700 hover:bg-white hover:text-slate-900'
+                }`}
+              >
+                <Package className="w-4 h-4" />
+                <span>تتبع طلبك</span>
+              </button>
+            </nav>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setContactModalOpen(true)}
+                className="px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-black bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 transition shadow-md"
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span>تواصل معنا</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCartOpen(true)}
+                className="relative px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-black bg-slate-900 hover:bg-slate-800 text-white flex items-center gap-2 transition shadow-md"
+              >
+                <ShoppingCart className="w-4 h-4 text-amber-400" />
+                <span>السلة</span>
+                {cart.length > 0 && (
+                  <span className="px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 text-xs font-black">
+                    {cart.length}
+                  </span>
+                )}
+              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setActiveView('admin')}
+                  className="px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-black bg-amber-400 hover:bg-amber-300 text-slate-950 flex items-center gap-1.5 transition shadow-md"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>الإدارة</span>
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </header>
 
       {/* المحتوى الرئيسي */}
       <main className="flex-1 w-full">
-        {/* التنبيهات العامة المفعّلة للمنصة في مستطيل واحد موحّد */}
-        {(() => {
-          const homeAlerts = (Array.isArray(settings.globalAlerts) ? settings.globalAlerts : []).filter(
-            (al) => al && al.active !== false && safeText(al.text).trim() && al.scope !== 'preview_only'
-          );
-          if (homeAlerts.length === 0) return null;
-          return (
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4">
-              <UnifiedNoticeBox items={homeAlerts.map((al) => ({ text: safeText(al.text), color: al.color || 'amber' }))} />
-            </div>
-          );
-        })()}
-
         {/* =================================================================== */}
         {/* الصفحة الرئيسية */}
         {/* =================================================================== */}
