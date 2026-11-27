@@ -3161,7 +3161,7 @@ function AdminDashboard({
         targetId = created.id;
       }
 
-      if (Array.isArray(nbForm.samples) && (samplesTouched || nbForm.samples.length > 0 || !nbForm.id)) {
+      if (Array.isArray(nbForm.samples) && (samplesTouched || nbForm.samples.length > 0)) {
         const validSamples = nbForm.samples.map((s) => extractImageFromValue(s)).filter(Boolean);
         const shrunkSamples = await Promise.all(
           validSamples.map((s) => shrinkDataUrlIfNeeded(s, 450000))
@@ -3804,7 +3804,9 @@ function AdminDashboard({
                       type="button"
                       onClick={async () => {
                         setSamplesTouched(false);
-                        const existingSamples = samplesMap[nb.id] || nb.inlineSamples || [];
+                        const existingSamples = (samplesMap[nb.id] || nb.inlineSamples || [])
+                          .map((im) => extractImageFromValue(im))
+                          .filter(Boolean);
                         setNbForm({
                           ...emptyNotebookForm,
                           ...nb,
@@ -3813,20 +3815,27 @@ function AdminDashboard({
                           samples: existingSamples
                         });
                         window.scrollTo({ top: 0, behavior: 'smooth' });
-                        if (existingSamples.length === 0 && db) {
+                        if (db) {
                           setLoadingEditSamples(true);
                           try {
-                            const pageIds = Array.from({ length: 12 }, (_, i) => `${nb.id}_p${i}`);
-                            const snaps = await Promise.all(
-                              pageIds.map((pid) => getDoc(publicDoc('notebook_samples', pid)).catch(() => null))
-                            );
-                            const loaded = [];
-                            snaps.forEach((s) => {
-                              if (s && s.exists()) {
-                                const im = extractImageFromValue(s.data()?.image);
-                                if (im) loaded.push(im);
-                              }
-                            });
+                            const pageIds = Array.from({ length: 24 }, (_, i) => `${nb.id}_p${i}`);
+                            const [mainSnap, legacySnap, ...pageSnaps] = await Promise.all([
+                              getDoc(publicDoc('notebook_samples', nb.id)).catch(() => null),
+                              getDoc(legacyPublicDoc('notebook_samples', nb.id)).catch(() => null),
+                              ...pageIds.map((pid) => getDoc(publicDoc('notebook_samples', pid)).catch(() => null))
+                            ]);
+                            const loaded = [...existingSamples];
+                            const collectFromSnap = (snap) => {
+                              if (!snap || !snap.exists()) return;
+                              extractAnyImagesFromDoc(snap.data() || {}).forEach((im) => {
+                                if (im && im !== nb.coverImage && !loaded.includes(im)) {
+                                  loaded.push(im);
+                                }
+                              });
+                            };
+                            collectFromSnap(mainSnap);
+                            pageSnaps.forEach(collectFromSnap);
+                            collectFromSnap(legacySnap);
                             if (loaded.length > 0) {
                               setNbForm((prev) => (prev.id === nb.id ? { ...prev, samples: loaded } : prev));
                               setSamplesMap((prev) => ({ ...prev, [nb.id]: loaded }));
