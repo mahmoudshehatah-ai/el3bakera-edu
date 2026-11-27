@@ -3102,231 +3102,191 @@ function MuzakkiratiPlatformContent() {
                               </div>
                             )}
                             <button
-                          onClick={() => {
-                            setSettings({
-                              ...settings,
-                              stages: normalizedStages.filter((s) => s.id !== st.id)
-                            });
-                            showToast('تم حذف المرحلة — اضغط حفظ التعديلات للاعتماد');
-                          }}
-                          className="text-rose-600 cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                              type="button"
+                              onClick={() => {
+                                const updatedCats = normalizedCategories.filter((c) => c.id !== cat.id);
+                                setSettings({ ...settings, categories: updatedCats });
+                                showToast('تم حذف القسم — اضغط حفظ التعديلات للاعتماد');
+                              }}
+                              className="absolute top-2 left-2 p-2 rounded-xl bg-rose-600 text-white shadow cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          <div className="p-4 space-y-2">
+                            <input
+                              type="text"
+                              value={cat.name}
+                              onChange={(e) => {
+                                const updatedCats = normalizedCategories.map((c) =>
+                                  c.id === cat.id ? { ...c, name: e.target.value } : c
+                                );
+                                setSettings({ ...settings, categories: updatedCats });
+                              }}
+                              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-black"
+                            />
+                            <label className="inline-flex items-center gap-1.5 text-xs text-blue-600 font-bold cursor-pointer hover:underline">
+                              <ImageIcon className="w-3.5 h-3.5" />
+                              <span>{cat.coverImage ? 'تغيير صورة القسم' : 'رفع صورة غلاف للقسم'}</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={async (e) => {
+                                  const f = e.target.files?.[0];
+                                  if (!f) return;
+                                  const img = await compressImageFile(f, 800, 0.82);
+                                  const updatedCats = normalizedCategories.map((c) =>
+                                    c.id === cat.id ? { ...c, coverImage: img } : c
+                                  );
+                                  setSettings({ ...settings, categories: updatedCats });
+                                  showToast('تم تجهيز صورة القسم — اضغط حفظ التعديلات للاعتماد');
+                                }}
+                              />
+                            </label>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
-                  <button
-                    onClick={handleSaveAllAdminChanges}
-                    className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black cursor-pointer"
-                  >
-                    حفظ تعديلات المراحل
-                  </button>
                 </div>
 
-                <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
-                  <h3 className="text-base font-black text-slate-900">الصفوف الدراسية</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
-                    <select
-                      value={newGradeStageId}
-                      onChange={(e) => setNewGradeStageId(e.target.value)}
-                      className="sm:col-span-5 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
-                    >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
+                    <h3 className="text-base font-black text-slate-900">المراحل الدراسية</h3>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newStageName}
+                        onChange={(e) => setNewStageName(e.target.value)}
+                        placeholder="اسم المرحلة..."
+                        className="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!newStageName.trim()) return;
+                          const next = [...normalizedStages, { id: `stg_${Date.now()}`, name: newStageName.trim() }];
+                          setSettings({ ...settings, stages: next });
+                          setNewStageName('');
+                          showToast('تمت إضافة المرحلة — اضغط حفظ التعديلات للاعتماد');
+                        }}
+                        className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold cursor-pointer"
+                      >
+                        إضافة
+                      </button>
+                    </div>
+                    <div className="space-y-2">
                       {normalizedStages.map((st) => (
-                        <option key={st.id} value={st.id}>
-                          {st.name}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="text"
-                      value={newGradeName}
-                      onChange={(e) => setNewGradeName(e.target.value)}
-                      placeholder="اسم الصف الدراسي..."
-                      className="sm:col-span-5 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs"
-                    />
-                    <button
-                      onClick={() => {
-                        if (!newGradeName.trim()) return;
-                        const next = [
-                          ...normalizedGrades,
-                          {
-                            id: `grd_${Date.now()}`,
-                            stageId: newGradeStageId,
-                            name: newGradeName.trim()
-                          }
-                        ];
-                        setSettings({ ...settings, grades: next });
-                        setNewGradeName('');
-                        showToast('تمت إضافة الصف — اضغط حفظ التعديلات للاعتماد');
-                      }}
-                      className="sm:col-span-2 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold cursor-pointer"
-                    >
-                      إضافة
-                    </button>
-                  </div>
-                  <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {normalizedGrades.map((gr) => {
-                      const stObj = normalizedStages.find((s) => s.id === gr.stageId);
-                      return (
-                        <div
-                          key={gr.id}
-                          className="flex items-center justify-between p-3 rounded-xl bg-slate-50 text-xs font-bold"
-                        >
-                          <div>
-                            <span>{gr.name}</span>
-                            {stObj && (
-                              <span className="text-[11px] text-slate-400 mr-2">({stObj.name})</span>
-                            )}
-                          </div>
+                        <div key={st.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 text-xs font-bold">
+                          <span>{st.name}</span>
                           <button
+                            type="button"
                             onClick={() => {
                               setSettings({
                                 ...settings,
-                                grades: normalizedGrades.filter((g) => g.id !== gr.id)
+                                stages: normalizedStages.filter((s) => s.id !== st.id)
                               });
-                              showToast('تم حذف الصف — اضغط حفظ التعديلات للاعتماد');
+                              showToast('تم حذف المرحلة — اضغط حفظ التعديلات للاعتماد');
                             }}
                             className="text-rose-600 cursor-pointer"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
-                      );
-                    })}
-                  </div>
-                  <button
-                    onClick={handleSaveAllAdminChanges}
-                    className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black cursor-pointer"
-                  >
-                    حفظ تعديلات الصفوف
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* تبويب 4: الكوبونات والعروض */}
-            {adminSubTab === 'coupons' && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
-                  <h3 className="text-base font-black text-slate-900">إضافة كوبون خصم جديد</h3>
-                  <div className="space-y-3 text-xs">
-                    <input
-                      type="text"
-                      placeholder="كود الخصم (مثال: M20)"
-                      value={newCouponForm.code}
-                      onChange={(e) =>
-                        setNewCouponForm({ ...newCouponForm, code: e.target.value.toUpperCase() })
-                      }
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 uppercase font-bold"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">نسبة الخصم %</label>
-                        <input
-                          type="number"
-                          value={newCouponForm.discountPercent}
-                          onChange={(e) =>
-                            setNewCouponForm({
-                              ...newCouponForm,
-                              discountPercent: Number(e.target.value)
-                            })
-                          }
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">الحد الأقصى للخصم (ج.م)</label>
-                        <input
-                          type="number"
-                          value={newCouponForm.maxDiscount}
-                          onChange={(e) =>
-                            setNewCouponForm({ ...newCouponForm, maxDiscount: Number(e.target.value) })
-                          }
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                        />
-                      </div>
+                      ))}
                     </div>
                     <button
-                      onClick={async () => {
-                        if (!newCouponForm.code.trim()) return;
-                        const cpObj = {
-                          ...newCouponForm,
-                          id: `cp_${Date.now()}`,
-                          code: newCouponForm.code.trim().toUpperCase(),
-                          active: true
-                        };
-                        const next = [cpObj, ...coupons];
-                        setCoupons(next);
-                        await idbSet('coupons_v5', next);
-                        if (db) {
-                          await setDoc(
-                            doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cpObj.id),
-                            cpObj
-                          );
-                        }
-                        setNewCouponForm({ code: '', discountPercent: 15, maxDiscount: 200, active: true });
-                        showToast('تمت إضافة الكوبون وحفظه');
-                      }}
-                      className="w-full py-3 rounded-xl bg-blue-600 text-white font-black text-sm cursor-pointer"
+                      type="button"
+                      onClick={handleSaveAllAdminChanges}
+                      className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black cursor-pointer"
                     >
-                      إضافة الكوبون
+                      حفظ تعديلات المراحل
                     </button>
                   </div>
-                </div>
 
-                <div className="lg:col-span-7 space-y-3">
-                  {coupons.map((cp) => (
-                    <div
-                      key={cp.id}
-                      className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center justify-between"
-                    >
-                      <div>
-                        <span className="px-3 py-1 rounded-lg bg-amber-100 text-amber-950 font-black text-xs">
-                          {cp.code}
-                        </span>
-                        <span className="text-xs text-slate-600 font-bold mr-3">
-                          خصم {cp.discountPercent}% (بحد أقصى {cp.maxDiscount} ج.م)
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={async () => {
-                            const next = coupons.map((c) =>
-                              c.id === cp.id ? { ...c, active: c.active === false } : c
-                            );
-                            setCoupons(next);
-                            await idbSet('coupons_v5', next);
-                            showToast('تم تحديث حالة الكوبون');
-                          }}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer ${
-                            cp.active === false
-                              ? 'bg-slate-100 text-slate-500'
-                              : 'bg-emerald-50 text-emerald-700'
-                          }`}
-                        >
-                          {cp.active === false ? 'معطّل' : 'مفعّل'}
-                        </button>
-                        <button
-                          onClick={async () => {
-                            const next = coupons.filter((c) => c.id !== cp.id);
-                            setCoupons(next);
-                            await idbSet('coupons_v5', next);
-                            if (db) {
-                              await deleteDoc(
-                                doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cp.id)
-                              );
+                  <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
+                    <h3 className="text-base font-black text-slate-900">الصفوف الدراسية</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                      <select
+                        value={newGradeStageId}
+                        onChange={(e) => setNewGradeStageId(e.target.value)}
+                        className="sm:col-span-5 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
+                      >
+                        {normalizedStages.map((st) => (
+                          <option key={st.id} value={st.id}>
+                            {st.name}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        value={newGradeName}
+                        onChange={(e) => setNewGradeName(e.target.value)}
+                        placeholder="اسم الصف الدراسي..."
+                        className="sm:col-span-5 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!newGradeName.trim()) return;
+                          const next = [
+                            ...normalizedGrades,
+                            {
+                              id: `grd_${Date.now()}`,
+                              stageId: newGradeStageId,
+                              name: newGradeName.trim()
                             }
-                            showToast('تم حذف الكوبون');
-                          }}
-                          className="p-2 rounded-xl bg-rose-50 text-rose-600 cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                          ];
+                          setSettings({ ...settings, grades: next });
+                          setNewGradeName('');
+                          showToast('تمت إضافة الصف — اضغط حفظ التعديلات للاعتماد');
+                        }}
+                        className="sm:col-span-2 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold cursor-pointer"
+                      >
+                        إضافة
+                      </button>
                     </div>
-                  ))}
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {normalizedGrades.map((gr) => {
+                        const stObj = normalizedStages.find((s) => s.id === gr.stageId);
+                        return (
+                          <div
+                            key={gr.id}
+                            className="flex items-center justify-between p-3 rounded-xl bg-slate-50 text-xs font-bold"
+                          >
+                            <div>
+                              <span>{gr.name}</span>
+                              {stObj && (
+                                <span className="text-[11px] text-slate-400 mr-2">({stObj.name})</span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSettings({
+                                  ...settings,
+                                  grades: normalizedGrades.filter((g) => g.id !== gr.id)
+                                });
+                                showToast('تم حذف الصف — اضغط حفظ التعديلات للاعتماد');
+                              }}
+                              className="text-rose-600 cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSaveAllAdminChanges}
+                      className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black cursor-pointer"
+                    >
+                      حفظ تعديلات الصفوف
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
