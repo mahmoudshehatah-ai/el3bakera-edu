@@ -596,18 +596,18 @@ export default function App() {
   });
 
   const [notebooks, setNotebooks] = useState(() => {
-    for (const key of LEGACY_NOTEBOOK_KEYS) {
-      try {
-        const raw = localStorage.getItem(key);
+    try {
+      for (const k of LEGACY_NOTEBOOK_KEYS) {
+        const raw = localStorage.getItem(k);
         if (raw) {
-          const arr = JSON.parse(raw);
-          if (Array.isArray(arr) && arr.length > 0) {
-            return arr.map((item) => normalizeNotebook(item.id, item));
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.map((item, idx) => normalizeNotebook(item.id || `local_${idx}`, item));
           }
         }
-      } catch {
-        // تجاهل
       }
+    } catch {
+      // تجاهل
     }
     return [];
   });
@@ -625,14 +625,24 @@ export default function App() {
   const [coupons, setCoupons] = useState([]);
   const [orders, setOrders] = useState([]);
 
-  // حالة التنقل والواجهة
   const [activeView, setActiveView] = useState('home');
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [selectedStageId, setSelectedStageId] = useState('');
   const [selectedGradeId, setSelectedGradeId] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // نافذة معاينة المذكرة والعينات
+  const [cart, setCart] = useState([]);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [customerForm, setCustomerForm] = useState({});
+  const [submittingOrder, setSubmittingOrder] = useState(false);
+  const [lastCreatedOrder, setLastCreatedOrder] = useState(null);
+
+  const [trackOrderInput, setTrackOrderInput] = useState('');
+  const [trackedOrder, setTrackedOrder] = useState(null);
+  const [trackingLoading, setTrackingLoading] = useState(false);
+
   const [previewNotebook, setPreviewNotebook] = useState(null);
   const [previewPageIdx, setPreviewPageIdx] = useState(0);
   const [previewZoom, setPreviewZoom] = useState(1);
@@ -642,59 +652,47 @@ export default function App() {
   const fetchedSamplesDoneRef = useRef({});
   const touchStartXRef = useRef(null);
 
-  // السلة والطلبات
-  const [cart, setCart] = useState([]);
-  const [cartOpen, setCartOpen] = useState(false);
-  const [couponInput, setCouponInput] = useState('');
-  const [appliedCoupon, setAppliedCoupon] = useState(null);
-  const [customerForm, setCustomerForm] = useState({});
-  const [submittingOrder, setSubmittingOrder] = useState(false);
-  const [lastCreatedOrder, setLastCreatedOrder] = useState(null);
-
-  // تتبع الطلب والتواصل
-  const [trackOrderInput, setTrackOrderInput] = useState('');
-  const [trackedOrder, setTrackedOrder] = useState(null);
-  const [trackingLoading, setTrackingLoading] = useState(false);
   const [contactModalOpen, setContactModalOpen] = useState(false);
-
-  // دخول الإدارة والصلاحيات
-  const [firebaseUser, setFirebaseUser] = useState(null);
   const [adminLoginOpen, setAdminLoginOpen] = useState(false);
   const [adminEmailInput, setAdminEmailInput] = useState(ADMIN_EMAIL);
   const [adminPassInput, setAdminPassInput] = useState('');
-  const [customApiKeyInput, setCustomApiKeyInput] = useState(() => getEffectiveApiKey());
+  const [customApiKeyInput, setCustomApiKeyInput] = useState('');
   const [adminLoginError, setAdminLoginError] = useState('');
   const [adminLoggingIn, setAdminLoggingIn] = useState(false);
+  const [firebaseUser, setFirebaseUser] = useState(null);
   const [logoClickCount, setLogoClickCount] = useState(0);
   const [toast, setToast] = useState(null);
 
-  const theme = THEME_PALETTES[settings.primaryTheme] || THEME_PALETTES.royal;
   const isAdmin = Boolean(firebaseUser && firebaseUser.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase());
+  const theme = THEME_PALETTES[settings.primaryTheme] || THEME_PALETTES.royal;
 
   const showToast = (message, type = 'success') => {
-    setToast({ message, type });
+    setToast({ message: safeText(message), type });
     setTimeout(() => setToast(null), 3500);
   };
 
-  // ============================================================================
-  // 4. الطرق الثلاث لفتح نافذة دخول الإدارة + دعم زر الرجوع للخلف
-  // ============================================================================
+  // الاستماع لحالة تسجيل الدخول (بما فيها العودة من signInWithRedirect على الهاتف) وروابط ?admin=1
   useEffect(() => {
-    const checkUrlAdminTrigger = () => {
-      try {
-        const params = new URLSearchParams(window.location.search);
-        if (params.get('admin') === '1' || window.location.hash === '#admin') {
-          setAdminLoginOpen(true);
-        }
-      } catch {
-        // تجاهل
+    if (!auth) return;
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      if (user && user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        setFirebaseUser(user);
+      } else {
+        setFirebaseUser(null);
       }
-    };
-    checkUrlAdminTrigger();
-    window.addEventListener('hashchange', checkUrlAdminTrigger);
+    });
+
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('admin') === '1' || window.location.hash === '#admin') {
+        setAdminLoginOpen(true);
+      }
+    } catch {
+      // تجاهل
+    }
 
     const onKeyDown = (e) => {
-      if (e.ctrlKey && e.shiftKey && (e.key === 'A' || e.key === 'a' || e.key === 'ش')) {
+      if (e.ctrlKey && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
         e.preventDefault();
         setAdminLoginOpen(true);
       }
@@ -702,94 +700,19 @@ export default function App() {
     window.addEventListener('keydown', onKeyDown);
 
     return () => {
-      window.removeEventListener('hashchange', checkUrlAdminTrigger);
+      unsubAuth();
       window.removeEventListener('keydown', onKeyDown);
     };
   }, []);
 
-  const handleLogoSecretClick = () => {
-    const next = logoClickCount + 1;
-    if (next >= 5) {
-      setLogoClickCount(0);
-      if (isAdmin) {
-        setActiveView('admin');
-      } else {
-        setAdminLoginOpen(true);
-      }
-    } else {
-      setLogoClickCount(next);
-      setTimeout(() => setLogoClickCount(0), 2500);
-    }
-  };
-
-  // دعم زر الرجوع للخلف في المتصفح والهاتف
-  const skipNextPushRef = useRef(false);
+  // دعم زر الرجوع في المتصفح والهاتف
   useEffect(() => {
-    if (skipNextPushRef.current) {
-      skipNextPushRef.current = false;
-      return;
-    }
-    try {
-      window.history.pushState(
-        {
-          muzakkiratiNav: true,
-          activeView,
-          selectedCategoryId,
-          selectedStageId,
-          selectedGradeId
-        },
-        ''
-      );
-    } catch {
-      // تجاهل
-    }
-  }, [activeView, selectedCategoryId, selectedStageId, selectedGradeId]);
-
-  useEffect(() => {
-    const onPopState = (e) => {
+    const onPopState = () => {
       if (previewNotebook) {
         setPreviewNotebook(null);
         setPreviewFullscreen(false);
-        setPreviewZoom(1);
         return;
       }
-      if (cartOpen) {
-        setCartOpen(false);
-        return;
-      }
-      if (contactModalOpen) {
-        setContactModalOpen(false);
-        return;
-      }
-      const st = e.state;
-      skipNextPushRef.current = true;
-      if (st && st.muzakkiratiNav) {
-        setActiveView(st.activeView || 'home');
-        setSelectedCategoryId(st.selectedCategoryId || '');
-        setSelectedStageId(st.selectedStageId || '');
-        setSelectedGradeId(st.selectedGradeId || '');
-      } else if (selectedGradeId) {
-        setSelectedGradeId('');
-      } else if (selectedStageId) {
-        setSelectedStageId('');
-      } else if (selectedCategoryId) {
-        setSelectedCategoryId('');
-      } else if (activeView !== 'home') {
-        setActiveView('home');
-      }
-    };
-    window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
-  }, [previewNotebook, cartOpen, contactModalOpen, activeView, selectedCategoryId, selectedStageId, selectedGradeId]);
-
-  const handleBackNavigation = () => {
-    if (previewNotebook) {
-      setPreviewNotebook(null);
-      setPreviewFullscreen(false);
-      setPreviewZoom(1);
-      return;
-    }
-    if (activeView === 'library') {
       if (selectedGradeId) {
         setSelectedGradeId('');
         return;
@@ -802,32 +725,190 @@ export default function App() {
         setSelectedCategoryId('');
         return;
       }
-    }
-    if (activeView !== 'home') {
-      setActiveView('home');
-    } else if (window.history.length > 1) {
-      window.history.back();
+      if (activeView !== 'home') {
+        setActiveView('home');
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [previewNotebook, selectedGradeId, selectedStageId, selectedCategoryId, activeView]);
+
+  const handleLogoSecretClick = () => {
+    const nextCount = logoClickCount + 1;
+    if (nextCount >= 5) {
+      setLogoClickCount(0);
+      if (isAdmin) {
+        setActiveView('admin');
+      } else {
+        setAdminLoginOpen(true);
+      }
+    } else {
+      setLogoClickCount(nextCount);
     }
   };
 
-  // ============================================================================
-  // 5. مستمعات Firebase اللحظية وجلب البيانات
-  // ============================================================================
-  useEffect(() => {
-    if (!auth) return;
-    const unsub = onAuthStateChanged(auth, (user) => {
-      setFirebaseUser(user);
-      if (user && user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
-        setAdminLoginOpen(false);
-        setAdminLoginError('');
-      }
-    });
-    return () => unsub();
-  }, []);
+  const handleBackNavigation = () => {
+    if (selectedGradeId) {
+      setSelectedGradeId('');
+    } else if (selectedStageId) {
+      setSelectedStageId('');
+    } else if (selectedCategoryId) {
+      setSelectedCategoryId('');
+    } else {
+      setActiveView('home');
+    }
+  };
 
-  // مزامنة الباقات والكوبونات والطلبات
+  // مزامنة الإعدادات والمذكرات والباقات والكوبونات والطلبات لحظيًا للزوار والإدارة
   useEffect(() => {
     if (!db) return;
+
+    let latestMainSettings = null;
+    let latestLogo = '';
+    let latestHero = '';
+    const latestCatImages = {};
+
+    const applyCombinedSettings = () => {
+      setSettings((prev) => {
+        const base = latestMainSettings ? { ...DEFAULT_SETTINGS, ...latestMainSettings } : { ...prev };
+        const rawCats = latestMainSettings?.categories || base.categories || DEFAULT_CATEGORIES;
+        const mergedCats = normalizeCategories(rawCats).map((c) => ({
+          ...c,
+          image: latestCatImages[c.id] || c.image || ''
+        }));
+        const next = {
+          ...base,
+          logoImage: latestLogo || base.logoImage || prev.logoImage || '',
+          heroImage: latestHero || base.heroImage || prev.heroImage || '',
+          categories: mergedCats
+        };
+        try {
+          localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(next));
+        } catch {
+          // تجاهل
+        }
+        return next;
+      });
+    };
+
+    // جلب فوري من جميع مستندات الإعدادات والوسائط (الجديدة والقديمة)
+    (async () => {
+      try {
+        const [mainSnap, logoSnap, heroSnap, configSnap, legacyMainSnap, legacyAssetsSnap, allSettingsSnap] =
+          await Promise.all([
+            getDoc(publicDoc('settings', 'main')).catch(() => null),
+            getDoc(publicDoc('settings', 'media_logo')).catch(() => null),
+            getDoc(publicDoc('settings', 'media_hero')).catch(() => null),
+            getDoc(publicDoc('config', 'main')).catch(() => null),
+            getDoc(legacyPublicDoc('settings', 'main')).catch(() => null),
+            getDoc(legacyPublicDoc('settings', 'media_assets')).catch(() => null),
+            getDocs(publicCol('settings')).catch(() => null)
+          ]);
+
+        const cfgData = configSnap && configSnap.exists() ? configSnap.data() : null;
+        const legData = legacyMainSnap && legacyMainSnap.exists() ? legacyMainSnap.data() : null;
+        const mainData = mainSnap && mainSnap.exists() ? mainSnap.data() : null;
+        latestMainSettings = { ...(legData || {}), ...(cfgData || {}), ...(mainData || {}) };
+
+        if (logoSnap && logoSnap.exists() && logoSnap.data()?.logoImage) {
+          latestLogo = extractImageFromValue(logoSnap.data().logoImage);
+        } else if (mainData?.logoImage) {
+          latestLogo = extractImageFromValue(mainData.logoImage);
+        } else if (cfgData?.logoImage) {
+          latestLogo = extractImageFromValue(cfgData.logoImage);
+        } else if (legacyAssetsSnap && legacyAssetsSnap.exists() && legacyAssetsSnap.data()?.logoImage) {
+          latestLogo = extractImageFromValue(legacyAssetsSnap.data().logoImage);
+        }
+
+        if (heroSnap && heroSnap.exists() && heroSnap.data()?.heroImage) {
+          latestHero = extractImageFromValue(heroSnap.data().heroImage);
+        } else if (mainData?.heroImage) {
+          latestHero = extractImageFromValue(mainData.heroImage);
+        } else if (cfgData?.heroImage) {
+          latestHero = extractImageFromValue(cfgData.heroImage);
+        } else if (legacyAssetsSnap && legacyAssetsSnap.exists() && legacyAssetsSnap.data()?.heroImage) {
+          latestHero = extractImageFromValue(legacyAssetsSnap.data().heroImage);
+        }
+
+        if (allSettingsSnap) {
+          allSettingsSnap.docs.forEach((d) => {
+            if (d.id.startsWith('media_cat_')) {
+              const catId = d.id.replace('media_cat_', '');
+              const img = extractImageFromValue(d.data()?.image);
+              if (img) latestCatImages[catId] = img;
+            } else if (d.id === 'media_assets') {
+              const ad = d.data() || {};
+              if (!latestLogo && ad.logoImage) latestLogo = extractImageFromValue(ad.logoImage);
+              if (!latestHero && ad.heroImage) latestHero = extractImageFromValue(ad.heroImage);
+              if (ad.categoryImages && typeof ad.categoryImages === 'object') {
+                Object.entries(ad.categoryImages).forEach(([cid, im]) => {
+                  const clean = extractImageFromValue(im);
+                  if (clean && !latestCatImages[cid]) latestCatImages[cid] = clean;
+                });
+              }
+            }
+          });
+        }
+
+        applyCombinedSettings();
+      } catch {
+        // تجاهل
+      }
+    })();
+
+    // مستمع لحظي لأي تحديثات تطرأ على الإعدادات والوسائط ليرى العملاء التغييرات فورًا
+    const unsubSettingsCol = onSnapshot(
+      publicCol('settings'),
+      (snap) => {
+        snap.docs.forEach((d) => {
+          const data = d.data() || {};
+          if (d.id === 'main') {
+            latestMainSettings = { ...(latestMainSettings || {}), ...data };
+            if (data.logoImage) latestLogo = extractImageFromValue(data.logoImage);
+            if (data.heroImage) latestHero = extractImageFromValue(data.heroImage);
+          } else if (d.id === 'media_logo' && data.logoImage !== undefined) {
+            latestLogo = extractImageFromValue(data.logoImage);
+          } else if (d.id === 'media_hero' && data.heroImage !== undefined) {
+            latestHero = extractImageFromValue(data.heroImage);
+          } else if (d.id.startsWith('media_cat_')) {
+            const catId = d.id.replace('media_cat_', '');
+            latestCatImages[catId] = extractImageFromValue(data.image);
+          }
+        });
+        applyCombinedSettings();
+      },
+      () => {}
+    );
+
+    // مستمع لحظي للمذكرات مع دمج المسار الاحتياطي السابق إن وجد
+    const unsubNotebooks = onSnapshot(
+      publicCol('notebooks'),
+      async (snap) => {
+        const map = new Map();
+        snap.docs.forEach((d) => {
+          map.set(d.id, normalizeNotebook(d.id, d.data()));
+        });
+        if (map.size === 0) {
+          const legSnap = await getDocs(legacyPublicCol('notebooks')).catch(() => null);
+          if (legSnap) {
+            legSnap.docs.forEach((d) => {
+              if (!map.has(d.id)) map.set(d.id, normalizeNotebook(d.id, d.data()));
+            });
+          }
+        }
+        if (map.size > 0) {
+          const list = Array.from(map.values()).sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999));
+          setNotebooks(list);
+          try {
+            localStorage.setItem(LOCAL_NOTEBOOKS_KEY, JSON.stringify(list));
+          } catch {
+            // تجاهل
+          }
+        }
+      },
+      () => {}
+    );
+
     const unsubPackages = onSnapshot(
       publicCol('packages'),
       (snap) => {
@@ -852,6 +933,8 @@ export default function App() {
       () => {}
     );
     return () => {
+      unsubSettingsCol();
+      unsubNotebooks();
       unsubPackages();
       unsubCoupons();
       unsubOrders();
@@ -1346,27 +1429,28 @@ export default function App() {
       )}
 
       {/* الشريط الترويجي العلوي */}
-      {settings.promoEnabled && settings.promoText && (
+      {settings.promoEnabled && safeText(settings.promoText) && (
         <div
           style={{
-            backgroundColor: settings.promoBgColor || '#0f172a',
-            color: settings.promoTextColor || '#ffffff'
+            backgroundColor: safeText(settings.promoBgColor, '#0f172a'),
+            color: safeText(settings.promoTextColor, '#ffffff')
           }}
           className="w-full py-2.5 px-3 text-center text-xs sm:text-sm font-black transition-colors"
         >
           <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-center gap-2">
-            <span>{settings.promoText}</span>
-            {settings.promoCouponCode && (
+            <span>{safeText(settings.promoText)}</span>
+            {safeText(settings.promoCouponCode) && (
               <button
                 type="button"
                 onClick={() => {
-                  navigator.clipboard?.writeText(settings.promoCouponCode);
-                  setCouponInput(settings.promoCouponCode);
-                  showToast(`تم نسخ كود الخصم: ${settings.promoCouponCode}`);
+                  const codeStr = safeText(settings.promoCouponCode);
+                  navigator.clipboard?.writeText(codeStr);
+                  setCouponInput(codeStr);
+                  showToast(`تم نسخ كود الخصم: ${codeStr}`);
                 }}
                 className="px-3 py-1 rounded-full bg-amber-400 text-slate-950 text-xs font-black hover:bg-amber-300 transition shadow-sm"
               >
-                كود: {settings.promoCouponCode} (اضغط للنسخ)
+                كود: {safeText(settings.promoCouponCode)} (اضغط للنسخ)
               </button>
             )}
           </div>
@@ -1381,11 +1465,11 @@ export default function App() {
             <button
               type="button"
               onClick={handleLogoSecretClick}
-              title="منصة العباقرة للمذكرات التعليمية"
+              title={safeText(settings.platformName)}
               className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center overflow-hidden shadow-md shrink-0 border border-slate-200"
             >
               {settings.logoImage ? (
-                <img src={settings.logoImage} alt={settings.platformName} className="w-full h-full object-cover" />
+                <img src={settings.logoImage} alt={safeText(settings.platformName)} className="w-full h-full object-cover" />
               ) : (
                 <BookOpen className="w-6 h-6 text-amber-400" />
               )}
@@ -1395,10 +1479,10 @@ export default function App() {
               className="cursor-pointer min-w-0 flex-1"
             >
               <h1 className="text-base sm:text-xl font-black text-slate-900 truncate leading-tight">
-                {settings.platformName}
+                {safeText(settings.platformName, 'منصة العباقرة للمذكرات التعليمية')}
               </h1>
               <p className="text-[11px] sm:text-xs text-slate-500 font-bold truncate">
-                {settings.platformTagline}
+                {safeText(settings.platformTagline)}
               </p>
             </div>
           </div>
@@ -1507,17 +1591,17 @@ export default function App() {
 
               <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-12 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
                 <div className="lg:col-span-7 space-y-5">
-                  {settings.heroBadge && (
+                  {safeText(settings.heroBadge) && (
                     <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-xs sm:text-sm font-black">
                       <Sparkles className="w-4 h-4" />
-                      <span>{settings.heroBadge}</span>
+                      <span>{safeText(settings.heroBadge)}</span>
                     </span>
                   )}
                   <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black leading-tight text-white">
-                    {settings.heroTitle}
+                    {safeText(settings.heroTitle)}
                   </h2>
                   <p className="text-sm sm:text-base text-slate-200 font-bold leading-relaxed max-w-2xl">
-                    {settings.heroSubtitle}
+                    {safeText(settings.heroSubtitle)}
                   </p>
                   <div className="flex flex-wrap items-center gap-3 pt-2">
                     <button
@@ -1530,20 +1614,20 @@ export default function App() {
                       }}
                       className={`px-6 py-3.5 rounded-2xl ${theme.primaryBg} text-white text-sm sm:text-base font-black shadow-xl transition`}
                     >
-                      {settings.heroPrimaryBtnText || 'تصفح المذكرات الدراسية'}
+                      {safeText(settings.heroPrimaryBtnText, 'تصفح المذكرات الدراسية')}
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveView('offers')}
                       className="px-6 py-3.5 rounded-2xl bg-white/15 hover:bg-white/25 backdrop-blur border border-white/25 text-white text-sm sm:text-base font-black transition"
                     >
-                      {settings.heroSecondaryBtnText || 'العروض وباقات التوفير'}
+                      {safeText(settings.heroSecondaryBtnText, 'العروض وباقات التوفير')}
                     </button>
                     {settings.showHeroCustomBtn !== false && (
                       <button
                         type="button"
                         onClick={() => {
-                          const waPhone = (settings.whatsappNumber || '201000000000').replace(/[^0-9]/g, '');
+                          const waPhone = safeText(settings.whatsappNumber, '201000000000').replace(/[^0-9]/g, '');
                           window.open(
                             `https://wa.me/${waPhone}?text=${encodeURIComponent('السلام عليكم، أرغب في طلب مذكرة بتصميم خاص باسمي وشعاري.')}`,
                             '_blank'
@@ -1551,7 +1635,7 @@ export default function App() {
                         }}
                         className="px-5 py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-sm font-black transition shadow-lg"
                       >
-                        {settings.heroCustomBtnText || 'اطلب مذكرة مخصصة'}
+                        {safeText(settings.heroCustomBtnText, 'اطلب مذكرة مخصصة')}
                       </button>
                     )}
                   </div>
@@ -1562,13 +1646,13 @@ export default function App() {
                   <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-3xl p-6 space-y-4 shadow-2xl">
                     <div className="flex items-center gap-2.5 text-amber-300 font-black text-base sm:text-lg">
                       <ShieldCheck className="w-6 h-6 shrink-0" />
-                      <h3>{settings.trustTitle || 'لماذا يثق بنا المعلمون؟'}</h3>
+                      <h3>{safeText(settings.trustTitle, 'لماذا يثق بنا المعلمون؟')}</h3>
                     </div>
                     <ul className="space-y-3">
-                      {(settings.trustPoints || []).map((pt, i) => (
+                      {(Array.isArray(settings.trustPoints) ? settings.trustPoints : []).map((pt, i) => (
                         <li key={i} className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-100 font-bold leading-relaxed">
                           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-1" />
-                          <span>{pt}</span>
+                          <span>{safeText(typeof pt === 'object' ? pt?.text || pt?.title || pt?.label : pt)}</span>
                         </li>
                       ))}
                     </ul>
@@ -1681,20 +1765,20 @@ export default function App() {
             {settings.newsSectionEnabled && Array.isArray(settings.newsItems) && settings.newsItems.length > 0 && (
               <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-5">
                 <h2 className="text-xl sm:text-2xl font-black text-slate-900">
-                  {settings.newsSectionTitle || 'أخبار المنصة ومذكرات قيد التجهيز'}
+                  {safeText(settings.newsSectionTitle, 'أخبار المنصة ومذكرات قيد التجهيز')}
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {settings.newsItems.map((item) => (
-                    <div key={item.id} className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-2">
+                  {settings.newsItems.map((item, idx) => (
+                    <div key={item.id || idx} className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-2">
                       <div className="flex items-center justify-between gap-2">
-                        <h3 className="font-black text-slate-900 text-base">{item.title}</h3>
-                        {item.date && (
+                        <h3 className="font-black text-slate-900 text-base">{safeText(item.title)}</h3>
+                        {safeText(item.date) && (
                           <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-black shrink-0">
-                            {item.date}
+                            {safeText(item.date)}
                           </span>
                         )}
                       </div>
-                      <p className="text-xs sm:text-sm text-slate-600 font-bold leading-relaxed">{item.description}</p>
+                      <p className="text-xs sm:text-sm text-slate-600 font-bold leading-relaxed">{safeText(item.description)}</p>
                     </div>
                   ))}
                 </div>
@@ -2080,28 +2164,28 @@ export default function App() {
       {/* ===================================================================== */}
       <footer className="bg-slate-950 text-slate-300 border-t border-slate-800 py-8 px-4">
         <div className="max-w-7xl mx-auto text-center space-y-4">
-          <div className="text-base sm:text-lg font-black text-white">{settings.platformName}</div>
-          <p className="text-xs sm:text-sm text-slate-400 font-bold max-w-xl mx-auto">{settings.footerNote}</p>
+          <div className="text-base sm:text-lg font-black text-white">{safeText(settings.platformName)}</div>
+          <p className="text-xs sm:text-sm text-slate-400 font-bold max-w-xl mx-auto">{safeText(settings.footerNote)}</p>
 
           {Array.isArray(settings.socialLinks) && settings.socialLinks.length > 0 && (
             <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
-              {settings.socialLinks.map((soc) => (
+              {settings.socialLinks.map((soc, idx) => (
                 <a
-                  key={soc.id}
-                  href={soc.url}
+                  key={soc.id || idx}
+                  href={safeText(soc.url, '#')}
                   target="_blank"
                   rel="noreferrer"
                   className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-black flex items-center gap-2 transition"
                 >
-                  {getSocialIcon(soc.platform, soc.url)}
-                  <span>{soc.label}</span>
+                  {getSocialIcon(safeText(soc.platform), safeText(soc.url))}
+                  <span>{safeText(soc.label, 'رابط تواصل')}</span>
                 </a>
               ))}
             </div>
           )}
 
           <div className="text-xs text-slate-500 font-bold pt-2">
-            © {new Date().getFullYear()} {settings.platformName} — جميع الحقوق محفوظة
+            © {new Date().getFullYear()} {safeText(settings.platformName)} — جميع الحقوق محفوظة
           </div>
         </div>
       </footer>
