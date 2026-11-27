@@ -1517,38 +1517,39 @@ export default function App() {
 
         {/* الهيدر الرئيسي الرشيق والمتجاوب */}
         <header className="w-full bg-white/95 backdrop-blur-md border-b border-slate-200/90">
-          <div className="max-w-7xl mx-auto px-2.5 sm:px-6 py-1.5 sm:py-2.5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-1.5 sm:gap-3">
-            {/* الصف العلوي: الشعار واسم المنصة + أزرار التواصل والسلة */}
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2 sm:py-2.5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2 sm:gap-3">
+            {/* الصف العلوي: الشعار واسم المنصة الكامل + أزرار التواصل والسلة */}
             <div className="flex items-center justify-between gap-2 min-w-0">
               <div
                 onClick={handleLogoSecretClick}
-                className="flex items-center gap-2 sm:gap-2.5 cursor-pointer select-none min-w-0"
+                className="flex items-center gap-2.5 cursor-pointer select-none min-w-0 flex-1"
               >
-                <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-gradient-to-br from-slate-900 to-blue-950 border border-amber-400/50 shadow-sm overflow-hidden flex items-center justify-center shrink-0">
+                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br from-slate-900 to-blue-950 border border-amber-400/60 shadow-sm overflow-hidden flex items-center justify-center shrink-0">
                   {settings.logoImage ? (
                     <img src={settings.logoImage} alt={settings.platformName} className="w-full h-full object-cover" />
                   ) : (
                     <BookOpen className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400" />
                   )}
                 </div>
-                <div className="min-w-0">
-                  <h1 className="text-xs sm:text-lg font-black bg-gradient-to-l from-blue-950 via-blue-700 to-indigo-700 bg-clip-text text-transparent leading-tight truncate">
+                <div className="min-w-0 flex-1">
+                  <h1 className="text-[13px] sm:text-lg font-black text-slate-900 leading-snug line-clamp-1">
                     {safeText(settings.platformName)}
                   </h1>
                   {settings.platformTagline && (
-                    <p className="hidden sm:block text-xs text-slate-500 font-bold truncate max-w-md">
+                    <p className="text-[10px] sm:text-xs text-slate-500 font-bold truncate">
                       {safeText(settings.platformTagline)}
                     </p>
                   )}
                 </div>
               </div>
 
-              {/* أزرار سريعة على الهاتف (تواصل + السلة + الإدارة) */}
+              {/* أزرار سريعة على الهاتف (أيقونات أنيقة مدمجة) */}
               <div className="flex lg:hidden items-center gap-1.5 shrink-0">
                 <button
                   type="button"
                   onClick={() => setContactModalOpen(true)}
-                  className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black flex items-center gap-1 shadow-sm"
+                  aria-label="تواصل معنا"
+                  className="h-9 px-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black flex items-center gap-1 shadow-sm"
                 >
                   <MessageCircle className="w-3.5 h-3.5" />
                   <span>تواصل</span>
@@ -1557,7 +1558,8 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setCartOpen(true)}
-                  className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-black flex items-center gap-1 shadow-sm"
+                  aria-label="السلة"
+                  className="relative h-9 px-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-black flex items-center gap-1 shadow-sm"
                 >
                   <ShoppingCart className="w-3.5 h-3.5 text-amber-400" />
                   <span>السلة</span>
@@ -1572,18 +1574,18 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setActiveView('admin')}
-                    className={`px-2 py-1.5 rounded-xl text-[11px] font-black flex items-center gap-1 ${
+                    className={`h-9 w-9 rounded-xl flex items-center justify-center ${
                       activeView === 'admin' ? 'bg-amber-400 text-slate-950' : 'bg-amber-100 text-amber-950'
                     }`}
                   >
-                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <ShieldCheck className="w-4 h-4" />
                   </button>
                 )}
               </div>
             </div>
 
-            {/* شريط التنقل الرشيق (سطر واحد على الهاتف وبدون أي تمدد رأسي) */}
-            <nav className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto pb-0.5 lg:pb-0">
+            {/* شريط التنقل المتناسق (شبكة متساوية العرض على الهاتف) */}
+            <nav className="grid grid-cols-4 lg:flex items-center gap-1.5 bg-slate-100/90 lg:bg-transparent p-1 lg:p-0 rounded-2xl border border-slate-200/70 lg:border-0">
               <button
                 type="button"
                 onClick={() => {
@@ -1592,8 +1594,8 @@ export default function App() {
                   setSelectedStageId('');
                   setSelectedGradeId('');
                 }}
-                className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-sm font-black whitespace-nowrap transition ${
-                  activeView === 'home' ? `${theme.primaryBg} text-white shadow-sm` : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                className={`py-1.5 px-2 sm:px-3.5 sm:py-2 rounded-xl text-[11px] sm:text-sm font-black text-center transition ${
+                  activeView === 'home' ? `${theme.primaryBg} text-white shadow-sm` : 'text-slate-700 hover:bg-white/80'
                 }`}
               >
                 الرئيسية
@@ -1602,8 +1604,8 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setActiveView('library')}
-                className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-sm font-black whitespace-nowrap transition ${
-                  activeView === 'library' ? `${theme.primaryBg} text-white shadow-sm` : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                className={`py-1.5 px-2 sm:px-3.5 sm:py-2 rounded-xl text-[11px] sm:text-sm font-black text-center transition ${
+                  activeView === 'library' ? `${theme.primaryBg} text-white shadow-sm` : 'text-slate-700 hover:bg-white/80'
                 }`}
               >
                 المذكرات
@@ -1612,18 +1614,18 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setActiveView('offers')}
-                className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-sm font-black whitespace-nowrap transition ${
-                  activeView === 'offers' ? `${theme.primaryBg} text-white shadow-sm` : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                className={`py-1.5 px-2 sm:px-3.5 sm:py-2 rounded-xl text-[11px] sm:text-sm font-black text-center transition ${
+                  activeView === 'offers' ? `${theme.primaryBg} text-white shadow-sm` : 'text-slate-700 hover:bg-white/80'
                 }`}
               >
-                العروض والباقات
+                العروض
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveView('track')}
-                className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-sm font-black whitespace-nowrap transition ${
-                  activeView === 'track' ? `${theme.primaryBg} text-white shadow-sm` : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                className={`py-1.5 px-2 sm:px-3.5 sm:py-2 rounded-xl text-[11px] sm:text-sm font-black text-center transition ${
+                  activeView === 'track' ? `${theme.primaryBg} text-white shadow-sm` : 'text-slate-700 hover:bg-white/80'
                 }`}
               >
                 تتبع طلبك
@@ -1697,181 +1699,144 @@ export default function App() {
           />
         ) : activeView === 'home' ? (
           <div className="space-y-12 pb-16">
-            {/* الواجهة الرئيسية (Hero) */}
-            <section
-              style={{
-                minHeight: `${Number(settings.heroMinHeight) || 460}px`,
-                backgroundImage: activeHeroBg ? `url(${activeHeroBg})` : undefined
-              }}
-              className="relative bg-slate-950 bg-cover bg-center bg-no-repeat text-white flex items-center overflow-hidden"
-            >
-              <div
-                style={{ backgroundColor: `rgba(11, 20, 42, ${activeHeroBg ? overlayAlpha : 0.96})` }}
-                className="absolute inset-0"
-              />
-              <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-12 sm:py-16 w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-                <div className="lg:col-span-7 space-y-5">
+            {/* الواجهة الرئيسية (Hero) — على الهاتف تعرض الصورة بأبعادها الطبيعية الكاملة دون قصّ أو تمدد */}
+            {isMobileViewport ? (
+              <section className="bg-gradient-to-b from-slate-950 via-blue-950 to-slate-900 text-white overflow-hidden">
+                {activeHeroBg && (
+                  <div className="w-full bg-slate-950 border-b border-white/10">
+                    <img
+                      src={activeHeroBg}
+                      alt={safeText(settings.platformName)}
+                      className="w-full h-auto block object-contain"
+                    />
+                  </div>
+                )}
+                <div className="px-4 py-7 space-y-5">
                   {settings.heroBadge && (
-                    <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-400/15 border border-amber-400/40 text-amber-300 text-xs sm:text-sm font-black">
-                      <Sparkles className="w-4 h-4" />
+                    <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-400/15 border border-amber-400/40 text-amber-300 text-xs font-black">
+                      <Sparkles className="w-3.5 h-3.5 shrink-0" />
                       <span>{safeText(settings.heroBadge)}</span>
                     </span>
                   )}
-                  <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black leading-tight">
+                  <h2 className="text-2xl font-black leading-snug">
                     {safeText(settings.heroTitle)}
                   </h2>
-                  <p className="text-sm sm:text-base text-slate-200 font-bold leading-relaxed max-w-2xl">
+                  <p className="text-xs text-slate-200 font-bold leading-relaxed">
                     {safeText(settings.heroSubtitle)}
                   </p>
-                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <div className="grid grid-cols-1 gap-2.5 pt-1">
                     <button
                       type="button"
                       onClick={() => setActiveView('library')}
-                      className={`px-6 py-3.5 rounded-2xl ${theme.primaryBg} text-white text-sm font-black shadow-lg transition`}
+                      className={`w-full py-3.5 rounded-2xl ${theme.primaryBg} text-white text-sm font-black shadow-lg transition`}
                     >
                       {safeText(settings.heroPrimaryBtnText, 'تصفح المذكرات الدراسية')}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveView('offers')}
-                      className="px-6 py-3.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/25 text-white text-sm font-black backdrop-blur transition"
-                    >
-                      {safeText(settings.heroSecondaryBtnText, 'العروض وباقات التوفير')}
-                    </button>
-                    {settings.showHeroCustomBtn !== false && (
+                    <div className="grid grid-cols-2 gap-2.5">
                       <button
                         type="button"
-                        onClick={() => setContactModalOpen(true)}
-                        className="px-6 py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-sm font-black shadow-lg transition"
+                        onClick={() => setActiveView('offers')}
+                        className="py-3 px-3 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-black transition"
                       >
-                        {safeText(settings.heroCustomBtnText, 'اطلب مذكرة مخصصة')}
+                        {safeText(settings.heroSecondaryBtnText, 'العروض والباقات')}
                       </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* بطاقة لماذا يثق بنا المعلمون */}
-                <div className="lg:col-span-5 bg-white/10 backdrop-blur-md border border-white/20 rounded-3xl p-6 space-y-4 shadow-2xl">
-                  <div className="flex items-center gap-2.5 text-amber-400 font-black text-base sm:text-lg">
-                    <ShieldCheck className="w-6 h-6 shrink-0" />
-                    <h3>{safeText(settings.trustTitle, 'لماذا يثق بنا المعلمون؟')}</h3>
-                  </div>
-                  <ul className="space-y-3">
-                    {(settings.trustPoints || []).map((pt, idx) => (
-                      <li key={idx} className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-100 font-bold leading-relaxed">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-1" />
-                        <span>{safeText(pt)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </section>
-
-            {/* التنبيهات العامة في الصفحة الرئيسية إذا اختار المدير موضعها هنا */}
-            {settings.globalAlertsEnabled !== false &&
-              settings.globalAlertsPosition === 'home_top' &&
-              Array.isArray(settings.globalAlerts) &&
-              settings.globalAlerts.some((a) => a && a.active !== false && safeText(a.text).trim()) && (
-                <section className="max-w-7xl mx-auto px-4 sm:px-6">
-                  <UnifiedNoticeBox
-                    items={settings.globalAlerts
-                      .filter((a) => a && a.active !== false && safeText(a.text).trim())
-                      .map((a) => ({ text: safeText(a.text).trim(), color: safeText(a.color, 'amber') }))}
-                  />
-                </section>
-              )}
-
-            {/* الأقسام الرئيسية للمذكرات والكورسات */}
-            <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
-              <div className="text-center space-y-1.5">
-                <h2 className="text-xl sm:text-3xl font-black text-slate-900">الأقسام الرئيسية للمذكرات والكورسات</h2>
-                <p className="text-xs sm:text-sm text-slate-500 font-bold">اختر القسم المناسب لتصفح مجلدات المراحل والصفوف الدراسية</p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {(settings.categories || []).map((cat) => {
-                  const nbCount = countNotebooksInCategory(cat);
-                  return (
-                    <div
-                      key={cat.id}
-                      onClick={() => {
-                        setSelectedCategoryId(cat.id);
-                        setSelectedStageId('');
-                        setSelectedGradeId('');
-                        setActiveView('library');
-                      }}
-                      className="group bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl hover:border-blue-400 transition cursor-pointer flex flex-col justify-between"
-                    >
-                      <div className={`relative h-48 bg-gradient-to-br ${theme.cardGradient} overflow-hidden flex items-center justify-center`}>
-                        {cat.image ? (
-                          <img
-                            src={cat.image}
-                            alt={cat.name}
-                            loading="lazy"
-                            className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                          />
-                        ) : (
-                          <Layers className="w-12 h-12 text-white/80" />
-                        )}
-                        <span className="absolute top-3 left-3 px-3 py-1 rounded-full bg-slate-950/80 text-white text-xs font-black backdrop-blur">
-                          {nbCount} مذكرة متاحة
-                        </span>
-                      </div>
-                      <div className="p-5 flex items-center justify-between">
-                        <div>
-                          <h3 className="text-base sm:text-lg font-black text-slate-900 group-hover:text-blue-600 transition">
-                            {cat.name}
-                          </h3>
-                          <p className="text-xs text-blue-600 font-bold mt-0.5">
-                            تصفح المراحل والصفوف الدراسية
-                          </p>
-                        </div>
-                        <ChevronLeft className="w-5 h-5 text-blue-600" />
-                      </div>
+                      {settings.showHeroCustomBtn !== false && (
+                        <button
+                          type="button"
+                          onClick={() => setContactModalOpen(true)}
+                          className="py-3 px-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black shadow transition"
+                        >
+                          {safeText(settings.heroCustomBtnText, 'اطلب مذكرة خاصة')}
+                        </button>
+                      )}
                     </div>
-                  );
-                })}
-              </div>
-            </section>
-
-            {/* قسم ما الجديد */}
-            {settings.whatsNewEnabled !== false && whatsNewNotebooks.length > 0 && (
-              <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <span className="inline-block px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-black mb-1">
-                      إصدارات حديثة
-                    </span>
-                    <h2 className="text-xl sm:text-2xl font-black text-slate-900">
-                      {safeText(settings.whatsNewTitle, 'ما الجديد؟ أحدث المذكرات والإصدارات')}
-                    </h2>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setActiveView('library')}
-                    className="text-xs sm:text-sm font-black text-blue-600 hover:underline flex items-center gap-1"
-                  >
-                    <span>عرض الكل</span>
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                  {whatsNewNotebooks.map((nb) => (
-                    <NotebookCard
-                      key={nb.id}
-                      nb={nb}
-                      theme={theme}
-                      settings={settings}
-                      onPreview={() => {
-                        setPreviewNotebook(nb);
-                        setPreviewPageIdx(0);
-                        setPreviewZoom(1);
-                      }}
-                      onAdd={() => addToCart(nb)}
-                    />
-                  ))}
+                  {/* بطاقة لماذا يثق بنا المعلمون */}
+                  <div className="bg-white/10 backdrop-blur-md border border-white/15 rounded-3xl p-4 space-y-3">
+                    <div className="flex items-center gap-2 text-amber-400 font-black text-sm">
+                      <ShieldCheck className="w-5 h-5 shrink-0" />
+                      <h3>{safeText(settings.trustTitle, 'لماذا يثق بنا المعلمون؟')}</h3>
+                    </div>
+                    <ul className="space-y-2">
+                      {(settings.trustPoints || []).map((pt, idx) => (
+                        <li key={idx} className="flex items-start gap-2 text-xs text-slate-100 font-bold leading-relaxed">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <span>{safeText(pt)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </section>
+            ) : (
+              <section
+                style={{
+                  minHeight: `${Number(settings.heroMinHeight) || 460}px`,
+                  backgroundImage: activeHeroBg ? `url(${activeHeroBg})` : undefined
+                }}
+                className="relative bg-slate-950 bg-cover bg-center bg-no-repeat text-white flex items-center overflow-hidden"
+              >
+                <div
+                  style={{ backgroundColor: `rgba(11, 20, 42, ${activeHeroBg ? overlayAlpha : 0.96})` }}
+                  className="absolute inset-0"
+                />
+                <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-12 sm:py-16 w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+                  <div className="lg:col-span-7 space-y-5">
+                    {settings.heroBadge && (
+                      <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-400/15 border border-amber-400/40 text-amber-300 text-xs sm:text-sm font-black">
+                        <Sparkles className="w-4 h-4" />
+                        <span>{safeText(settings.heroBadge)}</span>
+                      </span>
+                    )}
+                    <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black leading-tight">
+                      {safeText(settings.heroTitle)}
+                    </h2>
+                    <p className="text-sm sm:text-base text-slate-200 font-bold leading-relaxed max-w-2xl">
+                      {safeText(settings.heroSubtitle)}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveView('library')}
+                        className={`px-6 py-3.5 rounded-2xl ${theme.primaryBg} text-white text-sm font-black shadow-lg transition`}
+                      >
+                        {safeText(settings.heroPrimaryBtnText, 'تصفح المذكرات الدراسية')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveView('offers')}
+                        className="px-6 py-3.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/25 text-white text-sm font-black backdrop-blur transition"
+                      >
+                        {safeText(settings.heroSecondaryBtnText, 'العروض وباقات التوفير')}
+                      </button>
+                      {settings.showHeroCustomBtn !== false && (
+                        <button
+                          type="button"
+                          onClick={() => setContactModalOpen(true)}
+                          className="px-6 py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-sm font-black shadow-lg transition"
+                        >
+                          {safeText(settings.heroCustomBtnText, 'اطلب مذكرة مخصصة')}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* بطاقة لماذا يثق بنا المعلمون */}
+                  <div className="lg:col-span-5 bg-white/10 backdrop-blur-md border border-white/20 rounded-3xl p-6 space-y-4 shadow-2xl">
+                    <div className="flex items-center gap-2.5 text-amber-400 font-black text-base sm:text-lg">
+                      <ShieldCheck className="w-6 h-6 shrink-0" />
+                      <h3>{safeText(settings.trustTitle, 'لماذا يثق بنا المعلمون؟')}</h3>
+                    </div>
+                    <ul className="space-y-3">
+                      {(settings.trustPoints || []).map((pt, idx) => (
+                        <li key={idx} className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-100 font-bold leading-relaxed">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-1" />
+                          <span>{safeText(pt)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               </section>
             )}
@@ -2178,6 +2143,239 @@ export default function App() {
           </section>
         )}
       </main>
+
+      {/* ===================================================================== */}
+      {/* نافذة معاينة المذكرة والعينات */}
+      {/* ===================================================================== */}
+      {previewNotebook && (() => {
+        const showGlobalInThisView =
+          previewGlobalNotices.length > 0 &&
+          (!previewFullscreen || settings.globalAlertsShowInFullscreen);
+        const showNbNoticeInThisView =
+          previewNotebookNotice &&
+          (!previewFullscreen || previewNotebook.noticeShowInFullscreen);
+        const showDetailsInThisView =
+          !previewFullscreen || settings.previewDetailsShowInFullscreen;
+        const detailsPos = settings.previewDetailsPosition || 'above_samples';
+
+        const detailsBlock = showDetailsInThisView && (
+          <div className="px-3.5 sm:px-5 py-2.5 bg-white border-b border-slate-200/80 space-y-1.5 shrink-0">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {previewNotebook.badgeText && (
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[11px] font-black">
+                  {safeText(previewNotebook.badgeText)}
+                </span>
+              )}
+              {previewNotebook.subject && (
+                <span className="px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-bold">
+                  المادة: {safeText(previewNotebook.subject)}
+                </span>
+              )}
+              {previewNotebook.pagesCount && (
+                <span className="px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-bold">
+                  عدد الصفحات: {safeText(previewNotebook.pagesCount)} صفحة
+                </span>
+              )}
+            </div>
+            {previewNotebook.subtitle && (
+              <p className="text-xs sm:text-sm text-slate-700 font-bold leading-relaxed">
+                {safeText(previewNotebook.subtitle)}
+              </p>
+            )}
+          </div>
+        );
+
+        return (
+          <div
+            className={`fixed inset-0 z-[70] bg-slate-950/90 backdrop-blur-sm flex items-center justify-center ${
+              previewFullscreen ? 'p-0' : 'p-2 sm:p-4'
+            }`}
+          >
+            <div
+              className={`bg-white w-full flex flex-col overflow-hidden shadow-2xl ${
+                previewFullscreen ? 'h-full rounded-none' : 'max-w-4xl max-h-[92vh] rounded-3xl'
+              }`}
+            >
+              {/* رأس نافذة المعاينة */}
+              <div className="bg-slate-900 text-white px-3.5 sm:px-5 py-3 flex items-center justify-between gap-2 shrink-0">
+                <div className="min-w-0">
+                  <h3 className="text-sm sm:text-base font-black truncate">{safeText(previewNotebook.title)}</h3>
+                  <p className="text-[11px] text-slate-300 font-bold">
+                    صفحة {previewSamplesList.length > 0 ? previewPageIdx + 1 : 0} من {previewSamplesList.length}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewZoom((z) => Math.max(0.75, +(z - 0.25).toFixed(2)))}
+                    className="p-2 rounded-xl bg-white/10 hover:bg-white/20"
+                    title="تصغير"
+                  >
+                    <ZoomOut className="w-4 h-4" />
+                  </button>
+                  <span className="text-xs font-black px-1">{Math.round(previewZoom * 100)}%</span>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewZoom((z) => Math.min(2.5, +(z + 0.25).toFixed(2)))}
+                    className="p-2 rounded-xl bg-white/10 hover:bg-white/20"
+                    title="تكبير"
+                  >
+                    <ZoomIn className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewFullscreen((f) => !f)}
+                    className="p-2 rounded-xl bg-white/10 hover:bg-white/20"
+                    title={previewFullscreen ? 'إنهاء ملء الشاشة' : 'ملء الشاشة'}
+                  >
+                    {previewFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPreviewNotebook(null);
+                      setPreviewFullscreen(false);
+                      setPreviewZoom(1);
+                    }}
+                    className="p-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white"
+                    title="إغلاق"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* منطقة التمرير الكاملة */}
+              <div className="flex-1 overflow-y-auto bg-slate-100 flex flex-col">
+                {showGlobalInThisView && settings.globalAlertsPosition !== 'preview_bottom' && (
+                  <UnifiedNoticeBox items={previewGlobalNotices} compact />
+                )}
+
+                {showNbNoticeInThisView && previewNotebook.noticePosition === 'top' && (
+                  <UnifiedNoticeBox items={previewNotebookNotice} compact />
+                )}
+
+                {detailsPos === 'above_samples' && detailsBlock}
+
+                {showNbNoticeInThisView && previewNotebook.noticePosition === 'below_details' && (
+                  <UnifiedNoticeBox items={previewNotebookNotice} compact />
+                )}
+
+                {/* عارض صفحة العينة كاملة */}
+                <div
+                  onTouchStart={(e) => {
+                    touchStartXRef.current = e.touches?.[0]?.clientX ?? null;
+                  }}
+                  onTouchEnd={(e) => {
+                    if (touchStartXRef.current === null || previewSamplesList.length <= 1) return;
+                    const endX = e.changedTouches?.[0]?.clientX ?? touchStartXRef.current;
+                    const diff = touchStartXRef.current - endX;
+                    if (Math.abs(diff) > 40) {
+                      if (diff > 0) {
+                        setPreviewPageIdx((p) => (p + 1) % previewSamplesList.length);
+                      } else {
+                        setPreviewPageIdx((p) => (p - 1 + previewSamplesList.length) % previewSamplesList.length);
+                      }
+                    }
+                    touchStartXRef.current = null;
+                  }}
+                  className="relative flex-1 min-h-[340px] flex items-center justify-center p-2 sm:p-4 bg-slate-200/70 overflow-auto"
+                >
+                  {loadingSamples && previewSamplesList.length === 0 ? (
+                    <div className="flex flex-col items-center gap-2 text-slate-600">
+                      <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                      <span className="text-xs font-black">جاري تحميل صفحات العينة...</span>
+                    </div>
+                  ) : previewSamplesList.length > 0 ? (
+                    <img
+                      src={previewSamplesList[previewPageIdx] || previewSamplesList[0]}
+                      alt={`صفحة ${previewPageIdx + 1}`}
+                      style={{ transform: `scale(${previewZoom})`, transformOrigin: 'top center' }}
+                      className="w-auto h-auto max-w-full max-h-[65vh] sm:max-h-[72vh] object-contain rounded-xl shadow-lg bg-white transition-transform duration-200"
+                    />
+                  ) : (
+                    <div className="text-center text-slate-500 space-y-2 py-12">
+                      <BookOpen className="w-10 h-10 mx-auto text-slate-400" />
+                      <p className="text-xs font-black">لا توجد صور عينات مرفوعة لهذه المذكرة حاليًا.</p>
+                    </div>
+                  )}
+
+                  {previewSamplesList.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPreviewPageIdx((p) => (p - 1 + previewSamplesList.length) % previewSamplesList.length)
+                        }
+                        className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-slate-900/80 hover:bg-slate-900 text-white flex items-center justify-center shadow-lg"
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewPageIdx((p) => (p + 1) % previewSamplesList.length)}
+                        className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-slate-900/80 hover:bg-slate-900 text-white flex items-center justify-center shadow-lg"
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {detailsPos === 'below_samples' && detailsBlock}
+
+                {showNbNoticeInThisView && previewNotebook.noticePosition === 'bottom' && (
+                  <UnifiedNoticeBox items={previewNotebookNotice} compact />
+                )}
+
+                {showGlobalInThisView && settings.globalAlertsPosition === 'preview_bottom' && (
+                  <UnifiedNoticeBox items={previewGlobalNotices} compact />
+                )}
+              </div>
+
+              {/* الشريط السفلي للطلب ورابط Drive */}
+              {!previewFullscreen && (
+                <div className="bg-white border-t border-slate-200 px-3.5 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-2 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg sm:text-xl font-black text-blue-600">{previewNotebook.price} ج.م</span>
+                    {Number(previewNotebook.oldPrice) > Number(previewNotebook.price) && (
+                      <span className="text-xs text-slate-400 line-through font-bold">
+                        {previewNotebook.oldPrice} ج.م
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {previewNotebook.driveLink && (
+                      <a
+                        href={previewNotebook.driveLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ backgroundColor: previewNotebook.driveBtnColor || '#059669' }}
+                        className="px-3.5 py-2.5 rounded-2xl text-white text-xs font-black flex items-center gap-1.5 shadow"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>معاينة PDF على Drive</span>
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        addToCart(previewNotebook);
+                        setPreviewNotebook(null);
+                      }}
+                      className={`px-4 py-2.5 rounded-2xl ${theme.primaryBg} text-white text-xs sm:text-sm font-black shadow`}
+                    >
+                      اطلب المذكرة الآن
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ===================================================================== */}
       {/* نافذة سلة الطلبات الجانبية */}
