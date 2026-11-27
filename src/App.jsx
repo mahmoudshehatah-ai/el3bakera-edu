@@ -201,6 +201,39 @@ const DEFAULT_SETTINGS = {
     { id: 'soc_fb', label: 'صفحة الفيسبوك', url: 'https://www.facebook.com/share/17bS2p2v12/' },
     { id: 'soc_wa', label: 'جروب الواتساب', url: 'https://chat.whatsapp.com/I8vT9t7k8t60H5H7s5X2yG' },
     { id: 'soc_tg', label: 'قناة التيليجرام', url: 'https://t.me/el3bakera_edu' }
+  ],
+  trustFeatures: [
+    {
+      id: 'tr_1',
+      title: 'محتوى متكامل ومطابق لأحدث المواصفات',
+      desc: 'مذكرات منسقة باحترافية وتشمل أسئلة الكتاب المدرسي والتقييمات.'
+    },
+    {
+      id: 'tr_2',
+      title: 'تخصيص كامل باسمك ورقم هاتفك وشعارك',
+      desc: 'نضع بياناتك الخاصة على الغلاف وجميع الصفحات كعلامة مائية احترافية.'
+    },
+    {
+      id: 'tr_3',
+      title: 'جاهزة للطباعة الفورية بصيغة PDF',
+      desc: 'ملفات عالية الدقة ومُراجعة لغوياً وفنياً لتوفير وقتك ومجهودك.'
+    }
+  ],
+  upcomingNotebooks: [
+    {
+      id: 'up_1',
+      title: 'مذكرة المراجعة النهائية للصف الأول الثانوي',
+      stage: 'المرحلة الثانوية',
+      status: 'قيد المراجعة النهائية والتنسيق',
+      expectedDate: 'قريباً جداً'
+    },
+    {
+      id: 'up_2',
+      title: 'بنك الأسئلة الشامل للصف السادس الابتدائي',
+      stage: 'المرحلة الابتدائية',
+      status: 'جاري التجهيز والإخراج الفني',
+      expectedDate: 'خلال أيام'
+    }
   ]
 };
 
@@ -323,6 +356,51 @@ const DEFAULT_PRODUCTS = [
 
 const DEFAULT_BUNDLES = [
   {
+    id: 'bnd_prep_master',
+    title: 'باقة مراجعات التقفيل الشاملة للمرحلة الإعدادية',
+    subtitle:
+      'تشمل بنوك المراجعة وبوكليتات الامتحانات النهائية للصفوف الأول والثاني والثالث الإعدادي مخصصة بالكامل باسمك وشعارك.',
+    price: 649,
+    originalPrice: 895,
+    badge: 'وفر 246 ج.م',
+    productIds: ['nb_1795789801', 'nb_1795789802', 'nb_1795789803', 'nb_1795789804', 'nb_1795789805'],
+    coverImage: ''
+  }
+];
+
+const DEFAULT_COUPONS = [
+  { id: 'cp_m20', code: 'M20', discountPercent: 15, maxDiscount: 200, active: true },
+  { id: 'cp_next15', code: 'NEXT15', discountPercent: 15, maxDiscount: 200, active: true },
+  { id: 'cp_vip7906', code: 'VIP7906', discountPercent: 20, maxDiscount: 250, active: true }
+];
+
+// ============================================================================
+// دوال المساعدة وتطبيع البيانات وضغط الصور والتخزين غير المحدود
+// ============================================================================
+function safeText(val, fallback = '') {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === 'string' || typeof val === 'number') return String(val);
+  if (typeof val === 'object') {
+    return val.name || val.title || val.label || fallback;
+  }
+  return fallback;
+}
+
+function normalizeItems(rawList, fallbackList, prefix) {
+  if (!Array.isArray(rawList) || rawList.length === 0) return fallbackList;
+  return rawList.map((item, idx) => {
+    if (typeof item === 'string') {
+      return { id: `${prefix}_${idx}`, name: item };
+    }
+    const resolvedName = safeText(item.name || item.title || item.label, `عنصر ${idx + 1}`);
+    return {
+      ...item,
+      id: item.id || `${prefix}_${idx}`,
+      name: resolvedName
+    };
+  });
+}
+
 function compressImageFile(file, maxWidth = 650, quality = 0.72) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -602,6 +680,13 @@ function MuzakkiratiPlatformContent() {
   const [newCategorySubtitle, setNewCategorySubtitle] = useState('');
   const [newSocialLabel, setNewSocialLabel] = useState('');
   const [newSocialUrl, setNewSocialUrl] = useState('');
+  const [newUpcomingForm, setNewUpcomingForm] = useState({
+    title: '',
+    stage: 'المرحلة الإعدادية',
+    status: 'جاري التجهيز والتنسيق',
+    expectedDate: 'قريباً'
+  });
+  const [cloudSyncStatus, setCloudSyncStatus] = useState('checking'); // 'checking' | 'connected' | 'local-only' | 'error'
   const [customFirebaseText, setCustomFirebaseText] = useState(() => {
     try {
       return localStorage.getItem('el3bakera_custom_firebase_config') || '';
@@ -679,8 +764,13 @@ function MuzakkiratiPlatformContent() {
   // الاتصال بـ Firebase Firestore واسترداد/مزامنة البيانات والصور
   // ============================================================================
   useEffect(() => {
-    if (!auth) return;
-    signInAnonymously(auth).catch(() => {});
+    if (!auth) {
+      setCloudSyncStatus('local-only');
+      return;
+    }
+    signInAnonymously(auth)
+      .then(() => setCloudSyncStatus('connected'))
+      .catch(() => setCloudSyncStatus('error'));
     const unsub = onAuthStateChanged(auth, (u) => setUser(u));
     return () => unsub();
   }, []);
@@ -690,20 +780,59 @@ function MuzakkiratiPlatformContent() {
 
     // 1. الاستماع لإعدادات المنصة في المسار الأساسي
     const settingsRef = doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'main');
+    const mediaRef = doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'media');
+
     const unsubSettings = onSnapshot(
       settingsRef,
       (snap) => {
+        setCloudSyncStatus('connected');
         if (snap.exists() && !isSavingRef.current) {
           const cloudData = snap.data();
           setSettings((prev) => {
+            const mergedCategories = Array.isArray(cloudData.categories)
+              ? cloudData.categories.map((c) => {
+                  const prevCat = (prev.categories || []).find((pc) => pc.id === c.id);
+                  return { ...c, coverImage: c.coverImage || prevCat?.coverImage || '' };
+                })
+              : prev.categories;
             const merged = {
               ...prev,
               ...cloudData,
+              categories: mergedCategories,
               logoImage: cloudData.logoImage || prev.logoImage || '',
               heroImage: cloudData.heroImage || prev.heroImage || '',
               heroBgImage: cloudData.heroBgImage || prev.heroBgImage || ''
             };
-            localStorage.setItem('el3bakera_settings_v5', JSON.stringify(merged));
+            idbSet('settings_v5', merged);
+            try {
+              localStorage.setItem('el3bakera_settings_v5', JSON.stringify(merged));
+            } catch {}
+            return merged;
+          });
+        }
+      },
+      () => setCloudSyncStatus('error')
+    );
+
+    const unsubMedia = onSnapshot(
+      mediaRef,
+      (snap) => {
+        if (snap.exists() && !isSavingRef.current) {
+          const mediaData = snap.data();
+          setSettings((prev) => {
+            const catCovers = mediaData.categoryCovers || {};
+            const mergedCategories = (prev.categories || []).map((c) => ({
+              ...c,
+              coverImage: catCovers[c.id] || c.coverImage || ''
+            }));
+            const merged = {
+              ...prev,
+              categories: mergedCategories,
+              logoImage: mediaData.logoImage || prev.logoImage || '',
+              heroImage: mediaData.heroImage || prev.heroImage || '',
+              heroBgImage: mediaData.heroBgImage || prev.heroBgImage || ''
+            };
+            idbSet('settings_v5', merged);
             return merged;
           });
         }
@@ -798,9 +927,14 @@ function MuzakkiratiPlatformContent() {
       } catch {}
     };
     fetchSamples();
+    return () => {
+      unsubSettings();
+      unsubMedia();
+      unsubProducts();
+    };
   }, [user]);
 
-  // دوال الحفظ المتزامن (محلي + سحابي مع قفل الكتابة العكسية)
+  // دوال الحفظ المتزامن (محلي + سحابي مع فصل الصور لتجنب تجاوز حد 1MB في Firestore)
   const saveSettings = async (updatedSettings) => {
     isSavingRef.current = true;
     const cleanSettings = {
@@ -816,8 +950,15 @@ function MuzakkiratiPlatformContent() {
     } catch {}
     if (db) {
       try {
-        // فصل الصور الكبيرة في مستند media منفصل لتجنب تجاوز حد 1MB في Firestore
+        const categoryCovers = {};
+        const lightCategories = (cleanSettings.categories || []).map((c) => {
+          if (c.coverImage) categoryCovers[c.id] = c.coverImage;
+          const { coverImage, ...rest } = c;
+          return rest;
+        });
         const { logoImage, heroImage, heroBgImage, ...lightSettings } = cleanSettings;
+        lightSettings.categories = lightCategories;
+
         await setDoc(
           doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'main'),
           lightSettings,
@@ -828,18 +969,21 @@ function MuzakkiratiPlatformContent() {
           {
             logoImage: logoImage || '',
             heroImage: heroImage || '',
-            heroBgImage: heroBgImage || ''
+            heroBgImage: heroBgImage || '',
+            categoryCovers
           },
           { merge: true }
         );
+        setCloudSyncStatus('connected');
       } catch (e) {
         console.warn('Cloud settings save warning:', e);
-        showToast('تعذر الحفظ في السحابة — تأكد من قواعد أمان Firebase أو إعدادات الربط', 'error');
+        setCloudSyncStatus('error');
+        showToast('تعذر الحفظ في السحابة — تأكد من إعدادات ربط Firebase', 'error');
       }
     }
     setTimeout(() => {
       isSavingRef.current = false;
-    }, 3000);
+    }, 3500);
   };
 
   const saveProductToCloud = async (productObj) => {
@@ -866,35 +1010,6 @@ function MuzakkiratiPlatformContent() {
     } catch (e) {
       console.warn('Cloud product save warning:', e);
       showToast('تعذر مزامنة المذكرة مع السحابة — تم الحفظ في ذاكرة المتصفح', 'error');
-    }
-    setTimeout(() => {
-      isSavingRef.current = false;
-    }, 3000);
-  };
-
-  const saveProductToCloud = async (productObj) => {
-    if (!db) return;
-    isSavingRef.current = true;
-    try {
-      await setDoc(
-        doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebooks', productObj.id),
-        productObj,
-        { merge: true }
-      );
-      await setDoc(
-        doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebook_samples', productObj.id),
-        {
-          notebookId: productObj.id,
-          title: productObj.title,
-          coverImage: productObj.coverImage || '',
-          sampleImages: productObj.sampleImages || [],
-          updatedAt: new Date().toISOString()
-        },
-        { merge: true }
-      );
-    } catch (e) {
-      console.warn('Cloud product save warning:', e);
-      showToast('تعذر مزامنة المذكرة مع السحابة — تم الحفظ محلياً', 'error');
     }
     setTimeout(() => {
       isSavingRef.current = false;
@@ -1587,6 +1702,24 @@ function MuzakkiratiPlatformContent() {
               </div>
             </section>
 
+            {/* قسم: لماذا يثق بنا المعلمون؟ */}
+            <section className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {(settings.trustFeatures || DEFAULT_SETTINGS.trustFeatures).map((feat, idx) => (
+                <div
+                  key={feat.id || idx}
+                  className="bg-white rounded-3xl border border-slate-200/80 p-5 sm:p-6 shadow-2xs flex items-start gap-4"
+                >
+                  <div className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                    <ShieldCheck className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm sm:text-base font-black text-slate-900">{feat.title}</h3>
+                    <p className="text-xs text-slate-600 mt-1 leading-relaxed">{feat.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </section>
+
             {/* قسم الأقسام الدراسية (بطاقات بيضاء بصور الغلاف الكاملة) */}
             <section className="space-y-5">
               <div className="flex items-center justify-between">
@@ -1646,126 +1779,54 @@ function MuzakkiratiPlatformContent() {
               </div>
             </section>
 
-            {/* قسم أحدث المذكرات المضافة */}
-            <section className="space-y-5">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xl sm:text-2xl font-black text-slate-900">أحدث المذكرات المضافة</h3>
-                <button
-                  onClick={() => navigateToTab('library')}
-                  className="text-sm font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
-                >
-                  تصفح جميع المذكرات ←
-                </button>
-              </div>
+            {/* ركن الإعلان عن المذكرات قيد التجهيز */}
+            {Array.isArray(settings.upcomingNotebooks) && settings.upcomingNotebooks.length > 0 && (
+              <section className="bg-gradient-to-l from-slate-900 via-[#0f2347] to-slate-900 rounded-3xl p-6 sm:p-8 text-white border border-slate-800 shadow-lg space-y-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-2xl bg-amber-400/20 border border-amber-400/30 text-amber-300 flex items-center justify-center">
+                      <Sparkles className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg sm:text-xl font-black text-white">
+                        مذكرات وبنوك أسئلة قيد التجهيز والإصدار قريباً
+                      </h3>
+                      <p className="text-xs text-slate-300">
+                        نعمل حالياً على إعداد وتنسيق هذه الإصدارات لتكون متاحة للحجز والتخصيص قريباً
+                      </p>
+                    </div>
+                  </div>
+                  <span className="px-3.5 py-1.5 rounded-full bg-amber-400 text-slate-950 text-xs font-black">
+                    قريباً على المنصة
+                  </span>
+                </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {visibleProducts.slice(0, 6).map((product) => {
-                  const gradeObj = normalizedGrades.find((g) => g.id === product.gradeId);
-                  const catObj = normalizedCategories.find((c) => c.id === product.categoryId);
-
-                  return (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {settings.upcomingNotebooks.map((item) => (
                     <div
-                      key={product.id}
-                      className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-sm hover:shadow-xl transition-all flex flex-col"
+                      key={item.id}
+                      className="rounded-2xl bg-white/10 border border-white/15 p-4 flex flex-col justify-between gap-3"
                     >
-                      {/* صورة غلاف المذكرة كاملة الوضوح */}
-                      <div
-                        onClick={() => {
-                          setPreviewProduct(product);
-                          setActiveSampleIndex(0);
-                        }}
-                        className="relative aspect-[4/3] w-full bg-gradient-to-br from-[#0f1f44] to-[#1e3a8a] cursor-pointer overflow-hidden group"
-                      >
-                        {product.coverImage ? (
-                          <img
-                            src={product.coverImage}
-                            alt={product.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          />
-                        ) : (
-                          <div className="w-full h-full p-6 flex flex-col items-center justify-center text-center text-white">
-                            <FileText className="w-12 h-12 text-amber-400 mb-3" />
-                            <span className="font-black text-lg leading-snug">{product.title}</span>
-                          </div>
-                        )}
-
-                        {renderDiscountBadge(product)}
-
-                        {product.badgeText && (
-                          <span className="absolute bottom-3 right-3 max-w-[85%] truncate bg-amber-400 text-slate-950 text-[11px] font-black px-3 py-1 rounded-full shadow-md">
-                            {product.badgeText}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="px-2.5 py-0.5 rounded-full bg-sky-400/20 text-sky-200 font-bold">
+                            {item.stage}
                           </span>
-                        )}
+                          <span className="text-amber-300 font-black">{item.expectedDate}</span>
+                        </div>
+                        <h4 className="font-black text-sm sm:text-base text-white pt-1">
+                          {item.title}
+                        </h4>
                       </div>
-
-                      <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2 text-xs text-slate-500 font-semibold">
-                            <span>{gradeObj?.name || 'جميع الصفوف'}</span>
-                            <span>•</span>
-                            <span>{catObj?.name || 'مذكرة'}</span>
-                          </div>
-
-                          <h4
-                            onClick={() => {
-                              setPreviewProduct(product);
-                              setActiveSampleIndex(0);
-                            }}
-                            className="text-lg font-black text-slate-900 hover:text-blue-600 cursor-pointer line-clamp-1"
-                          >
-                            {product.title}
-                          </h4>
-
-                          <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">
-                            {product.description}
-                          </p>
-
-                          {product.tipText && (
-                            <div className="px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200/80 text-amber-900 text-[11px] font-bold">
-                              💡 {product.tipText}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="space-y-3 pt-2 border-t border-slate-100">
-                          <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-xl">
-                            <span>📄 {product.pagesCount} صفحة PDF</span>
-                            <button
-                              onClick={() => {
-                                setPreviewProduct(product);
-                                setActiveSampleIndex(0);
-                              }}
-                              className="text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>معاينة العينة</span>
-                            </button>
-                          </div>
-
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <span className="text-xl font-black text-blue-600">{product.price} ج.م</span>
-                              {product.oldPrice > product.price && (
-                                <span className="text-xs text-slate-400 line-through mr-2">
-                                  {product.oldPrice} ج.م
-                                </span>
-                              )}
-                            </div>
-
-                            <button
-                              onClick={() => addToCart(product, 'product')}
-                              className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-sm transition cursor-pointer"
-                            >
-                              أضف للسلة
-                            </button>
-                          </div>
-                        </div>
+                      <div className="text-xs text-slate-300 bg-slate-950/40 px-3 py-2 rounded-xl flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                        <span>{item.status}</span>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            </section>
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
         )}
 
@@ -2122,8 +2183,14 @@ function MuzakkiratiPlatformContent() {
                 </div>
                 <div>
                   <h2 className="text-lg font-black">لوحة إدارة منصة العباقرة</h2>
-                  <p className="text-xs text-slate-400">
-                    متصل بقاعدة البيانات السحابية ({PRIMARY_APP_ID}) — اضغط حفظ التعديلات لمزامنة التغييرات فوراً
+                  <p className="text-xs text-slate-400 flex items-center gap-2">
+                    <span>
+                      {cloudSyncStatus === 'connected'
+                        ? `متصل بقاعدة البيانات السحابية (${PRIMARY_APP_ID}) ✓`
+                        : cloudSyncStatus === 'error'
+                        ? 'تعذر الاتصال بالسحابة — يتم الحفظ في ذاكرة المتصفح فقط (تحقق من إعدادات Firebase)'
+                        : 'وضع التخزين المحلي — الصق إعدادات Firebase في تبويب الهوية والروابط للمزامنة السحابية'}
+                    </span>
                   </p>
                 </div>
               </div>
@@ -3417,6 +3484,101 @@ function MuzakkiratiPlatformContent() {
                         </button>
                       </div>
                     ))}
+                  </div>
+
+                  {/* إدارة ركن المذكرات قيد التجهيز */}
+                  <div className="pt-4 border-t border-slate-100 space-y-3">
+                    <h4 className="font-black text-slate-900">إدارة ركن المذكرات قيد التجهيز (تظهر في الرئيسية)</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        placeholder="عنوان المذكرة قيد التجهيز..."
+                        value={newUpcomingForm.title}
+                        onChange={(e) =>
+                          setNewUpcomingForm({ ...newUpcomingForm, title: e.target.value })
+                        }
+                        className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                      />
+                      <input
+                        type="text"
+                        placeholder="المرحلة (مثال: المرحلة الإعدادية)"
+                        value={newUpcomingForm.stage}
+                        onChange={(e) =>
+                          setNewUpcomingForm({ ...newUpcomingForm, stage: e.target.value })
+                        }
+                        className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                      />
+                      <input
+                        type="text"
+                        placeholder="حالة التجهيز (مثال: جاري التنسيق)"
+                        value={newUpcomingForm.status}
+                        onChange={(e) =>
+                          setNewUpcomingForm({ ...newUpcomingForm, status: e.target.value })
+                        }
+                        className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="موعد الإصدار (مثال: قريباً)"
+                          value={newUpcomingForm.expectedDate}
+                          onChange={(e) =>
+                            setNewUpcomingForm({ ...newUpcomingForm, expectedDate: e.target.value })
+                          }
+                          className="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                        />
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!newUpcomingForm.title.trim()) return;
+                            const next = [
+                              ...(settings.upcomingNotebooks || []),
+                              { id: `up_${Date.now()}`, ...newUpcomingForm }
+                            ];
+                            await saveSettings({ ...settings, upcomingNotebooks: next });
+                            setNewUpcomingForm({
+                              title: '',
+                              stage: 'المرحلة الإعدادية',
+                              status: 'جاري التجهيز والتنسيق',
+                              expectedDate: 'قريباً'
+                            });
+                            showToast('تمت إضافة المذكرة قيد التجهيز وحفظها');
+                          }}
+                          className="px-4 py-2 rounded-xl bg-blue-600 text-white font-bold cursor-pointer"
+                        >
+                          إضافة
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      {(settings.upcomingNotebooks || []).map((up) => (
+                        <div
+                          key={up.id}
+                          className="flex items-center justify-between p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/70"
+                        >
+                          <div>
+                            <span className="font-bold text-slate-900">{up.title}</span>
+                            <span className="text-[11px] text-slate-500 mr-2">
+                              ({up.stage} • {up.expectedDate})
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const next = (settings.upcomingNotebooks || []).filter(
+                                (x) => x.id !== up.id
+                              );
+                              await saveSettings({ ...settings, upcomingNotebooks: next });
+                              showToast('تم حذف العنصر');
+                            }}
+                            className="text-rose-600 cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="pt-4 border-t border-slate-100 space-y-2">
