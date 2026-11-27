@@ -568,7 +568,14 @@ function MuzakkiratiPlatformContent() {
       return 'home';
     }
   });
-  const [tabHistory, setTabHistory] = useState(['home']);
+  const [tabHistory, setTabHistory] = useState(() => {
+    try {
+      const initial = localStorage.getItem('el3bakera_active_tab') || 'home';
+      return initial === 'home' ? ['home'] : ['home', initial];
+    } catch {
+      return ['home'];
+    }
+  });
   const [selectedCategory, setSelectedCategory] = useState('all');
 
   const navigateToTab = (newTab) => {
@@ -578,20 +585,27 @@ function MuzakkiratiPlatformContent() {
     try {
       localStorage.setItem('el3bakera_active_tab', newTab);
     } catch {}
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleGoBack = () => {
-    if (tabHistory.length > 1) {
-      const nextHistory = tabHistory.slice(0, -1);
-      const prevTab = nextHistory[nextHistory.length - 1] || 'home';
-      setTabHistory(nextHistory);
-      setActiveTab(prevTab);
+    setTabHistory((prev) => {
+      if (prev.length > 1) {
+        const nextHistory = prev.slice(0, -1);
+        const prevTab = nextHistory[nextHistory.length - 1] || 'home';
+        setActiveTab(prevTab);
+        try {
+          localStorage.setItem('el3bakera_active_tab', prevTab);
+        } catch {}
+        return nextHistory;
+      }
+      setActiveTab('home');
       try {
-        localStorage.setItem('el3bakera_active_tab', prevTab);
+        localStorage.setItem('el3bakera_active_tab', 'home');
       } catch {}
-    } else {
-      navigateToTab('home');
-    }
+      return ['home'];
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const [settings, setSettings] = useState(() => {
@@ -1096,33 +1110,6 @@ function MuzakkiratiPlatformContent() {
       console.error('Product cloud save error:', e);
       showToast(`تعذر رفع صور المذكرة للسحابة: ${e?.code || e?.message || 'خطأ في الاتصال'}`, 'error');
     }
-    setTimeout(() => {
-      isSavingRef.current = false;
-    }, 2000);
-  };
-
-  const saveProductToCloud = async (productObj) => {
-    if (!db) return;
-    isSavingRef.current = true;
-    try {
-      const { sampleImages, ...lightProduct } = productObj;
-      await setDoc(
-        doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebooks', productObj.id),
-        lightProduct,
-        { merge: true }
-      );
-      await setDoc(
-        doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebook_samples', productObj.id),
-        {
-          notebookId: productObj.id,
-          title: productObj.title,
-          coverImage: productObj.coverImage || '',
-          sampleImages: sampleImages || [],
-          updatedAt: new Date().toISOString()
-        },
-        { merge: true }
-      );
-    } catch {}
     setTimeout(() => {
       isSavingRef.current = false;
     }, 2000);
@@ -2930,9 +2917,56 @@ function MuzakkiratiPlatformContent() {
                         className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
                       />
                     </div>
+                    <input
+                      type="text"
+                      placeholder="شارة التوفير (مثال: وفر 150 ج.م)"
+                      value={newBundleForm.badge}
+                      onChange={(e) => setNewBundleForm({ ...newBundleForm, badge: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
+                    />
+                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                      <div className="font-black text-slate-800">
+                        اختر المذكرات المشمولة داخل الباقة ({newBundleForm.productIds.length}):
+                      </div>
+                      <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1">
+                        {products.map((prod) => {
+                          const isChecked = newBundleForm.productIds.includes(prod.id);
+                          return (
+                            <label
+                              key={prod.id}
+                              className={`flex items-center justify-between gap-2 p-2 rounded-xl border cursor-pointer transition ${
+                                isChecked
+                                  ? 'bg-blue-50 border-blue-300 text-blue-900 font-bold'
+                                  : 'bg-white border-slate-200 text-slate-700'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 truncate">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    setNewBundleForm((prev) => ({
+                                      ...prev,
+                                      productIds: isChecked
+                                        ? prev.productIds.filter((id) => id !== prod.id)
+                                        : [...prev.productIds, prod.id]
+                                    }));
+                                  }}
+                                />
+                                <span className="truncate">{prod.title}</span>
+                              </div>
+                              <span className="text-[11px] font-bold shrink-0">{prod.price} ج.م</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
                     <button
                       onClick={async () => {
-                        if (!newBundleForm.title.trim()) return;
+                        if (!newBundleForm.title.trim()) {
+                          showToast('يرجى إدخال اسم الباقة أولاً', 'error');
+                          return;
+                        }
                         const bObj = { ...newBundleForm, id: `bnd_${Date.now()}` };
                         const next = [bObj, ...bundles];
                         setBundles(next);
@@ -2952,9 +2986,9 @@ function MuzakkiratiPlatformContent() {
                           productIds: [],
                           coverImage: ''
                         });
-                        showToast('تمت إضافة الباقة وحفظها');
+                        showToast('تمت إضافة الباقة وحفظها بنجاح');
                       }}
-                      className="w-full py-3 rounded-xl bg-blue-600 text-white font-black text-sm cursor-pointer"
+                      className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm cursor-pointer"
                     >
                       حفظ الباقة
                     </button>
@@ -2965,12 +2999,12 @@ function MuzakkiratiPlatformContent() {
                   {bundles.map((b) => (
                     <div
                       key={b.id}
-                      className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center justify-between"
+                      className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center justify-between gap-3"
                     >
-                      <div>
+                      <div className="space-y-1">
                         <h4 className="font-black text-sm">{b.title}</h4>
-                        <p className="text-xs text-slate-500 mt-1">
-                          {b.price} ج.م (بدلاً من {b.originalPrice} ج.م)
+                        <p className="text-xs text-slate-500">
+                          {b.price} ج.م (بدلاً من {b.originalPrice} ج.م) • تشمل {(b.productIds || []).length} مذكرات
                         </p>
                       </div>
                       <button
@@ -3068,177 +3102,111 @@ function MuzakkiratiPlatformContent() {
                               </div>
                             )}
                             <button
-                              onClick={() => {
-                                const updatedCats = normalizedCategories.filter((c) => c.id !== cat.id);
-                                saveSettings({ ...settings, categories: updatedCats });
-                                showToast('تم حذف القسم');
-                              }}
-                              className="absolute top-2 left-2 p-2 rounded-xl bg-rose-600 text-white shadow cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-
-                          <div className="p-4 space-y-2">
-                            <input
-                              type="text"
-                              value={cat.name}
-                              onChange={(e) => {
-                                const updatedCats = normalizedCategories.map((c) =>
-                                  c.id === cat.id ? { ...c, name: e.target.value } : c
-                                );
-                                setSettings({ ...settings, categories: updatedCats });
-                              }}
-                              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-black"
-                            />
-                            <label className="inline-flex items-center gap-1.5 text-xs text-blue-600 font-bold cursor-pointer hover:underline">
-                              <ImageIcon className="w-3.5 h-3.5" />
-                              <span>{cat.coverImage ? 'تغيير صورة القسم' : 'رفع صورة غلاف للقسم'}</span>
-                              <input
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={async (e) => {
-                                  const f = e.target.files?.[0];
-                                  if (!f) return;
-                                  const img = await compressImageFile(f, 800, 0.82);
-                                  const updatedCats = normalizedCategories.map((c) =>
-                                    c.id === cat.id ? { ...c, coverImage: img } : c
-                                  );
-                                  await saveSettings({ ...settings, categories: updatedCats });
-                                  showToast('تم تحديث وحفظ صورة القسم');
-                                }}
-                              />
-                            </label>
-                          </div>
-                        </div>
+                          onClick={() => {
+                            setSettings({
+                              ...settings,
+                              stages: normalizedStages.filter((s) => s.id !== st.id)
+                            });
+                            showToast('تم حذف المرحلة — اضغط حفظ التعديلات للاعتماد');
+                          }}
+                          className="text-rose-600 cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     ))}
                   </div>
+                  <button
+                    onClick={handleSaveAllAdminChanges}
+                    className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black cursor-pointer"
+                  >
+                    حفظ تعديلات المراحل
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
-                    <h3 className="text-base font-black text-slate-900">المراحل الدراسية</h3>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={newStageName}
-                        onChange={(e) => setNewStageName(e.target.value)}
-                        placeholder="اسم المرحلة..."
-                        className="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs"
-                      />
-                      <button
-                        onClick={() => {
-                          if (!newStageName.trim()) return;
-                          const next = [...normalizedStages, { id: `stg_${Date.now()}`, name: newStageName.trim() }];
-                          saveSettings({ ...settings, stages: next });
-                          setNewStageName('');
-                          showToast('تمت إضافة المرحلة');
-                        }}
-                        className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold cursor-pointer"
-                      >
-                        إضافة
-                      </button>
-                    </div>
-                    <div className="space-y-2">
+                <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
+                  <h3 className="text-base font-black text-slate-900">الصفوف الدراسية</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                    <select
+                      value={newGradeStageId}
+                      onChange={(e) => setNewGradeStageId(e.target.value)}
+                      className="sm:col-span-5 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
+                    >
                       {normalizedStages.map((st) => (
-                        <div key={st.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 text-xs font-bold">
-                          <span>{st.name}</span>
+                        <option key={st.id} value={st.id}>
+                          {st.name}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      value={newGradeName}
+                      onChange={(e) => setNewGradeName(e.target.value)}
+                      placeholder="اسم الصف الدراسي..."
+                      className="sm:col-span-5 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs"
+                    />
+                    <button
+                      onClick={() => {
+                        if (!newGradeName.trim()) return;
+                        const next = [
+                          ...normalizedGrades,
+                          {
+                            id: `grd_${Date.now()}`,
+                            stageId: newGradeStageId,
+                            name: newGradeName.trim()
+                          }
+                        ];
+                        setSettings({ ...settings, grades: next });
+                        setNewGradeName('');
+                        showToast('تمت إضافة الصف — اضغط حفظ التعديلات للاعتماد');
+                      }}
+                      className="sm:col-span-2 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold cursor-pointer"
+                    >
+                      إضافة
+                    </button>
+                  </div>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {normalizedGrades.map((gr) => {
+                      const stObj = normalizedStages.find((s) => s.id === gr.stageId);
+                      return (
+                        <div
+                          key={gr.id}
+                          className="flex items-center justify-between p-3 rounded-xl bg-slate-50 text-xs font-bold"
+                        >
+                          <div>
+                            <span>{gr.name}</span>
+                            {stObj && (
+                              <span className="text-[11px] text-slate-400 mr-2">({stObj.name})</span>
+                            )}
+                          </div>
                           <button
                             onClick={() => {
-                              saveSettings({
+                              setSettings({
                                 ...settings,
-                                stages: normalizedStages.filter((s) => s.id !== st.id)
+                                grades: normalizedGrades.filter((g) => g.id !== gr.id)
                               });
-                              showToast('تم حذف المرحلة');
+                              showToast('تم حذف الصف — اضغط حفظ التعديلات للاعتماد');
                             }}
                             className="text-rose-600 cursor-pointer"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
-                      ))}
-                    </div>
+                      );
+                    })}
                   </div>
-
-                  <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
-                    <h3 className="text-base font-black text-slate-900">الصفوف الدراسية</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
-                      <select
-                        value={newGradeStageId}
-                        onChange={(e) => setNewGradeStageId(e.target.value)}
-                        className="sm:col-span-5 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
-                      >
-                        {normalizedStages.map((st) => (
-                          <option key={st.id} value={st.id}>
-                            {st.name}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        type="text"
-                        value={newGradeName}
-                        onChange={(e) => setNewGradeName(e.target.value)}
-                        placeholder="اسم الصف الدراسي..."
-                        className="sm:col-span-5 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs"
-                      />
-                      <button
-                        onClick={() => {
-                          if (!newGradeName.trim()) return;
-                          const next = [
-                            ...normalizedGrades,
-                            {
-                              id: `grd_${Date.now()}`,
-                              stageId: newGradeStageId,
-                              name: newGradeName.trim()
-                            }
-                          ];
-                          saveSettings({ ...settings, grades: next });
-                          setNewGradeName('');
-                          showToast('تمت إضافة الصف الدراسي');
-                        }}
-                        className="sm:col-span-2 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold cursor-pointer"
-                      >
-                        إضافة
-                      </button>
-                    </div>
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
-                      {normalizedGrades.map((gr) => {
-                        const stObj = normalizedStages.find((s) => s.id === gr.stageId);
-                        return (
-                          <div
-                            key={gr.id}
-                            className="flex items-center justify-between p-3 rounded-xl bg-slate-50 text-xs font-bold"
-                          >
-                            <div>
-                              <span>{gr.name}</span>
-                              {stObj && (
-                                <span className="text-[11px] text-slate-400 mr-2">({stObj.name})</span>
-                              )}
-                            </div>
-                            <button
-                              onClick={() => {
-                                saveSettings({
-                                  ...settings,
-                                  grades: normalizedGrades.filter((g) => g.id !== gr.id)
-                                });
-                                showToast('تم حذف الصف');
-                              }}
-                              className="text-rose-600 cursor-pointer"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                  <button
+                    onClick={handleSaveAllAdminChanges}
+                    className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black cursor-pointer"
+                  >
+                    حفظ تعديلات الصفوف
+                  </button>
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* تبويب 4: الكوبونات والعروض */}
+          {/* تبويب 4: الكوبونات والعروض */}
             {adminSubTab === 'coupons' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
@@ -3423,7 +3391,7 @@ function MuzakkiratiPlatformContent() {
                     <h3 className="text-base font-black text-slate-900">الهوية والشعار والتحكم في التنبيهات</h3>
                     <button
                       onClick={handleSaveAllAdminChanges}
-                      className="px-4 py-2 rounded-xl bg-blue-600 text-white font-black cursor-pointer"
+                      className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black cursor-pointer shadow-sm"
                     >
                       حفظ التعديلات
                     </button>
@@ -3440,10 +3408,22 @@ function MuzakkiratiPlatformContent() {
                           const f = e.target.files?.[0];
                           if (!f) return;
                           const img = await compressImageFile(f, 350, 0.85);
-                          await saveSettings({ ...settings, logoImage: img });
-                          showToast('تم حفظ شعار المنصة');
+                          setSettings((prev) => ({ ...prev, logoImage: img }));
+                          showToast('تم تجهيز الشعار — اضغط على زر "حفظ التعديلات" لاعتماده');
                         }}
                       />
+                      {settings.logoImage && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSettings((prev) => ({ ...prev, logoImage: '' }));
+                            showToast('تمت إزالة الشعار — اضغط على "حفظ التعديلات"');
+                          }}
+                          className="text-[11px] text-rose-600 font-bold hover:underline block"
+                        >
+                          حذف الشعار المرفوع
+                        </button>
+                      )}
                     </div>
 
                     <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
@@ -3461,11 +3441,23 @@ function MuzakkiratiPlatformContent() {
                         onChange={async (e) => {
                           const f = e.target.files?.[0];
                           if (!f) return;
-                          const img = await compressImageFile(f, 1100, 0.78);
-                          await saveSettings({ ...settings, heroBgImage: img });
-                          showToast('تم حفظ خلفية الشاشة الرئيسية');
+                          const img = await compressImageFile(f, 1000, 0.72);
+                          setSettings((prev) => ({ ...prev, heroBgImage: img }));
+                          showToast('تم تجهيز صورة الخلفية — اضغط على زر "حفظ التعديلات" لاعتمادها');
                         }}
                       />
+                      {settings.heroBgImage && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSettings((prev) => ({ ...prev, heroBgImage: '' }));
+                            showToast('تمت إزالة الخلفية — اضغط على "حفظ التعديلات"');
+                          }}
+                          className="text-[11px] text-rose-600 font-bold hover:underline block"
+                        >
+                          حذف الخلفية المرفوعة
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -3670,11 +3662,28 @@ function MuzakkiratiPlatformContent() {
                       </div>
                     </div>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveAllAdminChanges}
+                    className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-md cursor-pointer"
+                  >
+                    حفظ ونشر تعديلات الهوية والشعار والتنبيهات
+                  </button>
                 </div>
 
                 <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-5">
-                  <div className="space-y-2">
+                  <div className="flex items-center justify-between">
                     <h4 className="font-black text-slate-900">روابط التواصل</h4>
+                    <button
+                      type="button"
+                      onClick={handleSaveAllAdminChanges}
+                      className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black cursor-pointer"
+                    >
+                      حفظ التعديلات
+                    </button>
+                  </div>
+                  <div className="space-y-2">
                     <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
                       <input
                         type="text"
@@ -3693,7 +3702,7 @@ function MuzakkiratiPlatformContent() {
                       />
                       <button
                         type="button"
-                        onClick={async () => {
+                        onClick={() => {
                           if (!newSocialLabel.trim() || !newSocialUrl.trim()) return;
                           const next = [
                             ...(settings.socialLinks || []),
@@ -3703,12 +3712,12 @@ function MuzakkiratiPlatformContent() {
                               url: newSocialUrl.trim()
                             }
                           ];
-                          await saveSettings({ ...settings, socialLinks: next });
+                          setSettings({ ...settings, socialLinks: next });
                           setNewSocialLabel('');
                           setNewSocialUrl('');
-                          showToast('تمت إضافة الرابط');
+                          showToast('تمت إضافة الرابط — اضغط حفظ التعديلات لاعتماده');
                         }}
-                        className="sm:col-span-2 py-2 rounded-xl bg-blue-600 text-white font-bold cursor-pointer"
+                        className="sm:col-span-2 py-2 rounded-xl bg-slate-900 text-white font-bold cursor-pointer"
                       >
                         إضافة
                       </button>
@@ -3722,10 +3731,10 @@ function MuzakkiratiPlatformContent() {
                           <span className="font-bold">{soc.label}</span>
                           <button
                             type="button"
-                            onClick={async () => {
+                            onClick={() => {
                               const next = (settings.socialLinks || []).filter((s) => s.id !== soc.id);
-                              await saveSettings({ ...settings, socialLinks: next });
-                              showToast('تم حذف الرابط');
+                              setSettings({ ...settings, socialLinks: next });
+                              showToast('تم حذف الرابط — اضغط حفظ التعديلات لاعتماده');
                             }}
                             className="text-rose-600 cursor-pointer"
                           >
@@ -3769,22 +3778,22 @@ function MuzakkiratiPlatformContent() {
                       />
                       <button
                         type="button"
-                        onClick={async () => {
+                        onClick={() => {
                           if (!newUpcomingForm.title.trim()) return;
                           const next = [
                             ...(settings.upcomingNotebooks || []),
                             { id: `up_${Date.now()}`, ...newUpcomingForm }
                           ];
-                          await saveSettings({ ...settings, upcomingNotebooks: next });
+                          setSettings({ ...settings, upcomingNotebooks: next });
                           setNewUpcomingForm({
                             title: '',
                             stage: 'المرحلة الإعدادية',
                             status: 'جاري التجهيز والتنسيق',
                             expectedDate: 'قريباً'
                           });
-                          showToast('تمت الإضافة لقسم قيد التجهيز');
+                          showToast('تمت الإضافة — اضغط حفظ التعديلات لاعتمادها');
                         }}
-                        className="py-2 rounded-xl bg-blue-600 text-white font-bold cursor-pointer"
+                        className="py-2 rounded-xl bg-slate-900 text-white font-bold cursor-pointer"
                       >
                         + إضافة إعلان
                       </button>
@@ -3798,12 +3807,12 @@ function MuzakkiratiPlatformContent() {
                           <span className="font-bold truncate">{up.title}</span>
                           <button
                             type="button"
-                            onClick={async () => {
+                            onClick={() => {
                               const next = (settings.upcomingNotebooks || []).filter(
                                 (u) => u.id !== up.id
                               );
-                              await saveSettings({ ...settings, upcomingNotebooks: next });
-                              showToast('تم الحذف');
+                              setSettings({ ...settings, upcomingNotebooks: next });
+                              showToast('تم الحذف — اضغط حفظ التعديلات لاعتماده');
                             }}
                             className="text-rose-600 cursor-pointer"
                           >
@@ -3813,6 +3822,14 @@ function MuzakkiratiPlatformContent() {
                       ))}
                     </div>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveAllAdminChanges}
+                    className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-md cursor-pointer"
+                  >
+                    حفظ ونشر تعديلات الروابط والإصدارات القادمة
+                  </button>
                 </div>
               </div>
             )}
