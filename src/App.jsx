@@ -690,6 +690,9 @@ export default function App() {
   const [couponInput, setCouponInput] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [customerForm, setCustomerForm] = useState({});
+  const [customerLogoImage, setCustomerLogoImage] = useState('');
+  const [customerLogoText, setCustomerLogoText] = useState('');
+  const [uploadingCustomerLogo, setUploadingCustomerLogo] = useState(false);
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [lastCreatedOrder, setLastCreatedOrder] = useState(null);
 
@@ -1530,6 +1533,8 @@ export default function App() {
       const orderDoc = {
         orderCode,
         customer: customerForm,
+        customerLogoText: customerLogoText.trim(),
+        customerLogoImage: customerLogoImage || '',
         items: cart.map((i) => ({ id: i.id, title: i.title, price: i.price, qty: i.qty || 1 })),
         subtotal: cartSubtotal,
         quantityDiscount: quantityDiscountInfo.amount,
@@ -1554,20 +1559,28 @@ export default function App() {
       setCart([]);
       setAppliedCoupon(null);
       setCouponInput('');
+      setCustomerLogoImage('');
+      setCustomerLogoText('');
 
       const waNum = String(settings.whatsappNumber || '201000000000').replace(/[^0-9]/g, '');
       const itemsLines = orderDoc.items.map((it, idx) => `${idx + 1}. ${it.title} (${it.price} ج.م)`).join('\n');
+      const customFieldsLines = (settings.checkoutFields || [])
+        .filter((f) => f && f.enabled !== false && f.id !== 'logo' && f.type !== 'file')
+        .map((f) => {
+          const val = safeText(customerForm[f.id]).trim();
+          return val ? `${f.label}: ${val}` : '';
+        })
+        .filter(Boolean);
+
       const waText = [
         `السلام عليكم، طلب جديد من ${settings.platformName}`,
         `رقم الطلب: ${orderCode}`,
-        `اسم المعلم: ${customerForm.teacherName || '-'}`,
-        `رقم الهاتف: ${customerForm.phone || '-'}`,
-        customerForm.subject ? `المادة: ${customerForm.subject}` : '',
-        customerForm.governorate ? `المحافظة: ${customerForm.governorate}` : '',
+        ...customFieldsLines,
+        customerLogoText.trim() ? `نص شعار المعلم: ${customerLogoText.trim()}` : '',
+        orderDoc.customerLogoImage ? `صورة الشعار: مرفقة داخل الطلب في لوحة الإدارة (${orderCode})` : '',
         `--- المذكرات المطلوبة ---`,
         itemsLines,
-        `الإجمالي النهائي: ${cartFinalTotal} ج.م`,
-        customerForm.notes ? `ملاحظات: ${customerForm.notes}` : ''
+        `الإجمالي النهائي: ${cartFinalTotal} ج.م`
       ]
         .filter(Boolean)
         .join('\n');
@@ -2991,7 +3004,7 @@ export default function App() {
                   {/* بيانات المعلم */}
                   <form onSubmit={handleSubmitOrder} className="space-y-3">
                     {(settings.checkoutFields || [])
-                      .filter((f) => f && f.enabled !== false)
+                      .filter((f) => f && f.enabled !== false && f.type !== 'file' && f.id !== 'logo')
                       .map((field) => (
                         <div key={field.id}>
                           <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -3019,9 +3032,71 @@ export default function App() {
                         </div>
                       ))}
 
+                    {/* قسم شعار المعلم المرن (كتابة نص أو رفع صورة) */}
+                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-black text-slate-800">
+                          شعار المعلم (Logo) — اكتب نص الشعار أو ارفع صورة (اختياري)
+                        </label>
+                        {uploadingCustomerLogo && (
+                          <span className="text-[11px] font-black text-blue-600">جاري تجهيز الصورة...</span>
+                        )}
+                      </div>
+
+                      <input
+                        type="text"
+                        placeholder="اكتب نص الشعار إذا كان نصيًا (مثال: سلسلة الأوائل التعليمية)"
+                        value={customerLogoText}
+                        onChange={(e) => setCustomerLogoText(e.target.value)}
+                        className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-bold"
+                      />
+
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                        <label className="px-3.5 py-2 rounded-xl bg-white hover:bg-blue-50 border border-slate-300 text-xs font-black text-slate-800 flex items-center gap-1.5 cursor-pointer transition">
+                          <Upload className="w-3.5 h-3.5 text-blue-600" />
+                          <span>{customerLogoImage ? 'تغيير صورة الشعار' : 'رفع صورة الشعار (PNG / JPG)'}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              setUploadingCustomerLogo(true);
+                              try {
+                                const compressed = await compressImageFile(file, 900, 0.88, 380000);
+                                setCustomerLogoImage(compressed);
+                              } finally {
+                                setUploadingCustomerLogo(false);
+                              }
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+
+                        {customerLogoImage && (
+                          <div className="flex items-center gap-2 bg-white px-2.5 py-1.5 rounded-xl border border-emerald-300">
+                            <img
+                              src={customerLogoImage}
+                              alt="شعار المعلم"
+                              className="w-10 h-10 rounded-lg object-contain bg-slate-50 border border-slate-200"
+                            />
+                            <span className="text-[11px] font-black text-emerald-700">تم إرفاق الشعار</span>
+                            <button
+                              type="button"
+                              onClick={() => setCustomerLogoImage('')}
+                              className="p-1 rounded-lg bg-rose-100 text-rose-700"
+                              title="حذف الصورة"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
                     <button
                       type="submit"
-                      disabled={submittingOrder}
+                      disabled={submittingOrder || uploadingCustomerLogo}
                       className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-black shadow-lg flex items-center justify-center gap-2"
                     >
                       <MessageCircle className="w-4 h-4" />
@@ -5180,27 +5255,83 @@ function AdminDashboard({
             <p className="text-xs sm:text-sm text-slate-500 font-bold text-center py-8">لا توجد طلبات مسجلة حتى الآن.</p>
           ) : (
             <div className="space-y-3">
-              {orders.map((ord) => (
-                <div key={ord.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-sm font-black text-slate-900">
-                      {ord.orderCode} • {ord.customer?.teacherName || 'معلم'} ({ord.customer?.phone || '-'})
+              {orders.map((ord) => {
+                const logoImg = extractImageFromValue(ord.customerLogoImage || ord.customer?.logo);
+                const logoTxt = safeText(ord.customerLogoText || ord.customer?.logoText).trim();
+                return (
+                  <div key={ord.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-sm font-black text-slate-900">
+                        {ord.orderCode} • {ord.customer?.teacherName || 'معلم'} ({ord.customer?.phone || '-'})
+                      </div>
+                      <select
+                        value={ord.status || 'pending'}
+                        onChange={(e) => updateDoc(publicDoc('orders', ord.id), { status: e.target.value })}
+                        className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-black"
+                      >
+                        <option value="pending">قيد المراجعة</option>
+                        <option value="processing">جاري التنسيق</option>
+                        <option value="completed">مكتمل وتم التسليم</option>
+                      </select>
                     </div>
-                    <select
-                      value={ord.status || 'pending'}
-                      onChange={(e) => updateDoc(publicDoc('orders', ord.id), { status: e.target.value })}
-                      className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-black"
-                    >
-                      <option value="pending">قيد المراجعة</option>
-                      <option value="processing">جاري التنسيق</option>
-                      <option value="completed">مكتمل وتم التسليم</option>
-                    </select>
+
+                    <div className="text-xs text-slate-600 font-bold">
+                      المطلوب: {(ord.items || []).map((i) => i.title).join(' + ')} • الإجمالي: {ord.total} ج.م
+                    </div>
+
+                    {/* عرض كل بيانات المعلم المسجلة في الطلب */}
+                    {ord.customer && Object.keys(ord.customer).length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {Object.entries(ord.customer)
+                          .filter(([k, v]) => k !== 'logo' && safeText(v).trim() && !String(v).startsWith('data:image/'))
+                          .map(([k, v]) => {
+                            const fieldDef = (localSettings.checkoutFields || []).find((f) => f.id === k);
+                            return (
+                              <span
+                                key={k}
+                                className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-bold text-slate-700"
+                              >
+                                {fieldDef?.label || k}: <strong className="text-slate-950">{safeText(v)}</strong>
+                              </span>
+                            );
+                          })}
+                      </div>
+                    )}
+
+                    {/* عرض نص أو صورة شعار المعلم مع زر تنزيل مباشر */}
+                    {(logoTxt || logoImg) && (
+                      <div className="p-3 rounded-xl bg-white border border-blue-200 flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          {logoImg && (
+                            <img
+                              src={logoImg}
+                              alt="شعار المعلم"
+                              className="w-14 h-14 rounded-xl object-contain bg-slate-50 border border-slate-200 p-1"
+                            />
+                          )}
+                          <div className="space-y-0.5">
+                            <div className="text-xs font-black text-blue-800">شعار المعلم المرفق:</div>
+                            {logoTxt && (
+                              <div className="text-xs sm:text-sm font-black text-slate-900">«{logoTxt}»</div>
+                            )}
+                          </div>
+                        </div>
+
+                        {logoImg && (
+                          <a
+                            href={logoImg}
+                            download={`logo_${ord.customer?.teacherName || ord.orderCode || 'teacher'}.jpg`}
+                            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black flex items-center gap-1.5 shadow transition"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>تنزيل صورة الشعار</span>
+                          </a>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <div className="text-xs text-slate-600 font-bold">
-                    المطلوب: {(ord.items || []).map((i) => i.title).join(' + ')} • الإجمالي: {ord.total} ج.م
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
