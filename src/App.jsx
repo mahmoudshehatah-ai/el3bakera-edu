@@ -549,6 +549,50 @@ function shrinkDataUrlIfNeeded(dataUrl, maxBytes = 480000) {
   });
 }
 
+function processHighQualityLogoFile(file, maxWidth = 1800, maxBytes = 820000) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const originalDataUrl = ev.target.result;
+      const isPngOrWebp = file.type === 'image/png' || file.type === 'image/webp';
+      if (typeof originalDataUrl === 'string' && originalDataUrl.length <= maxBytes) {
+        resolve(originalDataUrl);
+        return;
+      }
+      const img = new Image();
+      img.onload = () => {
+        let curWidth = img.width > maxWidth ? maxWidth : img.width;
+        let curQuality = 0.94;
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        const renderAttempt = () => {
+          const ratio = img.width > curWidth ? curWidth / img.width : 1;
+          canvas.width = Math.round(img.width * ratio);
+          canvas.height = Math.round(img.height * ratio);
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          return isPngOrWebp
+            ? canvas.toDataURL('image/png')
+            : canvas.toDataURL('image/jpeg', curQuality);
+        };
+
+        let result = renderAttempt();
+        while (result.length > maxBytes && curWidth > 450) {
+          curWidth = Math.round(curWidth * 0.82);
+          if (!isPngOrWebp) curQuality = Math.max(0.75, +(curQuality - 0.06).toFixed(2));
+          result = renderAttempt();
+        }
+        resolve(result);
+      };
+      img.onerror = reject;
+      img.src = originalDataUrl;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 function normalizeNotebook(id, data) {
   const d = data || {};
   const cover =
@@ -1534,7 +1578,8 @@ export default function App() {
         orderCode,
         customer: customerForm,
         customerLogoText: customerLogoText.trim(),
-        customerLogoImage: customerLogoImage || '',
+        customerLogoImage: '',
+        hasLogoImage: Boolean(customerLogoImage),
         items: cart.map((i) => ({ id: i.id, title: i.title, price: i.price, qty: i.qty || 1 })),
         subtotal: cartSubtotal,
         quantityDiscount: quantityDiscountInfo.amount,
@@ -1548,6 +1593,18 @@ export default function App() {
 
       if (db) {
         await addDoc(publicCol('orders'), orderDoc);
+        if (customerLogoImage) {
+          await setDoc(
+            publicDoc('order_logos', orderCode),
+            {
+              orderCode,
+              image: customerLogoImage,
+              teacherName: safeText(customerForm.teacherName),
+              createdAt: serverTimestamp()
+            },
+            { merge: true }
+          ).catch(() => {});
+        }
         if (appliedCoupon?.id) {
           await updateDoc(publicDoc('coupons', appliedCoupon.id), {
             usedCount: Number(appliedCoupon.usedCount || 0) + 1
@@ -1577,7 +1634,7 @@ export default function App() {
         `رقم الطلب: ${orderCode}`,
         ...customFieldsLines,
         customerLogoText.trim() ? `نص شعار المعلم: ${customerLogoText.trim()}` : '',
-        orderDoc.customerLogoImage ? `صورة الشعار: مرفقة داخل الطلب في لوحة الإدارة (${orderCode})` : '',
+        orderDoc.hasLogoImage ? `صورة الشعار: مرفقة بالجودة الكاملة داخل الطلب (${orderCode})` : '',
         `--- المذكرات المطلوبة ---`,
         itemsLines,
         `الإجمالي النهائي: ${cartFinalTotal} ج.م`
@@ -3063,8 +3120,8 @@ export default function App() {
                               if (!file) return;
                               setUploadingCustomerLogo(true);
                               try {
-                                const compressed = await compressImageFile(file, 900, 0.88, 380000);
-                                setCustomerLogoImage(compressed);
+                                const hqLogo = await processHighQualityLogoFile(file, 1800, 820000);
+                                setCustomerLogoImage(hqLogo);
                               } finally {
                                 setUploadingCustomerLogo(false);
                               }
@@ -3480,6 +3537,8 @@ function AdminDashboard({
   const [settingsSubTab, setSettingsSubTab] = useState('identity');
   const [localSettings, setLocalSettings] = useState(settings);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [orderLogosMap, setOrderLogosMap] = useState({});
+  const [loadingLogoCode, setLoadingLogoCode] = useState('');
 
   useEffect(() => {
     setLocalSettings(settings);
@@ -5256,8 +5315,12 @@ function AdminDashboard({
           ) : (
             <div className="space-y-3">
               {orders.map((ord) => {
-                const logoImg = extractImageFromValue(ord.customerLogoImage || ord.customer?.logo);
+                const logoImg = extractImageFromValue(
+                  orderLogosMap[ord.orderCode] || ord.customerLogoImage || ord.customer?.logo
+                );
+                const hasCloudLogo = Boolean(ord.hasLogoImage || logoImg);
                 const logoTxt = safeText(ord.customerLogoText || ord.customer?.logoText).trim();
+                const isPngLogo = logoImg.startsWith('data:image/png');
                 return (
                   <div key={ord.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -5299,7 +5362,7 @@ function AdminDashboard({
                     )}
 
                     {/* عرض نص أو صورة شعار المعلم مع زر تنزيل مباشر */}
-                    {(logoTxt || logoImg) && (
+                    {(logoTxt || hasCloudLogo) && (
                       <div className="p-3 rounded-xl bg-white border border-blue-200 flex flex-wrap items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
                           {logoImg && (
@@ -5317,16 +5380,41 @@ function AdminDashboard({
                           </div>
                         </div>
 
-                        {logoImg && (
+                        {logoImg ? (
                           <a
                             href={logoImg}
-                            download={`logo_${ord.customer?.teacherName || ord.orderCode || 'teacher'}.jpg`}
+                            download={`logo_${ord.customer?.teacherName || ord.orderCode || 'teacher'}.${isPngLogo ? 'png' : 'jpg'}`}
                             className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black flex items-center gap-1.5 shadow transition"
                           >
                             <Download className="w-3.5 h-3.5" />
-                            <span>تنزيل صورة الشعار</span>
+                            <span>تنزيل الشعار بالجودة الكاملة ({isPngLogo ? 'PNG شفاف' : 'JPG'})</span>
                           </a>
-                        )}
+                        ) : hasCloudLogo ? (
+                          <button
+                            type="button"
+                            disabled={loadingLogoCode === ord.orderCode}
+                            onClick={async () => {
+                              setLoadingLogoCode(ord.orderCode);
+                              try {
+                                const snap = await getDoc(publicDoc('order_logos', ord.orderCode));
+                                if (snap.exists() && snap.data()?.image) {
+                                  const imgData = snap.data().image;
+                                  setOrderLogosMap((prev) => ({ ...prev, [ord.orderCode]: imgData }));
+                                } else {
+                                  showToast('لم يتم العثور على ملف الشعار لهذا الطلب.', 'error');
+                                }
+                              } finally {
+                                setLoadingLogoCode('');
+                              }
+                            }}
+                            className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black flex items-center gap-1.5 shadow transition"
+                          >
+                            <Download className="w-3.5 h-3.5 text-amber-400" />
+                            <span>
+                              {loadingLogoCode === ord.orderCode ? 'جاري جلب الشعار...' : 'جلب وتنزيل صورة الشعار'}
+                            </span>
+                          </button>
+                        ) : null}
                       </div>
                     )}
                   </div>
