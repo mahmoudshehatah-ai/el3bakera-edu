@@ -156,12 +156,12 @@ function compressImageFile(file, maxWidth = 900, quality = 0.78, maxBytes = 4200
   });
 }
 
-function processHighQualityLogoFile(file, maxWidth = 3600, maxBytes = 6500000) {
+function processHighQualityLogoFile(file, maxWidth = 4096, maxBytes = 10000000) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const originalDataUrl = ev.target.result;
-      // الحفاظ على الملف الأصلي بالبايتات الخام دون أي لمس أو إعادة رسم إذا كان أقل من 6.5 ميجابايت
+      // الحفاظ على الملف الأصلي بالبايتات الخام 100% دون أي تصغير أو إعادة رسم لأي ملف حتى 10 ميجابايت
       if (typeof originalDataUrl === 'string' && originalDataUrl.length <= maxBytes) {
         resolve(originalDataUrl);
         return;
@@ -170,7 +170,7 @@ function processHighQualityLogoFile(file, maxWidth = 3600, maxBytes = 6500000) {
       const img = new Image();
       img.onload = () => {
         let curWidth = img.width > maxWidth ? maxWidth : img.width;
-        let curQuality = 0.98;
+        let curQuality = 0.99;
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
 
@@ -186,9 +186,9 @@ function processHighQualityLogoFile(file, maxWidth = 3600, maxBytes = 6500000) {
         };
 
         let result = renderAttempt();
-        while (result.length > maxBytes && curWidth > 1200) {
+        while (result.length > maxBytes && curWidth > 1600) {
           curWidth = Math.round(curWidth * 0.85);
-          if (!isPngOrWebp) curQuality = Math.max(0.88, +(curQuality - 0.04).toFixed(2));
+          if (!isPngOrWebp) curQuality = Math.max(0.92, +(curQuality - 0.03).toFixed(2));
           result = renderAttempt();
         }
         resolve(result);
@@ -201,7 +201,7 @@ function processHighQualityLogoFile(file, maxWidth = 3600, maxBytes = 6500000) {
   });
 }
 
-function splitDataUrlToChunks(dataUrl, chunkSize = 550000) {
+function splitDataUrlToChunks(dataUrl, chunkSize = 350000) {
   if (!dataUrl || typeof dataUrl !== 'string') return [];
   const chunks = [];
   for (let i = 0; i < dataUrl.length; i += chunkSize) {
@@ -414,11 +414,12 @@ export default function App() {
   const [newStageName, setNewStageName] = useState('');
   const [newGradeName, setNewGradeName] = useState('');
   const [newGradeStageId, setNewGradeStageId] = useState('');
-  const [exportingBackup, setExportingBackup] = useState(false);
-
-  // إشعارات Toast ونسخ
+  // إشعارات Toast ونسخ وحذف الطلبات
   const [toast, setToast] = useState(null);
   const [copiedCode, setCopiedCode] = useState('');
+  const [confirmClearCompleted, setConfirmClearCompleted] = useState(false);
+  const [clearingCompleted, setClearingCompleted] = useState(false);
+  const [exportingBackup, setExportingBackup] = useState(false);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -769,49 +770,31 @@ export default function App() {
     });
 
     if (!hasEligible) {
-      showToast('هذا الكوبون لا يسري على المذكرات الموجودة في السلة حاليًا.', 'error');
+      showToast('هذا الكوبون لا ينطبق على المذكرات الموجودة في السلة حاليًا.', 'error');
       return;
     }
 
     setAppliedCoupon(found);
-    showToast(`تم تطبيق كود الخصم (${found.code}) بنجاح!`);
+    showToast(`تم تطبيق كود الخصم ${found.code} بنجاح!`);
   };
 
-  // إرسال الطلب وحفظ شعار المعلم بأجزاء كاملة الدقة
+  // إرسال الطلب وحفظ شعار المعلم بالأجزاء الكاملة
   const handleSubmitOrder = async (e) => {
-    if (e && e.preventDefault) e.preventDefault();
-    if (cart.length === 0) {
-      showToast('سلة المشتريات فارغة حاليًا.', 'error');
-      return;
-    }
-    if (!customerForm.teacherName?.trim() || !customerForm.phone?.trim()) {
-      showToast('يرجى إدخال اسم المعلم ورقم الهاتف على الأقل.', 'error');
+    e.preventDefault();
+    if (cart.length === 0) return;
+    if (!customerForm.teacherName.trim() || !customerForm.phone.trim()) {
+      showToast('يرجى إدخال اسم المعلم ورقم الهاتف.', 'error');
       return;
     }
 
     setSubmittingOrder(true);
     try {
       const orderCode = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
-      let generatedRewardCode = '';
+      const generatedRewardCode = settings.nextOrderRewardEnabled
+        ? `NEXT-${Math.floor(1000 + Math.random() * 9000)}`
+        : '';
 
-      if (db && settings.nextOrderRewardEnabled && Number(settings.nextOrderRewardPercent) > 0) {
-        generatedRewardCode = `VIP-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-        const expiresAt = new Date(Date.now() + (Number(settings.nextOrderRewardDays) || 30) * 86400000).toISOString();
-        await addDoc(publicCol('coupons'), {
-          code: generatedRewardCode,
-          type: 'percent',
-          value: Number(settings.nextOrderRewardPercent) || 15,
-          maxDiscount: Number(settings.nextOrderRewardMaxDiscount) || 0,
-          minOrder: 0,
-          maxUses: 1,
-          usedCount: 0,
-          expiresAt,
-          active: true,
-          createdAt: serverTimestamp()
-        }).catch(() => {});
-      }
-
-      const logoChunks = customerLogoImage ? splitDataUrlToChunks(customerLogoImage, 550000) : [];
+      const logoChunks = customerLogoImage ? splitDataUrlToChunks(customerLogoImage, 350000) : [];
       const orderDoc = {
         orderCode,
         customer: customerForm,
@@ -870,7 +853,7 @@ export default function App() {
         `رقم الهاتف: *${customerForm.phone}*`,
         customerForm.seriesName ? `اسم السلسلة: *${customerForm.seriesName}*` : '',
         customerLogoText ? `نص الشعار: *${customerLogoText}*` : '',
-        customerLogoImage ? `🖼️ تم إرفاق صورة شعار المعلم بالجودة الكاملة في النظام` : '',
+        customerLogoImage ? `🖼️ تم إرفاق صورة شعار المعلم بالجودة الأصلية الكاملة في النظام` : '',
         `------------------`,
         itemsLines,
         `------------------`,
@@ -887,7 +870,53 @@ export default function App() {
       setCart([]);
       setAppliedCoupon(null);
       setCustomerLogoImage('');
-      setSettings(updatedSettings);
+      setCustomerLogoText('');
+      showToast(`تم تسجيل طلبك بنجاح برقم ${orderCode}`);
+    } catch {
+      showToast('حدث خطأ أثناء إرسال الطلب، يرجى المحاولة مرة أخرى.', 'error');
+    } finally {
+      setSubmittingOrder(false);
+    }
+  };
+
+  // تتبع الطلب برقم الطلب
+  const handleTrackOrder = async () => {
+    const code = trackCodeInput.trim().toUpperCase();
+    if (!code) {
+      showToast('يرجى إدخال رقم الطلب أولاً.', 'error');
+      return;
+    }
+    setTrackingLoading(true);
+    setTrackedOrderResult(null);
+    try {
+      const localMatch = orders.find((o) => safeText(o.orderCode).toUpperCase() === code);
+      if (localMatch) {
+        setTrackedOrderResult(localMatch);
+        return;
+      }
+      if (db) {
+        const snap = await getDocs(publicCol('orders'));
+        const foundDoc = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .find((o) => !o.isLogoChunk && safeText(o.orderCode).toUpperCase() === code);
+        if (foundDoc) {
+          setTrackedOrderResult(foundDoc);
+          return;
+        }
+      }
+      showToast('لم يتم العثور على طلب بهذا الرقم.', 'error');
+    } finally {
+      setTrackingLoading(false);
+    }
+  };
+
+  // حفظ وتعميم إعدادات المنصة والباقات والكوبونات للسحابة
+  const saveAllSettingsToCloud = async (
+    updatedSettings,
+    nextPackages = packages,
+    nextCoupons = coupons
+  ) => {
+    setSettings(updatedSettings);
     if (!db) return;
     const payload = {
       ...updatedSettings,
@@ -1922,7 +1951,7 @@ export default function App() {
                               if (!file) return;
                               setUploadingCustomerLogo(true);
                               try {
-                                const hqLogo = await processHighQualityLogoFile(file, 3600, 6500000);
+                                const hqLogo = await processHighQualityLogoFile(file, 4096, 10000000);
                                 setCustomerLogoImage(hqLogo);
                                 showToast('تم إرفاق صورة الشعار بالجودة الأصلية الكاملة!');
                               } catch {
@@ -3022,7 +3051,65 @@ export default function App() {
             {/* تبويب 4: الطلبات الواردة وتنزيل شعار المعلم بالجودة الأصلية الكاملة */}
             {adminTab === 'orders' && (
               <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 space-y-4 shadow-sm">
-                <h3 className="text-lg font-black text-slate-900">الطلبات الواردة ({orders.length})</h3>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="text-lg font-black text-slate-900">الطلبات الواردة ({orders.length})</h3>
+
+                  {orders.some((o) => o.status === 'completed') && (
+                    <div className="flex items-center gap-2">
+                      {!confirmClearCompleted ? (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmClearCompleted(true)}
+                          className="px-4 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-black inline-flex items-center gap-1.5 transition"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>
+                            مسح الطلبات المكتملة ({orders.filter((o) => o.status === 'completed').length})
+                          </span>
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-xl">
+                          <span className="text-xs font-black text-rose-800">تأكيد مسح المكتملة؟</span>
+                          <button
+                            type="button"
+                            disabled={clearingCompleted}
+                            onClick={async () => {
+                              setClearingCompleted(true);
+                              try {
+                                const completedList = orders.filter((o) => o.status === 'completed');
+                                if (db) {
+                                  for (const ord of completedList) {
+                                    await deleteDoc(publicDoc('orders', ord.id)).catch(() => {});
+                                    const chunksCount = Number(ord.customerLogoChunksCount) || 0;
+                                    for (let i = 0; i < chunksCount; i++) {
+                                      await deleteDoc(publicDoc('orders', `${ord.id}_logo_${i}`)).catch(() => {});
+                                    }
+                                  }
+                                }
+                                setOrders((prev) => prev.filter((o) => o.status !== 'completed'));
+                                showToast(`تم مسح ${completedList.length} طلب مكتمل بنجاح.`);
+                              } finally {
+                                setClearingCompleted(false);
+                                setConfirmClearCompleted(false);
+                              }
+                            }}
+                            className="px-3 py-1 rounded-lg bg-rose-600 text-white text-xs font-black"
+                          >
+                            {clearingCompleted ? 'جارٍ المسح...' : 'نعم، امسح'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmClearCompleted(false)}
+                            className="px-2.5 py-1 rounded-lg bg-white text-slate-700 text-xs font-black border"
+                          >
+                            إلغاء
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 {orders.length === 0 ? (
                   <p className="text-sm text-slate-500 font-bold py-6 text-center">لا توجد طلبات واردة حاليًا.</p>
                 ) : (
@@ -3030,29 +3117,51 @@ export default function App() {
                     {orders.map((ord) => {
                       const logoImg = isValidImageSrc(ord.customerLogoImage) ? ord.customerLogoImage : '';
                       const isPngLogo = logoImg.startsWith('data:image/png');
+                      const approxKb = logoImg ? Math.round((logoImg.length * 0.75) / 1024) : 0;
                       return (
                         <div key={ord.id} className="p-4 sm:p-5 rounded-2xl border border-slate-200 space-y-3">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="text-sm sm:text-base font-black text-slate-900">
                               {ord.orderCode} • {ord.customer?.teacherName} ({ord.customer?.phone})
                             </div>
-                            <select
-                              value={ord.status || 'pending'}
-                              onChange={async (e) => {
-                                if (db) {
-                                  await setDoc(
-                                    publicDoc('orders', ord.id),
-                                    { status: e.target.value },
-                                    { merge: true }
-                                  ).catch(() => {});
-                                }
-                              }}
-                              className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-black bg-slate-50"
-                            >
-                              <option value="pending">قيد المراجعة</option>
-                              <option value="processing">قيد التجهيز</option>
-                              <option value="completed">مكتمل</option>
-                            </select>
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={ord.status || 'pending'}
+                                onChange={async (e) => {
+                                  if (db) {
+                                    await setDoc(
+                                      publicDoc('orders', ord.id),
+                                      { status: e.target.value },
+                                      { merge: true }
+                                    ).catch(() => {});
+                                  }
+                                }}
+                                className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-black bg-slate-50"
+                              >
+                                <option value="pending">قيد المراجعة</option>
+                                <option value="processing">قيد التجهيز</option>
+                                <option value="completed">مكتمل</option>
+                              </select>
+
+                              <button
+                                type="button"
+                                title="حذف هذا الطلب"
+                                onClick={async () => {
+                                  if (db) {
+                                    await deleteDoc(publicDoc('orders', ord.id)).catch(() => {});
+                                    const chunksCount = Number(ord.customerLogoChunksCount) || 0;
+                                    for (let i = 0; i < chunksCount; i++) {
+                                      await deleteDoc(publicDoc('orders', `${ord.id}_logo_${i}`)).catch(() => {});
+                                    }
+                                  }
+                                  setOrders((prev) => prev.filter((x) => x.id !== ord.id));
+                                  showToast('تم حذف الطلب.');
+                                }}
+                                className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 transition"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
                           </div>
 
                           <p className="text-xs sm:text-sm text-slate-700 font-bold">
@@ -3084,9 +3193,11 @@ export default function App() {
                                   className="w-16 h-16 object-contain rounded-xl bg-white p-1 border border-slate-200"
                                 />
                                 <div>
-                                  <p className="text-xs font-black text-slate-900">صورة شعار المعلم المرفقة</p>
+                                  <p className="text-xs font-black text-slate-900">
+                                    صورة شعار المعلم المرفقة ({approxKb} KB)
+                                  </p>
                                   <p className="text-[11px] text-slate-500 font-bold">
-                                    جاهزة للتنزيل بالجودة الأصلية الكاملة للطباعة
+                                    محفوظة بالبايتات الخام الأصلية 100% للطباعة
                                   </p>
                                 </div>
                               </div>
