@@ -1578,7 +1578,7 @@ export default function App() {
         orderCode,
         customer: customerForm,
         customerLogoText: customerLogoText.trim(),
-        customerLogoImage: '',
+        customerLogoImage: customerLogoImage || '',
         hasLogoImage: Boolean(customerLogoImage),
         items: cart.map((i) => ({ id: i.id, title: i.title, price: i.price, qty: i.qty || 1 })),
         subtotal: cartSubtotal,
@@ -3120,7 +3120,7 @@ export default function App() {
                               if (!file) return;
                               setUploadingCustomerLogo(true);
                               try {
-                                const hqLogo = await processHighQualityLogoFile(file, 1800, 820000);
+                                const hqLogo = await processHighQualityLogoFile(file, 1600, 620000);
                                 setCustomerLogoImage(hqLogo);
                               } finally {
                                 setUploadingCustomerLogo(false);
@@ -5426,7 +5426,10 @@ function AdminDashboard({
                                   const imgData = snap.data().image;
                                   setOrderLogosMap((prev) => ({ ...prev, [ord.orderCode]: imgData }));
                                 } else {
-                                  showToast('لم يتم العثور على ملف الشعار لهذا الطلب.', 'error');
+                                  showToast(
+                                    'تعذر العثور على ملف الشعار في السحابة (تأكد من إعادة تجربة طلب جديد بعد التحديث).',
+                                    'error'
+                                  );
                                 }
                               } finally {
                                 setLoadingLogoCode('');
