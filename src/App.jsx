@@ -3597,6 +3597,396 @@ function AdminDashboard({
             </div>
           </div>
 
+          <div className="space-y-4">
+            {(localSettings.categories || []).map((cat, cIdx) => (
+              <div key={cat.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-col gap-0.5">
+                    <button
+                      type="button"
+                      disabled={cIdx === 0}
+                      onClick={() => {
+                        const arr = [...localSettings.categories];
+                        [arr[cIdx - 1], arr[cIdx]] = [arr[cIdx], arr[cIdx - 1]];
+                        setLocalSettings({ ...localSettings, categories: arr });
+                      }}
+                      className="p-1 rounded bg-white border border-slate-200 disabled:opacity-30"
+                    >
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={cIdx === (localSettings.categories || []).length - 1}
+                      onClick={() => {
+                        const arr = [...localSettings.categories];
+                        [arr[cIdx + 1], arr[cIdx]] = [arr[cIdx], arr[cIdx + 1]];
+                        setLocalSettings({ ...localSettings, categories: arr });
+                      }}
+                      className="p-1 rounded bg-white border border-slate-200 disabled:opacity-30"
+                    >
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <input
+                    type="text"
+                    value={cat.name}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setLocalSettings((prev) => ({
+                        ...prev,
+                        categories: prev.categories.map((c, i) => (i === cIdx ? { ...c, name: val } : c))
+                      }));
+                    }}
+                    className="flex-1 min-w-[180px] px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-black"
+                  />
+
+                  <select
+                    value={cat.browseMode || 'hierarchy'}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setLocalSettings((prev) => ({
+                        ...prev,
+                        categories: prev.categories.map((c, i) => (i === cIdx ? { ...c, browseMode: val } : c))
+                      }));
+                    }}
+                    className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                  >
+                    <option value="hierarchy">تصفح هرمي (مراحل وصفوف)</option>
+                    <option value="direct">عرض المذكرات مباشرة</option>
+                  </select>
+
+                  <label className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs font-black cursor-pointer hover:border-blue-400">
+                    <span>صورة القسم</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const dataUrl = await compressImageFile(file, 900, 0.85);
+                        setLocalSettings((prev) => ({
+                          ...prev,
+                          categories: prev.categories.map((c, i) => (i === cIdx ? { ...c, image: dataUrl } : c))
+                        }));
+                      }}
+                    />
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLocalSettings((prev) => ({
+                        ...prev,
+                        categories: prev.categories.map((c, i) =>
+                          i === cIdx
+                            ? {
+                                ...c,
+                                stages: [...(c.stages || []), { id: `stg_${Date.now()}`, name: 'مرحلة جديدة', grades: [] }]
+                              }
+                            : c
+                        )
+                      }))
+                    }
+                    className="px-3.5 py-2 rounded-xl bg-emerald-600 text-white text-xs font-black"
+                  >
+                    + مرحلة
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLocalSettings((prev) => ({
+                        ...prev,
+                        categories: prev.categories.filter((_, i) => i !== cIdx)
+                      }))
+                    }
+                    className="p-2 rounded-xl bg-rose-50 text-rose-600"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {cat.image && (
+                  <div className="flex items-center gap-3">
+                    <img src={cat.image} alt="" className="h-16 w-28 rounded-xl object-cover border" />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setLocalSettings((prev) => ({
+                          ...prev,
+                          categories: prev.categories.map((c, i) => (i === cIdx ? { ...c, image: '' } : c))
+                        }))
+                      }
+                      className="text-xs font-black text-rose-600"
+                    >
+                      حذف الصورة
+                    </button>
+                  </div>
+                )}
+
+                <div className="pr-4 space-y-2.5 border-r-2 border-blue-200">
+                  {(cat.stages || []).map((st, sIdx) => (
+                    <div key={st.id} className="p-3 rounded-xl bg-white border border-slate-200 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          type="text"
+                          value={st.name}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setLocalSettings((prev) => ({
+                              ...prev,
+                              categories: prev.categories.map((c, i) =>
+                                i === cIdx
+                                  ? { ...c, stages: c.stages.map((s, si) => (si === sIdx ? { ...s, name: val } : s)) }
+                                  : c
+                              )
+                            }));
+                          }}
+                          className="flex-1 min-w-[160px] px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-black"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setLocalSettings((prev) => ({
+                              ...prev,
+                              categories: prev.categories.map((c, i) =>
+                                i === cIdx
+                                  ? {
+                                      ...c,
+                                      stages: c.stages.map((s, si) =>
+                                        si === sIdx
+                                          ? { ...s, grades: [...(s.grades || []), { id: `grd_${Date.now()}`, name: 'صف جديد' }] }
+                                          : s
+                                      )
+                                    }
+                                  : c
+                              )
+                            }))
+                          }
+                          className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-xs font-black"
+                        >
+                          + صف دراسي
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setLocalSettings((prev) => ({
+                              ...prev,
+                              categories: prev.categories.map((c, i) =>
+                                i === cIdx ? { ...c, stages: c.stages.filter((_, si) => si !== sIdx) } : c
+                              )
+                            }))
+                          }
+                          className="p-1.5 text-rose-600"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        {(st.grades || []).map((gr, gIdx) => (
+                          <div
+                            key={gr.id}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200"
+                          >
+                            <input
+                              type="text"
+                              value={gr.name}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setLocalSettings((prev) => ({
+                                  ...prev,
+                                  categories: prev.categories.map((c, i) =>
+                                    i === cIdx
+                                      ? {
+                                          ...c,
+                                          stages: c.stages.map((s, si) =>
+                                            si === sIdx
+                                              ? {
+                                                  ...s,
+                                                  grades: s.grades.map((g, gi) => (gi === gIdx ? { ...g, name: val } : g))
+                                                }
+                                              : s
+                                          )
+                                        }
+                                      : c
+                                  )
+                                }));
+                              }}
+                              className="bg-transparent text-xs font-bold w-36 focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setLocalSettings((prev) => ({
+                                  ...prev,
+                                  categories: prev.categories.map((c, i) =>
+                                    i === cIdx
+                                      ? {
+                                          ...c,
+                                          stages: c.stages.map((s, si) =>
+                                            si === sIdx
+                                              ? { ...s, grades: s.grades.filter((_, gi) => gi !== gIdx) }
+                                              : s
+                                          )
+                                        }
+                                      : c
+                                  )
+                                }))
+                              }
+                              className="text-rose-500 font-black text-sm"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSaveSettings}
+            disabled={savingSettings}
+            className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-black shadow"
+          >
+            {savingSettings ? 'جاري الحفظ...' : 'حفظ هيكل الأقسام والصور'}
+          </button>
+        </div>
+      )}
+
+      {/* 3. تبويب الكوبونات وباقات التوفير */}
+      {activeTab === 'offers' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4">
+            <h3 className="font-black text-slate-900 text-base">إنشاء كوبون خصم بمدة صلاحية</h3>
+            <form onSubmit={handleCreateCoupon} className="space-y-3">
+              <div className="grid grid-cols-2 gap-2.5">
+                <input
+                  type="text"
+                  required
+                  placeholder="كود الخصم (مثلاً: M20)"
+                  value={couponForm.code}
+                  onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })}
+                  className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-black uppercase"
+                />
+                <select
+                  value={couponForm.type}
+                  onChange={(e) => setCouponForm({ ...couponForm, type: e.target.value })}
+                  className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
+                >
+                  <option value="percent">نسبة مئوية (%)</option>
+                  <option value="fixed">مبلغ ثابت (ج.م)</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">قيمة الخصم *</label>
+                  <input
+                    type="number"
+                    required
+                    value={couponForm.value}
+                    onChange={(e) => setCouponForm({ ...couponForm, value: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">الحد الأدنى للطلب</label>
+                  <input
+                    type="number"
+                    placeholder="0 = بدون حد"
+                    value={couponForm.minOrder}
+                    onChange={(e) => setCouponForm({ ...couponForm, minOrder: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">تاريخ الانتهاء</label>
+                  <input
+                    type="datetime-local"
+                    value={couponForm.expiresAt}
+                    onChange={(e) => setCouponForm({ ...couponForm, expiresAt: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                  />
+                </div>
+              </div>
+              <input
+                type="text"
+                placeholder="ملاحظة أو وصف للكوبون"
+                value={couponForm.note}
+                onChange={(e) => setCouponForm({ ...couponForm, note: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
+              />
+              <button
+                type="submit"
+                className="w-full py-2.5 rounded-xl bg-blue-600 text-white text-xs sm:text-sm font-black"
+              >
+                إضافة الكوبون
+              </button>
+            </form>
+
+            <div className="space-y-2 pt-2">
+              {coupons.map((cp) => {
+                const expired = isCouponExpired(cp);
+                const isPaused = cp.active === false;
+                return (
+                  <div
+                    key={cp.id}
+                    className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2"
+                  >
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-black text-xs text-slate-900">{cp.code}</span>
+                        <span className="text-xs font-bold text-emerald-700">
+                          ({cp.value} {cp.type === 'fixed' ? 'ج.م' : '%'})
+                        </span>
+                        {expired && (
+                          <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-xs font-black">
+                            منتهي
+                          </span>
+                        )}
+                        {isPaused && (
+                          <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-black">
+                            متوقف
+                          </span>
+                        )}
+                      </div>
+                      {cp.expiresAt && (
+                        <div className="text-xs text-slate-500 font-bold">ينتهي: {formatExpiryAr(cp.expiresAt)}</div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (db) await updateDoc(publicDoc('coupons', cp.id), { active: isPaused });
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-black text-slate-700"
+                      >
+                        {isPaused ? 'تفعيل' : 'إيقاف'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (db) await deleteDoc(publicDoc('coupons', cp.id));
+                        }}
+                        className="p-1.5 text-rose-600"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4">
             <h3 className="font-black text-slate-900 text-base">إضافة باقة توفير وربط مذكراتها</h3>
             <form onSubmit={handleCreateBundle} className="space-y-3">
@@ -3634,14 +4024,14 @@ function AdminDashboard({
               </div>
               {notebooks.length > 0 && (
                 <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 max-h-36 overflow-y-auto">
-                  <div className="text-[11px] font-black text-slate-700">حدد المذكرات المشمولة داخل الباقة (اختياري):</div>
+                  <div className="text-xs font-black text-slate-700">حدد المذكرات المشمولة داخل الباقة (اختياري):</div>
                   <div className="flex flex-wrap gap-1.5">
                     {notebooks.map((n) => {
                       const checked = (bundleForm.notebookIds || []).includes(n.id);
                       return (
                         <label
                           key={n.id}
-                          className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer ${
+                          className={`px-2.5 py-1 rounded-lg border text-xs font-bold cursor-pointer ${
                             checked ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 border-slate-200'
                           }`}
                         >
@@ -3666,7 +4056,7 @@ function AdminDashboard({
               )}
               <button
                 type="submit"
-                className="w-full py-2.5 rounded-xl bg-amber-500 text-slate-950 text-xs font-black"
+                className="w-full py-2.5 rounded-xl bg-amber-500 text-slate-950 text-xs sm:text-sm font-black"
               >
                 حفظ الباقة
               </button>
@@ -3680,14 +4070,14 @@ function AdminDashboard({
                 >
                   <div>
                     <div className="font-black text-xs text-slate-900">{b.title}</div>
-                    <div className="text-[11px] font-bold text-blue-600">
+                    <div className="text-xs font-bold text-blue-600">
                       {b.price} ج.م {(b.notebookIds || []).length > 0 ? `• (${b.notebookIds.length} مذكرات)` : ''}
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={async () => {
-                      if (db && auth?.currentUser) await deleteDoc(publicDoc('bundles', b.id));
+                      if (db) await deleteDoc(publicDoc('bundles', b.id));
                     }}
                     className="p-1.5 text-rose-600"
                   >
