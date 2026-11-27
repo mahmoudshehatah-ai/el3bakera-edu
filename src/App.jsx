@@ -16,6 +16,7 @@ import {
   getFirestore,
   collection,
   doc,
+  getDoc,
   getDocs,
   query,
   where,
@@ -64,7 +65,13 @@ import {
   Minimize2,
   RotateCcw,
   Filter,
-  Layers
+  Layers,
+  Globe,
+  Send,
+  Youtube,
+  Facebook,
+  Instagram,
+  Loader2
 } from 'lucide-react';
 
 // ============================================================================
@@ -264,6 +271,26 @@ const extractAnyImagesFromDoc = (data) => {
     if (img && !found.includes(img)) found.push(img);
   }
   return found;
+};
+
+const getSocialIconMeta = (url = '', label = '') => {
+  const hay = `${url} ${label}`.toLowerCase();
+  if (hay.includes('facebook') || hay.includes('fb.com') || hay.includes('فيسبوك')) {
+    return { Icon: Facebook, bg: 'bg-blue-600 text-white', badge: 'bg-blue-50 text-blue-700' };
+  }
+  if (hay.includes('t.me') || hay.includes('telegram') || hay.includes('تليجرام')) {
+    return { Icon: Send, bg: 'bg-sky-500 text-white', badge: 'bg-sky-50 text-sky-700' };
+  }
+  if (hay.includes('youtube') || hay.includes('youtu.be') || hay.includes('يوتيوب')) {
+    return { Icon: Youtube, bg: 'bg-rose-600 text-white', badge: 'bg-rose-50 text-rose-700' };
+  }
+  if (hay.includes('instagram') || hay.includes('انستجرام')) {
+    return { Icon: Instagram, bg: 'bg-pink-600 text-white', badge: 'bg-pink-50 text-pink-700' };
+  }
+  if (hay.includes('wa.me') || hay.includes('whatsapp') || hay.includes('واتساب')) {
+    return { Icon: MessageCircle, bg: 'bg-emerald-600 text-white', badge: 'bg-emerald-50 text-emerald-700' };
+  }
+  return { Icon: Globe, bg: 'bg-slate-800 text-white', badge: 'bg-slate-100 text-slate-700' };
 };
 
 const normalizeNotebook = (raw, docId = '') => {
@@ -692,6 +719,7 @@ function MuzakkiratiApp() {
   const [previewPageIdx, setPreviewPageIdx] = useState(0);
   const [previewZoom, setPreviewZoom] = useState(1);
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
+  const [loadingSamples, setLoadingSamples] = useState(false);
   const swipeStartXRef = useRef(null);
 
   const [cart, setCart] = useState(() => {
@@ -985,66 +1013,63 @@ function MuzakkiratiApp() {
   useEffect(() => {
     if (!previewNotebook || !db) return;
     let cancelled = false;
+    const nbId = previewNotebook.id;
+    const hasCached = (samplesMap[nbId] || []).length > 0;
+    if (!hasCached) setLoadingSamples(true);
+
     (async () => {
-      const nbId = previewNotebook.id;
       const collected = [];
-      const pushDocsImages = (docs) => {
-        docs.forEach((d) => {
-          const data = d.data() || {};
-          const rawId = safeText(data.notebookId || data.nbId, d.id);
-          const baseId = rawId.includes('_') ? rawId.split('_')[0] : rawId;
-          if (baseId === nbId || d.id === nbId || d.id.startsWith(`${nbId}_`)) {
-            extractAnyImagesFromDoc(data).forEach((im) => {
-              if (!collected.includes(im)) collected.push(im);
-            });
+      const addImages = (data) => {
+        if (!data) return;
+        extractAnyImagesFromDoc(data).forEach((im) => {
+          if (im && im !== previewNotebook.coverImage && !collected.includes(im)) {
+            collected.push(im);
           }
         });
       };
 
-      // 1. جلب سريع بالاستعلام المباشر لـ notebookId
       try {
-        const qSnap = await getDocs(query(publicCol('notebook_samples'), where('notebookId', '==', nbId)));
-        if (!cancelled && !qSnap.empty) pushDocsImages(qSnap.docs);
-      } catch {
-        // تجاهل
-      }
-
-      // 2. إن لم توجد بعد، فحص المجموعات الفرعية أو المستندات القديمة
-      if (!cancelled && collected.length === 0) {
-        const subPaths = [
-          collection(db, 'artifacts', APP_ID, 'public', 'data', 'notebooks', nbId, 'samples'),
-          collection(db, 'artifacts', APP_ID, 'public', 'data', 'notebooks', nbId, 'pages'),
-          collection(db, 'artifacts', APP_ID, 'public', 'data', 'notebook_samples', nbId, 'pages'),
-          publicCol('notebook_samples')
+        // 1. جلب مباشر وسريع جدًا للمستند الرئيسي ومستندات الصفحات بالتوازي
+        const directPromises = [
+          getDoc(publicDoc('notebook_samples', nbId)).catch(() => null),
+          getDocs(query(publicCol('notebook_samples'), where('notebookId', '==', nbId))).catch(() => null)
         ];
-        for (const subCol of subPaths) {
-          try {
-            const subSnap = await getDocs(subCol);
-            if (!cancelled && !subSnap.empty) {
-              pushDocsImages(subSnap.docs);
-              if (collected.length > 0) break;
-            }
-          } catch {
-            // تجاهل
-          }
+        const [mainDocSnap, qSnap] = await Promise.all(directPromises);
+        if (mainDocSnap && mainDocSnap.exists()) addImages(mainDocSnap.data());
+        if (qSnap && !qSnap.empty) {
+          qSnap.docs.forEach((d) => addImages(d.data()));
         }
-      }
 
-      if (!cancelled && collected.length > 0) {
-        setSamplesMap((prev) => {
-          const updated = {
-            ...prev,
-            [nbId]: Array.from(new Set([...(prev[nbId] || []), ...collected]))
-          };
-          try {
-            localStorage.setItem(LOCAL_SAMPLES_KEY, JSON.stringify(updated));
-          } catch {
-            // تجاهل
-          }
-          return updated;
-        });
+        // 2. إن لم توجد بعد، فحص المجموعات الفرعية بالتوازي
+        if (!cancelled && collected.length === 0) {
+          const subSnaps = await Promise.all([
+            getDocs(collection(db, 'artifacts', APP_ID, 'public', 'data', 'notebooks', nbId, 'samples')).catch(() => null),
+            getDocs(collection(db, 'artifacts', APP_ID, 'public', 'data', 'notebooks', nbId, 'pages')).catch(() => null)
+          ]);
+          subSnaps.forEach((s) => {
+            if (s && !s.empty) s.docs.forEach((d) => addImages(d.data()));
+          });
+        }
+
+        if (!cancelled && collected.length > 0) {
+          setSamplesMap((prev) => {
+            const updated = {
+              ...prev,
+              [nbId]: Array.from(new Set([...(prev[nbId] || []), ...collected]))
+            };
+            try {
+              localStorage.setItem(LOCAL_SAMPLES_KEY, JSON.stringify(updated));
+            } catch {
+              // تجاهل
+            }
+            return updated;
+          });
+        }
+      } finally {
+        if (!cancelled) setLoadingSamples(false);
       }
     })();
+
     return () => {
       cancelled = true;
     };
@@ -2269,7 +2294,12 @@ function MuzakkiratiApp() {
                       }}
                       className="relative bg-slate-900/5 rounded-2xl border border-slate-200 overflow-auto flex items-center justify-center min-h-[360px] sm:min-h-[480px] max-h-[68vh] select-none"
                     >
-                      {currentImg ? (
+                      {loadingSamples && pages.length <= 1 ? (
+                        <div className="text-center p-10 text-slate-600 space-y-3">
+                          <Loader2 className="w-10 h-10 mx-auto text-blue-600 animate-spin" />
+                          <p className="text-sm font-black">جاري تحميل صفحات العينة...</p>
+                        </div>
+                      ) : currentImg ? (
                         <div className="p-3 flex items-center justify-center min-w-full min-h-full">
                           <img
                             src={currentImg}
@@ -2369,7 +2399,13 @@ function MuzakkiratiApp() {
                       {previewNotebook.oldPrice} ج.م
                     </span>
                     <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black">
-                      وفّر {Number(previewNotebook.oldPrice) - Number(previewNotebook.price)} ج.م
+                      وفّر {Number(previewNotebook.oldPrice) - Number(previewNotebook.price)} ج.م (
+                      {Math.round(
+                        ((Number(previewNotebook.oldPrice) - Number(previewNotebook.price)) /
+                          Number(previewNotebook.oldPrice)) *
+                          100
+                      )}
+                      %)
                     </span>
                   </>
                 )}
@@ -2728,24 +2764,32 @@ function MuzakkiratiApp() {
                   href={`https://wa.me/${String(settings.whatsappNumber).replace(/[^\d]/g, '')}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black flex items-center justify-center gap-2"
+                  className="w-full py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-black flex items-center justify-center gap-2 shadow-sm"
                 >
                   <MessageCircle className="w-4 h-4" />
                   <span>مراسلة مباشرة عبر واتساب</span>
                 </a>
               )}
-              {(settings.socialLinks || []).map((lnk) => (
-                <a
-                  key={lnk.id}
-                  href={lnk.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-3 px-4 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-black flex items-center justify-between"
-                >
-                  <span>{lnk.label}</span>
-                  <ExternalLink className="w-4 h-4 text-blue-600" />
-                </a>
-              ))}
+              {(settings.socialLinks || []).map((lnk) => {
+                const { Icon, bg } = getSocialIconMeta(lnk.url, lnk.label);
+                return (
+                  <a
+                    key={lnk.id}
+                    href={lnk.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-2.5 px-3.5 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-800 text-xs sm:text-sm font-black flex items-center justify-between transition"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <span className={`w-8 h-8 rounded-xl ${bg} flex items-center justify-center shrink-0`}>
+                        <Icon className="w-4 h-4" />
+                      </span>
+                      <span>{lnk.label}</span>
+                    </div>
+                    <ExternalLink className="w-4 h-4 text-slate-400" />
+                  </a>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -2834,11 +2878,32 @@ function MuzakkiratiApp() {
 
       {/* الفوتر */}
       <footer className="bg-slate-950 text-slate-400 border-t border-slate-900 py-8 px-4 sm:px-6 mt-12">
-        <div className="max-w-7xl mx-auto text-center space-y-2">
-          <div className="text-sm font-black text-white">{settings.platformName}</div>
+        <div className="max-w-7xl mx-auto text-center space-y-3">
+          <div className="text-sm sm:text-base font-black text-white">{settings.platformName}</div>
           <p className="text-xs font-bold">{settings.platformTagline}</p>
+          {(settings.socialLinks || []).length > 0 && (
+            <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+              {(settings.socialLinks || []).map((lnk) => {
+                const { Icon, bg } = getSocialIconMeta(lnk.url, lnk.label);
+                return (
+                  <a
+                    key={lnk.id}
+                    href={lnk.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 text-xs font-black transition"
+                  >
+                    <span className={`w-6 h-6 rounded-lg ${bg} flex items-center justify-center`}>
+                      <Icon className="w-3.5 h-3.5" />
+                    </span>
+                    <span>{lnk.label}</span>
+                  </a>
+                );
+              })}
+            </div>
+          )}
           {settings.footerNote && <p className="text-[11px] text-slate-500 font-bold">{settings.footerNote}</p>}
-          <p className="text-[11px] text-slate-500 pt-2">
+          <p className="text-[11px] text-slate-500 pt-1">
             © {new Date().getFullYear()} جميع الحقوق محفوظة — {settings.platformName}
           </p>
         </div>
@@ -2851,6 +2916,10 @@ function MuzakkiratiApp() {
 // 6. بطاقة عرض المذكرة للزوار
 // ============================================================================
 function NotebookCard({ nb, theme, onPreview, onAdd }) {
+  const hasDiscount = Number(nb.oldPrice) > Number(nb.price) && Number(nb.oldPrice) > 0;
+  const savedAmount = hasDiscount ? Number(nb.oldPrice) - Number(nb.price) : 0;
+  const savedPercent = hasDiscount ? Math.round((savedAmount / Number(nb.oldPrice)) * 100) : 0;
+
   return (
     <div
       className={`group bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl ${
@@ -2882,9 +2951,9 @@ function NotebookCard({ nb, theme, onPreview, onAdd }) {
             </span>
           )}
 
-          {Number(nb.oldPrice) > Number(nb.price) && (
+          {hasDiscount && (
             <span className="absolute bottom-3 right-3 px-3 py-1 rounded-full bg-emerald-600 text-white text-xs font-black shadow">
-              وفّر {Number(nb.oldPrice) - Number(nb.price)} ج.م
+              وفّر {savedAmount} ج.م ({savedPercent}%)
             </span>
           )}
 
@@ -3017,6 +3086,7 @@ function AdminDashboard({
     description: '',
     price: '',
     oldPrice: '',
+    oldPriceManuallyEdited: false,
     notebookIds: []
   });
 
@@ -3215,7 +3285,7 @@ function AdminDashboard({
         createdAt: serverTimestamp()
       });
     }
-    setBundleForm({ title: '', description: '', price: '', oldPrice: '', notebookIds: [] });
+    setBundleForm({ title: '', description: '', price: '', oldPrice: '', oldPriceManuallyEdited: false, notebookIds: [] });
     showToast('تمت إضافة الباقة بنجاح');
   };
 
@@ -4260,22 +4330,45 @@ function AdminDashboard({
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
                 />
                 <div className="grid grid-cols-2 gap-2.5">
-                  <input
-                    type="number"
-                    required
-                    placeholder="سعر الباقة (ج.م)"
-                    value={bundleForm.price}
-                    onChange={(e) => setBundleForm({ ...bundleForm, price: e.target.value })}
-                    className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
-                  />
-                  <input
-                    type="number"
-                    placeholder="السعر قبل الخصم"
-                    value={bundleForm.oldPrice}
-                    onChange={(e) => setBundleForm({ ...bundleForm, oldPrice: e.target.value })}
-                    className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
-                  />
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">سعر الباقة بعد الخصم (ج.م) *</label>
+                    <input
+                      type="number"
+                      required
+                      placeholder="سعر الباقة (ج.م)"
+                      value={bundleForm.price}
+                      onChange={(e) => setBundleForm({ ...bundleForm, price: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">
+                      السعر قبل الخصم (يُحسب تلقائيًا وقابل للتعديل)
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="السعر قبل الخصم"
+                      value={bundleForm.oldPrice}
+                      onChange={(e) =>
+                        setBundleForm({
+                          ...bundleForm,
+                          oldPrice: e.target.value,
+                          oldPriceManuallyEdited: e.target.value !== ''
+                        })
+                      }
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
+                    />
+                  </div>
                 </div>
+                {Number(bundleForm.oldPrice) > Number(bundleForm.price) && Number(bundleForm.price) > 0 && (
+                  <div className="px-3.5 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-black">
+                    قيمة التوفير للعميل: {Number(bundleForm.oldPrice) - Number(bundleForm.price)} ج.م (خصم{' '}
+                    {Math.round(
+                      ((Number(bundleForm.oldPrice) - Number(bundleForm.price)) / Number(bundleForm.oldPrice)) * 100
+                    )}
+                    %)
+                  </div>
+                )}
                 {notebooks.length > 0 && (
                   <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
                     <div className="text-xs font-black text-slate-700">حدد المذكرات المشمولة داخل الباقة (اختياري):</div>
@@ -4295,13 +4388,25 @@ function AdminDashboard({
                               checked={checked}
                               onChange={() => {
                                 const cur = bundleForm.notebookIds || [];
-                                setBundleForm({
-                                  ...bundleForm,
-                                  notebookIds: checked ? cur.filter((id) => id !== n.id) : [...cur, n.id]
-                                });
+                                const nextIds = checked ? cur.filter((id) => id !== n.id) : [...cur, n.id];
+                                const autoSum = nextIds.reduce((sum, id) => {
+                                  const foundNb = notebooks.find((item) => item.id === id);
+                                  return sum + Number(foundNb?.price || 0);
+                                }, 0);
+                                setBundleForm((prev) => ({
+                                  ...prev,
+                                  notebookIds: nextIds,
+                                  oldPrice: prev.oldPriceManuallyEdited
+                                    ? prev.oldPrice
+                                    : autoSum > 0
+                                    ? String(autoSum)
+                                    : ''
+                                }));
                               }}
                             />
-                            <span>{n.title}</span>
+                            <span>
+                              {n.title} ({n.price} ج.م)
+                            </span>
                           </label>
                         );
                       })}
