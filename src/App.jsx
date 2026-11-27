@@ -407,67 +407,110 @@ function extractImageFromValue(val) {
   return '';
 }
 
-function extractAnyImagesFromDoc(data) {
+function extractAnyImagesFromDoc(docData) {
   const results = [];
-  if (!data || typeof data !== 'object') return results;
-
-  const pushUnique = (img) => {
-    const clean = extractImageFromValue(img);
-    if (clean && !results.includes(clean)) {
-      results.push(clean);
+  const visit = (node) => {
+    if (!node) return;
+    const direct = extractImageFromValue(node);
+    if (direct) {
+      if (!results.includes(direct)) results.push(direct);
+      return;
+    }
+    if (Array.isArray(node)) {
+      node.forEach(visit);
+    } else if (typeof node === 'object') {
+      Object.values(node).forEach(visit);
     }
   };
-
-  const arrayKeys = ['samples', 'sampleImages', 'images', 'pages', 'gallery', 'previewImages', 'files'];
-  arrayKeys.forEach((k) => {
-    if (Array.isArray(data[k])) {
-      data[k].forEach((item) => pushUnique(item));
-    }
-  });
-
-  Object.keys(data).forEach((k) => {
-    if (k === 'coverImage' || k === 'cover' || k === 'logoImage' || k === 'heroImage') return;
-    const val = data[k];
-    if (typeof val === 'string') {
-      pushUnique(val);
-    } else if (Array.isArray(val)) {
-      val.forEach((item) => pushUnique(item));
-    } else if (val && typeof val === 'object') {
-      Object.values(val).forEach((nested) => pushUnique(nested));
-    }
-  });
-
+  visit(docData);
   return results;
 }
 
 function normalizeCategories(rawCats) {
   if (!Array.isArray(rawCats) || rawCats.length === 0) return DEFAULT_CATEGORIES;
-  return rawCats.map((c, idx) => {
-    const realName =
-      safeText(c?.name).trim() ||
-      safeText(c?.title).trim() ||
-      safeText(c?.label).trim() ||
-      safeText(c?.catName).trim() ||
-      DEFAULT_CATEGORIES[idx]?.name ||
-      `قسم ${idx + 1}`;
-    const rawStages = Array.isArray(c?.stages) ? c.stages : [];
-    const stages = rawStages.map((s, sIdx) => ({
-      id: safeText(s?.id) || `stg_${idx}_${sIdx}_${Date.now()}`,
-      name: safeText(s?.name || s?.title).trim() || `مرحلة ${sIdx + 1}`,
-      grades: Array.isArray(s?.grades)
-        ? s.grades.map((g, gIdx) => ({
-            id: safeText(g?.id) || `grd_${idx}_${sIdx}_${gIdx}_${Date.now()}`,
-            name: safeText(g?.name || g?.title).trim() || `صف ${gIdx + 1}`
-          }))
-        : []
-    }));
-    return {
-      id: safeText(c?.id) || `cat_${idx + 1}`,
-      name: realName,
-      image: extractImageFromValue(c?.image || c?.img || c?.coverImage || c?.photo),
-      browseMode: c?.browseMode === 'direct' ? 'direct' : 'hierarchical',
-      stages
+  return rawCats.map((cat, idx) => ({
+    id: safeText(cat?.id, `cat_${idx + 1}`),
+    name: safeText(cat?.name || cat?.title || cat?.label, DEFAULT_CATEGORIES[idx]?.name || `قسم ${idx + 1}`),
+    image: extractImageFromValue(cat?.image),
+    browseMode: cat?.browseMode === 'direct' ? 'direct' : 'hierarchical',
+    stages: Array.isArray(cat?.stages)
+      ? cat.stages.map((stg, sIdx) => ({
+          id: safeText(stg?.id, `stg_${idx}_${sIdx}`),
+          name: safeText(stg?.name || stg?.title, `مرحلة ${sIdx + 1}`),
+          grades: Array.isArray(stg?.grades)
+            ? stg.grades.map((grd, gIdx) => ({
+                id: safeText(grd?.id, `grd_${idx}_${sIdx}_${gIdx}`),
+                name: safeText(grd?.name || grd?.title, `صف ${gIdx + 1}`)
+              }))
+            : []
+        }))
+      : []
+  }));
+}
+
+function compressImageFile(file, maxWidth = 1400, quality = 0.85, maxBytes = 480000) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        let curWidth = img.width > maxWidth ? maxWidth : img.width;
+        let curQuality = quality;
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        const renderAttempt = () => {
+          const ratio = img.width > curWidth ? curWidth / img.width : 1;
+          canvas.width = Math.round(img.width * ratio);
+          canvas.height = Math.round(img.height * ratio);
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          return canvas.toDataURL('image/jpeg', curQuality);
+        };
+
+        let result = renderAttempt();
+        while (result.length > maxBytes && curQuality > 0.45) {
+          curQuality = +(curQuality - 0.1).toFixed(2);
+          curWidth = Math.round(curWidth * 0.85);
+          result = renderAttempt();
+        }
+        resolve(result);
+      };
+      img.onerror = reject;
+      img.src = ev.target.result;
     };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function shrinkDataUrlIfNeeded(dataUrl, maxBytes = 480000) {
+  return new Promise((resolve) => {
+    if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/') || dataUrl.length <= maxBytes) {
+      resolve(dataUrl || '');
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      let curWidth = Math.min(img.width, 1280);
+      let curQuality = 0.78;
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      let result = dataUrl;
+      while (result.length > maxBytes && curQuality >= 0.4) {
+        const ratio = img.width > curWidth ? curWidth / img.width : 1;
+        canvas.width = Math.round(img.width * ratio);
+        canvas.height = Math.round(img.height * ratio);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        result = canvas.toDataURL('image/jpeg', curQuality);
+        curQuality = +(curQuality - 0.1).toFixed(2);
+        curWidth = Math.round(curWidth * 0.82);
+      }
+      resolve(result);
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
   });
 }
 
@@ -519,28 +562,6 @@ function normalizeNotebook(id, data) {
     inlineSamples,
     createdAtMs: toTimeMs(d.createdAt || d.updatedAt)
   };
-}
-
-function compressImageFile(file, maxWidth = 1400, quality = 0.85) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const img = new Image();
-      img.onload = () => {
-        const ratio = img.width > maxWidth ? maxWidth / img.width : 1;
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(img.width * ratio);
-        canvas.height = Math.round(img.height * ratio);
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', quality));
-      };
-      img.onerror = reject;
-      img.src = ev.target.result;
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
 }
 
 function getSocialIcon(platform, url = '') {
@@ -807,6 +828,9 @@ export default function App() {
     if (!db) return;
     let latestMain = {};
     let latestMedia = {};
+    let latestLogoDoc = {};
+    let latestHeroDoc = {};
+    let latestCatDocs = {};
     let latestConfig = {};
     let latestLegacyMedia = {};
 
@@ -817,12 +841,14 @@ export default function App() {
           ...latestConfig,
           ...latestMain,
           logoImage:
+            extractImageFromValue(latestLogoDoc.logoImage) ||
             extractImageFromValue(latestMedia.logoImage) ||
             extractImageFromValue(latestMain.logoImage) ||
             extractImageFromValue(latestConfig.logoImage) ||
             extractImageFromValue(latestLegacyMedia.logoImage) ||
             prev.logoImage,
           heroImage:
+            extractImageFromValue(latestHeroDoc.heroImage) ||
             extractImageFromValue(latestMedia.heroImage) ||
             extractImageFromValue(latestMain.heroImage) ||
             extractImageFromValue(latestConfig.heroImage) ||
@@ -838,7 +864,8 @@ export default function App() {
         const catImgs = {
           ...(latestLegacyMedia.categoryImages || {}),
           ...(latestConfig.categoryImages || {}),
-          ...(latestMedia.categoryImages || {})
+          ...(latestMedia.categoryImages || {}),
+          ...latestCatDocs
         };
         merged.categories = normalizeCategories(rawCats).map((c) => ({
           ...c,
@@ -875,6 +902,45 @@ export default function App() {
       () => {}
     );
 
+    const unsubLogo = onSnapshot(
+      publicDoc('settings', 'media_logo'),
+      (snap) => {
+        if (snap.exists()) {
+          latestLogoDoc = snap.data() || {};
+          applyMergedSettings();
+        }
+      },
+      () => {}
+    );
+
+    const unsubHero = onSnapshot(
+      publicDoc('settings', 'media_hero'),
+      (snap) => {
+        if (snap.exists()) {
+          latestHeroDoc = snap.data() || {};
+          applyMergedSettings();
+        }
+      },
+      () => {}
+    );
+
+    const unsubSettingsCol = onSnapshot(
+      publicCol('settings'),
+      (snap) => {
+        const nextCats = {};
+        snap.docs.forEach((d) => {
+          if (d.id.startsWith('media_cat_')) {
+            const catId = d.id.replace('media_cat_', '');
+            const img = extractImageFromValue(d.data()?.image);
+            if (img) nextCats[catId] = img;
+          }
+        });
+        latestCatDocs = nextCats;
+        applyMergedSettings();
+      },
+      () => {}
+    );
+
     const unsubConfig = onSnapshot(
       publicDoc('config', 'main'),
       (snap) => {
@@ -898,6 +964,9 @@ export default function App() {
     return () => {
       unsubMain();
       unsubMedia();
+      unsubLogo();
+      unsubHero();
+      unsubSettingsCol();
       unsubConfig();
     };
   }, []);
@@ -2841,41 +2910,34 @@ function AdminDashboard({
   const [savingNb, setSavingNb] = useState(false);
   const [adminNbSearch, setAdminNbSearch] = useState('');
 
-  // حالة الباقات والكوبونات
-  const [pkgForm, setPkgForm] = useState({
-    id: '',
-    title: '',
-    description: '',
-    price: '',
-    oldPrice: '',
-    oldPriceManual: false,
-    notebookIds: []
-  });
-  const [couponForm, setCouponForm] = useState({
-    id: '',
-    code: '',
-    type: 'percent',
-    value: '',
-    minOrder: '',
-    maxUses: '',
-    expiresAt: '',
-    active: true
-  });
-
-  // حفظ الإعدادات الشاملة في السحابة
+  // حفظ الإعدادات الشاملة في السحابة (بتقسيم الصور إلى مستندات مستقلة لتفادي حد الـ 1MB في Firestore)
   const saveAllSettingsToCloud = async (updatedObj) => {
     setSavingSettings(true);
     try {
-      const categoryImages = {};
-      const cleanCategories = (updatedObj.categories || []).map((c) => {
-        if (c.image) categoryImages[c.id] = c.image;
-        return {
+      const safeLogo = await shrinkDataUrlIfNeeded(updatedObj.logoImage || '', 300000);
+      const safeHero = await shrinkDataUrlIfNeeded(updatedObj.heroImage || '', 550000);
+
+      const cleanCategories = [];
+      const catWrites = [];
+
+      for (const c of updatedObj.categories || []) {
+        const safeCatImg = await shrinkDataUrlIfNeeded(c.image || '', 420000);
+        cleanCategories.push({
           id: c.id,
           name: c.name,
           browseMode: c.browseMode || 'hierarchical',
           stages: c.stages || []
-        };
-      });
+        });
+        if (db) {
+          catWrites.push(
+            setDoc(
+              publicDoc('settings', `media_cat_${c.id}`),
+              { image: safeCatImg, updatedAt: serverTimestamp() },
+              { merge: true }
+            )
+          );
+        }
+      }
 
       const mainPayload = {
         ...updatedObj,
@@ -2885,26 +2947,33 @@ function AdminDashboard({
         updatedAt: serverTimestamp()
       };
 
-      const mediaPayload = {
-        logoImage: updatedObj.logoImage || '',
-        heroImage: updatedObj.heroImage || '',
-        categoryImages,
-        updatedAt: serverTimestamp()
+      const finalMerged = {
+        ...updatedObj,
+        logoImage: safeLogo,
+        heroImage: safeHero,
+        categories: (updatedObj.categories || []).map((c, idx) => ({
+          ...c,
+          image: cleanCategories[idx] ? c.image : ''
+        }))
       };
 
       if (db) {
         await Promise.all([
           setDoc(publicDoc('settings', 'main'), mainPayload, { merge: true }),
-          setDoc(publicDoc('settings', 'media_assets'), mediaPayload, { merge: true })
+          setDoc(publicDoc('settings', 'media_logo'), { logoImage: safeLogo, updatedAt: serverTimestamp() }, { merge: true }),
+          setDoc(publicDoc('settings', 'media_hero'), { heroImage: safeHero, updatedAt: serverTimestamp() }, { merge: true }),
+          ...catWrites
         ]);
       }
-      setSettings(updatedObj);
+
+      setSettings(finalMerged);
+      setLocalSettings(finalMerged);
       try {
-        localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(updatedObj));
+        localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(finalMerged));
       } catch {
         // تجاهل
       }
-      showToast('تم حفظ الإعدادات وتعميمها على جميع العملاء بنجاح!');
+      showToast('تم حفظ الإعدادات والصور وتعميمها على جميع العملاء بنجاح!');
     } catch (err) {
       showToast(`تعذر الحفظ السحابي: ${err?.message || ''}`, 'error');
     } finally {
