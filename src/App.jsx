@@ -1818,6 +1818,89 @@ export default function App() {
                 </div>
               </section>
             )}
+
+            {/* قسم الإعلان عن القادم وأخبار المنصة */}
+            {settings.newsSectionEnabled !== false && Array.isArray(settings.newsItems) && settings.newsItems.length > 0 && (
+              <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-black mb-1">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>قريبًا على المنصة</span>
+                    </span>
+                    <h2 className="text-xl sm:text-2xl font-black text-slate-900">
+                      {safeText(settings.newsSectionTitle, 'أخبار المنصة ومذكرات قيد التجهيز')}
+                    </h2>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {settings.newsItems.map((item, idx) => (
+                    <div
+                      key={item.id || idx}
+                      className="bg-white rounded-3xl border border-amber-200/80 p-5 sm:p-6 shadow-sm hover:shadow-md transition flex flex-col justify-between space-y-4"
+                    >
+                      <div className="space-y-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="px-3 py-1 rounded-full bg-amber-400 text-slate-950 text-xs font-black">
+                            {safeText(item.date, 'قريبًا')}
+                          </span>
+                          <Sparkles className="w-4 h-4 text-amber-500" />
+                        </div>
+                        <h3 className="text-base sm:text-lg font-black text-slate-900 leading-snug">
+                          {safeText(item.title)}
+                        </h3>
+                        {item.description && (
+                          <p className="text-xs sm:text-sm text-slate-600 font-bold leading-relaxed">
+                            {safeText(item.description)}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="pt-3 border-t border-slate-100">
+                        <a
+                          href={`https://wa.me/${String(settings.whatsappNumber || '201000000000').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                            `السلام عليكم، أرغب في الاستفسار أو الحجز المسبق بخصوص: ${safeText(item.title)}`
+                          )}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="w-full py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 transition"
+                        >
+                          <MessageCircle className="w-4 h-4 text-emerald-400" />
+                          <span>احجز نسختك مسبقًا عبر واتساب</span>
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* بنر طلب مذكرة مخصصة */}
+            {settings.customBannerEnabled !== false && (
+              <section className="max-w-7xl mx-auto px-4 sm:px-6">
+                <div className="rounded-3xl bg-gradient-to-l from-slate-900 via-blue-950 to-slate-900 text-white p-6 sm:p-10 shadow-xl flex flex-col lg:flex-row items-center justify-between gap-6">
+                  <div className="space-y-2 text-center lg:text-right max-w-2xl">
+                    <h2 className="text-xl sm:text-2xl font-black">
+                      {safeText(settings.customBannerTitle, 'هل تحتاج مذكرة بتصميم خاص أو منهج مخصص؟')}
+                    </h2>
+                    <p className="text-xs sm:text-sm text-slate-300 font-bold leading-relaxed">
+                      {safeText(
+                        settings.customBannerSubtitle,
+                        'فريقنا جاهز لتنسيق وإعداد مذكرتك الخاصة من الصفر باسمك وشعارك وألوانك المفضلة بأعلى جودة للطباعة.'
+                      )}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setContactModalOpen(true)}
+                    className="px-6 py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-sm font-black shadow-lg shrink-0 transition"
+                  >
+                    {safeText(settings.customBannerBtnText, 'اطلب مذكرة مخصصة الآن')}
+                  </button>
+                </div>
+              </section>
+            )}
           </div>
         ) : activeView === 'library' ? (
           /* صفحة مكتبة المذكرات */
@@ -4231,7 +4314,7 @@ function AdminDashboard({
                   />
                   {localSettings.heroImage && (
                     <div className="flex items-center gap-3 pt-1">
-                      <img src={localSettings.heroImage} alt="hero" className="w-28 h-14 rounded-xl object-cover border" />
+                      <img src={localSettings.heroImage} alt="hero" className="w-24 h-14 rounded-xl object-cover border" />
                       <button
                         type="button"
                         onClick={() => setLocalSettings({ ...localSettings, heroImage: '' })}
@@ -4241,18 +4324,17 @@ function AdminDashboard({
                       </button>
                     </div>
                   )}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      درجة شفافية التعتيم فوق الخلفية: {localSettings.heroOverlayOpacity ?? 65}%
-                    </label>
+                  <div className="pt-1">
+                    <div className="flex justify-between text-xs font-bold text-slate-700 mb-1">
+                      <span>درجة شفافية التعتيم فوق الخلفية:</span>
+                      <span>{localSettings.heroOverlayOpacity ?? 65}%</span>
+                    </div>
                     <input
                       type="range"
                       min="10"
                       max="95"
                       value={localSettings.heroOverlayOpacity ?? 65}
-                      onChange={(e) =>
-                        setLocalSettings({ ...localSettings, heroOverlayOpacity: Number(e.target.value) })
-                      }
+                      onChange={(e) => setLocalSettings({ ...localSettings, heroOverlayOpacity: Number(e.target.value) })}
                       className="w-full"
                     />
                   </div>
@@ -4270,28 +4352,28 @@ function AdminDashboard({
                     className="w-5 h-5"
                   />
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  <div className="sm:col-span-2">
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                  <div className="sm:col-span-6">
                     <label className="block text-xs font-bold text-slate-700 mb-1">النص المكتوب على الشريط</label>
                     <input
                       type="text"
                       value={localSettings.promoText || ''}
                       onChange={(e) => setLocalSettings({ ...localSettings, promoText: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-bold"
                     />
                   </div>
-                  <div>
+                  <div className="sm:col-span-3">
                     <label className="block text-xs font-bold text-slate-700 mb-1">كود الكوبون</label>
                     <input
                       type="text"
                       value={localSettings.promoCouponCode || ''}
                       onChange={(e) => setLocalSettings({ ...localSettings, promoCouponCode: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-black uppercase"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-black uppercase"
                     />
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="sm:col-span-3 flex items-center gap-3">
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">لون الشريط</label>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">لون الشريط</label>
                       <input
                         type="color"
                         value={localSettings.promoBgColor || '#0f172a'}
@@ -4300,7 +4382,7 @@ function AdminDashboard({
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">لون النص</label>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">لون النص</label>
                       <input
                         type="color"
                         value={localSettings.promoTextColor || '#ffffff'}
@@ -4312,12 +4394,14 @@ function AdminDashboard({
                 </div>
               </div>
 
-              {/* إدارة التنبيهات العامة للمنصة */}
+              {/* التنبيهات العامة للمنصة (تظهر داخل نافذة معاينة المذكرات) */}
               <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <span className="text-sm font-black text-slate-900">التنبيهات العامة للمنصة (تظهر للزوار في الرئيسية وداخل معاينة المذكرات)</span>
-                    <p className="text-xs text-slate-600 font-bold">أضف تنبيهات هامة مثل مواعيد التسليم، خصومات الكميات، أو تعليمات الطلب</p>
+                    <div className="text-sm font-black text-slate-900">التنبيهات العامة للمنصة</div>
+                    <p className="text-xs text-slate-600 font-bold">
+                      تظهر في سطر واحد مضغوط مع تنبيه كل مذكرة داخل نافذة المعاينة
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -4326,13 +4410,7 @@ function AdminDashboard({
                         ...localSettings,
                         globalAlerts: [
                           ...(localSettings.globalAlerts || []),
-                          {
-                            id: `al_${Date.now()}`,
-                            text: 'تنبيه هام: التسليم يتم خلال ساعات قليلة بصيغة PDF عالية الجودة جاهزة للطباعة.',
-                            color: 'amber',
-                            scope: 'all',
-                            active: true
-                          }
+                          { id: `al_${Date.now()}`, text: 'تنبيه جديد للمعلمين', color: 'amber', scope: 'preview_only', active: true }
                         ]
                       })
                     }
@@ -4343,86 +4421,159 @@ function AdminDashboard({
                   </button>
                 </div>
 
-                {(!localSettings.globalAlerts || localSettings.globalAlerts.length === 0) ? (
-                  <p className="text-xs text-slate-500 font-bold py-2">لا توجد تنبيهات عامة مضافة حاليًا. اضغط «إضافة تنبيه عام» لإضافة تنبيه.</p>
-                ) : (
-                  <div className="space-y-2.5">
-                    {localSettings.globalAlerts.map((al, idx) => (
-                      <div key={al.id || idx} className="p-3 rounded-2xl bg-white border border-amber-200 grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
-                        <div className="sm:col-span-6">
-                          <input
-                            type="text"
-                            value={al.text || ''}
-                            onChange={(e) => {
-                              const arr = [...localSettings.globalAlerts];
-                              arr[idx] = { ...al, text: e.target.value };
-                              setLocalSettings({ ...localSettings, globalAlerts: arr });
-                            }}
-                            placeholder="اكتب نص التنبيه هنا..."
-                            className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
-                          />
-                        </div>
-                        <div className="sm:col-span-2">
-                          <select
-                            value={al.color || 'amber'}
-                            onChange={(e) => {
-                              const arr = [...localSettings.globalAlerts];
-                              arr[idx] = { ...al, color: e.target.value };
-                              setLocalSettings({ ...localSettings, globalAlerts: arr });
-                            }}
-                            className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
-                          >
-                            <option value="amber">أصفر تحذيري</option>
-                            <option value="blue">أزرق معلوماتي</option>
-                            <option value="rose">أحمر هام</option>
-                            <option value="emerald">أخضر تأكيدي</option>
-                          </select>
-                        </div>
-                        <div className="sm:col-span-2">
-                          <select
-                            value={al.scope || 'all'}
-                            onChange={(e) => {
-                              const arr = [...localSettings.globalAlerts];
-                              arr[idx] = { ...al, scope: e.target.value };
-                              setLocalSettings({ ...localSettings, globalAlerts: arr });
-                            }}
-                            className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
-                          >
-                            <option value="all">الرئيسية + المعاينة</option>
-                            <option value="home_only">الرئيسية فقط</option>
-                            <option value="preview_only">معاينة المذكرات فقط</option>
-                          </select>
-                        </div>
-                        <div className="sm:col-span-2 flex items-center justify-end gap-2">
-                          <label className="flex items-center gap-1 text-xs font-bold cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={al.active !== false}
-                              onChange={(e) => {
-                                const arr = [...localSettings.globalAlerts];
-                                arr[idx] = { ...al, active: e.target.checked };
-                                setLocalSettings({ ...localSettings, globalAlerts: arr });
-                              }}
-                            />
-                            <span>نشط</span>
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setLocalSettings({
-                                ...localSettings,
-                                globalAlerts: localSettings.globalAlerts.filter((_, i) => i !== idx)
-                              })
-                            }
-                            className="p-2 rounded-xl bg-rose-100 text-rose-700"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                {(localSettings.globalAlerts || []).map((al, idx) => (
+                  <div key={al.id || idx} className="p-3 rounded-2xl bg-white border border-amber-200 grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                    <div className="sm:col-span-7 flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={al.active !== false}
+                        onChange={(e) => {
+                          const arr = [...localSettings.globalAlerts];
+                          arr[idx] = { ...al, active: e.target.checked };
+                          setLocalSettings({ ...localSettings, globalAlerts: arr });
+                        }}
+                        className="w-4 h-4 shrink-0"
+                      />
+                      <input
+                        type="text"
+                        value={al.text || ''}
+                        onChange={(e) => {
+                          const arr = [...localSettings.globalAlerts];
+                          arr[idx] = { ...al, text: e.target.value };
+                          setLocalSettings({ ...localSettings, globalAlerts: arr });
+                        }}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                      />
+                    </div>
+                    <div className="sm:col-span-4">
+                      <select
+                        value={al.color || 'amber'}
+                        onChange={(e) => {
+                          const arr = [...localSettings.globalAlerts];
+                          arr[idx] = { ...al, color: e.target.value };
+                          setLocalSettings({ ...localSettings, globalAlerts: arr });
+                        }}
+                        className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                      >
+                        <option value="amber">أصفر تحذيري</option>
+                        <option value="blue">أزرق معلوماتي</option>
+                        <option value="rose">أحمر هام</option>
+                        <option value="emerald">أخضر تأكيدي</option>
+                      </select>
+                    </div>
+                    <div className="sm:col-span-1 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLocalSettings({
+                            ...localSettings,
+                            globalAlerts: localSettings.globalAlerts.filter((_, i) => i !== idx)
+                          })
+                        }
+                        className="p-2 rounded-xl bg-rose-100 text-rose-700"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
-                )}
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 2. الواجهة وبطاقة الثقة */}
+          {settingsSubTab === 'hero' && (
+            <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">الشارة العلوية في الواجهة</label>
+                  <input
+                    type="text"
+                    value={localSettings.heroBadge || ''}
+                    onChange={(e) => setLocalSettings({ ...localSettings, heroBadge: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">ارتفاع الواجهة الرئيسية (px)</label>
+                  <input
+                    type="number"
+                    min="320"
+                    max="750"
+                    value={localSettings.heroMinHeight || 460}
+                    onChange={(e) => setLocalSettings({ ...localSettings, heroMinHeight: Number(e.target.value) })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">العنوان الرئيسي الكبير (Hero Title)</label>
+                  <input
+                    type="text"
+                    value={localSettings.heroTitle || ''}
+                    onChange={(e) => setLocalSettings({ ...localSettings, heroTitle: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">الوصف أسفل العنوان</label>
+                  <textarea
+                    rows={2}
+                    value={localSettings.heroSubtitle || ''}
+                    onChange={(e) => setLocalSettings({ ...localSettings, heroSubtitle: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold"
+                  />
+                </div>
+              </div>
+
+              {/* بطاقة لماذا يثق بنا المعلمون */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-black text-slate-900">نقاط بطاقة الثقة في الواجهة الرئيسية</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLocalSettings({
+                        ...localSettings,
+                        trustPoints: [...(localSettings.trustPoints || []), 'نقطة ميزة جديدة للمعلمين']
+                      })
+                    }
+                    className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-black"
+                  >
+                    + إضافة نقطة
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={localSettings.trustTitle || ''}
+                  onChange={(e) => setLocalSettings({ ...localSettings, trustTitle: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-black"
+                />
+                {(localSettings.trustPoints || []).map((pt, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={pt}
+                      onChange={(e) => {
+                        const arr = [...localSettings.trustPoints];
+                        arr[idx] = e.target.value;
+                        setLocalSettings({ ...localSettings, trustPoints: arr });
+                      }}
+                      className="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setLocalSettings({
+                          ...localSettings,
+                          trustPoints: localSettings.trustPoints.filter((_, i) => i !== idx)
+                        })
+                      }
+                      className="p-2 rounded-xl bg-rose-100 text-rose-700"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -4500,6 +4651,109 @@ function AdminDashboard({
                     onChange={(e) => setLocalSettings({ ...localSettings, whatsNewCount: Number(e.target.value) })}
                     className="px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
                   />
+                </div>
+              </div>
+
+              {/* قسم الإعلان عن القادم وأخبار المنصة */}
+              <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={localSettings.newsSectionEnabled !== false}
+                      onChange={(e) => setLocalSettings({ ...localSettings, newsSectionEnabled: e.target.checked })}
+                      className="w-5 h-5"
+                    />
+                    <span className="text-sm font-black text-slate-900">قسم الإعلان عن القادم ومذكرات قيد التجهيز</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLocalSettings({
+                        ...localSettings,
+                        newsSectionEnabled: true,
+                        newsItems: [
+                          ...(localSettings.newsItems || []),
+                          {
+                            id: `news_${Date.now()}`,
+                            title: 'عنوان المذكرة القادمة أو الخبر',
+                            date: 'قريبًا',
+                            description: 'اكتب تفاصيل المذكرة القادمة وموعد توفرها هنا...'
+                          }
+                        ]
+                      })
+                    }
+                    className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black flex items-center gap-1"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>إضافة إعلان عن قادم</span>
+                  </button>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">عنوان القسم في الصفحة الرئيسية</label>
+                  <input
+                    type="text"
+                    value={localSettings.newsSectionTitle || ''}
+                    onChange={(e) => setLocalSettings({ ...localSettings, newsSectionTitle: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                  />
+                </div>
+
+                <div className="space-y-2.5">
+                  {(localSettings.newsItems || []).map((item, idx) => (
+                    <div key={item.id || idx} className="p-3 rounded-2xl bg-white border border-amber-200 space-y-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                        <input
+                          type="text"
+                          value={item.title || ''}
+                          onChange={(e) => {
+                            const arr = [...localSettings.newsItems];
+                            arr[idx] = { ...item, title: e.target.value };
+                            setLocalSettings({ ...localSettings, newsItems: arr });
+                          }}
+                          placeholder="عنوان الإعلان / المذكرة القادمة"
+                          className="sm:col-span-3 px-3 py-2 rounded-xl border border-slate-200 text-xs font-black"
+                        />
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            value={item.date || ''}
+                            onChange={(e) => {
+                              const arr = [...localSettings.newsItems];
+                              arr[idx] = { ...item, date: e.target.value };
+                              setLocalSettings({ ...localSettings, newsItems: arr });
+                            }}
+                            placeholder="قريبًا / الموعد"
+                            className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setLocalSettings({
+                                ...localSettings,
+                                newsItems: localSettings.newsItems.filter((_, i) => i !== idx)
+                              })
+                            }
+                            className="p-2 rounded-xl bg-rose-100 text-rose-700"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      <textarea
+                        rows={2}
+                        value={item.description || ''}
+                        onChange={(e) => {
+                          const arr = [...localSettings.newsItems];
+                          arr[idx] = { ...item, description: e.target.value };
+                          setLocalSettings({ ...localSettings, newsItems: arr });
+                        }}
+                        placeholder="تفاصيل المذكرة القادمة..."
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                      />
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
