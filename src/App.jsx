@@ -33,7 +33,9 @@ import {
   Sliders,
   Truck,
   Database,
-  Power
+  Power,
+  Star,
+  UserCheck
 } from 'lucide-react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -233,6 +235,23 @@ const DEFAULT_SETTINGS = {
       stage: 'المرحلة الابتدائية',
       status: 'جاري التجهيز والإخراج الفني',
       expectedDate: 'خلال أيام'
+    }
+  ],
+  testimonialsTitle: 'آراء وتقييمات المعلمين في مذكراتنا',
+  testimonials: [
+    {
+      id: 'rev_1',
+      teacherName: 'أ/ محمود عبد الرحمن',
+      role: 'معلم أول لغة عربية',
+      text: 'مذكرات منسقة باحترافية عالية جداً وتغني الطالب عن أي مصدر خارجي، والتخصيص بالاسم والشعار ممتاز.',
+      image: ''
+    },
+    {
+      id: 'rev_2',
+      teacherName: 'أ/ سارة السيد',
+      role: 'معلمة لغة عربية للمرحلة الإعدادية',
+      text: 'سرعة في التسليم وجودة طباعة مبهرة، وبنوك المراجعة شاملة لكل أسئلة التقييمات والكتاب المدرسي.',
+      image: ''
     }
   ]
 };
@@ -599,6 +618,7 @@ function MuzakkiratiPlatformContent() {
 
   // تتبع الطلبات
   const [trackPhone, setTrackPhone] = useState('');
+  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
 
   // حالات لوحة الإدارة والدخول السري مع حفظ الجلسة عند Refresh
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
@@ -685,6 +705,12 @@ function MuzakkiratiPlatformContent() {
     stage: 'المرحلة الإعدادية',
     status: 'جاري التجهيز والتنسيق',
     expectedDate: 'قريباً'
+  });
+  const [newTestimonialForm, setNewTestimonialForm] = useState({
+    teacherName: '',
+    role: '',
+    text: '',
+    image: ''
   });
   const [cloudSyncStatus, setCloudSyncStatus] = useState('checking'); // 'checking' | 'connected' | 'local-only' | 'error'
   const [customFirebaseText, setCustomFirebaseText] = useState(() => {
@@ -1525,15 +1551,15 @@ function MuzakkiratiPlatformContent() {
 
           {/* أزرار اليسار: تواصل معنا الأخضر + السلة الداكن */}
           <div className="flex items-center gap-2.5">
-            <a
-              href={`https://wa.me/${settings.whatsappNumber.replace(/\D/g, '')}`}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold shadow-sm transition"
+          {/* أزرار اليسار: تواصل معنا الأخضر (يفتح نافذة روابط التواصل) + السلة الداكن */}
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => setIsContactModalOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold shadow-sm transition cursor-pointer"
             >
               <Phone className="w-4 h-4" />
               <span className="hidden sm:inline">تواصل معنا</span>
-            </a>
+            </button>
 
             <button
               onClick={() => setIsCartOpen(true)}
@@ -1673,51 +1699,40 @@ function MuzakkiratiPlatformContent() {
                   </div>
                 </div>
 
-                {/* العمود الأيسر: صورة البانر المرفوعة */}
+                {/* العمود الأيسر: ركن لماذا يثق بنا المعلمون؟ مكان الصندوق الموضح */}
                 <div className="lg:col-span-5">
-                  <div className="rounded-2xl overflow-hidden border-2 border-white/15 shadow-2xl bg-slate-900/60 aspect-[16/10] flex items-center justify-center">
-                    {settings.heroImage ? (
-                      <img
-                        src={settings.heroImage}
-                        alt="بانر منصة العباقرة"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="p-8 text-center space-y-3">
-                        <img
-                          src={resolvedLogo}
-                          alt="شعار العباقرة"
-                          className="w-20 h-20 mx-auto rounded-2xl shadow-lg"
-                        />
-                        <div className="text-lg font-black text-amber-400">
-                          جهّز مذكرتك بلمسة وشعارك
-                        </div>
-                        <p className="text-xs text-slate-300">
-                          محتوى تعليمي متميز • جودة طباعة عالية • تسليم فوري بصيغة PDF
-                        </p>
+                  <div className="rounded-3xl bg-slate-950/65 backdrop-blur-md border border-white/15 p-5 sm:p-6 shadow-2xl space-y-4">
+                    <div className="flex items-center gap-3 pb-3 border-b border-white/10">
+                      <div className="w-10 h-10 rounded-2xl bg-amber-400/20 border border-amber-400/30 text-amber-300 flex items-center justify-center shrink-0">
+                        <UserCheck className="w-5 h-5" />
                       </div>
-                    )}
+                      <div>
+                        <h3 className="text-base font-black text-white">لماذا يثق بنا المعلمون؟</h3>
+                        <p className="text-[11px] text-slate-300">جودة تعليمية وتخصيص احترافي 100%</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      {(settings.trustFeatures || DEFAULT_SETTINGS.trustFeatures).map((feat, idx) => (
+                        <div
+                          key={feat.id || idx}
+                          className="rounded-2xl bg-white/10 border border-white/10 px-4 py-3 flex items-start gap-3"
+                        >
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <div>
+                            <div className="text-xs sm:text-sm font-bold text-white">{feat.title}</div>
+                            {feat.desc && (
+                              <div className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
+                                {feat.desc}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
-            </section>
-
-            {/* قسم: لماذا يثق بنا المعلمون؟ */}
-            <section className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              {(settings.trustFeatures || DEFAULT_SETTINGS.trustFeatures).map((feat, idx) => (
-                <div
-                  key={feat.id || idx}
-                  className="bg-white rounded-3xl border border-slate-200/80 p-5 sm:p-6 shadow-2xs flex items-start gap-4"
-                >
-                  <div className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                    <ShieldCheck className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm sm:text-base font-black text-slate-900">{feat.title}</h3>
-                    <p className="text-xs text-slate-600 mt-1 leading-relaxed">{feat.desc}</p>
-                  </div>
-                </div>
-              ))}
             </section>
 
             {/* قسم الأقسام الدراسية (بطاقات بيضاء بصور الغلاف الكاملة) */}
@@ -1822,6 +1837,79 @@ function MuzakkiratiPlatformContent() {
                         <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
                         <span>{item.status}</span>
                       </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* ركن آراء وتقييمات المعلمين (نص وصور) */}
+            {Array.isArray(settings.testimonials) && settings.testimonials.length > 0 && (
+              <section className="space-y-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xl sm:text-2xl font-black text-slate-900">
+                      {settings.testimonialsTitle || 'آراء وتقييمات المعلمين في مذكراتنا'}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1">
+                      تجارب حقيقية لمعلمين اعتمدوا على مذكرات منصة العباقرة في فصولهم ومجموعاتهم
+                    </p>
+                  </div>
+                  <div className="hidden sm:flex items-center gap-1 text-amber-400">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <Star key={n} className="w-4 h-4 fill-amber-400" />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {settings.testimonials.map((rev) => (
+                    <div
+                      key={rev.id}
+                      className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-sm flex flex-col justify-between gap-4"
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1 text-amber-400">
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <Star key={n} className="w-3.5 h-3.5 fill-amber-400" />
+                            ))}
+                          </div>
+                          <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full">
+                            تقييم موثق
+                          </span>
+                        </div>
+
+                        {rev.image && (
+                          <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-50">
+                            <img
+                              src={rev.image}
+                              alt={rev.teacherName || 'تقييم معلم'}
+                              className="w-full max-h-64 object-contain mx-auto"
+                            />
+                          </div>
+                        )}
+
+                        {rev.text && (
+                          <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
+                            "{rev.text}"
+                          </p>
+                        )}
+                      </div>
+
+                      {(rev.teacherName || rev.role) && (
+                        <div className="pt-3 border-t border-slate-100 flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 font-black text-xs flex items-center justify-center shrink-0">
+                            {(rev.teacherName || 'م').slice(0, 1)}
+                          </div>
+                          <div>
+                            {rev.teacherName && (
+                              <div className="text-xs font-black text-slate-900">{rev.teacherName}</div>
+                            )}
+                            {rev.role && <div className="text-[11px] text-slate-500">{rev.role}</div>}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -2856,723 +2944,123 @@ function MuzakkiratiPlatformContent() {
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
-                    <h3 className="text-base font-black text-slate-900">الصفوف الدراسية</h3>
-                    <div className="space-y-2">
-                      <select
-                        value={newGradeStageId}
-                        onChange={(e) => setNewGradeStageId(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
-                      >
-                        {normalizedStages.map((st) => (
-                          <option key={st.id} value={st.id}>
-                            {st.name}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={newGradeName}
-                          onChange={(e) => setNewGradeName(e.target.value)}
-                          placeholder="اسم الصف الدراسي..."
-                          className="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs"
-                        />
-                        <button
-                          onClick={() => {
-                            if (!newGradeName.trim()) return;
-                            const next = [
-                              ...normalizedGrades,
-                              { id: `grd_${Date.now()}`, stageId: newGradeStageId, name: newGradeName.trim() }
-                            ];
-                            saveSettings({ ...settings, grades: next });
-                            setNewGradeName('');
-                            showToast('تمت إضافة الصف');
-                          }}
-                          className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold cursor-pointer"
-                        >
-                          إضافة
-                        </button>
-                      </div>
-                    </div>
-                    <div className="space-y-2 max-h-64 overflow-y-auto">
-                      {normalizedGrades.map((gr) => {
-                        const stObj = normalizedStages.find((s) => s.id === gr.stageId);
-                        return (
-                          <div key={gr.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 text-xs font-bold">
-                            <div>
-                              <span>{gr.name}</span>
-                              {stObj && (
-                                <span className="mr-2 text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                                  {stObj.name}
-                                </span>
-                              )}
-                            </div>
-                            <button
-                              onClick={() => {
-                                saveSettings({
-                                  ...settings,
-                                  grades: normalizedGrades.filter((g) => g.id !== gr.id)
-                                });
-                                showToast('تم حذف الصف');
-                              }}
-                              className="text-rose-600 cursor-pointer"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* تبويب 4: إدارة الكوبونات والعروض التلقائية */}
-            {adminSubTab === 'coupons' && (
-              <div className="space-y-6">
-                {/* إعدادات الشريط الترويجي العلوي وخصم الكميات التلقائي */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-base font-black text-slate-900">الشريط الترويجي العلوي</h3>
-                      <label className="inline-flex items-center gap-2 text-xs font-bold cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(settings.promoEnabled)}
-                          onChange={(e) => saveSettings({ ...settings, promoEnabled: e.target.checked })}
-                        />
-                        <span>مفعّل</span>
-                      </label>
-                    </div>
-                    <div className="space-y-3 text-xs">
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">نص العرض الترويجي</label>
-                        <input
-                          type="text"
-                          value={settings.promoText}
-                          onChange={(e) => setSettings({ ...settings, promoText: e.target.value })}
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">كود الخصم المعروض في الشريط</label>
-                        <input
-                          type="text"
-                          value={settings.promoCouponCode}
-                          onChange={(e) =>
-                            setSettings({ ...settings, promoCouponCode: e.target.value.toUpperCase() })
-                          }
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 uppercase"
-                        />
-                      </div>
-                      <button
-                        onClick={() => {
-                          saveSettings(settings);
-                          showToast('تم حفظ إعدادات الشريط الترويجي');
-                        }}
-                        className="w-full py-2.5 rounded-xl bg-blue-600 text-white font-black cursor-pointer"
-                      >
-                        حفظ الشريط الترويجي
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-base font-black text-slate-900">خصم الكميات التلقائي في السلة</h3>
-                      <label className="inline-flex items-center gap-2 text-xs font-bold cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(settings.bulkDiscountEnabled)}
-                          onChange={(e) =>
-                            saveSettings({ ...settings, bulkDiscountEnabled: e.target.checked })
-                          }
-                        />
-                        <span>مفعّل</span>
-                      </label>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 text-xs">
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">أقل عدد مذكرات</label>
-                        <input
-                          type="number"
-                          value={settings.bulkDiscountMinItems}
-                          onChange={(e) =>
-                            setSettings({ ...settings, bulkDiscountMinItems: Number(e.target.value) })
-                          }
-                          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">نسبة الخصم %</label>
-                        <input
-                          type="number"
-                          value={settings.bulkDiscountPercent}
-                          onChange={(e) =>
-                            setSettings({ ...settings, bulkDiscountPercent: Number(e.target.value) })
-                          }
-                          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">الحد الأقصى (ج.م)</label>
-                        <input
-                          type="number"
-                          value={settings.bulkDiscountMaxAmount}
-                          onChange={(e) =>
-                            setSettings({ ...settings, bulkDiscountMaxAmount: Number(e.target.value) })
-                          }
-                          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                        />
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => {
-                        saveSettings(settings);
-                        showToast('تم حفظ قواعد خصم الكميات');
-                      }}
-                      className="w-full py-2.5 rounded-xl bg-blue-600 text-white text-xs font-black cursor-pointer"
-                    >
-                      حفظ خصم الكميات
-                    </button>
-                  </div>
-                </div>
-
-                {/* إدارة كوبونات الخصم */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                  <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 p-6 space-y-3 text-xs">
-                    <h3 className="text-base font-black text-slate-900">إضافة كوبون خصم جديد</h3>
-                    <div>
-                      <label className="block font-bold text-slate-600 mb-1">كود الخصم</label>
-                      <input
-                        type="text"
-                        placeholder="مثال: VIP2026"
-                        value={newCouponForm.code}
-                        onChange={(e) =>
-                          setNewCouponForm({ ...newCouponForm, code: e.target.value.toUpperCase() })
-                        }
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 uppercase"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">نسبة الخصم %</label>
-                        <input
-                          type="number"
-                          value={newCouponForm.discountPercent}
-                          onChange={(e) =>
-                            setNewCouponForm({ ...newCouponForm, discountPercent: Number(e.target.value) })
-                          }
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">الحد الأقصى (ج.م)</label>
-                        <input
-                          type="number"
-                          value={newCouponForm.maxDiscount}
-                          onChange={(e) =>
-                            setNewCouponForm({ ...newCouponForm, maxDiscount: Number(e.target.value) })
-                          }
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                        />
-                      </div>
-                    </div>
-                    <button
-                      onClick={async () => {
-                        if (!newCouponForm.code.trim()) return;
-                        const cpObj = {
-                          id: `cp_${Date.now()}`,
-                          code: newCouponForm.code.trim().toUpperCase(),
-                          discountPercent: Number(newCouponForm.discountPercent || 15),
-                          maxDiscount: Number(newCouponForm.maxDiscount || 200),
-                          active: true
-                        };
-                        const next = [cpObj, ...coupons];
-                        setCoupons(next);
-                        localStorage.setItem('el3bakera_coupons_v5', JSON.stringify(next));
-                        if (db) {
-                          await setDoc(
-                            doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cpObj.id),
-                            cpObj
-                          );
-                        }
-                        setNewCouponForm({ code: '', discountPercent: 15, maxDiscount: 200, active: true });
-                        showToast('تمت إضافة الكوبون وحفظه');
-                      }}
-                      className="w-full py-3 rounded-xl bg-blue-600 text-white font-black text-sm cursor-pointer"
-                    >
-                      إضافة الكوبون
-                    </button>
-                  </div>
-
-                  <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-3 h-fit">
-                    {coupons.map((cp) => (
-                      <div
-                        key={cp.id}
-                        className={`bg-white rounded-2xl border p-4 flex items-center justify-between ${
-                          cp.active === false ? 'border-slate-200 opacity-60' : 'border-amber-200'
-                        }`}
-                      >
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="px-3 py-1 rounded-lg bg-amber-100 text-amber-900 font-black text-xs">
-                              {cp.code}
-                            </span>
-                            {cp.active === false && (
-                              <span className="text-[10px] font-bold text-rose-600">معطل</span>
-                            )}
-                          </div>
-                          <div className="text-xs text-slate-600 font-semibold mt-1.5">
-                            خصم {cp.discountPercent || 15}% (بحد أقصى {cp.maxDiscount || 200} ج.م)
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={async () => {
-                              const updated = { ...cp, active: cp.active === false };
-                              const next = coupons.map((x) => (x.id === cp.id ? updated : x));
-                              setCoupons(next);
-                              localStorage.setItem('el3bakera_coupons_v5', JSON.stringify(next));
-                              if (db) {
-                                await setDoc(
-                                  doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cp.id),
-                                  updated,
-                                  { merge: true }
-                                );
-                              }
-                              showToast(updated.active ? 'تم تفعيل الكوبون' : 'تم إيقاف الكوبون');
-                            }}
-                            title="تفعيل / إيقاف"
-                            className="p-2 rounded-xl bg-slate-100 text-slate-700 cursor-pointer"
-                          >
-                            <Power className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={async () => {
-                              const next = coupons.filter((x) => x.id !== cp.id);
-                              setCoupons(next);
-                              localStorage.setItem('el3bakera_coupons_v5', JSON.stringify(next));
-                              if (db) {
-                                await deleteDoc(
-                                  doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cp.id)
-                                );
-                              }
-                              showToast('تم حذف الكوبون');
-                            }}
-                            className="p-2 rounded-xl bg-rose-50 text-rose-600 cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* تبويب 5: الطلبات */}
-            {adminSubTab === 'orders' && (
-              <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
-                <h3 className="text-base font-black text-slate-900">سجل طلبات المعلمين</h3>
-                {orders.length === 0 ? (
-                  <p className="text-xs text-slate-500">لا توجد طلبات مسجلة حتى الآن.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {orders.map((ord) => (
-                      <div key={ord.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
-                        <div className="flex items-center justify-between">
-                          <span className="font-black text-sm text-blue-700">
-                            {ord.id} — أ/ {ord.teacherName}
-                          </span>
-                          <span className="font-black text-slate-900">{ord.total} ج.م</span>
-                        </div>
-                        <div className="text-slate-600">
-                          هاتف: {ord.phone1} • السلسلة: {ord.seriesName || '-'} • الشعار: {ord.hasLogo}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* تبويب 6: الهوية والشعار والروابط وربط السحابة */}
-            {adminSubTab === 'settings' && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4 text-xs">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-base font-black text-slate-900">الهوية البصرية والشعار وخلفية الرئيسية</h3>
-                    <button
-                      onClick={async () => {
-                        await saveSettings(settings);
-                        showToast('تم حفظ بيانات الهوية والروابط بنجاح');
-                      }}
-                      className="px-4 py-2 rounded-xl bg-blue-600 text-white font-black cursor-pointer"
-                    >
-                      حفظ التعديلات
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                      <span className="font-bold block">شعار المنصة</span>
-                      <img src={resolvedLogo} alt="Logo" className="w-16 h-16 rounded-xl object-cover border" />
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={async (e) => {
-                          const f = e.target.files?.[0];
-                          if (!f) return;
-                          const img = await compressImageFile(f, 400, 0.85);
-                          await saveSettings({ ...settings, logoImage: img });
-                          showToast('تم تحديث الشعار وحفظه');
-                        }}
-                      />
-                    </div>
-
-                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                      <span className="font-bold block">صورة البانر الجانبي (Hero)</span>
-                      {settings.heroImage && (
-                        <img src={settings.heroImage} alt="Hero" className="h-16 rounded-xl object-cover border" />
-                      )}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={async (e) => {
-                          const f = e.target.files?.[0];
-                          if (!f) return;
-                          const img = await compressImageFile(f, 1100, 0.82);
-                          await saveSettings({ ...settings, heroImage: img });
-                          showToast('تم تحديث صورة البانر وحفظها');
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* خلفية الشاشة الرئيسية والتحكم بالتعتيم */}
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="font-black text-slate-900">خلفية الشاشة الرئيسية (Hero Background)</span>
-                      {settings.heroBgImage && (
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            await saveSettings({ ...settings, heroBgImage: '' });
-                            showToast('تمت إزالة صورة الخلفية');
-                          }}
-                          className="text-rose-600 font-bold cursor-pointer"
-                        >
-                          إزالة الخلفية
-                        </button>
-                      )}
-                    </div>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={async (e) => {
-                        const f = e.target.files?.[0];
-                        if (!f) return;
-                        const img = await compressImageFile(f, 1280, 0.82);
-                        await saveSettings({ ...settings, heroBgImage: img });
-                        showToast('تم رفع وحفظ خلفية الشاشة الرئيسية');
-                      }}
-                    />
-                    {settings.heroBgImage && (
-                      <img
-                        src={settings.heroBgImage}
-                        alt="خلفية الرئيسية"
-                        className="h-24 w-full rounded-xl object-cover border"
-                      />
-                    )}
-                    <div>
-                      <div className="flex justify-between font-bold text-slate-700 mb-1">
-                        <span>درجة التعتيم على خلفية الرئيسية:</span>
-                        <span>{settings.heroOverlayOpacity ?? 75}%</span>
-                      </div>
-                      <input
-                        type="range"
-                        min={0}
-                        max={95}
-                        value={settings.heroOverlayOpacity ?? 75}
-                        onChange={(e) =>
-                          setSettings({ ...settings, heroOverlayOpacity: Number(e.target.value) })
-                        }
-                        className="w-full cursor-pointer"
-                      />
-                    </div>
-                  </div>
-
-                  {/* التحكم الكامل في شارة الخصم على المذكرات */}
-                  <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="font-black text-emerald-950">
-                        إعدادات شارة الخصم على المذكرات والعينات
-                      </span>
-                      <label className="inline-flex items-center gap-1.5 font-bold cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={settings.discountBadgeEnabled !== false}
-                          onChange={(e) =>
-                            setSettings({ ...settings, discountBadgeEnabled: e.target.checked })
-                          }
-                        />
-                        <span>إظهار الشارة</span>
-                      </label>
-                    </div>
-
-                    <div className="flex flex-wrap gap-4">
-                      <label className="inline-flex items-center gap-1.5 font-bold cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={settings.showDiscountPercent !== false}
-                          onChange={(e) =>
-                            setSettings({ ...settings, showDiscountPercent: e.target.checked })
-                          }
-                        />
-                        <span>إظهار نسبة الخصم (%)</span>
-                      </label>
-                      <label className="inline-flex items-center gap-1.5 font-bold cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={settings.showDiscountAmount !== false}
-                          onChange={(e) =>
-                            setSettings({ ...settings, showDiscountAmount: e.target.checked })
-                          }
-                        />
-                        <span>إظهار مبلغ التوفير (ج.م)</span>
-                      </label>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="block font-bold mb-1">مكان الشارة</label>
-                        <select
-                          value={settings.discountBadgePosition || 'top-left'}
-                          onChange={(e) =>
-                            setSettings({ ...settings, discountBadgePosition: e.target.value })
-                          }
-                          className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-white"
-                        >
-                          <option value="top-left">أعلى اليسار</option>
-                          <option value="top-right">أعلى اليمين</option>
-                          <option value="bottom-left">أسفل اليسار</option>
-                          <option value="bottom-right">أسفل اليمين</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block font-bold mb-1">لون الخلفية</label>
-                        <input
-                          type="color"
-                          value={settings.discountBadgeBg || '#10b981'}
-                          onChange={(e) =>
-                            setSettings({ ...settings, discountBadgeBg: e.target.value })
-                          }
-                          className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold mb-1">لون الخط</label>
-                        <input
-                          type="color"
-                          value={settings.discountBadgeText || '#ffffff'}
-                          onChange={(e) =>
-                            setSettings({ ...settings, discountBadgeText: e.target.value })
-                          }
-                          className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold mb-1">اسم المنصة</label>
-                    <input
-                      type="text"
-                      value={settings.platformName}
-                      onChange={(e) => setSettings({ ...settings, platformName: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block font-bold mb-1">رقم الواتساب</label>
-                      <input
-                        type="text"
-                        value={settings.whatsappNumber}
-                        onChange={(e) => setSettings({ ...settings, whatsappNumber: e.target.value })}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-bold mb-1">رقم فودافون كاش</label>
-                      <input
-                        type="text"
-                        value={settings.vodafoneCashNumber}
-                        onChange={(e) => setSettings({ ...settings, vodafoneCashNumber: e.target.value })}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold mb-1">رمز دخول الإدارة</label>
-                    <input
-                      type="text"
-                      value={settings.adminPin}
-                      onChange={(e) => setSettings({ ...settings, adminPin: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                    />
-                  </div>
-                </div>
-
-                {/* روابط التواصل وربط السحابة */}
-                <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4 text-xs">
-                  <h3 className="text-base font-black text-slate-900">روابط التواصل في الفوتر</h3>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="اسم الرابط (مثال: قناة التيليجرام)"
-                      value={newSocialLabel}
-                      onChange={(e) => setNewSocialLabel(e.target.value)}
-                      className="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                    />
-                    <input
-                      type="url"
-                      placeholder="https://..."
-                      value={newSocialUrl}
-                      onChange={(e) => setNewSocialUrl(e.target.value)}
-                      className="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                      dir="ltr"
-                    />
-                    <button
-                      onClick={() => {
-                        if (!newSocialLabel.trim() || !newSocialUrl.trim()) return;
-                        const next = [
-                          ...(settings.socialLinks || []),
-                          { id: `soc_${Date.now()}`, label: newSocialLabel.trim(), url: newSocialUrl.trim() }
-                        ];
-                        saveSettings({ ...settings, socialLinks: next });
-                        setNewSocialLabel('');
-                        setNewSocialUrl('');
-                        showToast('تمت إضافة الرابط');
-                      }}
-                      className="px-4 py-2 rounded-xl bg-blue-600 text-white font-bold cursor-pointer"
-                    >
-                      إضافة
-                    </button>
-                  </div>
-
-                  <div className="space-y-2">
-                    {(settings.socialLinks || []).map((soc) => (
-                      <div key={soc.id} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50">
-                        <span className="font-bold">{soc.label}</span>
-                        <button
-                          onClick={() =>
-                            saveSettings({
-                              ...settings,
-                              socialLinks: settings.socialLinks.filter((x) => x.id !== soc.id)
-                            })
-                          }
-                          className="text-rose-600 cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* إدارة ركن المذكرات قيد التجهيز */}
+                  {/* إدارة ركن تقييمات وآراء العملاء (نص أو صورة + تسمية القسم) */}
                   <div className="pt-4 border-t border-slate-100 space-y-3">
-                    <h4 className="font-black text-slate-900">إدارة ركن المذكرات قيد التجهيز (تظهر في الرئيسية)</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <h4 className="font-black text-slate-900">
+                      إدارة ركن تقييمات وآراء العملاء في الرئيسية
+                    </h4>
+                    <div>
+                      <label className="block font-bold text-slate-600 mb-1">تسمية القسم</label>
                       <input
                         type="text"
-                        placeholder="عنوان المذكرة قيد التجهيز..."
-                        value={newUpcomingForm.title}
+                        value={settings.testimonialsTitle ?? 'آراء وتقييمات المعلمين في مذكراتنا'}
                         onChange={(e) =>
-                          setNewUpcomingForm({ ...newUpcomingForm, title: e.target.value })
+                          setSettings({ ...settings, testimonialsTitle: e.target.value })
                         }
-                        className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
                       />
-                      <input
-                        type="text"
-                        placeholder="المرحلة (مثال: المرحلة الإعدادية)"
-                        value={newUpcomingForm.stage}
-                        onChange={(e) =>
-                          setNewUpcomingForm({ ...newUpcomingForm, stage: e.target.value })
-                        }
-                        className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                      />
-                      <input
-                        type="text"
-                        placeholder="حالة التجهيز (مثال: جاري التنسيق)"
-                        value={newUpcomingForm.status}
-                        onChange={(e) =>
-                          setNewUpcomingForm({ ...newUpcomingForm, status: e.target.value })
-                        }
-                        className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                      />
-                      <div className="flex gap-2">
+                    </div>
+
+                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+                      <div className="grid grid-cols-2 gap-2">
                         <input
                           type="text"
-                          placeholder="موعد الإصدار (مثال: قريباً)"
-                          value={newUpcomingForm.expectedDate}
+                          placeholder="اسم المعلم / العميل (اختياري)"
+                          value={newTestimonialForm.teacherName}
                           onChange={(e) =>
-                            setNewUpcomingForm({ ...newUpcomingForm, expectedDate: e.target.value })
+                            setNewTestimonialForm({ ...newTestimonialForm, teacherName: e.target.value })
                           }
-                          className="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                          className="px-3 py-2 rounded-xl border border-slate-200 bg-white"
                         />
+                        <input
+                          type="text"
+                          placeholder="الصفة / المادة (اختياري)"
+                          value={newTestimonialForm.role}
+                          onChange={(e) =>
+                            setNewTestimonialForm({ ...newTestimonialForm, role: e.target.value })
+                          }
+                          className="px-3 py-2 rounded-xl border border-slate-200 bg-white"
+                        />
+                      </div>
+                      <textarea
+                        rows={2}
+                        placeholder="نص التقييم (يمكنك إضافة نص أو صورة أو كليهما)..."
+                        value={newTestimonialForm.text}
+                        onChange={(e) =>
+                          setNewTestimonialForm({ ...newTestimonialForm, text: e.target.value })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
+                      />
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <label className="inline-flex items-center gap-1.5 text-blue-600 font-bold cursor-pointer hover:underline">
+                          <ImageIcon className="w-4 h-4" />
+                          <span>
+                            {newTestimonialForm.image
+                              ? 'تم إرفاق صورة التقييم ✓'
+                              : 'إرفاق صورة تقييم (سكرين شوت)'}
+                          </span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const f = e.target.files?.[0];
+                              if (!f) return;
+                              const img = await compressImageFile(f, 800, 0.82);
+                              setNewTestimonialForm((prev) => ({ ...prev, image: img }));
+                            }}
+                          />
+                        </label>
+
                         <button
                           type="button"
                           onClick={async () => {
-                            if (!newUpcomingForm.title.trim()) return;
+                            if (!newTestimonialForm.text.trim() && !newTestimonialForm.image) {
+                              showToast('أدخل نص التقييم أو ارفع صورة على الأقل', 'error');
+                              return;
+                            }
                             const next = [
-                              ...(settings.upcomingNotebooks || []),
-                              { id: `up_${Date.now()}`, ...newUpcomingForm }
+                              ...(settings.testimonials || []),
+                              { id: `rev_${Date.now()}`, ...newTestimonialForm }
                             ];
-                            await saveSettings({ ...settings, upcomingNotebooks: next });
-                            setNewUpcomingForm({
-                              title: '',
-                              stage: 'المرحلة الإعدادية',
-                              status: 'جاري التجهيز والتنسيق',
-                              expectedDate: 'قريباً'
-                            });
-                            showToast('تمت إضافة المذكرة قيد التجهيز وحفظها');
+                            await saveSettings({ ...settings, testimonials: next });
+                            setNewTestimonialForm({ teacherName: '', role: '', text: '', image: '' });
+                            showToast('تمت إضافة التقييم وحفظه في الرئيسية');
                           }}
                           className="px-4 py-2 rounded-xl bg-blue-600 text-white font-bold cursor-pointer"
                         >
-                          إضافة
+                          + إضافة التقييم
                         </button>
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      {(settings.upcomingNotebooks || []).map((up) => (
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {(settings.testimonials || []).map((rev) => (
                         <div
-                          key={up.id}
-                          className="flex items-center justify-between p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/70"
+                          key={rev.id}
+                          className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200"
                         >
-                          <div>
-                            <span className="font-bold text-slate-900">{up.title}</span>
-                            <span className="text-[11px] text-slate-500 mr-2">
-                              ({up.stage} • {up.expectedDate})
-                            </span>
+                          <div className="flex items-center gap-2.5 truncate">
+                            {rev.image && (
+                              <img src={rev.image} alt="" className="w-9 h-9 rounded-lg object-cover shrink-0" />
+                            )}
+                            <div className="truncate">
+                              <div className="font-bold text-slate-900 truncate">
+                                {rev.teacherName || 'تقييم مصور'}
+                              </div>
+                              <div className="text-[11px] text-slate-500 truncate">
+                                {rev.text || 'صورة تقييم عميل'}
+                              </div>
+                            </div>
                           </div>
                           <button
                             type="button"
                             onClick={async () => {
-                              const next = (settings.upcomingNotebooks || []).filter(
-                                (x) => x.id !== up.id
-                              );
-                              await saveSettings({ ...settings, upcomingNotebooks: next });
-                              showToast('تم حذف العنصر');
+                              const next = (settings.testimonials || []).filter((x) => x.id !== rev.id);
+                              await saveSettings({ ...settings, testimonials: next });
+                              showToast('تم حذف التقييم');
                             }}
-                            className="text-rose-600 cursor-pointer"
+                            className="text-rose-600 p-1.5 cursor-pointer shrink-0"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -3642,336 +3130,56 @@ function MuzakkiratiPlatformContent() {
       </main>
 
       {/* ==================================================================== */}
-      {/* الفوتر السفلي (بدون أي زر إدارة ظاهر للزوار) */}
+      {/* نافذة تواصل معنا (تعرض كافة روابط التواصل المباشرة والاجتماعية) */}
       {/* ==================================================================== */}
-      <footer className="bg-[#081229] text-slate-300 border-t border-slate-800 mt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <img src={resolvedLogo} alt={settings.platformName} className="w-10 h-10 rounded-xl object-cover" />
-            <div>
-              <div className="text-white font-black text-sm">{settings.platformName}</div>
-              <div className="text-xs text-slate-400">
-                جميع المذكرات منسقة بأعلى جودة وجاهزة للطباعة والتسليم الفوري بصيغة PDF.
+      {isContactModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center">
+                  <MessageCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">تواصل مع {settings.platformName}</h3>
+                  <p className="text-[11px] text-slate-500">اختر وسيلة التواصل المناسبة لك</p>
+                </div>
               </div>
+              <button
+                onClick={() => setIsContactModalOpen(false)}
+                className="p-1.5 rounded-xl bg-slate-100 text-slate-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
-          </div>
 
-          <div className="flex flex-wrap items-center gap-4 text-xs font-bold">
-            {(settings.socialLinks || []).map((soc) => (
+            <div className="space-y-2.5">
               <a
-                key={soc.id}
-                href={soc.url}
+                href={`https://wa.me/${settings.whatsappNumber.replace(/\D/g, '')}`}
                 target="_blank"
                 rel="noreferrer"
-                className="text-slate-300 hover:text-amber-400 transition"
+                className="w-full p-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm flex items-center justify-between shadow-sm transition"
               >
-                {soc.label}
+                <span className="flex items-center gap-2.5">
+                  <Phone className="w-4 h-4" />
+                  <span>محادثة واتساب مباشرة ({settings.vodafoneCashNumber})</span>
+                </span>
+                <ExternalLink className="w-4 h-4" />
               </a>
-            ))}
-          </div>
-        </div>
-      </footer>
 
-      {/* ==================================================================== */}
-      {/* نافذة معاينة تفاصيل المذكرة وصفحات العينة */}
-      {/* ==================================================================== */}
-      {previewProduct && (
-        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl border border-slate-200 my-auto">
-            <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-2 font-black text-sm">
-                <Eye className="w-4 h-4 text-amber-400" />
-                <span>تفاصيل وعينة المذكرة</span>
-              </div>
-              <button
-                onClick={() => setPreviewProduct(null)}
-                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-5 max-h-[82vh] overflow-y-auto">
-              {/* عارض صفحات العينة أو صورة الغلاف */}
-              {Array.isArray(previewProduct.sampleImages) && previewProduct.sampleImages.length > 0 ? (
-                <div className="space-y-3">
-                  <div className="relative rounded-2xl overflow-hidden bg-slate-100 border border-slate-200">
-                    {renderDiscountBadge(previewProduct)}
-                    <img
-                      src={previewProduct.sampleImages[activeSampleIndex]}
-                      alt={`صفحة عينة ${activeSampleIndex + 1}`}
-                      className="w-full max-h-[420px] object-contain mx-auto"
-                    />
-                    {previewProduct.sampleImages.length > 1 && (
-                      <>
-                        <button
-                          onClick={() =>
-                            setActiveSampleIndex((prev) =>
-                              prev === 0 ? previewProduct.sampleImages.length - 1 : prev - 1
-                            )
-                          }
-                          className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-slate-900/80 text-white cursor-pointer"
-                        >
-                          <ChevronRight className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={() =>
-                            setActiveSampleIndex((prev) =>
-                              prev === previewProduct.sampleImages.length - 1 ? 0 : prev + 1
-                            )
-                          }
-                          className="absolute left-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-slate-900/80 text-white cursor-pointer"
-                        >
-                          <ChevronLeft className="w-5 h-5" />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                  <div className="text-center text-xs font-bold text-slate-600">
-                    صفحة عينة {activeSampleIndex + 1} من {previewProduct.sampleImages.length}
-                  </div>
-                </div>
-              ) : (
-                <div className="relative rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 aspect-[16/9]">
-                  {renderDiscountBadge(previewProduct)}
-                  <img
-                    src={previewProduct.coverImage || resolvedLogo}
-                    alt={previewProduct.title}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <h3 className="text-xl font-black text-slate-900">{previewProduct.title}</h3>
-                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                  {previewProduct.description}
-                </p>
-              </div>
-
-              {previewProduct.tipText && (
-                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold">
-                  💡 {previewProduct.tipText}
-                </div>
-              )}
-
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-1">
-                <div className="font-black text-slate-900">تنبيه هام قبل تأكيد الطلب:</div>
-                <p>- يتم تسليم المذكرة بصيغة PDF عالية الدقة جاهزة للطباعة ببيانات المعلم دون أي بيانات تخصنا.</p>
-                <p>- العلامة المائية باسم المعلم أو اسم السلسلة الخاص به، وغير متاح إرسال المذكرات بدونها.</p>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
-                <div>
-                  <span className="text-2xl font-black text-blue-600">{previewProduct.price} ج.م</span>
-                  {previewProduct.oldPrice > previewProduct.price && (
-                    <span className="text-xs text-slate-400 line-through mr-2">
-                      {previewProduct.oldPrice} ج.م
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {previewProduct.driveSampleUrl && (
-                    <a
-                      href={previewProduct.driveSampleUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold hover:bg-emerald-100"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      <span>معاينة Google Drive</span>
-                    </a>
-                  )}
-                  <button
-                    onClick={() => {
-                      addToCart(previewProduct, 'product');
-                      setPreviewProduct(null);
-                    }}
-                    className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black cursor-pointer"
-                  >
-                    اطلبها مخصصة باسمك
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ==================================================================== */}
-      {/* نافذة سلة الطلبات وإدخال بيانات تخصيص المعلم */}
-      {/* ==================================================================== */}
-      {isCartOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex justify-end">
-          <div className="bg-white w-full max-w-lg h-full flex flex-col shadow-2xl">
-            <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-2 font-black text-base">
-                <ShoppingCart className="w-5 h-5 text-amber-400" />
-                <span>سلة الطلبات والتخصيص ({cart.length})</span>
-              </div>
-              <button
-                onClick={() => setIsCartOpen(false)}
-                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {cart.length === 0 ? (
-                <div className="text-center py-12 space-y-3">
-                  <ShoppingCart className="w-12 h-12 text-slate-300 mx-auto" />
-                  <p className="text-sm font-bold text-slate-600">سلة الطلبات فارغة حالياً</p>
-                </div>
-              ) : (
-                <>
-                  {/* عناصر السلة */}
-                  <div className="space-y-2.5">
-                    {cart.map((item) => (
-                      <div
-                        key={item.id}
-                        className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3"
-                      >
-                        <div>
-                          <div className="font-black text-xs sm:text-sm text-slate-900">{item.title}</div>
-                          <div className="text-xs font-bold text-blue-600 mt-0.5">{item.price} ج.م</div>
-                        </div>
-                        <button
-                          onClick={() => removeFromCart(item.id)}
-                          className="p-2 rounded-xl text-rose-600 hover:bg-rose-50 cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* كود الخصم */}
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={couponInput}
-                      onChange={(e) => setCouponInput(e.target.value)}
-                      placeholder="هل لديك كود خصم؟ (مثال: M20)"
-                      className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs uppercase outline-none"
-                    />
-                    <button
-                      onClick={handleApplyCoupon}
-                      className="px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold cursor-pointer"
-                    >
-                      تطبيق
-                    </button>
-                  </div>
-
-                  {/* نموذج بيانات المعلم */}
-                  <div className="space-y-3 pt-3 border-t border-slate-200 text-xs">
-                    <h4 className="font-black text-sm text-slate-900">
-                      بيانات المعلم المراد طباعتها على المذكرات:
-                    </h4>
-
-                    <div>
-                      <label className="block font-bold text-slate-600 mb-1">اسم المعلم *</label>
-                      <input
-                        type="text"
-                        value={customerForm.teacherName}
-                        onChange={(e) =>
-                          setCustomerForm({ ...customerForm, teacherName: e.target.value })
-                        }
-                        placeholder="مثال: أ/ محمد أحمد"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">رقم الهاتف (1) *</label>
-                        <input
-                          type="tel"
-                          value={customerForm.phone1}
-                          onChange={(e) => setCustomerForm({ ...customerForm, phone1: e.target.value })}
-                          placeholder="010..."
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">رقم الهاتف الثاني</label>
-                        <input
-                          type="tel"
-                          value={customerForm.phone2}
-                          onChange={(e) => setCustomerForm({ ...customerForm, phone2: e.target.value })}
-                          placeholder="اختياري"
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block font-bold text-slate-600 mb-1">اسم السلسلة (إن وجد)</label>
-                      <input
-                        type="text"
-                        value={customerForm.seriesName}
-                        onChange={(e) => setCustomerForm({ ...customerForm, seriesName: e.target.value })}
-                        placeholder="مثال: سلسلة الأوائل في اللغة العربية"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block font-bold text-slate-600 mb-1">إرفاق شعار المعلم</label>
-                      <select
-                        value={customerForm.hasLogo}
-                        onChange={(e) => setCustomerForm({ ...customerForm, hasLogo: e.target.value })}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
-                      >
-                        <option value="نعم، سأرسله على الواتساب">نعم، سأرسله على الواتساب</option>
-                        <option value="لا يوجد شعار، يُكتفى بالاسم والهاتف">
-                          لا يوجد شعار، يُكتفى بالاسم والهاتف
-                        </option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block font-bold text-slate-600 mb-1">ملاحظات إضافية</label>
-                      <textarea
-                        rows={2}
-                        value={customerForm.notes}
-                        onChange={(e) => setCustomerForm({ ...customerForm, notes: e.target.value })}
-                        placeholder="أي ملاحظات حول التصميم أو البيانات..."
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {cart.length > 0 && (
-              <div className="p-6 bg-slate-50 border-t border-slate-200 space-y-3">
-                <div className="flex justify-between text-xs text-slate-600">
-                  <span>المجموع الفرعي:</span>
-                  <span className="font-bold">{cartCalculations.subtotal} ج.م</span>
-                </div>
-                {cartCalculations.activeDiscount > 0 && (
-                  <div className="flex justify-between text-xs text-emerald-600 font-bold">
-                    <span>{cartCalculations.discountLabel}:</span>
-                    <span>-{cartCalculations.activeDiscount} ج.م</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-base font-black text-slate-900 pt-2 border-t border-slate-200">
-                  <span>الإجمالي المطلوب:</span>
-                  <span className="text-blue-600">{cartCalculations.total} ج.م</span>
-                </div>
-
-                <button
-                  onClick={handleCheckoutWhatsApp}
-                  className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg transition cursor-pointer"
+              {(settings.socialLinks || []).map((soc) => (
+                <a
+                  key={soc.id}
+                  href={soc.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full p-3.5 rounded-2xl bg-slate-50 hover:bg-blue-50 border border-slate-200 text-slate-800 hover:text-blue-700 font-bold text-xs sm:text-sm flex items-center justify-between transition"
                 >
-                  <MessageCircle className="w-5 h-5" />
-                  <span>إرسال الطلب عبر واتساب للتجهيز</span>
-                </button>
-              </div>
-            )}
+                  <span>{soc.label}</span>
+                  <ExternalLink className="w-4 h-4 text-slate-400" />
+                </a>
+              ))}
+            </div>
           </div>
         </div>
       )}
