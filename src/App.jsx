@@ -66,24 +66,32 @@ import {
 // ============================================================================
 const LOCAL_API_KEY_STORAGE = 'el3bakera_firebase_web_api_key';
 
+const normalizeApiKey = (raw) => {
+  if (!raw) return '';
+  const match = String(raw).match(/AIza[0-9A-Za-z_-]{20,}/);
+  return match ? match[0] : '';
+};
+
 const getStoredOrEnvApiKey = () => {
   try {
     const fromStorage = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_API_KEY_STORAGE) : '';
-    if (fromStorage && fromStorage.trim().startsWith('AIza')) return fromStorage.trim();
+    const cleanStorage = normalizeApiKey(fromStorage);
+    if (cleanStorage) return cleanStorage;
   } catch {
     // تجاهل
   }
   try {
     const fromEnv = import.meta?.env?.VITE_FIREBASE_API_KEY;
-    if (fromEnv && String(fromEnv).trim().startsWith('AIza')) return String(fromEnv).trim();
+    const cleanEnv = normalizeApiKey(fromEnv);
+    if (cleanEnv) return cleanEnv;
   } catch {
     // تجاهل
   }
-  return ['AIzaSyD_du5VY8nJGDJ169Fof9EALI9x2W2d-14'].join('');
+  return ['AIzaSyD_du5VY8nJGDJ169Fof9EAlI9x2W2d-14'].join('');
 };
 
 const buildFirebaseConfig = (apiKeyOverride = '') => ({
-  apiKey: (apiKeyOverride || getStoredOrEnvApiKey()).trim(),
+  apiKey: normalizeApiKey(apiKeyOverride) || getStoredOrEnvApiKey(),
   authDomain: 'el3bakera-edu.firebaseapp.com',
   projectId: 'el3bakera-edu',
   storageBucket: 'el3bakera-edu.firebasestorage.app',
@@ -114,8 +122,9 @@ let db = null;
 
 const initFirebaseServices = (apiKeyOverride = '') => {
   try {
-    const cfg = buildFirebaseConfig(apiKeyOverride);
-    const appName = apiKeyOverride ? `el3bakera_${apiKeyOverride.slice(-6)}` : '[DEFAULT]';
+    const cleanKey = normalizeApiKey(apiKeyOverride);
+    const cfg = buildFirebaseConfig(cleanKey);
+    const appName = cleanKey ? `el3bakera_${cleanKey.slice(-6)}` : '[DEFAULT]';
     const existing = getApps().find((a) => a.name === appName);
     app = existing || (appName === '[DEFAULT]' ? initializeApp(cfg) : initializeApp(cfg, appName));
     auth = getAuth(app);
@@ -1201,13 +1210,14 @@ function MuzakkiratiApp() {
     setLoginError('');
     setLoginLoading(true);
     try {
-      if (customApiKeyInput.trim().startsWith('AIza')) {
+      const cleanKey = normalizeApiKey(customApiKeyInput);
+      if (cleanKey) {
         try {
-          localStorage.setItem(LOCAL_API_KEY_STORAGE, customApiKeyInput.trim());
+          localStorage.setItem(LOCAL_API_KEY_STORAGE, cleanKey);
         } catch {
           // تجاهل
         }
-        initFirebaseServices(customApiKeyInput.trim());
+        initFirebaseServices(cleanKey);
       }
       if (!auth) throw new Error('لم يتم تهيئة Firebase Auth');
       const cred = await signInWithEmailAndPassword(auth, adminEmailInput.trim(), adminPassInput);
@@ -1243,13 +1253,14 @@ function MuzakkiratiApp() {
     setLoginError('');
     setLoginLoading(true);
     try {
-      if (customApiKeyInput.trim().startsWith('AIza')) {
+      const cleanKey = normalizeApiKey(customApiKeyInput);
+      if (cleanKey) {
         try {
-          localStorage.setItem(LOCAL_API_KEY_STORAGE, customApiKeyInput.trim());
+          localStorage.setItem(LOCAL_API_KEY_STORAGE, cleanKey);
         } catch {
           // تجاهل
         }
-        initFirebaseServices(customApiKeyInput.trim());
+        initFirebaseServices(cleanKey);
       }
       if (!auth) throw new Error('لم يتم تهيئة Firebase Auth');
       const provider = new GoogleAuthProvider();
