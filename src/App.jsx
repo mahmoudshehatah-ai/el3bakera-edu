@@ -1665,7 +1665,7 @@ export default function App() {
                 minHeight: `${Number(settings.heroMinHeight) || 460}px`,
                 backgroundImage: settings.heroImage ? `url(${settings.heroImage})` : undefined
               }}
-              className="relative bg-slate-950 bg-cover bg-center text-white flex items-center overflow-hidden"
+              className="relative bg-slate-950 bg-contain bg-no-repeat bg-center text-white flex items-center overflow-hidden"
             >
               <div
                 style={{ backgroundColor: `rgba(11, 20, 42, ${settings.heroImage ? overlayAlpha : 0.96})` }}
