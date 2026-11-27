@@ -293,7 +293,9 @@ const normalizeNotebook = (raw, docId = '') => {
     oldPrice: Number(n.oldPrice ?? 0),
     coverImage: cover,
     driveUrl: safeText(n.driveUrl || n.pdfUrl || n.link, ''),
-    noticeText: safeText(n.noticeText || n.notice, ''),
+    driveBtnColor: safeText(n.driveBtnColor, '#2563eb'),
+    noticeText: safeText(n.noticeText || n.notice || n.alertText || n.pinnedNotice || n.warning || n.note, ''),
+    noticeColor: safeText(n.noticeColor, 'amber'),
     noticePosition: safeText(n.noticePosition, 'top'),
     badgeText: safeText(n.badgeText || n.badge, ''),
     hidden: Boolean(n.hidden),
@@ -2219,8 +2221,18 @@ function MuzakkiratiApp() {
             {/* جسم المعاينة القابل للتمرير والتبديل بالسحب */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
               {previewNotebook.noticeText && previewNotebook.noticePosition !== 'bottom' && (
-                <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs sm:text-sm font-bold flex items-start gap-2">
-                  <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div
+                  className={`p-3.5 rounded-2xl border text-xs sm:text-sm font-bold flex items-start gap-2 ${
+                    previewNotebook.noticeColor === 'rose'
+                      ? 'bg-rose-50 border-rose-200 text-rose-900'
+                      : previewNotebook.noticeColor === 'blue'
+                      ? 'bg-blue-50 border-blue-200 text-blue-900'
+                      : previewNotebook.noticeColor === 'emerald'
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                      : 'bg-amber-50 border-amber-200 text-amber-900'
+                  }`}
+                >
+                  <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
                   <span>{previewNotebook.noticeText}</span>
                 </div>
               )}
@@ -2330,8 +2342,18 @@ function MuzakkiratiApp() {
               })()}
 
               {previewNotebook.noticeText && previewNotebook.noticePosition === 'bottom' && (
-                <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div
+                  className={`p-3.5 rounded-2xl border text-xs sm:text-sm font-bold flex items-start gap-2 ${
+                    previewNotebook.noticeColor === 'rose'
+                      ? 'bg-rose-50 border-rose-200 text-rose-900'
+                      : previewNotebook.noticeColor === 'blue'
+                      ? 'bg-blue-50 border-blue-200 text-blue-900'
+                      : previewNotebook.noticeColor === 'emerald'
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                      : 'bg-amber-50 border-amber-200 text-amber-900'
+                  }`}
+                >
+                  <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
                   <span>{previewNotebook.noticeText}</span>
                 </div>
               )}
@@ -2339,12 +2361,17 @@ function MuzakkiratiApp() {
 
             {/* تذييل نافذة المعاينة */}
             <div className="bg-slate-50 px-5 py-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 shrink-0">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <span className={`text-xl sm:text-2xl font-black ${theme.primaryText}`}>{previewNotebook.price} ج.م</span>
                 {Number(previewNotebook.oldPrice) > Number(previewNotebook.price) && (
-                  <span className="text-xs sm:text-sm text-slate-400 line-through font-bold">
-                    {previewNotebook.oldPrice} ج.م
-                  </span>
+                  <>
+                    <span className="text-xs sm:text-sm text-slate-400 line-through font-bold">
+                      {previewNotebook.oldPrice} ج.م
+                    </span>
+                    <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black">
+                      وفّر {Number(previewNotebook.oldPrice) - Number(previewNotebook.price)} ج.م
+                    </span>
+                  </>
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -2353,9 +2380,13 @@ function MuzakkiratiApp() {
                     href={previewNotebook.driveUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-4 py-3 rounded-xl bg-white border border-slate-300 hover:border-blue-500 text-xs sm:text-sm font-black text-slate-800 flex items-center gap-1.5"
+                    style={{
+                      backgroundColor: previewNotebook.driveBtnColor || '#2563eb',
+                      color: '#ffffff'
+                    }}
+                    className="px-4 py-3 rounded-xl hover:opacity-90 text-xs sm:text-sm font-black flex items-center gap-1.5 shadow-sm transition"
                   >
-                    <ExternalLink className={`w-4 h-4 ${theme.primaryText}`} />
+                    <ExternalLink className="w-4 h-4" />
                     <span>معاينة PDF على Drive</span>
                   </a>
                 )}
@@ -2851,6 +2882,12 @@ function NotebookCard({ nb, theme, onPreview, onAdd }) {
             </span>
           )}
 
+          {Number(nb.oldPrice) > Number(nb.price) && (
+            <span className="absolute bottom-3 right-3 px-3 py-1 rounded-full bg-emerald-600 text-white text-xs font-black shadow">
+              وفّر {Number(nb.oldPrice) - Number(nb.price)} ج.م
+            </span>
+          )}
+
           <div className="absolute inset-0 bg-slate-950/0 group-hover:bg-slate-950/35 transition flex items-center justify-center">
             <span className="opacity-0 group-hover:opacity-100 px-4 py-2 rounded-full bg-white text-slate-900 text-xs sm:text-sm font-black shadow-lg flex items-center gap-1.5 transition">
               <Eye className="w-4 h-4 text-blue-600" />
@@ -2881,11 +2918,11 @@ function NotebookCard({ nb, theme, onPreview, onAdd }) {
       </div>
 
       <div className="px-4 sm:px-5 pb-4 sm:pb-5 pt-2.5 border-t border-slate-100 space-y-2.5">
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <span className={`text-lg font-black ${theme?.primaryText || 'text-blue-600'}`}>{nb.price} ج.م</span>
             {Number(nb.oldPrice) > Number(nb.price) && (
-              <span className="text-xs text-slate-400 line-through mr-2 font-bold">{nb.oldPrice} ج.م</span>
+              <span className="text-xs text-slate-400 line-through font-bold">{nb.oldPrice} ج.م</span>
             )}
           </div>
           <button
@@ -2954,7 +2991,9 @@ function AdminDashboard({
     oldPrice: '',
     coverImage: '',
     driveUrl: '',
+    driveBtnColor: '#2563eb',
     noticeText: '',
+    noticeColor: 'amber',
     noticePosition: 'top',
     badgeText: '',
     hidden: false,
@@ -3045,7 +3084,9 @@ function AdminDashboard({
         oldPrice: Number(nbForm.oldPrice || 0),
         coverImage: nbForm.coverImage || '',
         driveUrl: nbForm.driveUrl.trim(),
+        driveBtnColor: nbForm.driveBtnColor || '#2563eb',
         noticeText: nbForm.noticeText.trim(),
+        noticeColor: nbForm.noticeColor || 'amber',
         noticePosition: nbForm.noticePosition || 'top',
         badgeText: nbForm.badgeText.trim(),
         hidden: Boolean(nbForm.hidden),
@@ -3096,7 +3137,9 @@ function AdminDashboard({
         oldPrice: '',
         coverImage: '',
         driveUrl: '',
+        driveBtnColor: '#2563eb',
         noticeText: '',
+        noticeColor: 'amber',
         noticePosition: 'top',
         badgeText: '',
         hidden: false,
@@ -3455,20 +3498,53 @@ function AdminDashboard({
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <input
+                type="url"
+                dir="ltr"
+                placeholder="رابط معاينة Google Drive (اختياري)"
+                value={nbForm.driveUrl}
+                onChange={(e) => setNbForm({ ...nbForm, driveUrl: e.target.value })}
+                className="sm:col-span-2 px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-left"
+              />
+              <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50">
+                <span className="text-xs font-black text-slate-700">لون زر Drive</span>
+                <input
+                  type="color"
+                  value={nbForm.driveBtnColor || '#2563eb'}
+                  onChange={(e) => setNbForm({ ...nbForm, driveBtnColor: e.target.value })}
+                  className="w-8 h-7 rounded cursor-pointer border-0 bg-transparent"
+                />
+              </div>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+              <label className="block text-xs font-black text-slate-800">التنبيه الخاص بالمذكرة (داخل نافذة المعاينة)</label>
+              <input
                 type="text"
-                placeholder="تنبيه يظهر داخل المعاينة"
+                placeholder="اكتب نص التنبيه الخاص بهذه المذكرة..."
                 value={nbForm.noticeText}
                 onChange={(e) => setNbForm({ ...nbForm, noticeText: e.target.value })}
-                className="sm:col-span-2 px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
               />
-              <select
-                value={nbForm.noticePosition || 'top'}
-                onChange={(e) => setNbForm({ ...nbForm, noticePosition: e.target.value })}
-                className="px-2.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
-              >
-                <option value="top">أعلى العينات</option>
-                <option value="bottom">أسفل العينات</option>
-              </select>
+              <div className="grid grid-cols-2 gap-2">
+                <select
+                  value={nbForm.noticePosition || 'top'}
+                  onChange={(e) => setNbForm({ ...nbForm, noticePosition: e.target.value })}
+                  className="px-2.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                >
+                  <option value="top">موضع التنبيه: أعلى العينات</option>
+                  <option value="bottom">موضع التنبيه: أسفل العينات</option>
+                </select>
+                <select
+                  value={nbForm.noticeColor || 'amber'}
+                  onChange={(e) => setNbForm({ ...nbForm, noticeColor: e.target.value })}
+                  className="px-2.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                >
+                  <option value="amber">لون التنبيه: أصفر تحذيري</option>
+                  <option value="blue">لون التنبيه: أزرق معلوماتي</option>
+                  <option value="rose">لون التنبيه: أحمر هام</option>
+                  <option value="emerald">لون التنبيه: أخضر تأكيدي</option>
+                </select>
+              </div>
             </div>
 
             <div className="space-y-1.5">
