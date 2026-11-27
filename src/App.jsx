@@ -504,10 +504,21 @@ function compressImageFile(file, maxWidth = 1400, quality = 0.85, maxBytes = 480
         };
 
         let result = renderAttempt();
-        while (result.length > maxBytes && curQuality > 0.45) {
-          curQuality = +(curQuality - 0.1).toFixed(2);
-          curWidth = Math.round(curWidth * 0.85);
+        while (result.length > maxBytes && curWidth > 260) {
+          curWidth = Math.round(curWidth * 0.78);
+          if (!isPngOrWebp) curQuality = Math.max(0.7, +(curQuality - 0.08).toFixed(2));
           result = renderAttempt();
+        }
+        if (result.length > maxBytes) {
+          const fallbackCanvas = document.createElement('canvas');
+          const ratio = img.width > 900 ? 900 / img.width : 1;
+          fallbackCanvas.width = Math.round(img.width * ratio);
+          fallbackCanvas.height = Math.round(img.height * ratio);
+          const fCtx = fallbackCanvas.getContext('2d');
+          fCtx.fillStyle = '#ffffff';
+          fCtx.fillRect(0, 0, fallbackCanvas.width, fallbackCanvas.height);
+          fCtx.drawImage(img, 0, 0, fallbackCanvas.width, fallbackCanvas.height);
+          result = fallbackCanvas.toDataURL('image/jpeg', 0.85);
         }
         resolve(result);
       };
@@ -1592,8 +1603,23 @@ export default function App() {
       };
 
       if (db) {
-        await addDoc(publicCol('orders'), orderDoc);
-        if (customerLogoImage) {
+        let savedOrderSuccess = false;
+        try {
+          await addDoc(publicCol('orders'), orderDoc);
+          savedOrderSuccess = true;
+        } catch {
+          // في حال تجاوز حجم المستند الحد المسموح، نضغط الشعار قليلًا ونعيد المحاولة فورًا
+          const lighterLogo = orderDoc.customerLogoImage
+            ? await shrinkDataUrlIfNeeded(orderDoc.customerLogoImage, 240000)
+            : '';
+          await addDoc(publicCol('orders'), {
+            ...orderDoc,
+            customerLogoImage: lighterLogo,
+            hasLogoImage: Boolean(lighterLogo)
+          });
+          savedOrderSuccess = true;
+        }
+        if (savedOrderSuccess && customerLogoImage) {
           await setDoc(
             publicDoc('order_logos', orderCode),
             {
