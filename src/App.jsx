@@ -2114,6 +2114,75 @@ function MuzakkiratiPlatformContent() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-xl sm:text-2xl font-black text-slate-900">
+                      {safeText(settings.testimonialsTitle, 'آراء وتقييمات المعلمين في مذكراتنا')}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1">
+                      تجارب حقيقية لمعلمين اعتمدوا على مذكرات منصة العباقرة في فصولهم ومجموعاتهم
+                    </p>
+                  </div>
+                  <div className="hidden sm:flex items-center gap-1 text-amber-400">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <Star key={n} className="w-4 h-4 fill-amber-400" />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {safeTestimonials.map((rev) => (
+                    <div
+                      key={rev.id}
+                      className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-sm flex flex-col justify-between gap-4"
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1 text-amber-400">
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <Star key={n} className="w-3.5 h-3.5 fill-amber-400" />
+                            ))}
+                          </div>
+                          <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full">
+                            تقييم موثق
+                          </span>
+                        </div>
+
+                        {rev.image && (
+                          <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-50">
+                            <img
+                              src={rev.image}
+                              alt={safeText(rev.teacherName, 'تقييم معلم')}
+                              className="w-full max-h-64 object-contain mx-auto"
+                            />
+                          </div>
+                        )}
+
+                        {rev.text && (
+                          <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
+                            "{safeText(rev.text)}"
+                          </p>
+                        )}
+                      </div>
+
+                      {(rev.teacherName || rev.role) && (
+                        <div className="pt-3 border-t border-slate-100 flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 font-black text-xs flex items-center justify-center shrink-0">
+                            {safeText(rev.teacherName, 'م').slice(0, 1)}
+                          </div>
+                          <div>
+                            {rev.teacherName && (
+                              <div className="text-xs font-black text-slate-900">{safeText(rev.teacherName)}</div>
+                            )}
+                            {rev.role && <div className="text-[11px] text-slate-500">{safeText(rev.role)}</div>}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        )}
+
         {/* 2. مكتبة المذكرات والأقسام والمراحل */}
         {activeTab === 'library' && (
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
@@ -4209,6 +4278,19 @@ function MuzakkiratiPlatformContent() {
                 <a
                   key={soc.id}
                   href={soc.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full p-3.5 rounded-2xl bg-slate-50 hover:bg-blue-50 border border-slate-200 text-slate-800 hover:text-blue-700 font-bold text-xs sm:text-sm flex items-center justify-between transition"
+                >
+                  <span>{safeText(soc.label)}</span>
+                  <ExternalLink className="w-4 h-4 text-slate-400" />
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* نافذة تسجيل دخول الإدارة الآمنة مع زر إظهار الرقم السري */}
       {isAdminModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
