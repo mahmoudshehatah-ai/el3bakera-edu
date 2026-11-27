@@ -805,16 +805,41 @@ export default function App() {
   // مزامنة الإعدادات والوسائط
   useEffect(() => {
     if (!db) return;
-    const applyMergedSettings = (mainData = {}, mediaData = {}) => {
+    let latestMain = {};
+    let latestMedia = {};
+    let latestConfig = {};
+    let latestLegacyMedia = {};
+
+    const applyMergedSettings = () => {
       setSettings((prev) => {
         const merged = {
           ...prev,
-          ...mainData,
-          logoImage: extractImageFromValue(mediaData.logoImage) || extractImageFromValue(mainData.logoImage) || prev.logoImage,
-          heroImage: extractImageFromValue(mediaData.heroImage) || extractImageFromValue(mainData.heroImage) || prev.heroImage
+          ...latestConfig,
+          ...latestMain,
+          logoImage:
+            extractImageFromValue(latestMedia.logoImage) ||
+            extractImageFromValue(latestMain.logoImage) ||
+            extractImageFromValue(latestConfig.logoImage) ||
+            extractImageFromValue(latestLegacyMedia.logoImage) ||
+            prev.logoImage,
+          heroImage:
+            extractImageFromValue(latestMedia.heroImage) ||
+            extractImageFromValue(latestMain.heroImage) ||
+            extractImageFromValue(latestConfig.heroImage) ||
+            extractImageFromValue(latestLegacyMedia.heroImage) ||
+            prev.heroImage
         };
-        const rawCats = Array.isArray(mainData.categories) && mainData.categories.length > 0 ? mainData.categories : prev.categories;
-        const catImgs = mediaData.categoryImages || {};
+        const rawCats =
+          Array.isArray(latestMain.categories) && latestMain.categories.length > 0
+            ? latestMain.categories
+            : Array.isArray(latestConfig.categories) && latestConfig.categories.length > 0
+            ? latestConfig.categories
+            : prev.categories;
+        const catImgs = {
+          ...(latestLegacyMedia.categoryImages || {}),
+          ...(latestConfig.categoryImages || {}),
+          ...(latestMedia.categoryImages || {})
+        };
         merged.categories = normalizeCategories(rawCats).map((c) => ({
           ...c,
           image: extractImageFromValue(catImgs[c.id]) || c.image
@@ -828,15 +853,12 @@ export default function App() {
       });
     };
 
-    let latestMain = {};
-    let latestMedia = {};
-
     const unsubMain = onSnapshot(
       publicDoc('settings', 'main'),
       (snap) => {
         if (snap.exists()) {
           latestMain = snap.data() || {};
-          applyMergedSettings(latestMain, latestMedia);
+          applyMergedSettings();
         }
       },
       () => {}
@@ -847,15 +869,36 @@ export default function App() {
       (snap) => {
         if (snap.exists()) {
           latestMedia = snap.data() || {};
-          applyMergedSettings(latestMain, latestMedia);
+          applyMergedSettings();
         }
       },
       () => {}
     );
 
+    const unsubConfig = onSnapshot(
+      publicDoc('config', 'main'),
+      (snap) => {
+        if (snap.exists()) {
+          latestConfig = snap.data() || {};
+          applyMergedSettings();
+        }
+      },
+      () => {}
+    );
+
+    getDoc(legacyPublicDoc('settings', 'media_assets'))
+      .then((snap) => {
+        if (snap && snap.exists()) {
+          latestLegacyMedia = snap.data() || {};
+          applyMergedSettings();
+        }
+      })
+      .catch(() => {});
+
     return () => {
       unsubMain();
       unsubMedia();
+      unsubConfig();
     };
   }, []);
 
@@ -4233,6 +4276,18 @@ function AdminDashboard({
                     }}
                     className="text-xs font-bold"
                   />
+                  {localSettings.heroImage && (
+                    <div className="flex items-center gap-3 pt-1">
+                      <img src={localSettings.heroImage} alt="hero" className="w-28 h-14 rounded-xl object-cover border" />
+                      <button
+                        type="button"
+                        onClick={() => setLocalSettings({ ...localSettings, heroImage: '' })}
+                        className="text-xs font-black text-rose-600"
+                      >
+                        إزالة صورة الخلفية
+                      </button>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       درجة شفافية التعتيم فوق الخلفية: {localSettings.heroOverlayOpacity ?? 65}%
