@@ -391,10 +391,9 @@ function extractImageFromValue(val) {
   if (typeof val === 'string') {
     const trimmed = val.trim();
     if (
-      trimmed.startsWith('data:image/') ||
+      (trimmed.startsWith('data:image/') && trimmed.length > 60) ||
       trimmed.startsWith('http://') ||
-      trimmed.startsWith('https://') ||
-      trimmed.startsWith('blob:')
+      trimmed.startsWith('https://')
     ) {
       return trimmed;
     }
@@ -1393,18 +1392,25 @@ export default function App() {
 
   const previewSamplesList = useMemo(() => {
     if (!previewNotebook) return [];
-    const list = samplesMap[previewNotebook.id] || previewNotebook.inlineSamples || [];
-    if (list.length > 0) return list;
-    return previewNotebook.coverImage ? [previewNotebook.coverImage] : [];
+    const rawList = samplesMap[previewNotebook.id] || previewNotebook.inlineSamples || [];
+    const validList = rawList.map((item) => extractImageFromValue(item)).filter(Boolean);
+    if (validList.length > 0) return validList;
+    const validCover = extractImageFromValue(previewNotebook.coverImage);
+    return validCover ? [validCover] : [];
   }, [previewNotebook, samplesMap]);
+
+  useEffect(() => {
+    if (previewPageIdx >= previewSamplesList.length && previewSamplesList.length > 0) {
+      setPreviewPageIdx(0);
+    }
+  }, [previewPageIdx, previewSamplesList.length]);
 
   const previewUnifiedNotices = useMemo(() => {
     if (!previewNotebook) return [];
     const items = [];
-    const globalList = Array.isArray(settings.globalAlerts) ? settings.globalAlerts : [];
-    globalList.forEach((al) => {
-      if (al && al.active !== false && al.text && al.scope !== 'home_only') {
-        items.push({ text: al.text, color: al.color || 'amber' });
+    (settings.globalAlerts || []).forEach((al) => {
+      if (al && al.active !== false && safeText(al.text).trim()) {
+        items.push({ text: safeText(al.text).trim(), color: safeText(al.color, 'amber') });
       }
     });
     const nbNotice = previewNotebook.noticeText || fetchedSampleNotices[previewNotebook.id] || '';
@@ -2242,7 +2248,7 @@ export default function App() {
                 }
                 touchStartXRef.current = null;
               }}
-              className="relative flex-1 bg-slate-100 overflow-auto flex items-center justify-center p-3 min-h-[260px]"
+              className="relative flex-1 bg-slate-100 overflow-auto flex items-center justify-center p-2 sm:p-4 min-h-[300px]"
             >
               {loadingSamples ? (
                 <div className="flex flex-col items-center gap-2 text-slate-600">
@@ -2250,12 +2256,24 @@ export default function App() {
                   <span className="text-xs font-black">جاري تحميل صفحات العينة...</span>
                 </div>
               ) : previewSamplesList.length > 0 ? (
-                <img
-                  src={previewSamplesList[previewPageIdx] || previewSamplesList[0]}
-                  alt={`عينة ${previewPageIdx + 1}`}
-                  style={{ transform: `scale(${previewZoom})`, transformOrigin: 'center top' }}
-                  className="max-h-full max-w-full object-contain rounded-xl shadow-md transition-transform"
-                />
+                <div className="w-full h-full flex items-center justify-center">
+                  <img
+                    src={previewSamplesList[previewPageIdx] || previewSamplesList[0]}
+                    alt={`عينة ${previewPageIdx + 1}`}
+                    onError={(e) => {
+                      if (previewNotebook?.coverImage && e.currentTarget.src !== previewNotebook.coverImage) {
+                        e.currentTarget.src = previewNotebook.coverImage;
+                      }
+                    }}
+                    style={{
+                      transform: previewZoom !== 1 ? `scale(${previewZoom})` : undefined,
+                      transformOrigin: 'center center'
+                    }}
+                    className={`w-auto h-auto max-w-full ${
+                      previewFullscreen ? 'max-h-[82vh]' : 'max-h-[58vh] sm:max-h-[65vh]'
+                    } object-contain rounded-xl shadow-md transition-transform`}
+                  />
+                </div>
               ) : (
                 <p className="text-xs sm:text-sm font-bold text-slate-500">لا توجد صور عينات مرفوعة لهذه المذكرة.</p>
               )}
@@ -2846,6 +2864,8 @@ function AdminDashboard({
   };
   const [nbForm, setNbForm] = useState(emptyNotebookForm);
   const [savingNb, setSavingNb] = useState(false);
+  const [loadingEditSamples, setLoadingEditSamples] = useState(false);
+  const [samplesTouched, setSamplesTouched] = useState(false);
   const [adminNbSearch, setAdminNbSearch] = useState('');
   const [pkgForm, setPkgForm] = useState({
     id: '',
@@ -2976,9 +2996,10 @@ function AdminDashboard({
         targetId = created.id;
       }
 
-      if (Array.isArray(nbForm.samples)) {
+      if (Array.isArray(nbForm.samples) && (samplesTouched || nbForm.samples.length > 0 || !nbForm.id)) {
+        const validSamples = nbForm.samples.map((s) => extractImageFromValue(s)).filter(Boolean);
         const shrunkSamples = await Promise.all(
-          nbForm.samples.map((s) => shrinkDataUrlIfNeeded(s, 450000))
+          validSamples.map((s) => shrinkDataUrlIfNeeded(s, 450000))
         );
         const writePromises = [
           setDoc(
@@ -3018,6 +3039,7 @@ function AdminDashboard({
       }
 
       setNbForm(emptyNotebookForm);
+      setSamplesTouched(false);
       showToast('تم حفظ المذكرة والعينات بنجاح!');
     } catch (err) {
       showToast(`خطأ أثناء حفظ المذكرة: ${err?.message || ''}`, 'error');
@@ -3232,7 +3254,10 @@ function AdminDashboard({
               {nbForm.id && (
                 <button
                   type="button"
-                  onClick={() => setNbForm(emptyNotebookForm)}
+                  onClick={() => {
+                    setNbForm(emptyNotebookForm);
+                    setSamplesTouched(false);
+                  }}
                   className="text-xs font-black text-rose-600 hover:underline"
                 >
                   إلغاء التعديل
@@ -3449,7 +3474,17 @@ function AdminDashboard({
               </div>
 
               <div className="p-4 rounded-2xl border border-dashed border-slate-300 space-y-2">
-                <div className="text-xs font-black text-slate-800">صور صفحات العينات (يمكن اختيار عدة صور معًا)</div>
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-black text-slate-800">
+                    صور صفحات العينات (يمكن اختيار عدة صور معًا)
+                  </div>
+                  {loadingEditSamples && (
+                    <span className="text-[11px] font-black text-blue-600 flex items-center gap-1">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>جاري استرجاع العينات...</span>
+                    </span>
+                  )}
+                </div>
                 <input
                   type="file"
                   accept="image/*"
@@ -3458,6 +3493,7 @@ function AdminDashboard({
                     const files = Array.from(e.target.files || []);
                     if (files.length === 0) return;
                     const compressedList = await Promise.all(files.map((f) => compressImageFile(f, 1400, 0.85)));
+                    setSamplesTouched(true);
                     setNbForm((prev) => ({ ...prev, samples: [...(prev.samples || []), ...compressedList] }));
                   }}
                   className="text-xs font-bold"
@@ -3469,12 +3505,13 @@ function AdminDashboard({
                         <img src={sImg} alt={`sample_${sIdx}`} className="w-full h-full object-cover" />
                         <button
                           type="button"
-                          onClick={() =>
+                          onClick={() => {
+                            setSamplesTouched(true);
                             setNbForm((prev) => ({
                               ...prev,
                               samples: prev.samples.filter((_, i) => i !== sIdx)
-                            }))
-                          }
+                            }));
+                          }}
                           className="absolute top-0.5 left-0.5 p-0.5 rounded-full bg-rose-600 text-white"
                         >
                           <X className="w-3 h-3" />
@@ -3556,31 +3593,46 @@ function AdminDashboard({
                     <button
                       type="button"
                       onClick={async () => {
-                        let loadedSamples = samplesMap[nb.id] || nb.inlineSamples || [];
-                        if (loadedSamples.length === 0 && db) {
-                          const pageIds = Array.from({ length: 12 }, (_, i) => `${nb.id}_p${i}`);
-                          const [sSnap, legSnap, ...pSnaps] = await Promise.all([
-                            getDoc(publicDoc('notebook_samples', nb.id)).catch(() => null),
-                            getDoc(legacyPublicDoc('notebook_samples', nb.id)).catch(() => null),
-                            ...pageIds.map((pid) => getDoc(publicDoc('notebook_samples', pid)).catch(() => null))
-                          ]);
-                          const found = [];
-                          [sSnap, ...pSnaps, legSnap].forEach((snap) => {
-                            if (snap && snap.exists()) {
-                              extractAnyImagesFromDoc(snap.data()).forEach((im) => {
-                                if (im && im !== nb.coverImage && !found.includes(im)) found.push(im);
-                              });
-                            }
-                          });
-                          loadedSamples = found;
-                        }
+                        setSamplesTouched(false);
+                        const initialCached = (samplesMap[nb.id] || nb.inlineSamples || [])
+                          .map((im) => extractImageFromValue(im))
+                          .filter(Boolean);
                         setNbForm({
                           ...nb,
                           price: String(nb.price),
                           oldPrice: nb.oldPrice ? String(nb.oldPrice) : '',
-                          samples: loadedSamples
+                          samples: initialCached
                         });
                         window.scrollTo({ top: 0, behavior: 'smooth' });
+
+                        if (db) {
+                          setLoadingEditSamples(true);
+                          try {
+                            const pageIds = Array.from({ length: 16 }, (_, i) => `${nb.id}_p${i}`);
+                            const [sSnap, legSnap, ...pSnaps] = await Promise.all([
+                              getDoc(publicDoc('notebook_samples', nb.id)).catch(() => null),
+                              getDoc(legacyPublicDoc('notebook_samples', nb.id)).catch(() => null),
+                              ...pageIds.map((pid) => getDoc(publicDoc('notebook_samples', pid)).catch(() => null))
+                            ]);
+                            const found = [...initialCached];
+                            [sSnap, ...pSnaps, legSnap].forEach((snap) => {
+                              if (snap && snap.exists()) {
+                                extractAnyImagesFromDoc(snap.data()).forEach((im) => {
+                                  const clean = extractImageFromValue(im);
+                                  if (clean && clean !== nb.coverImage && !found.includes(clean)) {
+                                    found.push(clean);
+                                  }
+                                });
+                              }
+                            });
+                            if (found.length > 0) {
+                              setSamplesMap((prev) => ({ ...prev, [nb.id]: found }));
+                              setNbForm((prev) => (prev.id === nb.id ? { ...prev, samples: found } : prev));
+                            }
+                          } finally {
+                            setLoadingEditSamples(false);
+                          }
+                        }
                       }}
                       className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black flex items-center gap-1"
                     >
