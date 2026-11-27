@@ -926,6 +926,7 @@ function MuzakkiratiPlatformContent() {
     const settingsRef = doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'main');
     const configCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config');
 
+    // 1. الاستماع لإعدادات المنصة النصية والتصنيفات
     const unsubSettings = onSnapshot(
       settingsRef,
       (snap) => {
@@ -948,6 +949,7 @@ function MuzakkiratiPlatformContent() {
               heroBgImage: prev.heroBgImage || cloudData.heroBgImage || ''
             };
             idbSet('settings_v5', merged);
+            safeLocalSet('el3bakera_settings_v5', merged);
             return merged;
           });
         }
@@ -955,52 +957,60 @@ function MuzakkiratiPlatformContent() {
       () => setCloudSyncStatus('error')
     );
 
-    // الاستماع الفوري لجميع الصور المنفصلة (الشعار، الخلفية، أغلفة الأقسام، أغلفة المذكرات)
+    // 2. الاستماع لجميع مستندات الصور المنفصلة (الشعار، الخلفية، أغلفة الأقسام، أغلفة المذكرات)
     const unsubMediaAssets = onSnapshot(
       configCol,
       (snapshot) => {
+        if (snapshot.empty || isSavingRef.current) return;
         const assetsMap = {};
         snapshot.forEach((d) => {
           if (d.id.startsWith('media_')) {
-            const item = d.data();
-            const realAssetId = item?.assetId || d.id.replace('media_', '');
-            if (item && item.dataUrl) {
-              assetsMap[realAssetId] = item.dataUrl;
-            }
+            const data = d.data();
+            const key = data.assetId || d.id.replace('media_', '');
+            if (data.dataUrl) assetsMap[key] = data.dataUrl;
           }
         });
 
-        setSettings((prev) => {
-          const updatedCats = (prev.categories || []).map((c) => ({
-            ...c,
-            coverImage: assetsMap[`cat_${c.id}`] !== undefined ? assetsMap[`cat_${c.id}`] : c.coverImage || ''
-          }));
-          const updatedSettings = {
-            ...prev,
-            logoImage: assetsMap['logoImage'] !== undefined ? assetsMap['logoImage'] : prev.logoImage || '',
-            heroImage: assetsMap['heroImage'] !== undefined ? assetsMap['heroImage'] : prev.heroImage || '',
-            heroBgImage: assetsMap['heroBgImage'] !== undefined ? assetsMap['heroBgImage'] : prev.heroBgImage || '',
-            categories: updatedCats
-          };
-          idbSet('settings_v5', updatedSettings);
-          return updatedSettings;
-        });
+        if (Object.keys(assetsMap).length > 0) {
+          setSettings((prev) => {
+            const updatedCategories = (prev.categories || []).map((c) => ({
+              ...c,
+              coverImage: assetsMap[`cat_${c.id}`] || c.coverImage || ''
+            }));
+            const merged = {
+              ...prev,
+              logoImage: assetsMap.logoImage || prev.logoImage || '',
+              heroImage: assetsMap.heroImage || prev.heroImage || '',
+              heroBgImage: assetsMap.heroBgImage || prev.heroBgImage || '',
+              categories: updatedCategories
+            };
+            idbSet('settings_v5', merged);
+            safeLocalSet('el3bakera_settings_v5', merged);
+            return merged;
+          });
 
-        setProducts((prev) => {
-          const updatedProds = prev.map((p) => ({
-            ...p,
-            coverImage:
-              assetsMap[`prod_cover_${p.id}`] !== undefined
-                ? assetsMap[`prod_cover_${p.id}`]
-                : p.coverImage || ''
-          }));
-          idbSet('products_v5', updatedProds);
-          return updatedProds;
-        });
+          setProducts((prev) => {
+            let changed = false;
+            const updated = prev.map((p) => {
+              const cloudCover = assetsMap[`prod_cover_${p.id}`];
+              if (cloudCover && cloudCover !== p.coverImage) {
+                changed = true;
+                return { ...p, coverImage: cloudCover };
+              }
+              return p;
+            });
+            if (changed) {
+              idbSet('products_v5', updated);
+              safeLocalSet('el3bakera_products_v5', stripHeavyProductMedia(updated));
+            }
+            return updated;
+          });
+        }
       },
       () => {}
     );
 
+    // 3. الاستماع للمذكرات
     const productsCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebooks');
     const unsubProducts = onSnapshot(
       productsCol,
@@ -1012,7 +1022,7 @@ function MuzakkiratiPlatformContent() {
               const existing = prev.find((p) => p.id === item.id);
               return {
                 ...item,
-                coverImage: item.coverImage || item.image || existing?.coverImage || '',
+                coverImage: existing?.coverImage || item.coverImage || '',
                 sampleImages:
                   Array.isArray(item.sampleImages) && item.sampleImages.length > 0
                     ? item.sampleImages
@@ -1028,45 +1038,7 @@ function MuzakkiratiPlatformContent() {
       () => {}
     );
 
-    const fetchSamples = async () => {
-      try {
-        const samplesSnap = await getDocs(
-          collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebook_samples')
-        );
-        if (!samplesSnap.empty) {
-          const mapByNotebook = {};
-          const coverByNotebook = {};
-          samplesSnap.forEach((docSnap) => {
-            const data = docSnap.data();
-            const nbId = data.notebookId || docSnap.id.split('_')[0];
-            if (data.coverImage && nbId) coverByNotebook[nbId] = data.coverImage;
-            const foundImgs = [];
-            if (Array.isArray(data.sampleImages)) foundImgs.push(...data.sampleImages);
-            if (Array.isArray(data.images)) foundImgs.push(...data.images);
-            if (foundImgs.length > 0 && nbId) {
-              mapByNotebook[nbId] = [...(mapByNotebook[nbId] || []), ...foundImgs];
-            }
-          });
-
-          if (Object.keys(mapByNotebook).length > 0 || Object.keys(coverByNotebook).length > 0) {
-            setProducts((prev) => {
-              const updated = prev.map((p) => ({
-                ...p,
-                coverImage: p.coverImage || coverByNotebook[p.id] || '',
-                sampleImages:
-                  mapByNotebook[p.id] && mapByNotebook[p.id].length > 0
-                    ? Array.from(new Set([...(p.sampleImages || []), ...mapByNotebook[p.id]]))
-                    : p.sampleImages || []
-              }));
-              idbSet('products_v5', updated);
-              return updated;
-            });
-          }
-        }
-      } catch {}
-    };
-    fetchSamples();
-
+    // 4. الاستماع للطلبات لحظياً
     const ordersCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'orders');
     const unsubOrders = onSnapshot(
       ordersCol,
@@ -1080,23 +1052,32 @@ function MuzakkiratiPlatformContent() {
       () => {}
     );
 
+    // 5. الاستماع للباقات والكوبونات
     const bundlesCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles');
-    const unsubBundles = onSnapshot(bundlesCol, (snap) => {
-      if (!snap.empty && !isSavingRef.current) {
-        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setBundles(list);
-        idbSet('bundles_v5', list);
-      }
-    });
+    const unsubBundles = onSnapshot(
+      bundlesCol,
+      (snap) => {
+        if (!snap.empty && !isSavingRef.current) {
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          setBundles(list);
+          idbSet('bundles_v5', list);
+        }
+      },
+      () => {}
+    );
 
     const couponsCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons');
-    const unsubCoupons = onSnapshot(couponsCol, (snap) => {
-      if (!snap.empty && !isSavingRef.current) {
-        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setCoupons(list);
-        idbSet('coupons_v5', list);
-      }
-    });
+    const unsubCoupons = onSnapshot(
+      couponsCol,
+      (snap) => {
+        if (!snap.empty && !isSavingRef.current) {
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          setCoupons(list);
+          idbSet('coupons_v5', list);
+        }
+      },
+      () => {}
+    );
 
     return () => {
       unsubSettings();
