@@ -2718,7 +2718,10 @@ function NotebookCard({ nb, theme, settings, onPreview, onAdd }) {
           )}
 
           {nb.badgeText && (
-            <span className="absolute top-3 right-3 px-3 py-1.5 rounded-full bg-amber-400 text-slate-950 text-xs font-black shadow">
+            <span
+              title={nb.badgeText}
+              className="absolute top-3 right-3 max-w-[calc(100%-1.5rem)] truncate whitespace-nowrap px-2.5 py-1 rounded-full bg-amber-400 text-slate-950 text-[11px] font-black shadow"
+            >
               {nb.badgeText}
             </span>
           )}
