@@ -881,8 +881,52 @@ export default function App() {
     let latestHero = '';
     let latestHeroMobile = '';
     const latestCatImages = {};
+    const pkgSourcesMap = { embedded: [], legacy: [], live: [] };
+    const cpSourcesMap = { embedded: [], legacy: [], live: [] };
+
+    const syncMergedPackages = () => {
+      const merged = new Map();
+      [...pkgSourcesMap.embedded, ...pkgSourcesMap.legacy, ...pkgSourcesMap.live].forEach((p) => {
+        if (p && p.id) merged.set(p.id, p);
+      });
+      if (merged.size > 0) {
+        const finalList = Array.from(merged.values());
+        setPackages(finalList);
+        try {
+          localStorage.setItem(LOCAL_PACKAGES_KEY, JSON.stringify(finalList));
+        } catch {
+          // تجاهل
+        }
+      }
+    };
+
+    const syncMergedCoupons = () => {
+      const merged = new Map();
+      [...cpSourcesMap.embedded, ...cpSourcesMap.legacy, ...cpSourcesMap.live].forEach((c) => {
+        if (c && c.id) merged.set(c.id, c);
+      });
+      if (merged.size > 0) {
+        const finalList = Array.from(merged.values());
+        setCoupons(finalList);
+        try {
+          localStorage.setItem(LOCAL_COUPONS_KEY, JSON.stringify(finalList));
+        } catch {
+          // تجاهل
+        }
+      }
+    };
 
     const applyCombinedSettings = () => {
+      if (latestMainSettings) {
+        if (Array.isArray(latestMainSettings.cachedPackages) && latestMainSettings.cachedPackages.length > 0) {
+          pkgSourcesMap.embedded = latestMainSettings.cachedPackages;
+          syncMergedPackages();
+        }
+        if (Array.isArray(latestMainSettings.cachedCoupons) && latestMainSettings.cachedCoupons.length > 0) {
+          cpSourcesMap.embedded = latestMainSettings.cachedCoupons;
+          syncMergedCoupons();
+        }
+      }
       setSettings((prev) => {
         const base = latestMainSettings ? { ...DEFAULT_SETTINGS, ...latestMainSettings } : { ...prev };
         const rawCats = latestMainSettings?.categories || base.categories || DEFAULT_CATEGORIES;
@@ -1039,63 +1083,30 @@ export default function App() {
       () => {}
     );
 
-    const mergeAndSetPackages = (docsList) => {
-      const pkgMap = new Map();
-      (docsList || []).forEach((p) => {
-        if (p && p.id) pkgMap.set(p.id, p);
-      });
-      const finalPkgs = Array.from(pkgMap.values());
-      setPackages(finalPkgs);
-      try {
-        localStorage.setItem(LOCAL_PACKAGES_KEY, JSON.stringify(finalPkgs));
-      } catch {
-        // تجاهل
-      }
-    };
-
-    const mergeAndSetCoupons = (docsList) => {
-      const cpMap = new Map();
-      (docsList || []).forEach((c) => {
-        if (c && c.id) cpMap.set(c.id, c);
-      });
-      const finalCps = Array.from(cpMap.values());
-      setCoupons(finalCps);
-      try {
-        localStorage.setItem(LOCAL_COUPONS_KEY, JSON.stringify(finalCps));
-      } catch {
-        // تجاهل
-      }
-    };
-
     // جلب فوري للباقات والكوبونات من جميع المسارات (حتى بدون مصادقة)
     (async () => {
       try {
-        const [pkgSnap, legPkgSnap, cpSnap, legCpSnap, mainSetSnap] = await Promise.all([
+        const [pkgSnap, legPkgSnap, cpSnap, legCpSnap] = await Promise.all([
           getDocs(publicCol('packages')).catch(() => null),
           getDocs(legacyPublicCol('packages')).catch(() => null),
           getDocs(publicCol('coupons')).catch(() => null),
-          getDocs(legacyPublicCol('coupons')).catch(() => null),
-          getDoc(publicDoc('settings', 'main')).catch(() => null)
+          getDocs(legacyPublicCol('coupons')).catch(() => null)
         ]);
-        const embeddedPkgs = mainSetSnap?.exists() && Array.isArray(mainSetSnap.data()?.cachedPackages)
-          ? mainSetSnap.data().cachedPackages
-          : [];
-        const embeddedCps = mainSetSnap?.exists() && Array.isArray(mainSetSnap.data()?.cachedCoupons)
-          ? mainSetSnap.data().cachedCoupons
-          : [];
-        const allPkgs = [
-          ...embeddedPkgs,
-          ...(legPkgSnap ? legPkgSnap.docs.map((d) => ({ id: d.id, ...d.data() })) : []),
-          ...(pkgSnap ? pkgSnap.docs.map((d) => ({ id: d.id, ...d.data() })) : [])
-        ];
-        if (allPkgs.length > 0) mergeAndSetPackages(allPkgs);
+        if (legPkgSnap) {
+          pkgSourcesMap.legacy = legPkgSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        }
+        if (pkgSnap) {
+          pkgSourcesMap.live = pkgSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        }
+        syncMergedPackages();
 
-        const allCps = [
-          ...embeddedCps,
-          ...(legCpSnap ? legCpSnap.docs.map((d) => ({ id: d.id, ...d.data() })) : []),
-          ...(cpSnap ? cpSnap.docs.map((d) => ({ id: d.id, ...d.data() })) : [])
-        ];
-        if (allCps.length > 0) mergeAndSetCoupons(allCps);
+        if (legCpSnap) {
+          cpSourcesMap.legacy = legCpSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        }
+        if (cpSnap) {
+          cpSourcesMap.live = cpSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        }
+        syncMergedCoupons();
       } catch {
         // تجاهل
       }
@@ -1104,14 +1115,38 @@ export default function App() {
     const unsubPackages = onSnapshot(
       publicCol('packages'),
       (snap) => {
-        mergeAndSetPackages(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        pkgSourcesMap.live = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        if (snap.docs.length === 0) {
+          pkgSourcesMap.embedded = [];
+          pkgSourcesMap.legacy = [];
+          setPackages([]);
+          try {
+            localStorage.setItem(LOCAL_PACKAGES_KEY, '[]');
+          } catch {
+            // تجاهل
+          }
+        } else {
+          syncMergedPackages();
+        }
       },
       () => {}
     );
     const unsubCoupons = onSnapshot(
       publicCol('coupons'),
       (snap) => {
-        mergeAndSetCoupons(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        cpSourcesMap.live = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        if (snap.docs.length === 0) {
+          cpSourcesMap.embedded = [];
+          cpSourcesMap.legacy = [];
+          setCoupons([]);
+          try {
+            localStorage.setItem(LOCAL_COUPONS_KEY, '[]');
+          } catch {
+            // تجاهل
+          }
+        } else {
+          syncMergedCoupons();
+        }
       },
       () => {}
     );
@@ -3251,6 +3286,34 @@ function AdminDashboard({
   useEffect(() => {
     setLocalSettings(settings);
   }, [settings]);
+
+  // مزامنة تلقائية لأي باقات أو كوبونات حالية إلى مستند الإعدادات العام لظهورها للعملاء فورًا
+  useEffect(() => {
+    if (!db) return;
+    if (packages.length === 0 && coupons.length === 0) return;
+    const compactPkgs = packages.map((p) => ({
+      id: p.id,
+      title: p.title || '',
+      description: p.description || '',
+      price: Number(p.price) || 0,
+      oldPrice: Number(p.oldPrice) || 0,
+      notebookIds: Array.isArray(p.notebookIds) ? p.notebookIds : []
+    }));
+    const compactCps = coupons.map((c) => ({
+      id: c.id,
+      code: c.code || '',
+      type: c.type || 'percent',
+      value: Number(c.value) || 0,
+      maxDiscount: Number(c.maxDiscount) || 0,
+      minOrder: Number(c.minOrder) || 0,
+      expiresAt: c.expiresAt || '',
+      active: c.active !== false
+    }));
+    Promise.all([
+      setDoc(publicDoc('settings', 'main'), { cachedPackages: compactPkgs, cachedCoupons: compactCps }, { merge: true }),
+      setDoc(publicDoc('config', 'main'), { cachedPackages: compactPkgs, cachedCoupons: compactCps }, { merge: true })
+    ]).catch(() => {});
+  }, [packages, coupons]);
 
   // حالة نموذج المذكرة
   const emptyNotebookForm = {
