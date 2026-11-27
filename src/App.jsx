@@ -56,7 +56,7 @@ import {
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'el3bakera-app';
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'el3bakera-edu';
 
 let db = null;
 let auth = null;
@@ -718,8 +718,8 @@ export default function App() {
   useEffect(() => {
     if (!user || !db) return;
 
-    // 1. الاستماع للإعدادات الحالية
-    const settingsDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'platform_settings_v4', 'main');
+    // 1. الاستماع للإعدادات الحالية من المسار الفعلي el3bakera-edu
+    const settingsDocRef = doc(db, 'artifacts', 'el3bakera-edu', 'public', 'data', 'platform_settings_v4', 'main');
     const unsubSettings = onSnapshot(
       settingsDocRef,
       (snap) => {
@@ -745,7 +745,9 @@ export default function App() {
 
     // 2. استرداد الصور والبيانات المحفوظة في كافة معرفات التطبيق والمسارات السحابية السابقة تلقائياً
     const recoverCloudAssets = async () => {
-      const candidateAppIds = Array.from(new Set([appId, 'default-app-id', 'el3bakera-app']));
+      const candidateAppIds = Array.from(
+        new Set(['el3bakera-edu', 'muzakkirati-edu-app', appId, 'default-app-id', 'el3bakera-app'])
+      );
       try {
         for (const targetAppId of candidateAppIds) {
           // فحص الإعدادات القديمة في السحابة لاستعادة الشعار والبانر وأغلفة الأقسام
@@ -886,6 +888,34 @@ export default function App() {
               );
             }
           }
+
+          // فحص المجموعات الفرعية داخل كل مذكرة (notebooks/{id}/samples & images)
+          for (const prod of DEFAULT_PRODUCTS) {
+            const subCols = ['samples', 'images', 'pages'];
+            for (const subName of subCols) {
+              const subSnap = await getDocs(
+                collection(db, 'artifacts', targetAppId, 'public', 'data', 'notebooks', prod.id, subName)
+              ).catch(() => null);
+              if (subSnap && !subSnap.empty) {
+                const foundImgs = [];
+                subSnap.forEach((sd) => {
+                  const sData = sd.data() || {};
+                  foundImgs.push(...extractSampleImages(sData));
+                  const single = sData.url || sData.imageData || sData.image || sData.data;
+                  if (isValidImageSrc(single)) foundImgs.push(single);
+                });
+                if (foundImgs.length > 0) {
+                  setProducts((prev) =>
+                    prev.map((p) =>
+                      p.id === prod.id
+                        ? { ...p, sampleImages: Array.from(new Set([...(p.sampleImages || []), ...foundImgs])) }
+                        : p
+                    )
+                  );
+                }
+              }
+            }
+          }
         }
       } catch (err) {
         console.warn('Cloud asset recovery info:', err);
@@ -999,8 +1029,8 @@ export default function App() {
     try {
       localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(updatedSettings));
       if (user && db) {
-        const settingsDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'platform_settings_v4', 'main');
-        const logoMediaRef = doc(db, 'artifacts', appId, 'public', 'data', 'platform_media_v4', 'media_logo');
+        const settingsDocRef = doc(db, 'artifacts', 'el3bakera-edu', 'public', 'data', 'platform_settings_v4', 'main');
+        const logoMediaRef = doc(db, 'artifacts', 'el3bakera-edu', 'public', 'data', 'platform_media_v4', 'media_logo');
 
         const { logoImage, heroImage, ...restSettings } = updatedSettings;
         const isLargeLogo = typeof logoImage === 'string' && logoImage.length > 200000;
@@ -1333,7 +1363,7 @@ export default function App() {
       setProducts((prev) => prev.map((p) => (p.id === editingProduct.id ? updatedProd : p)));
       if (user && db && Array.isArray(updatedProd.sampleImages) && updatedProd.sampleImages.length > 0) {
         setDoc(
-          doc(db, 'artifacts', appId, 'public', 'data', 'platform_media_v4', `samples_${updatedProd.id}`),
+          doc(db, 'artifacts', 'el3bakera-edu', 'public', 'data', 'platform_media_v4', `samples_${updatedProd.id}`),
           { sampleImages: JSON.stringify(updatedProd.sampleImages), updatedAt: serverTimestamp() },
           { merge: true }
         ).catch(() => {});
@@ -1355,7 +1385,7 @@ export default function App() {
       setProducts((prev) => [created, ...prev]);
       if (user && db && Array.isArray(created.sampleImages) && created.sampleImages.length > 0) {
         setDoc(
-          doc(db, 'artifacts', appId, 'public', 'data', 'platform_media_v4', `samples_${created.id}`),
+          doc(db, 'artifacts', 'el3bakera-edu', 'public', 'data', 'platform_media_v4', `samples_${created.id}`),
           { sampleImages: JSON.stringify(created.sampleImages), updatedAt: serverTimestamp() },
           { merge: true }
         ).catch(() => {});
