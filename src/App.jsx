@@ -73,7 +73,7 @@ const getEnvVar = (key, fallback) => {
 };
 
 const firebaseConfig = {
-  apiKey: getEnvVar('apiKey', getEnvVar('VITE_FIREBASE_API_KEY', '')),
+  apiKey: getEnvVar('apiKey', getEnvVar('VITE_FIREBASE_API_KEY', 'AIzaSyD_du5VY8nJGDJ169Fof9EAlI9x2W2d-14')),
   authDomain: getEnvVar('authDomain', getEnvVar('VITE_FIREBASE_AUTH_DOMAIN', 'el3bakera-edu.firebaseapp.com')),
   projectId: getEnvVar('projectId', getEnvVar('VITE_FIREBASE_PROJECT_ID', 'el3bakera-edu')),
   storageBucket: getEnvVar('storageBucket', getEnvVar('VITE_FIREBASE_STORAGE_BUCKET', 'el3bakera-edu.appspot.com')),
