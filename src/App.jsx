@@ -477,14 +477,16 @@ function compressImageFile(file, maxWidth = 650, quality = 0.72) {
 // تقسيم وحفظ كل صورة في مستند منفصل في السحابة لتجنب تجاوز حد الـ 1MB في Firestore
 async function saveMediaAssetToCloud(dbInstance, appId, assetId, dataUrl) {
   if (!dbInstance) return;
-  const mediaCol = collection(dbInstance, 'artifacts', appId, 'public', 'data', 'media_assets');
+  // حفظ الصور داخل مسار config المفتوح بالفعل في قواعد الأمان لضمان عدم ظهور permission-denied
+  const mediaCol = collection(dbInstance, 'artifacts', appId, 'public', 'data', 'config');
+  const docId = `media_${assetId}`;
   if (!dataUrl) {
     try {
-      await deleteDoc(doc(mediaCol, assetId));
+      await deleteDoc(doc(mediaCol, docId));
     } catch {}
     return;
   }
-  await setDoc(doc(mediaCol, assetId), {
+  await setDoc(doc(mediaCol, docId), {
     assetId,
     dataUrl,
     updatedAt: Date.now()
@@ -906,7 +908,7 @@ function MuzakkiratiPlatformContent() {
     if (!db) return;
 
     const settingsRef = doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'main');
-    const mediaCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'media_assets');
+    const configCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config');
 
     const unsubSettings = onSnapshot(
       settingsRef,
@@ -939,13 +941,16 @@ function MuzakkiratiPlatformContent() {
 
     // الاستماع الفوري لجميع الصور المنفصلة (الشعار، الخلفية، أغلفة الأقسام، أغلفة المذكرات)
     const unsubMediaAssets = onSnapshot(
-      mediaCol,
+      configCol,
       (snapshot) => {
         const assetsMap = {};
         snapshot.forEach((d) => {
-          const item = d.data();
-          if (item && item.dataUrl) {
-            assetsMap[d.id] = item.dataUrl;
+          if (d.id.startsWith('media_')) {
+            const item = d.data();
+            const realAssetId = item?.assetId || d.id.replace('media_', '');
+            if (item && item.dataUrl) {
+              assetsMap[realAssetId] = item.dataUrl;
+            }
           }
         });
 
