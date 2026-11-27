@@ -299,6 +299,7 @@ const DEFAULT_SETTINGS = {
   primaryTheme: 'royal',
   logoImage: '',
   heroImage: '',
+  heroMobileImage: '',
   heroOverlayOpacity: 65,
   heroMinHeight: 460,
   heroBadge: 'تخصيص كامل باسم المعلم ورقم هاتفه وشعاره',
@@ -668,15 +669,15 @@ export default function App() {
   const [adminLoginOpen, setAdminLoginOpen] = useState(false);
   const [adminEmailInput, setAdminEmailInput] = useState(ADMIN_EMAIL);
   const [adminPassInput, setAdminPassInput] = useState('');
-  const [customApiKeyInput, setCustomApiKeyInput] = useState('');
-  const [adminLoginError, setAdminLoginError] = useState('');
-  const [adminLoggingIn, setAdminLoggingIn] = useState(false);
-  const [firebaseUser, setFirebaseUser] = useState(null);
-  const [logoClickCount, setLogoClickCount] = useState(0);
-  const [toast, setToast] = useState(null);
-  const isPoppingHistoryRef = useRef(false);
-  const topHeaderRef = useRef(null);
-  const [topHeaderHeight, setTopHeaderHeight] = useState(0);
+  const [isMobileViewport, setIsMobileViewport] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth < 768 : false
+  );
+
+  useEffect(() => {
+    const onResizeViewport = () => setIsMobileViewport(window.innerWidth < 768);
+    window.addEventListener('resize', onResizeViewport);
+    return () => window.removeEventListener('resize', onResizeViewport);
+  }, []);
 
   const isAdmin = Boolean(firebaseUser && firebaseUser.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase());
   const theme = THEME_PALETTES[settings.primaryTheme] || THEME_PALETTES.royal;
@@ -836,6 +837,7 @@ export default function App() {
     let latestMainSettings = null;
     let latestLogo = '';
     let latestHero = '';
+    let latestHeroMobile = '';
     const latestCatImages = {};
 
     const applyCombinedSettings = () => {
@@ -850,6 +852,7 @@ export default function App() {
           ...base,
           logoImage: latestLogo || base.logoImage || prev.logoImage || '',
           heroImage: latestHero || base.heroImage || prev.heroImage || '',
+          heroMobileImage: latestHeroMobile || base.heroMobileImage || prev.heroMobileImage || '',
           categories: mergedCats
         };
         try {
@@ -864,11 +867,12 @@ export default function App() {
     // جلب فوري من جميع مستندات الإعدادات والوسائط (الجديدة والقديمة)
     (async () => {
       try {
-        const [mainSnap, logoSnap, heroSnap, configSnap, legacyMainSnap, legacyAssetsSnap, allSettingsSnap] =
+        const [mainSnap, logoSnap, heroSnap, heroMobileSnap, configSnap, legacyMainSnap, legacyAssetsSnap, allSettingsSnap] =
           await Promise.all([
             getDoc(publicDoc('settings', 'main')).catch(() => null),
             getDoc(publicDoc('settings', 'media_logo')).catch(() => null),
             getDoc(publicDoc('settings', 'media_hero')).catch(() => null),
+            getDoc(publicDoc('settings', 'media_hero_mobile')).catch(() => null),
             getDoc(publicDoc('config', 'main')).catch(() => null),
             getDoc(legacyPublicDoc('settings', 'main')).catch(() => null),
             getDoc(legacyPublicDoc('settings', 'media_assets')).catch(() => null),
@@ -916,22 +920,18 @@ export default function App() {
           latestHero = extractImageFromValue(legacyAssetsSnap.data().heroImage);
         }
 
+        if (heroMobileSnap && heroMobileSnap.exists() && heroMobileSnap.data()?.heroMobileImage) {
+          latestHeroMobile = extractImageFromValue(heroMobileSnap.data().heroMobileImage);
+        } else if (mainData?.heroMobileImage) {
+          latestHeroMobile = extractImageFromValue(mainData.heroMobileImage);
+        }
+
         if (allSettingsSnap) {
           allSettingsSnap.docs.forEach((d) => {
             if (d.id.startsWith('media_cat_')) {
-              const catId = d.id.replace('media_cat_', '');
-              const img = extractImageFromValue(d.data()?.image);
-              if (img) latestCatImages[catId] = img;
-            } else if (d.id === 'media_assets') {
-              const ad = d.data() || {};
-              if (!latestLogo && ad.logoImage) latestLogo = extractImageFromValue(ad.logoImage);
-              if (!latestHero && ad.heroImage) latestHero = extractImageFromValue(ad.heroImage);
-              if (ad.categoryImages && typeof ad.categoryImages === 'object') {
-                Object.entries(ad.categoryImages).forEach(([cid, im]) => {
-                  const clean = extractImageFromValue(im);
-                  if (clean && !latestCatImages[cid]) latestCatImages[cid] = clean;
-                });
-              }
+              const cid = d.id.replace('media_cat_', '');
+              const imgVal = extractImageFromValue(d.data()?.image);
+              if (imgVal) latestCatImages[cid] = imgVal;
             }
           });
         }
@@ -956,6 +956,8 @@ export default function App() {
             latestLogo = extractImageFromValue(data.logoImage);
           } else if (d.id === 'media_hero' && data.heroImage !== undefined) {
             latestHero = extractImageFromValue(data.heroImage);
+          } else if (d.id === 'media_hero_mobile' && data.heroMobileImage !== undefined) {
+            latestHeroMobile = extractImageFromValue(data.heroMobileImage);
           } else if (d.id.startsWith('media_cat_')) {
             const catId = d.id.replace('media_cat_', '');
             latestCatImages[catId] = extractImageFromValue(data.image);
@@ -1431,6 +1433,11 @@ export default function App() {
   }, [previewNotebook, fetchedSampleNotices]);
 
   const overlayAlpha = Math.min(0.95, Math.max(0.1, Number(settings.heroOverlayOpacity ?? 65) / 100));
+  const activeHeroBg =
+    isMobileViewport && settings.heroMobileImage ? settings.heroMobileImage : settings.heroImage;
+
+  const topHeaderRef = useRef(null);
+  const [topHeaderHeight, setTopHeaderHeight] = useState(88);
 
   useEffect(() => {
     const updateHeaderHeight = () => {
@@ -1679,13 +1686,12 @@ export default function App() {
             <section
               style={{
                 minHeight: `${Number(settings.heroMinHeight) || 460}px`,
-                backgroundImage: settings.heroImage ? `url(${settings.heroImage})` : undefined,
-                backgroundSize: settings.heroImage ? '100% 100%' : undefined
+                backgroundImage: activeHeroBg ? `url(${activeHeroBg})` : undefined
               }}
-              className="relative bg-slate-950 bg-no-repeat bg-center text-white flex items-center overflow-hidden"
+              className="relative bg-slate-950 bg-cover bg-center bg-no-repeat text-white flex items-center overflow-hidden"
             >
               <div
-                style={{ backgroundColor: `rgba(11, 20, 42, ${settings.heroImage ? overlayAlpha : 0.96})` }}
+                style={{ backgroundColor: `rgba(11, 20, 42, ${activeHeroBg ? overlayAlpha : 0.96})` }}
                 className="absolute inset-0"
               />
               <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-12 sm:py-16 w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
@@ -2958,7 +2964,7 @@ function AdminDashboard({
     try {
       const safeLogo = await shrinkDataUrlIfNeeded(updatedObj.logoImage || '', 300000);
       const safeHero = await shrinkDataUrlIfNeeded(updatedObj.heroImage || '', 550000);
-
+      const safeHeroMobile = await shrinkDataUrlIfNeeded(updatedObj.heroMobileImage || '', 550000);
       const cleanCategories = [];
       const catWrites = [];
 
@@ -2985,6 +2991,7 @@ function AdminDashboard({
         ...updatedObj,
         logoImage: '',
         heroImage: '',
+        heroMobileImage: '',
         categories: cleanCategories,
         updatedAt: serverTimestamp()
       };
@@ -2993,6 +3000,7 @@ function AdminDashboard({
         ...updatedObj,
         logoImage: safeLogo,
         heroImage: safeHero,
+        heroMobileImage: safeHeroMobile,
         categories: (updatedObj.categories || []).map((c, idx) => ({
           ...c,
           image: cleanCategories[idx] ? c.image : ''
@@ -3004,6 +3012,11 @@ function AdminDashboard({
           setDoc(publicDoc('settings', 'main'), mainPayload, { merge: true }),
           setDoc(publicDoc('settings', 'media_logo'), { logoImage: safeLogo, updatedAt: serverTimestamp() }, { merge: true }),
           setDoc(publicDoc('settings', 'media_hero'), { heroImage: safeHero, updatedAt: serverTimestamp() }, { merge: true }),
+          setDoc(
+            publicDoc('settings', 'media_hero_mobile'),
+            { heroMobileImage: safeHeroMobile, updatedAt: serverTimestamp() },
+            { merge: true }
+          ),
           ...catWrites
         ]);
       }
@@ -4470,7 +4483,7 @@ function AdminDashboard({
                 </div>
 
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
-                  <div className="text-xs font-black text-slate-800">صورة خلفية الواجهة الرئيسية (Hero)</div>
+                  <div className="text-xs font-black text-slate-800">صورة خلفية الواجهة الرئيسية — الكمبيوتر (Hero Desktop)</div>
                   <input
                     type="file"
                     accept="image/*"
@@ -4494,6 +4507,40 @@ function AdminDashboard({
                       </button>
                     </div>
                   )}
+
+                  <div className="pt-2 border-t border-slate-200/80 space-y-1.5">
+                    <div className="text-xs font-black text-slate-800">
+                      صورة خلفية مخصصة للهاتف (اختياري — مقاس طولي 1080×1920)
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0];
+                        if (!f) return;
+                        const compressed = await compressImageFile(f, 1200, 0.85);
+                        setLocalSettings({ ...localSettings, heroMobileImage: compressed });
+                      }}
+                      className="text-xs font-bold"
+                    />
+                    {localSettings.heroMobileImage && (
+                      <div className="flex items-center gap-3 pt-1">
+                        <img
+                          src={localSettings.heroMobileImage}
+                          alt="hero-mobile"
+                          className="w-12 h-20 rounded-xl object-cover border"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setLocalSettings({ ...localSettings, heroMobileImage: '' })}
+                          className="text-xs font-black text-rose-600"
+                        >
+                          إزالة صورة الهاتف
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="pt-1">
                     <div className="flex justify-between text-xs font-bold text-slate-700 mb-1">
                       <span>درجة شفافية التعتيم فوق الخلفية:</span>
@@ -4707,6 +4754,280 @@ function AdminDashboard({
                     <span>إظهار في ملء الشاشة</span>
                   </label>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* 2. الواجهة وبطاقة الثقة */}
+          {settingsSubTab === 'hero' && (
+            <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">شارة الواجهة الرئيسية العلوية</label>
+                  <input
+                    type="text"
+                    value={localSettings.heroBadge || ''}
+                    onChange={(e) => setLocalSettings({ ...localSettings, heroBadge: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">ارتفاع قسم الواجهة (px)</label>
+                  <input
+                    type="number"
+                    value={localSettings.heroMinHeight || 460}
+                    onChange={(e) => setLocalSettings({ ...localSettings, heroMinHeight: Number(e.target.value) })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">العنوان الرئيسي الكبير (Hero Title)</label>
+                  <input
+                    type="text"
+                    value={localSettings.heroTitle || ''}
+                    onChange={(e) => setLocalSettings({ ...localSettings, heroTitle: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-black"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">النص التعريفي أسفل العنوان</label>
+                  <textarea
+                    rows={2}
+                    value={localSettings.heroSubtitle || ''}
+                    onChange={(e) => setLocalSettings({ ...localSettings, heroSubtitle: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold"
+                  />
+                </div>
+              </div>
+
+              {/* نقاط بطاقة الثقة */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-black text-slate-900">بطاقة «لماذا يثق بنا المعلمون؟»</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLocalSettings({
+                        ...localSettings,
+                        trustPoints: [...(localSettings.trustPoints || []), 'ميزة جديدة للمنصة']
+                      })
+                    }
+                    className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-black"
+                  >
+                    + إضافة نقطة
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={localSettings.trustTitle || ''}
+                  onChange={(e) => setLocalSettings({ ...localSettings, trustTitle: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-sm font-black"
+                />
+                {(localSettings.trustPoints || []).map((pt, idx) => (
+                  <div key={idx} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={pt}
+                      onChange={(e) => {
+                        const arr = [...localSettings.trustPoints];
+                        arr[idx] = e.target.value;
+                        setLocalSettings({ ...localSettings, trustPoints: arr });
+                      }}
+                      className="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setLocalSettings({
+                          ...localSettings,
+                          trustPoints: localSettings.trustPoints.filter((_, i) => i !== idx)
+                        })
+                      }
+                      className="p-2 rounded-xl bg-rose-100 text-rose-700"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 3. شارة التوفير وما الجديد والأخبار */}
+          {settingsSubTab === 'sections' && (
+            <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-5">
+              {/* التحكم الكامل في قسم الإعلان عن القادم وأخبار المنصة */}
+              <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={localSettings.newsSectionEnabled !== false}
+                      onChange={(e) => setLocalSettings({ ...localSettings, newsSectionEnabled: e.target.checked })}
+                      className="w-5 h-5"
+                    />
+                    <span className="text-sm font-black text-slate-900">قسم الإعلان عن القادم وأخبار المنصة</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLocalSettings({
+                        ...localSettings,
+                        newsSectionEnabled: true,
+                        newsItems: [
+                          ...(localSettings.newsItems || []),
+                          {
+                            id: `news_${Date.now()}`,
+                            title: 'عنوان الإصدار القادم',
+                            date: 'قريبًا',
+                            badgeColor: 'amber',
+                            description: 'تفاصيل الإصدار القادم...',
+                            showBookingBtn: true,
+                            bookingBtnText: 'احجز نسختك مسبقًا عبر واتساب',
+                            bookingBtnColor: '#0f172a'
+                          }
+                        ]
+                      })
+                    }
+                    className="px-3.5 py-2 rounded-xl bg-amber-500 text-white text-xs font-black flex items-center gap-1"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>إضافة إعلان قادم</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">نص الشارة العلوية للقسم</label>
+                    <input
+                      type="text"
+                      value={localSettings.newsSectionBadge ?? 'قريبًا على المنصة'}
+                      onChange={(e) => setLocalSettings({ ...localSettings, newsSectionBadge: e.target.value })}
+                      className="w-full px-3.5 py-2 rounded-xl border border-amber-300 bg-white text-xs font-black"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">العنوان الرئيسي للقسم</label>
+                    <input
+                      type="text"
+                      value={localSettings.newsSectionTitle || ''}
+                      onChange={(e) => setLocalSettings({ ...localSettings, newsSectionTitle: e.target.value })}
+                      className="w-full px-3.5 py-2 rounded-xl border border-amber-300 bg-white text-xs font-black"
+                    />
+                  </div>
+                </div>
+
+                {(localSettings.newsItems || []).map((item, idx) => (
+                  <div key={item.id || idx} className="p-3.5 rounded-2xl bg-white border border-amber-200 space-y-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                      <input
+                        type="text"
+                        placeholder="عنوان الإعلان"
+                        value={item.title || ''}
+                        onChange={(e) => {
+                          const arr = [...localSettings.newsItems];
+                          arr[idx] = { ...item, title: e.target.value };
+                          setLocalSettings({ ...localSettings, newsItems: arr });
+                        }}
+                        className="sm:col-span-6 px-3 py-2 rounded-xl border border-slate-200 text-xs font-black"
+                      />
+                      <input
+                        type="text"
+                        placeholder="شارة الموعد (مثل: قريبًا)"
+                        value={item.date || ''}
+                        onChange={(e) => {
+                          const arr = [...localSettings.newsItems];
+                          arr[idx] = { ...item, date: e.target.value };
+                          setLocalSettings({ ...localSettings, newsItems: arr });
+                        }}
+                        className="sm:col-span-3 px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                      />
+                      <select
+                        value={item.badgeColor || 'amber'}
+                        onChange={(e) => {
+                          const arr = [...localSettings.newsItems];
+                          arr[idx] = { ...item, badgeColor: e.target.value };
+                          setLocalSettings({ ...localSettings, newsItems: arr });
+                        }}
+                        className="sm:col-span-2 px-2.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                      >
+                        <option value="amber">شارة ذهبية</option>
+                        <option value="blue">شارة زرقاء</option>
+                        <option value="emerald">شارة خضراء</option>
+                        <option value="rose">شارة حمراء</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLocalSettings({
+                            ...localSettings,
+                            newsItems: localSettings.newsItems.filter((_, i) => i !== idx)
+                          })
+                        }
+                        className="sm:col-span-1 p-2 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <input
+                      type="text"
+                      placeholder="وصف مختصر للإعلان القادم"
+                      value={item.description || ''}
+                      onChange={(e) => {
+                        const arr = [...localSettings.newsItems];
+                        arr[idx] = { ...item, description: e.target.value };
+                        setLocalSettings({ ...localSettings, newsItems: arr });
+                      }}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold"
+                    />
+
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-wrap items-center gap-3">
+                      <label className="flex items-center gap-2 text-xs font-black text-slate-800 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={item.showBookingBtn !== false}
+                          onChange={(e) => {
+                            const arr = [...localSettings.newsItems];
+                            arr[idx] = { ...item, showBookingBtn: e.target.checked };
+                            setLocalSettings({ ...localSettings, newsItems: arr });
+                          }}
+                          className="w-4 h-4"
+                        />
+                        <span>إظهار زر «احجز نسختك مسبقًا عبر واتساب»</span>
+                      </label>
+
+                      {item.showBookingBtn !== false && (
+                        <>
+                          <input
+                            type="text"
+                            placeholder="نص الزر"
+                            value={item.bookingBtnText ?? 'احجز نسختك مسبقًا عبر واتساب'}
+                            onChange={(e) => {
+                              const arr = [...localSettings.newsItems];
+                              arr[idx] = { ...item, bookingBtnText: e.target.value };
+                              setLocalSettings({ ...localSettings, newsItems: arr });
+                            }}
+                            className="flex-1 min-w-[180px] px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold"
+                          />
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] font-bold text-slate-600">لون الزر:</span>
+                            <input
+                              type="color"
+                              value={item.bookingBtnColor || '#0f172a'}
+                              onChange={(e) => {
+                                const arr = [...localSettings.newsItems];
+                                arr[idx] = { ...item, bookingBtnColor: e.target.value };
+                                setLocalSettings({ ...localSettings, newsItems: arr });
+                              }}
+                              className="w-8 h-7 rounded border border-slate-200 cursor-pointer"
+                            />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
