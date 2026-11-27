@@ -2756,25 +2756,66 @@ export default function App() {
 // ============================================================================
 function UnifiedNoticeBox({ items = [], compact = false }) {
   if (!Array.isArray(items) || items.length === 0) return null;
-  const styles = {
-    amber: 'bg-amber-50 border-amber-200 text-amber-950',
-    blue: 'bg-blue-50 border-blue-200 text-blue-950',
-    rose: 'bg-rose-50 border-rose-200 text-rose-950',
-    emerald: 'bg-emerald-50 border-emerald-200 text-emerald-950'
+  const themes = {
+    amber: {
+      wrapper: 'bg-gradient-to-l from-amber-50 via-amber-50/90 to-orange-50/60 border-amber-300 border-r-amber-500 text-amber-950',
+      headerBadge: 'bg-amber-500 text-white',
+      iconBox: 'bg-amber-500/15 text-amber-700 border-amber-300/60',
+      divider: 'border-amber-200/70'
+    },
+    blue: {
+      wrapper: 'bg-gradient-to-l from-blue-50 via-blue-50/90 to-sky-50/60 border-blue-300 border-r-blue-600 text-blue-950',
+      headerBadge: 'bg-blue-600 text-white',
+      iconBox: 'bg-blue-500/15 text-blue-700 border-blue-300/60',
+      divider: 'border-blue-200/70'
+    },
+    rose: {
+      wrapper: 'bg-gradient-to-l from-rose-50 via-rose-50/90 to-red-50/60 border-rose-300 border-r-rose-600 text-rose-950',
+      headerBadge: 'bg-rose-600 text-white',
+      iconBox: 'bg-rose-500/15 text-rose-700 border-rose-300/60',
+      divider: 'border-rose-200/70'
+    },
+    emerald: {
+      wrapper: 'bg-gradient-to-l from-emerald-50 via-emerald-50/90 to-teal-50/60 border-emerald-300 border-r-emerald-600 text-emerald-950',
+      headerBadge: 'bg-emerald-600 text-white',
+      iconBox: 'bg-emerald-500/15 text-emerald-700 border-emerald-300/60',
+      divider: 'border-emerald-200/70'
+    }
   };
   const primaryColor = items[0]?.color || 'amber';
+  const st = themes[primaryColor] || themes.amber;
+
   return (
-    <div
-      className={`px-4 sm:px-6 py-2.5 text-xs sm:text-sm font-black space-y-1.5 shrink-0 ${
-        compact ? 'border-y' : 'rounded-2xl border shadow-sm'
-      } ${styles[primaryColor] || styles.amber}`}
-    >
-      {items.map((item, idx) => (
-        <div key={idx} className="flex items-start gap-2 leading-relaxed">
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-          <span>{item.text}</span>
+    <div className={`${compact ? 'px-4 sm:px-6 pt-3 pb-1 bg-slate-50 shrink-0' : ''}`}>
+      <div
+        className={`rounded-2xl border border-r-4 p-3.5 sm:p-4 shadow-sm space-y-2.5 ${st.wrapper}`}
+      >
+        <div className={`flex items-center justify-between gap-2 pb-2 border-b ${st.divider}`}>
+          <div className="flex items-center gap-2">
+            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black flex items-center gap-1 shadow-xs ${st.headerBadge}`}>
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span>ملاحظات هامة للمعلم</span>
+            </span>
+          </div>
+          {items.length > 1 && (
+            <span className="text-[11px] font-black opacity-75">{items.length} تنبيهات</span>
+          )}
         </div>
-      ))}
+
+        <div className="space-y-2">
+          {items.map((item, idx) => {
+            const cleanText = safeText(item.text).replace(/^[-–—•*]\s*/, '').trim();
+            return (
+              <div key={idx} className="flex items-start gap-2.5 text-xs sm:text-sm font-black leading-relaxed">
+                <span className={`w-6 h-6 rounded-lg border flex items-center justify-center shrink-0 mt-0.5 ${st.iconBox}`}>
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                </span>
+                <span className="pt-0.5">{cleanText}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
