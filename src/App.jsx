@@ -638,6 +638,8 @@ export default function App() {
   const [previewZoom, setPreviewZoom] = useState(1);
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
   const [loadingSamples, setLoadingSamples] = useState(false);
+  const [fetchedSampleNotices, setFetchedSampleNotices] = useState({});
+  const fetchedSamplesDoneRef = useRef({});
   const touchStartXRef = useRef(null);
 
   // السلة والطلبات
@@ -823,202 +825,23 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // مزامنة الإعدادات والوسائط
+  // مزامنة الباقات والكوبونات والطلبات
   useEffect(() => {
     if (!db) return;
-    let latestMain = {};
-    let latestMedia = {};
-    let latestLogoDoc = {};
-    let latestHeroDoc = {};
-    let latestCatDocs = {};
-    let latestConfig = {};
-    let latestLegacyMedia = {};
-
-    const applyMergedSettings = () => {
-      setSettings((prev) => {
-        const merged = {
-          ...prev,
-          ...latestConfig,
-          ...latestMain,
-          logoImage:
-            extractImageFromValue(latestLogoDoc.logoImage) ||
-            extractImageFromValue(latestMedia.logoImage) ||
-            extractImageFromValue(latestMain.logoImage) ||
-            extractImageFromValue(latestConfig.logoImage) ||
-            extractImageFromValue(latestLegacyMedia.logoImage) ||
-            prev.logoImage,
-          heroImage:
-            extractImageFromValue(latestHeroDoc.heroImage) ||
-            extractImageFromValue(latestMedia.heroImage) ||
-            extractImageFromValue(latestMain.heroImage) ||
-            extractImageFromValue(latestConfig.heroImage) ||
-            extractImageFromValue(latestLegacyMedia.heroImage) ||
-            prev.heroImage
-        };
-        const rawCats =
-          Array.isArray(latestMain.categories) && latestMain.categories.length > 0
-            ? latestMain.categories
-            : Array.isArray(latestConfig.categories) && latestConfig.categories.length > 0
-            ? latestConfig.categories
-            : prev.categories;
-        const catImgs = {
-          ...(latestLegacyMedia.categoryImages || {}),
-          ...(latestConfig.categoryImages || {}),
-          ...(latestMedia.categoryImages || {}),
-          ...latestCatDocs
-        };
-        merged.categories = normalizeCategories(rawCats).map((c) => ({
-          ...c,
-          image: extractImageFromValue(catImgs[c.id]) || c.image
-        }));
-        try {
-          localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(merged));
-        } catch {
-          // تجاهل
-        }
-        return merged;
-      });
-    };
-
-    const unsubMain = onSnapshot(
-      publicDoc('settings', 'main'),
-      (snap) => {
-        if (snap.exists()) {
-          latestMain = snap.data() || {};
-          applyMergedSettings();
-        }
-      },
-      () => {}
-    );
-
-    const unsubMedia = onSnapshot(
-      publicDoc('settings', 'media_assets'),
-      (snap) => {
-        if (snap.exists()) {
-          latestMedia = snap.data() || {};
-          applyMergedSettings();
-        }
-      },
-      () => {}
-    );
-
-    const unsubLogo = onSnapshot(
-      publicDoc('settings', 'media_logo'),
-      (snap) => {
-        if (snap.exists()) {
-          latestLogoDoc = snap.data() || {};
-          applyMergedSettings();
-        }
-      },
-      () => {}
-    );
-
-    const unsubHero = onSnapshot(
-      publicDoc('settings', 'media_hero'),
-      (snap) => {
-        if (snap.exists()) {
-          latestHeroDoc = snap.data() || {};
-          applyMergedSettings();
-        }
-      },
-      () => {}
-    );
-
-    const unsubSettingsCol = onSnapshot(
-      publicCol('settings'),
-      (snap) => {
-        const nextCats = {};
-        snap.docs.forEach((d) => {
-          if (d.id.startsWith('media_cat_')) {
-            const catId = d.id.replace('media_cat_', '');
-            const img = extractImageFromValue(d.data()?.image);
-            if (img) nextCats[catId] = img;
-          }
-        });
-        latestCatDocs = nextCats;
-        applyMergedSettings();
-      },
-      () => {}
-    );
-
-    const unsubConfig = onSnapshot(
-      publicDoc('config', 'main'),
-      (snap) => {
-        if (snap.exists()) {
-          latestConfig = snap.data() || {};
-          applyMergedSettings();
-        }
-      },
-      () => {}
-    );
-
-    getDoc(legacyPublicDoc('settings', 'media_assets'))
-      .then((snap) => {
-        if (snap && snap.exists()) {
-          latestLegacyMedia = snap.data() || {};
-          applyMergedSettings();
-        }
-      })
-      .catch(() => {});
-
-    return () => {
-      unsubMain();
-      unsubMedia();
-      unsubLogo();
-      unsubHero();
-      unsubSettingsCol();
-      unsubConfig();
-    };
-  }, []);
-
-  // مزامنة المذكرات
-  useEffect(() => {
-    if (!db) return;
-    const unsub = onSnapshot(
-      publicCol('notebooks'),
-      (snap) => {
-        const cloudList = snap.docs.map((d) => normalizeNotebook(d.id, d.data()));
-        if (cloudList.length > 0) {
-          cloudList.sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999) || b.createdAtMs - a.createdAtMs);
-          setNotebooks(cloudList);
-          try {
-            localStorage.setItem(LOCAL_NOTEBOOKS_KEY, JSON.stringify(cloudList));
-          } catch {
-            // تجاهل
-          }
-        }
-      },
-      () => {}
-    );
-    return () => unsub();
-  }, []);
-
-  // مزامنة الباقات والكوبونات
-  useEffect(() => {
-    if (!db) return;
-    const unsubPkg = onSnapshot(
+    const unsubPackages = onSnapshot(
       publicCol('packages'),
       (snap) => {
         setPackages(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       },
       () => {}
     );
-    const unsubCoup = onSnapshot(
+    const unsubCoupons = onSnapshot(
       publicCol('coupons'),
       (snap) => {
         setCoupons(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       },
       () => {}
     );
-    return () => {
-      unsubPkg();
-      unsubCoup();
-    };
-  }, []);
-
-  // مزامنة الطلبات للمدير فقط
-  useEffect(() => {
-    if (!db || !isAdmin) return;
     const unsubOrders = onSnapshot(
       publicCol('orders'),
       (snap) => {
@@ -1028,10 +851,14 @@ export default function App() {
       },
       () => {}
     );
-    return () => unsubOrders();
-  }, [isAdmin]);
+    return () => {
+      unsubPackages();
+      unsubCoupons();
+      unsubOrders();
+    };
+  }, []);
 
-  // جلب سريع لصور العينات عند فتح نافذة معاينة المذكرة فقط
+  // جلب سريع وشامل لصور العينات والتنبيهات من جميع المسارات عند فتح نافذة معاينة المذكرة
   useEffect(() => {
     if (!previewNotebook || !db) {
       setLoadingSamples(false);
@@ -1040,30 +867,70 @@ export default function App() {
     let cancelled = false;
     const nbId = previewNotebook.id;
     const cachedList = samplesMap[nbId] || previewNotebook.inlineSamples || [];
+
+    if (fetchedSamplesDoneRef.current[nbId]) {
+      setLoadingSamples(false);
+      return;
+    }
+
     setLoadingSamples(cachedList.length === 0);
 
     const stopTimer = setTimeout(() => {
       if (!cancelled) setLoadingSamples(false);
-    }, 1500);
+    }, 1200);
 
     (async () => {
       try {
-        const mainSnap = await getDoc(publicDoc('notebook_samples', nbId));
+        const pageDocIds = Array.from({ length: 12 }, (_, idx) => `${nbId}_p${idx}`);
+        const [mainSnap, legacySnap, ...pageSnaps] = await Promise.all([
+          getDoc(publicDoc('notebook_samples', nbId)).catch(() => null),
+          getDoc(legacyPublicDoc('notebook_samples', nbId)).catch(() => null),
+          ...pageDocIds.map((pid) => getDoc(publicDoc('notebook_samples', pid)).catch(() => null))
+        ]);
+
         if (cancelled) return;
         const collected = [];
-        if (mainSnap && mainSnap.exists()) {
-          extractAnyImagesFromDoc(mainSnap.data()).forEach((im) => {
+        let foundNotice = '';
+
+        const inspectDoc = (snap) => {
+          if (!snap || !snap.exists()) return;
+          const d = snap.data() || {};
+          if (!foundNotice) {
+            foundNotice =
+              safeText(d.noticeText).trim() ||
+              safeText(d.notice).trim() ||
+              safeText(d.alertText).trim() ||
+              safeText(d.note).trim() ||
+              safeText(d.warning).trim() ||
+              '';
+          }
+          extractAnyImagesFromDoc(d).forEach((im) => {
             if (im && im !== previewNotebook.coverImage && !collected.includes(im)) {
               collected.push(im);
             }
           });
+        };
+
+        inspectDoc(mainSnap);
+        pageSnaps.forEach(inspectDoc);
+        inspectDoc(legacySnap);
+
+        fetchedSamplesDoneRef.current[nbId] = true;
+
+        if (foundNotice) {
+          setFetchedSampleNotices((prev) => ({ ...prev, [nbId]: foundNotice }));
         }
+
         if (collected.length > 0) {
+          // تحميل مسبق في المتصفح لتسريع التقليب بين الصفحات
+          collected.slice(0, 6).forEach((src) => {
+            const preImg = new Image();
+            preImg.src = src;
+          });
+
           setSamplesMap((prev) => {
-            const updated = {
-              ...prev,
-              [nbId]: Array.from(new Set([...(prev[nbId] || []), ...collected]))
-            };
+            const merged = Array.from(new Set([...(prev[nbId] || []), ...collected]));
+            const updated = { ...prev, [nbId]: merged };
             try {
               localStorage.setItem(LOCAL_SAMPLES_KEY, JSON.stringify(updated));
             } catch {
@@ -1425,6 +1292,15 @@ export default function App() {
     });
     return list;
   }, [previewNotebook, samplesMap]);
+
+  const activePreviewNotice = useMemo(() => {
+    if (!previewNotebook) return '';
+    return (
+      safeText(previewNotebook.noticeText).trim() ||
+      safeText(fetchedSampleNotices[previewNotebook.id]).trim() ||
+      ''
+    );
+  }, [previewNotebook, fetchedSampleNotices]);
 
   const handlePreviewTouchStart = (e) => {
     if (previewZoom > 1) return;
@@ -2299,15 +2175,48 @@ export default function App() {
             </div>
 
             {/* التنبيه العلوي الخاص بالمذكرة */}
-            {previewNotebook.noticeText && previewNotebook.noticePosition !== 'bottom' && (
-              <NoticeBanner text={previewNotebook.noticeText} color={previewNotebook.noticeColor} />
+            {activePreviewNotice && previewNotebook.noticePosition !== 'bottom' && (
+              <NoticeBanner text={activePreviewNotice} color={previewNotebook.noticeColor} />
+            )}
+
+            {/* تفاصيل المذكرة الكاملة داخل نافذة المعاينة */}
+            {(previewNotebook.subtitle || previewNotebook.badgeText || previewNotebook.term) && (
+              <div className="px-4 sm:px-6 py-3 bg-slate-50 border-b border-slate-200 space-y-1.5 shrink-0">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {previewNotebook.badgeText && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-xs font-black">
+                      {previewNotebook.badgeText}
+                    </span>
+                  )}
+                  {previewNotebook.subject && (
+                    <span className="px-2.5 py-0.5 rounded-md bg-white border border-slate-200 text-slate-700 text-xs font-bold">
+                      المادة: {previewNotebook.subject}
+                    </span>
+                  )}
+                  {previewNotebook.term && (
+                    <span className="px-2.5 py-0.5 rounded-md bg-white border border-slate-200 text-slate-700 text-xs font-bold">
+                      {previewNotebook.term}
+                    </span>
+                  )}
+                  {previewNotebook.pagesCount && (
+                    <span className="px-2.5 py-0.5 rounded-md bg-white border border-slate-200 text-slate-700 text-xs font-bold">
+                      عدد الصفحات: {previewNotebook.pagesCount} صفحة
+                    </span>
+                  )}
+                </div>
+                {previewNotebook.subtitle && (
+                  <p className="text-xs sm:text-sm text-slate-700 font-bold leading-relaxed">
+                    {previewNotebook.subtitle}
+                  </p>
+                )}
+              </div>
             )}
 
             {/* منطقة عرض صورة العينة */}
             <div
               onTouchStart={handlePreviewTouchStart}
               onTouchEnd={handlePreviewTouchEnd}
-              className="relative flex-1 bg-slate-100 overflow-auto flex items-center justify-center p-3 select-none min-h-[300px]"
+              className="relative flex-1 bg-slate-100 overflow-auto flex items-center justify-center p-3 select-none min-h-[280px]"
             >
               {loadingSamples && activePreviewImages.length <= 1 ? (
                 <div className="flex flex-col items-center gap-2 text-slate-600">
@@ -2320,7 +2229,7 @@ export default function App() {
                   alt={`عينة ${previewPageIdx + 1}`}
                   onDoubleClick={() => setPreviewZoom((z) => (z > 1 ? 1 : 1.75))}
                   style={{ transform: `scale(${previewZoom})`, transformOrigin: 'center center' }}
-                  className="max-h-full max-w-full object-contain rounded-xl shadow-lg transition-transform duration-200"
+                  className="max-h-full max-w-full object-contain rounded-xl shadow-lg transition-transform duration-150"
                 />
               ) : (
                 <div className="text-center space-y-2 text-slate-500 p-6">
@@ -2353,8 +2262,8 @@ export default function App() {
             </div>
 
             {/* التنبيه السفلي الخاص بالمذكرة */}
-            {previewNotebook.noticeText && previewNotebook.noticePosition === 'bottom' && (
-              <NoticeBanner text={previewNotebook.noticeText} color={previewNotebook.noticeColor} />
+            {activePreviewNotice && previewNotebook.noticePosition === 'bottom' && (
+              <NoticeBanner text={activePreviewNotice} color={previewNotebook.noticeColor} />
             )}
 
             {/* شريط الأسفل: رابط Drive + السعر والتوفير + زر الطلب */}
@@ -2909,6 +2818,25 @@ function AdminDashboard({
   const [nbForm, setNbForm] = useState(emptyNotebookForm);
   const [savingNb, setSavingNb] = useState(false);
   const [adminNbSearch, setAdminNbSearch] = useState('');
+  const [pkgForm, setPkgForm] = useState({
+    id: '',
+    title: '',
+    description: '',
+    price: '',
+    oldPrice: '',
+    oldPriceManual: false,
+    notebookIds: []
+  });
+  const [couponForm, setCouponForm] = useState({
+    id: '',
+    code: '',
+    type: 'percent',
+    value: '',
+    minOrder: '',
+    maxUses: '',
+    expiresAt: '',
+    active: true
+  });
 
   // حفظ الإعدادات الشاملة في السحابة (بتقسيم الصور إلى مستندات مستقلة لتفادي حد الـ 1MB في Firestore)
   const saveAllSettingsToCloud = async (updatedObj) => {
@@ -3577,10 +3505,21 @@ function AdminDashboard({
                       onClick={async () => {
                         let loadedSamples = samplesMap[nb.id] || nb.inlineSamples || [];
                         if (loadedSamples.length === 0 && db) {
-                          const sSnap = await getDoc(publicDoc('notebook_samples', nb.id)).catch(() => null);
-                          if (sSnap && sSnap.exists()) {
-                            loadedSamples = extractAnyImagesFromDoc(sSnap.data());
-                          }
+                          const pageIds = Array.from({ length: 12 }, (_, i) => `${nb.id}_p${i}`);
+                          const [sSnap, legSnap, ...pSnaps] = await Promise.all([
+                            getDoc(publicDoc('notebook_samples', nb.id)).catch(() => null),
+                            getDoc(legacyPublicDoc('notebook_samples', nb.id)).catch(() => null),
+                            ...pageIds.map((pid) => getDoc(publicDoc('notebook_samples', pid)).catch(() => null))
+                          ]);
+                          const found = [];
+                          [sSnap, ...pSnaps, legSnap].forEach((snap) => {
+                            if (snap && snap.exists()) {
+                              extractAnyImagesFromDoc(snap.data()).forEach((im) => {
+                                if (im && im !== nb.coverImage && !found.includes(im)) found.push(im);
+                              });
+                            }
+                          });
+                          loadedSamples = found;
                         }
                         setNbForm({
                           ...nb,
