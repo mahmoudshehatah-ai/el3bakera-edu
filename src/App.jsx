@@ -326,7 +326,7 @@ const DEFAULT_PRODUCTS = [
     title: 'منهج الترم الثاني للصف الثالث الثانوي',
     subject: 'اللغة العربية',
     stageId: 'stg_1795789584022',
-    gradeId: 'grd_1795789716742',
+    gradeId: 'grd_1795789612785',
     categoryId: 'cat_1',
     price: 400,
     oldPrice: 500,
@@ -524,6 +524,20 @@ export default function App() {
     minOrder: 0,
     description: ''
   });
+
+  // حالات إدارة المراحل والصفوف والأقسام والأخبار وروابط التواصل وكلمة المرور
+  const [newStageName, setNewStageName] = useState('');
+  const [newGradeName, setNewGradeName] = useState('');
+  const [newGradeStageId, setNewGradeStageId] = useState('stg_prep_1');
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newNewsItem, setNewNewsItem] = useState({
+    badge: 'خبر جديد',
+    title: '',
+    description: '',
+    content: ''
+  });
+  const [newSocialLink, setNewSocialLink] = useState({ label: '', url: '' });
+  const [newAdminPinInput, setNewAdminPinInput] = useState('');
 
   const fileImportRef = useRef(null);
   const logoUploadRef = useRef(null);
@@ -1736,9 +1750,11 @@ export default function App() {
               <div className="flex flex-wrap gap-2">
                 {[
                   { id: 'settings', label: 'الإعدادات والشعار والبانر', icon: Settings },
+                  { id: 'structure', label: 'المراحل والصفوف والأقسام', icon: Layers },
                   { id: 'products', label: `المذكرات (${products.length})`, icon: BookOpen },
                   { id: 'bundles', label: `الباقات (${bundles.length})`, icon: Package },
                   { id: 'coupons', label: `الكوبونات (${coupons.length})`, icon: Ticket },
+                  { id: 'news_social', label: 'الأخبار وروابط الفوتر', icon: Newspaper },
                   { id: 'backup', label: 'النسخ الاحتياطي JSON', icon: Download }
                 ].map((tab) => {
                   const Icon = tab.icon;
@@ -1946,6 +1962,40 @@ export default function App() {
                         className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm"
                       />
                     </div>
+
+                    {/* تغيير كلمة مرور الإدارة */}
+                    <div className="md:col-span-2 bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
+                      <div className="flex-1">
+                        <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                          تغيير كلمة مرور لوحة الإدارة (الحالية محفوظة)
+                        </label>
+                        <input
+                          type="text"
+                          value={newAdminPinInput}
+                          onChange={(e) => setNewAdminPinInput(e.target.value)}
+                          placeholder="اكتب كلمة المرور الجديدة (6 أحرف أو أرقام على الأقل)..."
+                          className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-sm"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const trimmed = newAdminPinInput.trim();
+                          if (trimmed.length < 4) {
+                            showToast('يرجى إدخال 4 أحرف أو أرقام على الأقل', 'warning');
+                            return;
+                          }
+                          const updated = { ...settings, adminPin: trimmed };
+                          setSettings(updated);
+                          saveSettingsToCloud(updated);
+                          setNewAdminPinInput('');
+                          showToast('تم تحديث كلمة مرور لوحة الإدارة بنجاح');
+                        }}
+                        className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm cursor-pointer"
+                      >
+                        تحديث كلمة المرور
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex justify-end">
@@ -1955,6 +2005,210 @@ export default function App() {
                     >
                       حفظ جميع الإعدادات الآن
                     </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 1.5 قسم إدارة المراحل والصفوف والأقسام */}
+              {adminSection === 'structure' && (
+                <div className="space-y-6">
+                  {/* إدارة المراحل الدراسية */}
+                  <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
+                    <h3 className="font-black text-base text-slate-900">المراحل الدراسية</h3>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="اسم المرحلة الجديدة (مثال: المرحلة الجامعية)..."
+                        value={newStageName}
+                        onChange={(e) => setNewStageName(e.target.value)}
+                        className="flex-1 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!newStageName.trim()) return;
+                          const updated = {
+                            ...settings,
+                            stages: [
+                              ...settings.stages,
+                              { id: `stg_${Date.now()}`, name: newStageName.trim() }
+                            ]
+                          };
+                          setSettings(updated);
+                          saveSettingsToCloud(updated);
+                          setNewStageName('');
+                          showToast('تمت إضافة المرحلة الدراسية');
+                        }}
+                        className="px-5 py-3 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 cursor-pointer"
+                      >
+                        إضافة مرحلة
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {settings.stages.map((st) => (
+                        <div
+                          key={st.id}
+                          className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold"
+                        >
+                          <span>{st.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = {
+                                ...settings,
+                                stages: settings.stages.filter((item) => item.id !== st.id)
+                              };
+                              setSettings(updated);
+                              saveSettingsToCloud(updated);
+                              showToast('تم حذف المرحلة');
+                            }}
+                            className="text-rose-500 hover:text-rose-700 cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* إدارة الصفوف الدراسية */}
+                  <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
+                    <h3 className="font-black text-base text-slate-900">الصفوف الدراسية</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <select
+                        value={newGradeStageId}
+                        onChange={(e) => setNewGradeStageId(e.target.value)}
+                        className="px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm"
+                      >
+                        {settings.stages.map((st) => (
+                          <option key={st.id} value={st.id}>
+                            {st.name}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        placeholder="اسم الصف الدراسي (مثال: الصف الثالث الثانوي)..."
+                        value={newGradeName}
+                        onChange={(e) => setNewGradeName(e.target.value)}
+                        className="px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!newGradeName.trim()) return;
+                          const updated = {
+                            ...settings,
+                            grades: [
+                              ...settings.grades,
+                              {
+                                id: `grd_${Date.now()}`,
+                                stageId: newGradeStageId,
+                                name: newGradeName.trim()
+                              }
+                            ]
+                          };
+                          setSettings(updated);
+                          saveSettingsToCloud(updated);
+                          setNewGradeName('');
+                          showToast('تمت إضافة الصف الدراسي');
+                        }}
+                        className="px-5 py-3 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 cursor-pointer"
+                      >
+                        إضافة صف
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                      {settings.grades.map((gr) => {
+                        const parentStage =
+                          settings.stages.find((s) => s.id === gr.stageId)?.name || '';
+                        return (
+                          <div
+                            key={gr.id}
+                            className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 text-sm"
+                          >
+                            <div>
+                              <p className="font-bold text-slate-900">{gr.name}</p>
+                              <p className="text-[11px] text-slate-500">{parentStage}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = {
+                                  ...settings,
+                                  grades: settings.grades.filter((item) => item.id !== gr.id)
+                                };
+                                setSettings(updated);
+                                saveSettingsToCloud(updated);
+                                showToast('تم حذف الصف الدراسي');
+                              }}
+                              className="text-rose-500 hover:text-rose-700 cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* إدارة الأقسام */}
+                  <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
+                    <h3 className="font-black text-base text-slate-900">أقسام المكتبة</h3>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="اسم القسم الجديد (مثال: بوسترات التلخيص)..."
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        className="flex-1 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!newCategoryName.trim()) return;
+                          const updated = {
+                            ...settings,
+                            categories: [
+                              ...settings.categories,
+                              { id: `cat_${Date.now()}`, name: newCategoryName.trim() }
+                            ]
+                          };
+                          setSettings(updated);
+                          saveSettingsToCloud(updated);
+                          setNewCategoryName('');
+                          showToast('تمت إضافة القسم بنجاح');
+                        }}
+                        className="px-5 py-3 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 cursor-pointer"
+                      >
+                        إضافة قسم
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {settings.categories.map((cat) => (
+                        <div
+                          key={cat.id}
+                          className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold"
+                        >
+                          <span>{cat.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = {
+                                ...settings,
+                                categories: settings.categories.filter((item) => item.id !== cat.id)
+                              };
+                              setSettings(updated);
+                              saveSettingsToCloud(updated);
+                              showToast('تم حذف القسم');
+                            }}
+                            className="text-rose-500 hover:text-rose-700 cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
@@ -2206,66 +2460,202 @@ export default function App() {
                 </div>
               )}
 
-              {/* 4. قسم الكوبونات */}
-              {adminSection === 'coupons' && (
-                <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-6">
-                  <form onSubmit={handleAddCoupon} className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                    <input
-                      type="text"
-                      placeholder="كود الكوبون (مثال: M20)"
-                      value={newCoupon.code}
-                      onChange={(e) => setNewCoupon({ ...newCoupon, code: e.target.value })}
-                      className="px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm uppercase"
-                      required
-                    />
-                    <input
-                      type="number"
-                      placeholder="نسبة الخصم %"
-                      value={newCoupon.discountPercent}
-                      onChange={(e) =>
-                        setNewCoupon({ ...newCoupon, discountPercent: e.target.value })
-                      }
-                      className="px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm"
-                      required
-                    />
-                    <input
-                      type="number"
-                      placeholder="الحد الأدنى للطلب (ج.م)"
-                      value={newCoupon.minOrder}
-                      onChange={(e) => setNewCoupon({ ...newCoupon, minOrder: e.target.value })}
-                      className="px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm"
-                    />
-                    <button
-                      type="submit"
-                      className="px-4 py-3 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 cursor-pointer"
-                    >
-                      إضافة كوبون
-                    </button>
-                  </form>
+              {/* 4.5 قسم الأخبار وروابط الفوتر */}
+              {adminSection === 'news_social' && (
+                <div className="space-y-6">
+                  {/* إدارة أخبار المنصة */}
+                  <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-black text-base text-slate-900">
+                        أخبار المنصة والمذكرات قيد التجهيز
+                      </h3>
+                      <label className="flex items-center gap-2 text-xs font-bold cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={settings.newsSectionEnabled}
+                          onChange={(e) => {
+                            const updated = { ...settings, newsSectionEnabled: e.target.checked };
+                            setSettings(updated);
+                            saveSettingsToCloud(updated);
+                          }}
+                        />
+                        <span>إظهار قسم الأخبار</span>
+                      </label>
+                    </div>
 
-                  <div className="space-y-2.5">
-                    {coupons.map((cp) => (
-                      <div
-                        key={cp.id}
-                        className="flex items-center justify-between p-4 rounded-2xl bg-slate-50"
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <input
+                        type="text"
+                        placeholder="الشارة (مثال: قريبًا)"
+                        value={newNewsItem.badge}
+                        onChange={(e) => setNewNewsItem({ ...newNewsItem, badge: e.target.value })}
+                        className="px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm"
+                      />
+                      <input
+                        type="text"
+                        placeholder="عنوان الخبر *"
+                        value={newNewsItem.title}
+                        onChange={(e) => setNewNewsItem({ ...newNewsItem, title: e.target.value })}
+                        className="px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm"
+                      />
+                      <input
+                        type="text"
+                        placeholder="وصف فرعي (مثال: لجميع الصفوف)"
+                        value={newNewsItem.description}
+                        onChange={(e) =>
+                          setNewNewsItem({ ...newNewsItem, description: e.target.value })
+                        }
+                        className="px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm"
+                      />
+                      <input
+                        type="text"
+                        placeholder="تفاصيل الخبر..."
+                        value={newNewsItem.content}
+                        onChange={(e) =>
+                          setNewNewsItem({ ...newNewsItem, content: e.target.value })
+                        }
+                        className="px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm md:col-span-2"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!newNewsItem.title.trim()) return;
+                          const updated = {
+                            ...settings,
+                            newsItems: [
+                              ...(settings.newsItems || []),
+                              { id: `news-${Date.now()}`, ...newNewsItem }
+                            ]
+                          };
+                          setSettings(updated);
+                          saveSettingsToCloud(updated);
+                          setNewNewsItem({
+                            badge: 'خبر جديد',
+                            title: '',
+                            description: '',
+                            content: ''
+                          });
+                          showToast('تمت إضافة الخبر بنجاح');
+                        }}
+                        className="px-5 py-3 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 cursor-pointer"
                       >
-                        <div className="flex flex-wrap items-center gap-3">
-                          <span className="px-3 py-1 rounded-lg bg-amber-300 text-slate-950 font-black text-xs">
-                            {cp.code}
-                          </span>
-                          <span className="text-sm font-bold text-blue-700">
-                            خصم {cp.discountPercent}%
-                          </span>
-                          <span className="text-xs text-slate-500">{cp.description}</span>
-                        </div>
-                        <button
-                          onClick={() => setCoupons((prev) => prev.filter((c) => c.id !== cp.id))}
-                          className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl cursor-pointer"
+                        إضافة خبر
+                      </button>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      {(settings.newsItems || []).map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-200"
                         >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
+                          <div>
+                            <h4 className="font-bold text-sm text-slate-900">
+                              [{item.badge}] {item.title}
+                            </h4>
+                            <p className="text-xs text-slate-500">{item.content}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = {
+                                ...settings,
+                                newsItems: settings.newsItems.filter((n) => n.id !== item.id)
+                              };
+                              setSettings(updated);
+                              saveSettingsToCloud(updated);
+                              showToast('تم حذف الخبر');
+                            }}
+                            className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* إدارة روابط التواصل الاجتماعي في الفوتر */}
+                  <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
+                    <h3 className="font-black text-base text-slate-900">
+                      روابط التواصل الاجتماعي في الفوتر
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <input
+                        type="text"
+                        placeholder="اسم الرابط (مثال: قناة التيليجرام)"
+                        value={newSocialLink.label}
+                        onChange={(e) =>
+                          setNewSocialLink({ ...newSocialLink, label: e.target.value })
+                        }
+                        className="px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm"
+                      />
+                      <input
+                        type="url"
+                        placeholder="الرابط (https://...)"
+                        value={newSocialLink.url}
+                        onChange={(e) =>
+                          setNewSocialLink({ ...newSocialLink, url: e.target.value })
+                        }
+                        className="px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm text-left"
+                        dir="ltr"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!newSocialLink.label.trim() || !newSocialLink.url.trim()) return;
+                          const updated = {
+                            ...settings,
+                            socialLinks: [
+                              ...(settings.socialLinks || []),
+                              {
+                                id: `soc-${Date.now()}`,
+                                label: newSocialLink.label.trim(),
+                                url: newSocialLink.url.trim()
+                              }
+                            ]
+                          };
+                          setSettings(updated);
+                          saveSettingsToCloud(updated);
+                          setNewSocialLink({ label: '', url: '' });
+                          showToast('تمت إضافة رابط التواصل');
+                        }}
+                        className="px-5 py-3 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 cursor-pointer"
+                      >
+                        إضافة رابط
+                      </button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {(settings.socialLinks || []).map((link) => (
+                        <div
+                          key={link.id}
+                          className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-200"
+                        >
+                          <div>
+                            <span className="font-bold text-sm text-slate-900">{link.label}</span>
+                            <span className="text-xs text-slate-500 block" dir="ltr">
+                              {link.url}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = {
+                                ...settings,
+                                socialLinks: settings.socialLinks.filter((s) => s.id !== link.id)
+                              };
+                              setSettings(updated);
+                              saveSettingsToCloud(updated);
+                              showToast('تم حذف الرابط');
+                            }}
+                            className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
