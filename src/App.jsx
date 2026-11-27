@@ -48,36 +48,90 @@ import {
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 
 // ============================================================================
-// تهيئة الاتصال السحابي Firebase مع قاعدة بيانات el3bakera-edu
+// تهيئة الاتصال السحابي Firebase بأمان تام لبيئات النشر الخارجية (Vercel)
 // ============================================================================
-const firebaseConfig =
-  typeof window !== 'undefined' && window.__firebase_config
-    ? JSON.parse(window.__firebase_config)
-    : {
-        apiKey: 'AIzaSyDummyKeyForPreview',
-        authDomain: 'el3bakera-edu.firebaseapp.com',
-        projectId: 'el3bakera-edu',
-        storageBucket: 'el3bakera-edu.appspot.com',
-        messagingSenderId: '000000000000',
-        appId: '1:000000000000:web:el3bakeraedu'
-      };
+const getFirebaseConfig = () => {
+  try {
+    if (typeof window !== 'undefined' && window.__firebase_config) {
+      return typeof window.__firebase_config === 'string'
+        ? JSON.parse(window.__firebase_config)
+        : window.__firebase_config;
+    }
+    if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+      return typeof __firebase_config === 'string'
+        ? JSON.parse(__firebase_config)
+        : __firebase_config;
+    }
+    const savedConfig = localStorage.getItem('el3bakera_firebase_config');
+    if (savedConfig) {
+      return JSON.parse(savedConfig);
+    }
+  } catch (e) {
+    console.warn('Config parse skipped:', e);
+  }
+  return null;
+};
+
+const firebaseConfig = getFirebaseConfig();
 
 const PRIMARY_APP_ID = 'el3bakera-edu';
 const LEGACY_APP_IDS = [
   'el3bakera-edu',
   'muzakkirati-edu-app',
-  typeof window !== 'undefined' && window.__app_id ? window.__app_id : 'default-app-id',
+  typeof __app_id !== 'undefined' ? __app_id : 'default-app-id',
   'el3bakera-app'
 ];
 
 let db = null;
 let auth = null;
-try {
-  const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-  db = getFirestore(app);
-  auth = getAuth(app);
-} catch (err) {
-  console.warn('Firebase initialization fallback to local mode:', err);
+if (firebaseConfig && firebaseConfig.apiKey && !String(firebaseConfig.apiKey).includes('Dummy')) {
+  try {
+    const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+    db = getFirestore(app);
+    auth = getAuth(app);
+  } catch (err) {
+    console.warn('Firebase initialization fallback to local mode:', err);
+    db = null;
+    auth = null;
+  }
+}
+
+// ============================================================================
+// غلاف حماية لمنع الشاشة البيضاء نهائياً (Error Boundary)
+// ============================================================================
+class PlatformErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, errorMsg: '' };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, errorMsg: error?.message || 'حدث خطأ غير متوقع' };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div dir="rtl" className="min-h-screen bg-slate-50 flex items-center justify-center p-6 text-center">
+          <div className="bg-white rounded-3xl border border-slate-200 p-8 max-w-md w-full shadow-xl space-y-4">
+            <h2 className="text-xl font-black text-slate-900">جاري تحديث بيانات المنصة</h2>
+            <p className="text-xs text-slate-500">
+              تم رصد تعارض في البيانات المؤقتة بالمتصفح. اضغط على الزر بالأسفل لإعادة التحميل النظيف.
+            </p>
+            <button
+              onClick={() => {
+                localStorage.removeItem('el3bakera_settings_v5');
+                localStorage.removeItem('el3bakera_products_v5');
+                window.location.reload();
+              }}
+              className="w-full py-3 rounded-xl bg-blue-600 text-white font-bold text-sm"
+            >
+              إعادة تحميل المنصة الآن
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 // ============================================================================
@@ -344,7 +398,7 @@ function compressImageFile(file, maxWidth = 1100, quality = 0.82) {
 // ============================================================================
 // المكون الرئيسي للمنصة
 // ============================================================================
-export default function App() {
+function PlatformContent() {
   // حالة التبويب النشط
   const [activeTab, setActiveTab] = useState('home'); // 'home' | 'library' | 'bundles' | 'track' | 'admin'
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -2733,7 +2787,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* إدارة روابط الفوتر والأخبار */}
+                {/* إدارة روابط الفوتر والأخبار وربط السحابة */}
                 <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-5">
                   <div className="space-y-3">
                     <h3 className="font-black text-base">روابط التواصل في الفوتر</h3>
@@ -2790,6 +2844,38 @@ export default function App() {
                         </div>
                       ))}
                     </div>
+                  </div>
+
+                  {/* ربط قاعدة بيانات Firebase للنشر الخارجي (Vercel) */}
+                  <div className="pt-4 border-t border-slate-100 space-y-2">
+                    <h4 className="font-black text-sm text-slate-900">إعدادات ربط السحابة للنشر الخارجي (Vercel)</h4>
+                    <p className="text-[11px] text-slate-500">
+                      إذا كنت تنشر الموقع على Vercel، الصق كود `firebaseConfig` بصيغة JSON هنا لمزامنة البيانات والصور مع السحابة:
+                    </p>
+                    <textarea
+                      rows={3}
+                      dir="ltr"
+                      placeholder='{"apiKey":"...","authDomain":"el3bakera-edu.firebaseapp.com","projectId":"el3bakera-edu",...}'
+                      defaultValue={(() => {
+                        try {
+                          return localStorage.getItem('el3bakera_firebase_config') || '';
+                        } catch {
+                          return '';
+                        }
+                      })()}
+                      onBlur={(e) => {
+                        const val = e.target.value.trim();
+                        if (!val) return;
+                        try {
+                          JSON.parse(val);
+                          localStorage.setItem('el3bakera_firebase_config', val);
+                          showToast('تم حفظ إعدادات Firebase — أعد تحميل الصفحة لتفعيل المزامنة');
+                        } catch {
+                          showToast('صيغة JSON غير صحيحة', 'error');
+                        }
+                      }}
+                      className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-[11px] font-mono"
+                    />
                   </div>
                 </div>
               </div>
@@ -3186,5 +3272,13 @@ export default function App() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <PlatformErrorBoundary>
+      <PlatformContent />
+    </PlatformErrorBoundary>
   );
 }
