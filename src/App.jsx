@@ -474,6 +474,23 @@ function compressImageFile(file, maxWidth = 650, quality = 0.72) {
   });
 }
 
+// تقسيم وحفظ كل صورة في مستند منفصل في السحابة لتجنب تجاوز حد الـ 1MB في Firestore
+async function saveMediaAssetToCloud(dbInstance, appId, assetId, dataUrl) {
+  if (!dbInstance) return;
+  const mediaCol = collection(dbInstance, 'artifacts', appId, 'public', 'data', 'media_assets');
+  if (!dataUrl) {
+    try {
+      await deleteDoc(doc(mediaCol, assetId));
+    } catch {}
+    return;
+  }
+  await setDoc(doc(mediaCol, assetId), {
+    assetId,
+    dataUrl,
+    updatedAt: Date.now()
+  });
+}
+
 const IDB_NAME = 'el3bakera_persistent_db';
 const IDB_STORE = 'kv_store';
 
@@ -831,7 +848,7 @@ function MuzakkiratiPlatformContent() {
     if (!db) return;
 
     const settingsRef = doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'main');
-    const mediaRef = doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'media');
+    const mediaCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'media_assets');
 
     const unsubSettings = onSnapshot(
       settingsRef,
@@ -863,28 +880,43 @@ function MuzakkiratiPlatformContent() {
       () => setCloudSyncStatus('error')
     );
 
-    const unsubMedia = onSnapshot(
-      mediaRef,
-      (snap) => {
-        if (snap.exists() && !isSavingRef.current) {
-          const mediaData = snap.data();
-          setSettings((prev) => {
-            const catCovers = mediaData.categoryCovers || {};
-            const mergedCategories = (prev.categories || []).map((c) => ({
-              ...c,
-              coverImage: catCovers[c.id] || c.coverImage || ''
-            }));
-            const merged = {
-              ...prev,
-              categories: mergedCategories,
-              logoImage: mediaData.logoImage || prev.logoImage || '',
-              heroImage: mediaData.heroImage || prev.heroImage || '',
-              heroBgImage: mediaData.heroBgImage || prev.heroBgImage || ''
-            };
-            idbSet('settings_v5', merged);
-            return merged;
-          });
-        }
+    // الاستماع الفوري لجميع الصور المنفصلة (الشعار، الخلفية، أغلفة الأقسام، أغلفة المذكرات)
+    const unsubMediaAssets = onSnapshot(
+      mediaCol,
+      (snapshot) => {
+        if (snapshot.empty) return;
+        const assetsMap = {};
+        snapshot.forEach((d) => {
+          const item = d.data();
+          if (item && item.dataUrl) {
+            assetsMap[d.id] = item.dataUrl;
+          }
+        });
+
+        setSettings((prev) => {
+          const updatedCats = (prev.categories || []).map((c) => ({
+            ...c,
+            coverImage: assetsMap[`cat_${c.id}`] || c.coverImage || ''
+          }));
+          const updatedSettings = {
+            ...prev,
+            logoImage: assetsMap['logoImage'] || prev.logoImage || '',
+            heroImage: assetsMap['heroImage'] || prev.heroImage || '',
+            heroBgImage: assetsMap['heroBgImage'] || prev.heroBgImage || '',
+            categories: updatedCats
+          };
+          idbSet('settings_v5', updatedSettings);
+          return updatedSettings;
+        });
+
+        setProducts((prev) => {
+          const updatedProds = prev.map((p) => ({
+            ...p,
+            coverImage: assetsMap[`prod_cover_${p.id}`] || p.coverImage || ''
+          }));
+          idbSet('products_v5', updatedProds);
+          return updatedProds;
+        });
       },
       () => {}
     );
@@ -988,7 +1020,7 @@ function MuzakkiratiPlatformContent() {
 
     return () => {
       unsubSettings();
-      unsubMedia();
+      unsubMediaAssets();
       unsubProducts();
       unsubOrders();
       unsubBundles();
@@ -1009,12 +1041,7 @@ function MuzakkiratiPlatformContent() {
     safeLocalSet('el3bakera_settings_v5', cleanSettings);
     if (db) {
       try {
-        const categoryCovers = {};
-        const lightCategories = (cleanSettings.categories || []).map((c) => {
-          if (c.coverImage) categoryCovers[c.id] = c.coverImage;
-          const { coverImage, ...rest } = c;
-          return rest;
-        });
+        const lightCategories = (cleanSettings.categories || []).map(({ coverImage, ...rest }) => rest);
         const { logoImage, heroImage, heroBgImage, ...lightSettings } = cleanSettings;
         lightSettings.categories = lightCategories;
 
@@ -1023,21 +1050,51 @@ function MuzakkiratiPlatformContent() {
           lightSettings,
           { merge: true }
         );
-        await setDoc(
-          doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'media'),
-          {
-            logoImage: logoImage || '',
-            heroImage: heroImage || '',
-            heroBgImage: heroBgImage || '',
-            categoryCovers
-          },
-          { merge: true }
-        );
+
+        // رفع كل صورة في مستند مستقل تماماً لضمان عدم تجاوز حد الـ 1MB وظهورها فوراً للعملاء
+        await saveMediaAssetToCloud(db, PRIMARY_APP_ID, 'logoImage', logoImage || '');
+        await saveMediaAssetToCloud(db, PRIMARY_APP_ID, 'heroImage', heroImage || '');
+        await saveMediaAssetToCloud(db, PRIMARY_APP_ID, 'heroBgImage', heroBgImage || '');
+        for (const cat of cleanSettings.categories || []) {
+          await saveMediaAssetToCloud(db, PRIMARY_APP_ID, `cat_${cat.id}`, cat.coverImage || '');
+        }
+
         setCloudSyncStatus('connected');
       } catch (e) {
+        console.error('Firebase save error:', e);
         setCloudSyncStatus('error');
-        showToast('تعذر الحفظ في السحابة — تأكد من إعدادات ربط Firebase', 'error');
+        showToast(`تعذر الحفظ في السحابة: ${e?.code || e?.message || 'تحقق من صلاحيات Firestore'}`, 'error');
       }
+    }
+    setTimeout(() => {
+      isSavingRef.current = false;
+    }, 2000);
+  };
+
+  const saveProductToCloud = async (productObj) => {
+    if (!db) return;
+    isSavingRef.current = true;
+    try {
+      const { sampleImages, coverImage, ...lightProduct } = productObj;
+      await setDoc(
+        doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebooks', productObj.id),
+        lightProduct,
+        { merge: true }
+      );
+      await saveMediaAssetToCloud(db, PRIMARY_APP_ID, `prod_cover_${productObj.id}`, coverImage || '');
+      await setDoc(
+        doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebook_samples', productObj.id),
+        {
+          notebookId: productObj.id,
+          title: productObj.title,
+          sampleImages: (sampleImages || []).slice(0, 4),
+          updatedAt: new Date().toISOString()
+        },
+        { merge: true }
+      );
+    } catch (e) {
+      console.error('Product cloud save error:', e);
+      showToast(`تعذر رفع صور المذكرة للسحابة: ${e?.code || e?.message || 'خطأ في الاتصال'}`, 'error');
     }
     setTimeout(() => {
       isSavingRef.current = false;
