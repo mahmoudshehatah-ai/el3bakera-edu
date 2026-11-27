@@ -154,6 +154,25 @@ const DEFAULT_LOGO_SVG = `data:image/svg+xml;utf8,${encodeURIComponent(`
 </svg>
 `)}`;
 
+// مولد أغلفة SVG احترافية للأقسام والمذكرات عند عدم رفع صورة مخصصة
+const createCoverSvg = (title, subtitle, c1 = '#1e3a8a', c2 = '#0654d0') =>
+  `data:image/svg+xml;utf8,${encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 320" width="600" height="320">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="${c1}"/>
+      <stop offset="100%" stop-color="${c2}"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="320" fill="url(#g)"/>
+  <circle cx="520" cy="60" r="110" fill="#ffffff" opacity="0.06"/>
+  <circle cx="90" cy="280" r="140" fill="#fde047" opacity="0.08"/>
+  <rect x="36" y="36" width="528" height="248" rx="22" fill="none" stroke="#fde047" stroke-opacity="0.35" stroke-width="2"/>
+  <text x="300" y="145" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-weight="bold" font-size="30">${title}</text>
+  <text x="300" y="192" text-anchor="middle" fill="#fde047" font-family="Arial, sans-serif" font-weight="bold" font-size="18">${subtitle}</text>
+</svg>
+`)}`;
+
 // الإعدادات المعتمدة من النسخة الاحتياطية el3bakera_backup_2026-11-27_2.json
 const DEFAULT_SETTINGS = {
   platformName: 'منصة العباقرة للمذكرات التعليمية',
@@ -221,9 +240,24 @@ const DEFAULT_SETTINGS = {
   heroImage: '',
   adminPin: '2026',
   categories: [
-    { id: 'cat_0', name: 'مذكرات الفصل الدراسي الأول' },
-    { id: 'cat_1', name: 'مذكرات الفصل الدراسي الثاني' },
-    { id: 'cat_2', name: 'كورسات التأسيس والمراجعات النهائية' }
+    {
+      id: 'cat_0',
+      name: 'مذكرات الترم الأول',
+      subtitle: 'شرح وتدريبات وبنوك مراجعة الفصل الدراسي الأول',
+      coverImage: createCoverSvg('مذكرات الترم الأول', 'شرح وتدريبات وبنوك مراجعة شاملة', '#0f172a', '#1d4ed8')
+    },
+    {
+      id: 'cat_1',
+      name: 'مذكرات الترم الثاني',
+      subtitle: 'مناهج الفصل الدراسي الثاني كاملة ومجابة',
+      coverImage: createCoverSvg('مذكرات الترم الثاني', 'منسقة ومحدثة وفق أحدث مواصفات الوزارة', '#1e3a8a', '#0284c7')
+    },
+    {
+      id: 'cat_2',
+      name: 'الكورسات وملازم التأسيس',
+      subtitle: 'تأسيس القواعد والنحو والإملاء لجميع المراحل',
+      coverImage: createCoverSvg('الكورسات وملازم التأسيس', 'بناء مهارات الطلاب من الصفر حتى الإتقان', '#312e81', '#4338ca')
+    }
   ],
   stages: [
     { id: 'stg_prim_1', name: 'المرحلة الابتدائية' },
@@ -259,6 +293,7 @@ const DEFAULT_PRODUCTS = [
     badge: 'الخيار الأفضل للمراجعة وتهيئة الطالب قبل الامتحان',
     noticeText: 'للمراجعة المُثلى اطلبها مع بوكليت الاختبارات',
     driveLink: 'https://drive.google.com/drive/folders/1-da77OuUXUSPPc-GVcolMBkWxBqEzY-O',
+    coverImage: createCoverSvg('بنك مراجعة ٣ إعدادي', '109 صفحة مجابة بالكامل • اللغة العربية', '#0f172a', '#1e40af'),
     description:
       'بنك المراجعة يشمل: تدريبات مكثفة تحاكي أسئلة الامتحان بعدد صفحات 109 صفحة، ويضم أسئلة الكتاب المدرسي وكتاب التقييمات منسقة بشكل احترافي، المذكرة مجابة بالكامل، بفضل الله حققنا المعادلة الصعبة (محتوى متكامل بتنسيق احترافي يتفوق ع الملخصات + عدد صفحات قليلة) ولثقتنا في أعمالنا يمكن الاطلاع على عينة كاملة فقط اضغط ع رابط الدرايف.',
     features: [
@@ -280,6 +315,7 @@ const DEFAULT_PRODUCTS = [
     badge: 'الخيار الأفضل للمراجعة وتهيئة الطالب قبل الامتحان',
     noticeText: 'للمراجعة المُثلى اطلبها مع بوكليت الامتحانات',
     driveLink: 'https://drive.google.com/drive/folders/1XfiofQXtyNpPrta6iH2xxY8UUhhuIZ9i',
+    coverImage: createCoverSvg('بنك مراجعة ٢ إعدادي', '106 صفحة مجابة بالكامل • اللغة العربية', '#1e3a8a', '#2563eb'),
     description:
       'بنك المراجعة يشمل: تدريبات مكثفة تحاكي أسئلة الامتحان بعدد صفحات 106 صفحة، ويضم أسئلة الكتاب المدرسي وكتاب التقييمات منسقة بشكل احترافي، المذكرة مجابة بالكامل، بفضل الله حققنا المعادلة الصعبة (محتوى متكامل بتنسيق احترافي يتفوق ع الملخصات + عدد صفحات قليلة).',
     features: [
@@ -301,6 +337,7 @@ const DEFAULT_PRODUCTS = [
     badge: 'الخيار الأمثل لتدريب الطالب على الامتحان',
     noticeText: 'للمراجعة المُثلى اطلبها مع بنك المراجعة',
     driveLink: 'https://drive.google.com/drive/folders/1_42AbIFhyBwrtJOM5G3g_XZtMI0a6uco',
+    coverImage: createCoverSvg('بوكليت اختبارات ٢ إعدادي', '16 امتحانًا شاملًا مجابًا • 48 صفحة', '#0f172a', '#0369a1'),
     description:
       'البوكليت يشمل: 16 امتحانًا شاملًا بعدد صفحات 48 صفحة، تضم النماذج الاسترشادية منسقة بشكل احترافي، المذكرة مجابة بالكامل، بفضل الله حققنا المعادلة الصعبة (محتوى متكامل بتنسيق احترافي يتفوق ع الملخصات + عدد صفحات قليلة).',
     features: [
@@ -322,6 +359,7 @@ const DEFAULT_PRODUCTS = [
     badge: 'الخيار الأفضل للمراجعة وتهيئة الطالب قبل الامتحان',
     noticeText: 'للمراجعة المُثلى اطلبها مع بوكليت الاختبارات',
     driveLink: 'https://drive.google.com/drive/folders/12dq1K3PwD0D55xPHwUlIji83U-j1cC_X',
+    coverImage: createCoverSvg('بنك مراجعة ١ إعدادي', '95 صفحة مجابة بالكامل • اللغة العربية', '#1e3a8a', '#1d4ed8'),
     description:
       'بنك المراجعة يشمل: تدريبات مكثفة تحاكي أسئلة الامتحان بعدد صفحات 95 صفحة، ويضم أسئلة الكتاب المدرسي وكتاب التقييمات منسقة بشكل احترافي، المذكرة مجابة بالكامل.',
     features: [
@@ -343,6 +381,7 @@ const DEFAULT_PRODUCTS = [
     badge: 'الخيار الأمثل لتدريب الطالب على الامتحان',
     noticeText: 'للمراجعة المُثلى اطلبها مع بنك المراجعة',
     driveLink: 'https://drive.google.com/drive/folders/12dq1K3PwD0D55xPHwUlIji83U-j1cC_X',
+    coverImage: createCoverSvg('بوكليت اختبارات ١ إعدادي', '15 امتحانًا شاملًا مجابًا • 46 صفحة', '#0f172a', '#1e3a8a'),
     description:
       'البوكليت يشمل: 15 امتحانًا شاملًا بعدد صفحات 46 صفحة، تضم النماذج الاسترشادية منسقة بشكل احترافي، المذكرة مجابة بالكامل.',
     features: [
@@ -364,6 +403,7 @@ const DEFAULT_PRODUCTS = [
     badge: 'الاختيار الأمثل للمعلم لشرح وتدريبات الصف الثالث الثانوي',
     noticeText: 'المذكرة جزآن (النحو 289 ص + باقي الفروع 269 ص) ومتاح الحصول على كل جزء منفصل',
     driveLink: 'https://drive.google.com/drive/folders/1c-wKh87hwavlLp0QQ--TODl9u8UO3dn0',
+    coverImage: createCoverSvg('منهج الترم الثاني ٣ ثانوي', 'جزآن شاملان • 558 صفحة مجابة بالكامل', '#1e1b4b', '#1d4ed8'),
     description:
       'الكتاب يضم الشرح والتدريبات لمنهج الترم الثاني طبقًا لآخر التعليمات الوزارية (50% مقالي) ومكون من جزأين: الجزء الأول (النحو: 289 صفحة من الوحدة الرابعة حتى نهاية المنهج) + الجزء الثاني (القراءة + القصة + التعبير + البلاغة + الأدب والنصوص: 269 صفحة). التدريبات مجابة بالكامل.',
     features: [
@@ -514,7 +554,10 @@ export default function App() {
 
   // لوحة الإدارة
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [isAdminLoginModalOpen, setIsAdminLoginModalOpen] = useState(false);
+  const [adminUsernameInput, setAdminUsernameInput] = useState('admin@el3bakera.com');
   const [pinInput, setPinInput] = useState('');
+  const [showPinText, setShowPinText] = useState(false);
   const [adminSection, setAdminSection] = useState('settings');
   const [isSavingCloud, setIsSavingCloud] = useState(false);
 
@@ -532,6 +575,7 @@ export default function App() {
     badge: 'جديد',
     noticeText: '',
     driveLink: '',
+    coverImage: '',
     description: ''
   });
 
@@ -557,6 +601,8 @@ export default function App() {
   const [newGradeName, setNewGradeName] = useState('');
   const [newGradeStageId, setNewGradeStageId] = useState('stg_prep_1');
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategorySubtitle, setNewCategorySubtitle] = useState('');
+  const [newCategoryCover, setNewCategoryCover] = useState('');
   const [newNewsItem, setNewNewsItem] = useState({
     badge: 'خبر جديد',
     title: '',
@@ -867,13 +913,11 @@ export default function App() {
   };
 
   // ============================================================================
-  // 5. رفع الصور (الشعار والبانر) والنسخ الاحتياطي JSON
+  // 5. رفع الصور (الشعار والبانر والأغلفة) والنسخ الاحتياطي JSON
   // ============================================================================
 
-  const handleImageCompressUpload = (e, fieldName, maxSize = 360) => {
-    const file = e.target.files?.[0];
+  const compressImageFile = (file, maxSize, callback) => {
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = (event) => {
       const img = new Image();
@@ -898,15 +942,20 @@ export default function App() {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
-
-        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
-        const updated = { ...settings, [fieldName]: compressedDataUrl };
-        setSettings(updated);
-        saveSettingsToCloud(updated);
+        callback(canvas.toDataURL('image/jpeg', 0.85));
       };
       img.src = event.target?.result;
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleImageCompressUpload = (e, fieldName, maxSize = 360) => {
+    const file = e.target.files?.[0];
+    compressImageFile(file, maxSize, (compressedDataUrl) => {
+      const updated = { ...settings, [fieldName]: compressedDataUrl };
+      setSettings(updated);
+      saveSettingsToCloud(updated);
+    });
   };
 
   const handleExportBackup = () => {
@@ -1023,8 +1072,33 @@ export default function App() {
       badge: 'جديد',
       noticeText: '',
       driveLink: '',
+      coverImage: '',
       description: ''
     });
+  };
+
+  const handleAdminLoginSubmit = (e) => {
+    e.preventDefault();
+    const cleanPin = pinInput.trim();
+    const savedPin = (settings.adminPin || '').trim();
+    if (
+      cleanPin === savedPin ||
+      cleanPin === '2026' ||
+      cleanPin === 'el3bakera2026' ||
+      cleanPin.length >= 6
+    ) {
+      if (cleanPin && cleanPin !== savedPin) {
+        const updated = { ...settings, adminPin: cleanPin };
+        setSettings(updated);
+        saveSettingsToCloud(updated);
+      }
+      setIsAdminAuthenticated(true);
+      setIsAdminLoginModalOpen(false);
+      setActiveTab('admin');
+      showToast('تم تسجيل الدخول إلى لوحة الإدارة بنجاح');
+    } else {
+      showToast('كلمة المرور غير صحيحة', 'error');
+    }
   };
 
   const handleAddBundle = (e) => {
@@ -1149,7 +1223,7 @@ export default function App() {
             </div>
           </button>
 
-          {/* روابط التنقل */}
+          {/* روابط التنقل العامة (بدون زر لوحة الإدارة للزوار) */}
           <nav className="hidden md:flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl">
             <button
               onClick={() => setActiveTab('store')}
@@ -1173,28 +1247,32 @@ export default function App() {
               <Package className="w-4 h-4" />
               <span>الباقات المخفضة</span>
             </button>
-            <button
-              onClick={() => setActiveTab('admin')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition cursor-pointer ${
-                activeTab === 'admin'
-                  ? 'bg-slate-900 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Settings className="w-4 h-4" />
-              <span>لوحة الإدارة</span>
-            </button>
+            {isAdminAuthenticated && (
+              <button
+                onClick={() => setActiveTab('admin')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition cursor-pointer ${
+                  activeTab === 'admin'
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Settings className="w-4 h-4" />
+                <span>لوحة الإدارة</span>
+              </button>
+            )}
           </nav>
 
-          {/* أزرار السلة والإدارة للموبايل */}
+          {/* زر السلة */}
           <div className="flex items-center gap-2.5">
-            <button
-              onClick={() => setActiveTab(activeTab === 'admin' ? 'store' : 'admin')}
-              className="md:hidden p-2.5 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition"
-              title="لوحة الإدارة"
-            >
-              <Settings className="w-5 h-5" />
-            </button>
+            {isAdminAuthenticated && (
+              <button
+                onClick={() => setActiveTab(activeTab === 'admin' ? 'store' : 'admin')}
+                className="md:hidden p-2.5 rounded-xl bg-slate-900 text-white transition"
+                title="لوحة الإدارة"
+              >
+                <Settings className="w-5 h-5" />
+              </button>
+            )}
 
             <button
               onClick={() => setIsCartOpen(true)}
@@ -1312,24 +1390,73 @@ export default function App() {
             </div>
           </section>
 
-          {/* تنبيهات هامة للمعلمين */}
-          {settings.notebookNoticeEnabled && (
-            <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
-              <div className="bg-amber-50 border border-amber-200 rounded-3xl p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                <div className="w-11 h-11 rounded-2xl bg-amber-400/20 text-amber-700 flex items-center justify-center shrink-0">
-                  <Info className="w-6 h-6" />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="font-black text-sm sm:text-base text-amber-950">
-                    {settings.notebookNoticeTitle}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-amber-900 whitespace-pre-line leading-relaxed">
-                    {settings.notebookNoticeText}
-                  </p>
-                </div>
+          {/* بطاقات الأقسام الثلاثة الرئيسية بالصور */}
+          <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="text-xl sm:text-2xl font-black text-slate-900">تصفح حسب القسم</h3>
+                <p className="text-xs sm:text-sm text-slate-500">اختر القسم المطلوب لعرض المذكرات المتاحة به</p>
               </div>
-            </section>
-          )}
+              {selectedCategory !== 'all' && (
+                <button
+                  onClick={() => setSelectedCategory('all')}
+                  className="text-xs font-bold text-blue-700 hover:underline cursor-pointer"
+                >
+                  عرض كل الأقسام
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {settings.categories.map((cat, idx) => {
+                const defaultCat = DEFAULT_SETTINGS.categories[idx] || DEFAULT_SETTINGS.categories[0];
+                const catName = safeText(cat.name || cat.title, defaultCat.name);
+                const catSub = safeText(cat.subtitle, defaultCat.subtitle);
+                const catCover = isValidImageSrc(cat.coverImage)
+                  ? cat.coverImage
+                  : defaultCat.coverImage;
+                const countInCat = products.filter((p) => p.categoryId === cat.id).length;
+                const isSelected = selectedCategory === cat.id;
+
+                return (
+                  <button
+                    key={cat.id || idx}
+                    type="button"
+                    onClick={() => {
+                      setSelectedCategory(isSelected ? 'all' : cat.id);
+                      document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    className={`group text-right rounded-3xl overflow-hidden border-2 transition-all duration-300 bg-white shadow-sm hover:shadow-xl cursor-pointer flex flex-col ${
+                      isSelected
+                        ? 'border-blue-600 ring-4 ring-blue-600/15'
+                        : 'border-slate-200/90 hover:border-blue-400'
+                    }`}
+                  >
+                    <div className="relative h-40 w-full overflow-hidden bg-slate-900">
+                      <img
+                        src={catCover}
+                        alt={catName}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-900/20 to-transparent" />
+                      <span className="absolute top-3 left-3 bg-amber-300 text-slate-950 text-xs font-black px-3 py-1 rounded-full shadow">
+                        {countInCat} مذكرة
+                      </span>
+                      <div className="absolute bottom-3 right-4 left-4 text-white">
+                        <h4 className="font-black text-base sm:text-lg leading-snug">{catName}</h4>
+                      </div>
+                    </div>
+                    <div className="p-4 flex items-center justify-between gap-2 bg-white">
+                      <p className="text-xs text-slate-600 line-clamp-1">{catSub}</p>
+                      <span className="text-xs font-extrabold text-blue-700 shrink-0">
+                        {isSelected ? 'محدد ✓' : 'تصفح ←'}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
 
           {/* شريط البحث والفلترة المتقدم */}
           <section id="catalog" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -1456,28 +1583,38 @@ export default function App() {
                       key={product.id}
                       className="bg-white rounded-3xl border border-slate-200/90 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col overflow-hidden"
                     >
-                      {/* رأس البطاقة */}
-                      <div className="bg-gradient-to-l from-blue-900 to-slate-900 p-5 text-white space-y-2.5">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <span className="text-xs font-bold bg-blue-500/25 text-blue-200 border border-blue-400/30 px-3 py-1 rounded-full">
+                      {/* صورة غلاف المذكرة */}
+                      <div className="relative h-48 w-full overflow-hidden bg-slate-900">
+                        <img
+                          src={
+                            isValidImageSrc(product.coverImage)
+                              ? product.coverImage
+                              : createCoverSvg(product.title, `${product.subject} • ${gradeName}`)
+                          }
+                          alt={product.title}
+                          className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-900/25 to-transparent" />
+                        <div className="absolute top-3 right-3 left-3 flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold bg-blue-600/90 backdrop-blur-sm text-white px-3 py-1 rounded-full shadow">
                             {product.subject}
                           </span>
                           {savings > 0 && (
-                            <span className="text-xs font-black bg-emerald-400 text-slate-950 px-2.5 py-1 rounded-full">
+                            <span className="text-xs font-black bg-emerald-400 text-slate-950 px-2.5 py-1 rounded-full shadow">
                               وفر {savings} ج.م
                             </span>
                           )}
                         </div>
-                        <h3 className="font-extrabold text-lg leading-snug line-clamp-2 min-h-[3.25rem]">
-                          {product.title}
-                        </h3>
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
-                          <span className="flex items-center gap-1">
-                            <GraduationCap className="w-3.5 h-3.5 text-amber-300" />
-                            {gradeName}
-                          </span>
-                          <span>•</span>
-                          <span>{categoryName}</span>
+                        <div className="absolute bottom-3 right-4 left-4 text-white">
+                          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-amber-300 font-bold mb-1">
+                            <GraduationCap className="w-3.5 h-3.5" />
+                            <span>{gradeName}</span>
+                            <span>•</span>
+                            <span>{categoryName}</span>
+                          </div>
+                          <h3 className="font-extrabold text-base sm:text-lg leading-snug line-clamp-1">
+                            {product.title}
+                          </h3>
                         </div>
                       </div>
 
@@ -1634,49 +1771,67 @@ export default function App() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {bundles.map((bundle) => {
               const inCart = cart.some((c) => c.id === bundle.id);
+              const bundleSavings =
+                bundle.oldPrice > bundle.price ? bundle.oldPrice - bundle.price : 0;
               return (
                 <div
                   key={bundle.id}
-                  className="bg-white rounded-3xl border-2 border-blue-500/30 p-6 sm:p-8 shadow-md flex flex-col justify-between space-y-6"
+                  className="bg-white rounded-3xl border-2 border-blue-600/25 overflow-hidden shadow-lg hover:shadow-2xl transition-all flex flex-col justify-between"
                 >
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-bold bg-blue-50 text-blue-700 px-3 py-1 rounded-full">
-                        باقة متكاملة للمعلمين
-                      </span>
-                      {bundle.badge && (
-                        <span className="text-xs font-black bg-emerald-400 text-slate-950 px-3 py-1 rounded-full">
-                          {bundle.badge}
+                  <div>
+                    {/* رأس الباقة المميز */}
+                    <div className="bg-gradient-to-l from-slate-900 via-blue-950 to-slate-900 p-6 text-white relative overflow-hidden">
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <span className="text-xs font-extrabold bg-amber-400 text-slate-950 px-3 py-1 rounded-full">
+                          باقة التوفير الشاملة
                         </span>
-                      )}
+                        {(bundle.badge || bundleSavings > 0) && (
+                          <span className="text-xs font-black bg-emerald-400 text-slate-950 px-3 py-1 rounded-full">
+                            {bundle.badge || `وفر ${bundleSavings} ج.م`}
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="text-xl sm:text-2xl font-black leading-snug">
+                        {bundle.title}
+                      </h3>
+                      <p className="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
+                        {bundle.description}
+                      </p>
                     </div>
-                    <h3 className="text-xl sm:text-2xl font-black text-slate-900">{bundle.title}</h3>
-                    <p className="text-sm text-slate-600">{bundle.description}</p>
 
-                    <div className="bg-slate-50 rounded-2xl p-4 space-y-2.5 border border-slate-100">
-                      <p className="text-xs font-bold text-slate-500">محتويات الباقة:</p>
-                      {bundle.itemsIncluded.map((item, i) => (
-                        <div key={i} className="flex items-center gap-2 text-sm text-slate-800">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                          <span>{item}</span>
-                        </div>
-                      ))}
+                    {/* محتويات الباقة */}
+                    <div className="p-6 space-y-3">
+                      <p className="text-xs font-black text-slate-500 uppercase tracking-wider">
+                        تشمل الباقة المذكرات التالية مخصصة باسمك:
+                      </p>
+                      <div className="bg-slate-50 rounded-2xl p-4 space-y-2.5 border border-slate-200/80">
+                        {bundle.itemsIncluded.map((item, i) => (
+                          <div key={i} className="flex items-start gap-2.5 text-sm text-slate-800">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                            <span className="font-medium">{item}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  {/* السعر وزر الطلب */}
+                  <div className="px-6 py-5 bg-slate-50 border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-4">
                     <div>
-                      <span className="text-3xl font-black text-blue-700">{bundle.price} ج.م</span>
-                      {bundle.oldPrice > bundle.price && (
-                        <span className="text-sm text-slate-400 line-through mr-2">
-                          {bundle.oldPrice} ج.م
-                        </span>
-                      )}
+                      <span className="text-xs text-slate-500 block">سعر الباقة المخفض:</span>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-3xl font-black text-blue-700">{bundle.price} ج.م</span>
+                        {bundle.oldPrice > bundle.price && (
+                          <span className="text-sm text-slate-400 line-through">
+                            {bundle.oldPrice} ج.م
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <button
                       onClick={() => (inCart ? setIsCartOpen(true) : addToCart(bundle, 'bundle'))}
-                      className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-md"
+                      className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-md shadow-blue-600/20"
                     >
                       <ShoppingCart className="w-4 h-4 text-amber-300" />
                       <span>{inCart ? 'مضافة للسلة (عرض)' : 'اطلب الباقة الآن'}</span>
@@ -1690,62 +1845,11 @@ export default function App() {
       )}
 
       {/* ====================================================================
-          لوحة الإدارة المتكاملة (Admin Dashboard)
+          لوحة الإدارة المتكاملة (تظهر فقط بعد تسجيل الدخول)
          ==================================================================== */}
-      {activeTab === 'admin' && (
+      {activeTab === 'admin' && isAdminAuthenticated && (
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-          {!isAdminAuthenticated ? (
-            <div className="max-w-md mx-auto bg-white rounded-3xl p-8 shadow-lg border border-slate-200 text-center space-y-5">
-              <div className="w-16 h-16 rounded-2xl bg-slate-900 text-amber-400 flex items-center justify-center mx-auto">
-                <Lock className="w-8 h-8" />
-              </div>
-              <div>
-                <h2 className="text-xl font-black text-slate-900">دخول لوحة الإدارة</h2>
-                <p className="text-xs text-slate-500 mt-1">
-                  أدخل كلمة مرور الإدارة الخاصة بك أو الرمز السريع
-                </p>
-              </div>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const cleanPin = pinInput.trim();
-                  const savedPin = (settings.adminPin || '').trim();
-                  if (
-                    cleanPin === savedPin ||
-                    cleanPin === '2026' ||
-                    cleanPin === 'el3bakera2026' ||
-                    cleanPin.length >= 6
-                  ) {
-                    if (cleanPin && cleanPin !== savedPin) {
-                      const updated = { ...settings, adminPin: cleanPin };
-                      setSettings(updated);
-                      saveSettingsToCloud(updated);
-                    }
-                    setIsAdminAuthenticated(true);
-                    showToast('تم تسجيل الدخول إلى لوحة الإدارة بنجاح');
-                  } else {
-                    showToast('رمز المرور غير صحيح', 'error');
-                  }
-                }}
-                className="space-y-4"
-              >
-                <input
-                  type="password"
-                  value={pinInput}
-                  onChange={(e) => setPinInput(e.target.value)}
-                  placeholder="أدخل كلمة المرور..."
-                  className="w-full text-center tracking-widest text-lg font-bold px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:border-blue-600 focus:outline-none"
-                />
-                <button
-                  type="submit"
-                  className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm transition cursor-pointer"
-                >
-                  دخول لوحة التحكم
-                </button>
-              </form>
-            </div>
-          ) : (
-            <div className="space-y-6">
+          <div className="space-y-6">
               {/* شريط علوي للإدارة */}
               <div className="bg-slate-900 text-white rounded-3xl p-5 sm:p-6 flex flex-wrap items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
@@ -1776,7 +1880,10 @@ export default function App() {
                     <span>{isSavingCloud ? 'جاري الحفظ...' : 'حفظ وتثبيت'}</span>
                   </button>
                   <button
-                    onClick={() => setIsAdminAuthenticated(false)}
+                    onClick={() => {
+                      setIsAdminAuthenticated(false);
+                      setActiveTab('store');
+                    }}
                     className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition cursor-pointer"
                     title="تسجيل خروج"
                   >
@@ -2127,7 +2234,7 @@ export default function App() {
                       </select>
                       <input
                         type="text"
-                        placeholder="اسم الصف الدراسي (مثال: الصف الثالث الثانوي)..."
+                        placeholder="اسم الصف الجديد (مثال: الصف الثالث الابتدائي)..."
                         value={newGradeName}
                         onChange={(e) => setNewGradeName(e.target.value)}
                         className="px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm"
@@ -2157,96 +2264,163 @@ export default function App() {
                         إضافة صف
                       </button>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-                      {settings.grades.map((gr) => {
-                        const parentStage =
-                          settings.stages.find((s) => s.id === gr.stageId)?.name || '';
-                        return (
-                          <div
-                            key={gr.id}
-                            className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 text-sm"
-                          >
-                            <div>
-                              <p className="font-bold text-slate-900">{gr.name}</p>
-                              <p className="text-[11px] text-slate-500">{parentStage}</p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const updated = {
-                                  ...settings,
-                                  grades: settings.grades.filter((item) => item.id !== gr.id)
-                                };
-                                setSettings(updated);
-                                saveSettingsToCloud(updated);
-                                showToast('تم حذف الصف الدراسي');
-                              }}
-                              className="text-rose-500 hover:text-rose-700 cursor-pointer"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* إدارة الأقسام */}
-                  <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
-                    <h3 className="font-black text-base text-slate-900">أقسام المكتبة</h3>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="اسم القسم الجديد (مثال: بوسترات التلخيص)..."
-                        value={newCategoryName}
-                        onChange={(e) => setNewCategoryName(e.target.value)}
-                        className="flex-1 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!newCategoryName.trim()) return;
-                          const updated = {
-                            ...settings,
-                            categories: [
-                              ...settings.categories,
-                              { id: `cat_${Date.now()}`, name: newCategoryName.trim() }
-                            ]
-                          };
-                          setSettings(updated);
-                          saveSettingsToCloud(updated);
-                          setNewCategoryName('');
-                          showToast('تمت إضافة القسم بنجاح');
-                        }}
-                        className="px-5 py-3 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 cursor-pointer"
-                      >
-                        إضافة قسم
-                      </button>
-                    </div>
                     <div className="flex flex-wrap gap-2">
-                      {settings.categories.map((cat) => (
+                      {settings.grades.map((gr) => (
                         <div
-                          key={cat.id}
-                          className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold"
+                          key={gr.id}
+                          className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
                         >
-                          <span>{cat.name}</span>
+                          <span>{gr.name}</span>
                           <button
                             type="button"
                             onClick={() => {
                               const updated = {
                                 ...settings,
-                                categories: settings.categories.filter((item) => item.id !== cat.id)
+                                grades: settings.grades.filter((item) => item.id !== gr.id)
                               };
                               setSettings(updated);
                               saveSettingsToCloud(updated);
-                              showToast('تم حذف القسم');
+                              showToast('تم حذف الصف');
                             }}
                             className="text-rose-500 hover:text-rose-700 cursor-pointer"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       ))}
+                    </div>
+                  </div>
+
+                  {/* إدارة الأقسام وصور أغلفتها */}
+                  <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4">
+                    <h3 className="font-black text-base text-slate-900">
+                      أقسام المكتبة وصور أغلفتها
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <input
+                        type="text"
+                        placeholder="اسم القسم الجديد..."
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        className="px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm"
+                      />
+                      <input
+                        type="text"
+                        placeholder="وصف مختصر للقسم..."
+                        value={newCategorySubtitle}
+                        onChange={(e) => setNewCategorySubtitle(e.target.value)}
+                        className="px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm"
+                      />
+                      <div className="flex gap-2">
+                        <label className="flex-1 px-3 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer">
+                          <ImageIcon className="w-4 h-4 text-blue-600" />
+                          <span>{newCategoryCover ? 'تم اختيار الغلاف ✓' : 'صورة الغلاف'}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) =>
+                              compressImageFile(e.target.files?.[0], 640, (dataUrl) =>
+                                setNewCategoryCover(dataUrl)
+                              )
+                            }
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!newCategoryName.trim()) return;
+                            const updated = {
+                              ...settings,
+                              categories: [
+                                ...settings.categories,
+                                {
+                                  id: `cat_${Date.now()}`,
+                                  name: newCategoryName.trim(),
+                                  subtitle: newCategorySubtitle.trim() || 'مذكرات منسقة بأعلى جودة',
+                                  coverImage:
+                                    newCategoryCover ||
+                                    createCoverSvg(newCategoryName.trim(), 'منصة العباقرة')
+                                }
+                              ]
+                            };
+                            setSettings(updated);
+                            saveSettingsToCloud(updated);
+                            setNewCategoryName('');
+                            setNewCategorySubtitle('');
+                            setNewCategoryCover('');
+                            showToast('تمت إضافة القسم وغلافه بنجاح');
+                          }}
+                          className="px-4 py-3 rounded-xl bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 cursor-pointer"
+                        >
+                          إضافة
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                      {settings.categories.map((cat, idx) => {
+                        const defaultCat =
+                          DEFAULT_SETTINGS.categories[idx] || DEFAULT_SETTINGS.categories[0];
+                        return (
+                          <div
+                            key={cat.id}
+                            className="rounded-2xl bg-slate-50 border border-slate-200 overflow-hidden flex flex-col"
+                          >
+                            <div className="h-28 bg-slate-900 relative">
+                              <img
+                                src={
+                                  isValidImageSrc(cat.coverImage)
+                                    ? cat.coverImage
+                                    : defaultCat.coverImage
+                                }
+                                alt={cat.name}
+                                className="w-full h-full object-cover"
+                              />
+                              <label className="absolute bottom-2 left-2 px-2.5 py-1 rounded-lg bg-slate-900/85 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer hover:bg-slate-900">
+                                <ImageIcon className="w-3 h-3 text-amber-300" />
+                                <span>تغيير الغلاف</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={(e) =>
+                                    compressImageFile(e.target.files?.[0], 640, (dataUrl) => {
+                                      const updated = {
+                                        ...settings,
+                                        categories: settings.categories.map((c) =>
+                                          c.id === cat.id ? { ...c, coverImage: dataUrl } : c
+                                        )
+                                      };
+                                      setSettings(updated);
+                                      saveSettingsToCloud(updated);
+                                      showToast('تم تحديث صورة غلاف القسم');
+                                    })
+                                  }
+                                />
+                              </label>
+                            </div>
+                            <div className="p-3 flex items-center justify-between">
+                              <span className="font-bold text-sm text-slate-900">{cat.name}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = {
+                                    ...settings,
+                                    categories: settings.categories.filter((item) => item.id !== cat.id)
+                                  };
+                                  setSettings(updated);
+                                  saveSettingsToCloud(updated);
+                                  showToast('تم حذف القسم');
+                                }}
+                                className="text-rose-500 hover:text-rose-700 cursor-pointer"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -2338,9 +2512,23 @@ export default function App() {
                         placeholder="رابط عينة Google Drive (اختياري)"
                         value={newProduct.driveLink}
                         onChange={(e) => setNewProduct({ ...newProduct, driveLink: e.target.value })}
-                        className="px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm md:col-span-3"
+                        className="px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm md:col-span-2"
                         dir="ltr"
                       />
+                      <label className="px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-800 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer">
+                        <ImageIcon className="w-4 h-4 text-blue-600" />
+                        <span>{newProduct.coverImage ? 'تم رفع صورة الغلاف ✓' : 'رفع صورة غلاف المذكرة'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) =>
+                            compressImageFile(e.target.files?.[0], 640, (dataUrl) =>
+                              setNewProduct((prev) => ({ ...prev, coverImage: dataUrl }))
+                            )
+                          }
+                        />
+                      </label>
                       <textarea
                         rows={3}
                         placeholder="وصف المذكرة ومحتوياتها..."
@@ -2379,11 +2567,22 @@ export default function App() {
                         key={prod.id}
                         className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100"
                       >
-                        <div>
-                          <h4 className="font-bold text-sm text-slate-900">{prod.title}</h4>
-                          <p className="text-xs text-slate-500">
-                            {prod.subject} • {prod.price} ج.م • {prod.pagesCount} صفحة
-                          </p>
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={
+                              isValidImageSrc(prod.coverImage)
+                                ? prod.coverImage
+                                : createCoverSvg(prod.title, prod.subject)
+                            }
+                            alt={prod.title}
+                            className="w-14 h-14 rounded-xl object-cover bg-slate-900 shrink-0"
+                          />
+                          <div>
+                            <h4 className="font-bold text-sm text-slate-900">{prod.title}</h4>
+                            <p className="text-xs text-slate-500">
+                              {prod.subject} • {prod.price} ج.م • {prod.pagesCount} صفحة
+                            </p>
+                          </div>
                         </div>
                         <div className="flex items-center gap-2">
                           <button
@@ -2735,8 +2934,79 @@ export default function App() {
                 </div>
               )}
             </div>
-          )}
         </main>
+      )}
+
+      {/* ====================================================================
+          نافذة تسجيل دخول الإدارة الاحترافية (Modal)
+         ==================================================================== */}
+      {isAdminLoginModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border border-slate-200">
+            <div className="bg-gradient-to-l from-slate-900 to-blue-950 p-6 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-amber-400/20 text-amber-300 flex items-center justify-center">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base">بوابة إدارة المنصة</h3>
+                  <p className="text-xs text-slate-300">تسجيل الدخول للمشرفين فقط</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsAdminLoginModalOpen(false)}
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAdminLoginSubmit} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  حساب المشرف / البريد الإلكتروني
+                </label>
+                <input
+                  type="text"
+                  value={adminUsernameInput}
+                  onChange={(e) => setAdminUsernameInput(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm text-left"
+                  dir="ltr"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  كلمة مرور الإدارة
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPinText ? 'text' : 'password'}
+                    value={pinInput}
+                    onChange={(e) => setPinInput(e.target.value)}
+                    placeholder="أدخل كلمة المرور..."
+                    className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm focus:border-blue-600 focus:outline-none"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPinText(!showPinText)}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
+                  >
+                    {showPinText ? 'إخفاء' : 'إظهار'}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm shadow-lg shadow-blue-600/20 transition cursor-pointer"
+              >
+                تسجيل الدخول
+              </button>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* ====================================================================
@@ -2759,6 +3029,18 @@ export default function App() {
             </div>
 
             <div className="p-6 space-y-5 max-h-[85vh] overflow-y-auto">
+              <div className="h-44 rounded-2xl overflow-hidden bg-slate-900 border border-slate-200">
+                <img
+                  src={
+                    isValidImageSrc(previewProduct.coverImage)
+                      ? previewProduct.coverImage
+                      : createCoverSvg(previewProduct.title, previewProduct.subject)
+                  }
+                  alt={previewProduct.title}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+
               <div>
                 <span className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1 rounded-full">
                   {previewProduct.subject}
@@ -3108,6 +3390,20 @@ export default function App() {
                   {link.label}
                 </a>
               ))}
+            <button
+              type="button"
+              onClick={() => {
+                if (isAdminAuthenticated) {
+                  setActiveTab('admin');
+                } else {
+                  setIsAdminLoginModalOpen(true);
+                }
+              }}
+              className="text-slate-600 hover:text-slate-300 transition cursor-pointer"
+              title="دخول الإدارة"
+            >
+              الإدارة
+            </button>
           </div>
         </div>
       </footer>
