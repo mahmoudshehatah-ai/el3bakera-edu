@@ -314,6 +314,8 @@ const DEFAULT_SETTINGS = {
   promoCouponCode: 'OPEN15',
   promoBgColor: '#0f172a',
   promoTextColor: '#ffffff',
+  globalAlertsEnabled: true,
+  globalAlertsPosition: 'preview_top',
   globalAlerts: [],
   whatsappNumber: '201000000000',
   trustTitle: 'لماذا يثق بنا المعلمون؟',
@@ -560,9 +562,10 @@ function normalizeNotebook(id, data) {
     sortOrder: typeof d.sortOrder === 'number' ? d.sortOrder : 999,
     driveLink: safeText(d.driveLink || d.googleDriveLink || d.pdfLink || d.sampleUrl, ''),
     driveBtnColor: safeText(d.driveBtnColor, '#059669'),
+    noticeEnabled: d.noticeEnabled !== false,
     noticeText: notice,
     noticeColor: safeText(d.noticeColor, 'amber'),
-    noticePosition: d.noticePosition === 'bottom' ? 'bottom' : 'top',
+    noticePosition: ['top', 'bottom', 'below_details'].includes(d.noticePosition) ? d.noticePosition : 'top',
     coverImage: cover,
     inlineSamples,
     createdAtMs: toTimeMs(d.createdAt || d.updatedAt)
@@ -1405,20 +1408,23 @@ export default function App() {
     }
   }, [previewPageIdx, previewSamplesList.length]);
 
-  const previewUnifiedNotices = useMemo(() => {
-    if (!previewNotebook) return [];
+  const previewGlobalNotices = useMemo(() => {
+    if (!previewNotebook || settings.globalAlertsEnabled === false) return [];
     const items = [];
     (settings.globalAlerts || []).forEach((al) => {
       if (al && al.active !== false && safeText(al.text).trim()) {
         items.push({ text: safeText(al.text).trim(), color: safeText(al.color, 'amber') });
       }
     });
-    const nbNotice = previewNotebook.noticeText || fetchedSampleNotices[previewNotebook.id] || '';
-    if (nbNotice) {
-      items.push({ text: nbNotice, color: previewNotebook.noticeColor || 'amber' });
-    }
     return items;
-  }, [previewNotebook, settings.globalAlerts, fetchedSampleNotices]);
+  }, [previewNotebook, settings.globalAlertsEnabled, settings.globalAlerts]);
+
+  const previewNotebookNotice = useMemo(() => {
+    if (!previewNotebook || previewNotebook.noticeEnabled === false) return null;
+    const nbNotice = previewNotebook.noticeText || fetchedSampleNotices[previewNotebook.id] || '';
+    if (!nbNotice) return null;
+    return [{ text: nbNotice, color: previewNotebook.noticeColor || 'amber' }];
+  }, [previewNotebook, fetchedSampleNotices]);
 
   const overlayAlpha = Math.min(0.95, Math.max(0.1, Number(settings.heroOverlayOpacity ?? 65) / 100));
 
@@ -1736,6 +1742,20 @@ export default function App() {
                 </div>
               </div>
             </section>
+
+            {/* التنبيهات العامة في الصفحة الرئيسية إذا اختار المدير موضعها هنا */}
+            {settings.globalAlertsEnabled !== false &&
+              settings.globalAlertsPosition === 'home_top' &&
+              Array.isArray(settings.globalAlerts) &&
+              settings.globalAlerts.some((a) => a && a.active !== false && safeText(a.text).trim()) && (
+                <section className="max-w-7xl mx-auto px-4 sm:px-6">
+                  <UnifiedNoticeBox
+                    items={settings.globalAlerts
+                      .filter((a) => a && a.active !== false && safeText(a.text).trim())
+                      .map((a) => ({ text: safeText(a.text).trim(), color: safeText(a.color, 'amber') }))}
+                  />
+                </section>
+              )}
 
             {/* الأقسام الرئيسية للمذكرات والكورسات */}
             <section className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
@@ -2198,9 +2218,14 @@ export default function App() {
               </div>
             </div>
 
-            {/* التنبيه الموحد المضغوط أعلى العينات */}
-            {previewNotebook.noticePosition !== 'bottom' && previewUnifiedNotices.length > 0 && (
-              <UnifiedNoticeBox items={previewUnifiedNotices} compact />
+            {/* التنبيهات العامة المنفصلة (أعلى العينات) */}
+            {settings.globalAlertsPosition !== 'preview_bottom' &&
+              settings.globalAlertsPosition !== 'home_top' &&
+              previewGlobalNotices.length > 0 && <UnifiedNoticeBox items={previewGlobalNotices} compact />}
+
+            {/* التنبيه الخاص بالمذكرة (أعلى العينات) */}
+            {previewNotebook.noticePosition === 'top' && previewNotebookNotice && (
+              <UnifiedNoticeBox items={previewNotebookNotice} compact />
             )}
 
             {/* تفاصيل المذكرة */}
@@ -2229,6 +2254,11 @@ export default function App() {
                   </p>
                 )}
               </div>
+            )}
+
+            {/* التنبيه الخاص بالمذكرة (أسفل التفاصيل ومباشرة قبل العينات) */}
+            {previewNotebook.noticePosition === 'below_details' && previewNotebookNotice && (
+              <UnifiedNoticeBox items={previewNotebookNotice} compact />
             )}
 
             {/* منطقة عرض صور العينات */}
@@ -2298,8 +2328,14 @@ export default function App() {
               )}
             </div>
 
-            {previewNotebook.noticePosition === 'bottom' && previewUnifiedNotices.length > 0 && (
-              <UnifiedNoticeBox items={previewUnifiedNotices} compact />
+            {/* التنبيه الخاص بالمذكرة (أسفل العينات) */}
+            {previewNotebook.noticePosition === 'bottom' && previewNotebookNotice && (
+              <UnifiedNoticeBox items={previewNotebookNotice} compact />
+            )}
+
+            {/* التنبيهات العامة المنفصلة (أسفل العينات) */}
+            {settings.globalAlertsPosition === 'preview_bottom' && previewGlobalNotices.length > 0 && (
+              <UnifiedNoticeBox items={previewGlobalNotices} compact />
             )}
 
             {/* شريط الإجراءات السفلي داخل المعاينة */}
@@ -2855,6 +2891,7 @@ function AdminDashboard({
     badgeText: '',
     driveLink: '',
     driveBtnColor: '#059669',
+    noticeEnabled: true,
     noticeText: '',
     noticeColor: 'amber',
     noticePosition: 'top',
@@ -2978,6 +3015,7 @@ function AdminDashboard({
         badgeText: nbForm.badgeText.trim(),
         driveLink: nbForm.driveLink.trim(),
         driveBtnColor: nbForm.driveBtnColor || '#059669',
+        noticeEnabled: nbForm.noticeEnabled !== false,
         noticeText: nbForm.noticeText.trim(),
         noticeColor: nbForm.noticeColor || 'amber',
         noticePosition: nbForm.noticePosition || 'top',
@@ -3407,40 +3445,55 @@ function AdminDashboard({
             </div>
 
             {/* التنبيه الخاص بالمذكرة */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 grid grid-cols-1 sm:grid-cols-4 gap-3">
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-bold text-slate-700 mb-1">تنبيه خاص يظهر عند معاينة المذكرة</label>
-                <input
-                  type="text"
-                  placeholder="مثال: المذكرة متاحة بصيغتي Word و PDF قابلة للتعديل"
-                  value={nbForm.noticeText}
-                  onChange={(e) => setNbForm({ ...nbForm, noticeText: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-bold"
-                />
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs sm:text-sm font-black text-slate-900">التنبيه الخاص بهذه المذكرة (منفصل عن التنبيهات العامة)</span>
+                <label className="flex items-center gap-2 text-xs font-black text-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={nbForm.noticeEnabled !== false}
+                    onChange={(e) => setNbForm({ ...nbForm, noticeEnabled: e.target.checked })}
+                    className="w-4 h-4"
+                  />
+                  <span>إظهار التنبيه</span>
+                </label>
               </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">لون التنبيه</label>
-                <select
-                  value={nbForm.noticeColor}
-                  onChange={(e) => setNbForm({ ...nbForm, noticeColor: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
-                >
-                  <option value="amber">أصفر تحذيري</option>
-                  <option value="blue">أزرق معلوماتي</option>
-                  <option value="rose">أحمر هام</option>
-                  <option value="emerald">أخضر تأكيدي</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">موضع التنبيه</label>
-                <select
-                  value={nbForm.noticePosition}
-                  onChange={(e) => setNbForm({ ...nbForm, noticePosition: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
-                >
-                  <option value="top">أعلى العينات</option>
-                  <option value="bottom">أسفل العينات</option>
-                </select>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">نص التنبيه الخاص بالمذكرة</label>
+                  <input
+                    type="text"
+                    placeholder="مثال: المذكرة متاحة بصيغتي Word و PDF قابلة للتعديل"
+                    value={nbForm.noticeText}
+                    onChange={(e) => setNbForm({ ...nbForm, noticeText: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">لون التنبيه</label>
+                  <select
+                    value={nbForm.noticeColor}
+                    onChange={(e) => setNbForm({ ...nbForm, noticeColor: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                  >
+                    <option value="amber">أصفر تحذيري</option>
+                    <option value="blue">أزرق معلوماتي</option>
+                    <option value="rose">أحمر هام</option>
+                    <option value="emerald">أخضر تأكيدي</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">موضع التنبيه</label>
+                  <select
+                    value={nbForm.noticePosition}
+                    onChange={(e) => setNbForm({ ...nbForm, noticePosition: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold"
+                  >
+                    <option value="top">أعلى نافذة المعاينة</option>
+                    <option value="below_details">أسفل تفاصيل المذكرة</option>
+                    <option value="bottom">أسفل العينات</option>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -4455,7 +4508,7 @@ function AdminDashboard({
                         type="color"
                         value={localSettings.promoBgColor || '#0f172a'}
                         onChange={(e) => setLocalSettings({ ...localSettings, promoBgColor: e.target.value })}
-                        className="w-12 h-10 rounded-xl border border-slate-200 cursor-pointer"
+                        className="w-10 h-9 rounded-xl border border-slate-200 cursor-pointer"
                       />
                     </div>
                     <div>
@@ -4464,38 +4517,58 @@ function AdminDashboard({
                         type="color"
                         value={localSettings.promoTextColor || '#ffffff'}
                         onChange={(e) => setLocalSettings({ ...localSettings, promoTextColor: e.target.value })}
-                        className="w-12 h-10 rounded-xl border border-slate-200 cursor-pointer"
+                        className="w-10 h-9 rounded-xl border border-slate-200 cursor-pointer"
                       />
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* التنبيهات العامة للمنصة (تظهر داخل نافذة معاينة المذكرات) */}
+              {/* التنبيهات العامة للمنصة (منفصلة عن التنبيه الخاص بكل مذكرة) */}
               <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <div className="text-sm font-black text-slate-900">التنبيهات العامة للمنصة</div>
-                    <p className="text-xs text-slate-600 font-bold">
-                      تظهر في سطر واحد مضغوط مع تنبيه كل مذكرة داخل نافذة المعاينة
-                    </p>
+                  <div className="flex items-center gap-2.5">
+                    <input
+                      type="checkbox"
+                      checked={localSettings.globalAlertsEnabled !== false}
+                      onChange={(e) => setLocalSettings({ ...localSettings, globalAlertsEnabled: e.target.checked })}
+                      className="w-5 h-5"
+                    />
+                    <div>
+                      <div className="text-sm font-black text-slate-900">التنبيهات العامة للمنصة (صندوق مستقل)</div>
+                      <p className="text-xs text-slate-600 font-bold">
+                        منفصلة تمامًا عن التنبيه الخاص بكل مذكرة مع إمكانية التحكم في ظهورها وموضعها
+                      </p>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setLocalSettings({
-                        ...localSettings,
-                        globalAlerts: [
-                          ...(localSettings.globalAlerts || []),
-                          { id: `al_${Date.now()}`, text: 'تنبيه جديد للمعلمين', color: 'amber', scope: 'preview_only', active: true }
-                        ]
-                      })
-                    }
-                    className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black flex items-center gap-1"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>إضافة تنبيه عام</span>
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={localSettings.globalAlertsPosition || 'preview_top'}
+                      onChange={(e) => setLocalSettings({ ...localSettings, globalAlertsPosition: e.target.value })}
+                      className="px-3 py-2 rounded-xl border border-amber-300 bg-white text-xs font-black"
+                    >
+                      <option value="preview_top">أعلى نافذة معاينة المذكرات</option>
+                      <option value="preview_bottom">أسفل نافذة معاينة المذكرات</option>
+                      <option value="home_top">في الصفحة الرئيسية أعلى الأقسام</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setLocalSettings({
+                          ...localSettings,
+                          globalAlertsEnabled: true,
+                          globalAlerts: [
+                            ...(localSettings.globalAlerts || []),
+                            { id: `al_${Date.now()}`, text: 'تنبيه جديد للمعلمين', color: 'amber', scope: 'preview_only', active: true }
+                          ]
+                        })
+                      }
+                      className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black flex items-center gap-1"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>إضافة تنبيه عام</span>
+                    </button>
+                  </div>
                 </div>
 
                 {(localSettings.globalAlerts || []).map((al, idx) => (
