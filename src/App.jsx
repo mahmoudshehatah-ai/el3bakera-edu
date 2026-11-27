@@ -526,11 +526,24 @@ export default function App() {
           const oldCat = (prev.categories || []).find((oc) => oc.id === c.id);
           return {
             ...c,
+            name: safeText(c.name || c.title || c.label, 'قسم دراسي'),
             image: isValidImageSrc(c.image) ? c.image : oldCat?.image || ''
           };
         }),
-        stages: Array.isArray(data.stages) && data.stages.length > 0 ? data.stages : prev.stages,
-        grades: Array.isArray(data.grades) && data.grades.length > 0 ? data.grades : prev.grades
+        stages:
+          Array.isArray(data.stages) && data.stages.length > 0
+            ? data.stages.map((s) => ({
+                ...s,
+                name: safeText(s.name || s.title || s.label, 'مرحلة دراسية')
+              }))
+            : prev.stages,
+        grades:
+          Array.isArray(data.grades) && data.grades.length > 0
+            ? data.grades.map((g) => ({
+                ...g,
+                name: safeText(g.name || g.title || g.label, 'صف دراسي')
+              }))
+            : prev.grades
       }));
 
       loadMediaAssets(mergedCats);
@@ -1382,7 +1395,15 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
           <div
             onClick={() => setActiveView('home')}
-            className="flex items-center gap-3 cursor-pointer"
+            onDoubleClick={() => {
+              if (isAdmin) {
+                setActiveView('admin');
+              } else {
+                setAdminLoginOpen(true);
+              }
+            }}
+            title="اضغط مرتين لدخول الإدارة"
+            className="flex items-center gap-3 cursor-pointer select-none"
           >
             {isValidImageSrc(settings.logoImage) ? (
               <img
@@ -1450,7 +1471,7 @@ export default function App() {
               )}
             </button>
 
-            {isAdmin ? (
+            {isAdmin && (
               <button
                 type="button"
                 onClick={() => setActiveView('admin')}
@@ -1462,15 +1483,6 @@ export default function App() {
               >
                 <ShieldCheck className="w-4 h-4" />
                 <span>لوحة الإدارة</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setAdminLoginOpen(true)}
-                className="px-3.5 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-950 text-xs sm:text-sm font-black inline-flex items-center gap-1.5 transition"
-              >
-                <ShieldCheck className="w-4 h-4 text-amber-700" />
-                <span>الإدارة</span>
               </button>
             )}
           </nav>
@@ -1530,11 +1542,11 @@ export default function App() {
               </div>
 
               {isValidImageSrc(settings.heroImage) && (
-                <div className="w-full max-w-sm shrink-0">
+                <div className="w-full max-w-md lg:max-w-lg shrink-0">
                   <img
                     src={settings.heroImage}
                     alt="صورة العرض"
-                    className="w-full h-auto rounded-3xl border-2 border-white/15 shadow-2xl object-cover"
+                    className="w-full h-auto rounded-3xl border-2 border-white/15 shadow-2xl object-contain bg-white/5"
                   />
                 </div>
               )}
@@ -2913,7 +2925,7 @@ export default function App() {
                   <div className="space-y-2">
                     {(settings.stages || []).map((s) => (
                       <div key={s.id} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 text-xs font-black">
-                        <span>{s.name}</span>
+                        <span>{safeText(s.name || s.title || s.label)}</span>
                         <button
                           type="button"
                           onClick={() =>
@@ -2977,7 +2989,7 @@ export default function App() {
                   <div className="space-y-2">
                     {(settings.grades || []).map((g) => (
                       <div key={g.id} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 text-xs font-black">
-                        <span>{g.name}</span>
+                        <span>{safeText(g.name || g.title || g.label)}</span>
                         <button
                           type="button"
                           onClick={() =>
@@ -3815,31 +3827,77 @@ export default function App() {
                   </div>
                   <div>
                     <label className="block text-xs font-black text-slate-700 mb-1">شعار المنصة</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        const logo = await compressImageFile(file, 400, 0.85, 250000);
-                        setSettings({ ...settings, logoImage: logo });
-                      }}
-                      className="text-xs font-bold"
-                    />
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const logo = await compressImageFile(file, 400, 0.85, 250000);
+                          setSettings({ ...settings, logoImage: logo });
+                        }}
+                        className="text-xs font-bold"
+                      />
+                      {isValidImageSrc(settings.logoImage) && (
+                        <div className="flex items-center gap-2">
+                          <img
+                            src={settings.logoImage}
+                            alt="الشعار"
+                            className="w-10 h-10 rounded-xl object-cover border"
+                          />
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const next = { ...settings, logoImage: '' };
+                              setSettings(next);
+                              if (db) await deleteDoc(publicDoc('settings', 'media_logo')).catch(() => {});
+                              await saveAllSettingsToCloud(next);
+                            }}
+                            className="text-xs font-black text-rose-600"
+                          >
+                            حذف
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs font-black text-slate-700 mb-1">صورة البانر الرئيسي (اختياري)</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        const hero = await compressImageFile(file, 900, 0.82, 380000);
-                        setSettings({ ...settings, heroImage: hero });
-                      }}
-                      className="text-xs font-bold"
-                    />
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const hero = await compressImageFile(file, 1100, 0.85, 420000);
+                          setSettings({ ...settings, heroImage: hero });
+                        }}
+                        className="text-xs font-bold"
+                      />
+                      {isValidImageSrc(settings.heroImage) && (
+                        <div className="flex items-center gap-2">
+                          <img
+                            src={settings.heroImage}
+                            alt="البانر"
+                            className="w-16 h-10 rounded-xl object-cover border"
+                          />
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const next = { ...settings, heroImage: '' };
+                              setSettings(next);
+                              if (db) await deleteDoc(publicDoc('settings', 'media_hero')).catch(() => {});
+                              await saveAllSettingsToCloud(next);
+                            }}
+                            className="text-xs font-black text-rose-600"
+                          >
+                            حذف
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
