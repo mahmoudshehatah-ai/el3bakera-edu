@@ -1554,8 +1554,6 @@ function MuzakkiratiPlatformContent() {
             )}
           </nav>
 
-          {/* أزرار اليسار: تواصل معنا الأخضر + السلة الداكن */}
-          <div className="flex items-center gap-2.5">
           {/* أزرار اليسار: تواصل معنا الأخضر (يفتح نافذة روابط التواصل) + السلة الداكن */}
           <div className="flex items-center gap-2.5">
             <button
