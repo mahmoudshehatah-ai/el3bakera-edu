@@ -34,9 +34,7 @@ import {
   Truck,
   Database,
   Star,
-  UserCheck,
-  CloudUpload,
-  RefreshCw
+  UserCheck
 } from 'lucide-react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -63,15 +61,6 @@ const DEFAULT_FIREBASE_CONFIG = {
   messagingSenderId: "74663879858",
   appId: "1:74663879858:web:4327c0ea1b825dd6c615ab"
 };
-
-const FIRESTORE_RULES_SNIPPET = `rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /artifacts/{appId}/public/data/{document=**} {
-      allow read, write: if true;
-    }
-  }
-}`;
 
 function resolveFirebaseConfig() {
   try {
@@ -144,7 +133,7 @@ class PlatformErrorBoundary extends React.Component {
 }
 
 // ============================================================================
-// البيانات والإعدادات الافتراضية لمنصة العباقرة للمذكرات التعليمية
+// البيانات والإعدادات الافتراضية لمنصة العباقرة
 // ============================================================================
 const DEFAULT_LOGO_SVG = `data:image/svg+xml;utf8,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
@@ -173,6 +162,22 @@ const DEFAULT_SETTINGS = {
   discountBadgePosition: 'top-left',
   discountBadgeBg: '#10b981',
   discountBadgeText: '#ffffff',
+  // إعدادات التنبيه العام المنفصلة (يظهر حصراً في نافذة المعاينة)
+  generalNoticeEnabled: true,
+  generalNoticeTitle: 'تنبيه هام للمعلمين قبل تأكيد الطلب:',
+  generalNoticeText:
+    '• يتم تسليم المذكرة بصيغة PDF عالية الدقة جاهزة للطباعة ببيانات المعلم الخاصة دون أي بيانات تخصنا.\n• تُوضع العلامة المائية باسم المعلم أو اسم السلسلة الخاص به على كافة الصفحات، وغير متاح إرسال المذكرات بدونها.',
+  generalNoticePosition: 'bottom', // 'top' | 'bottom'
+  generalNoticeBg: '#f8fafc',
+  generalNoticeTextColor: '#334155',
+  generalNoticeBorder: '#cbd5e1',
+  // إعدادات التنبيه الخاص بكل مذكرة (مستقل تماماً عن التنبيه العام)
+  tipNoticeEnabled: true,
+  tipShowOnCard: true,
+  tipNoticePosition: 'below-desc', // 'above-desc' | 'below-desc' | 'before-actions'
+  tipNoticeBg: '#fffbeb',
+  tipNoticeTextColor: '#78350f',
+  tipNoticeBorder: '#fde68a',
   promoEnabled: true,
   promoText: 'عرض خاص للمعلمين: خصم 15% على جميع المذكرات بمناسبة إطلاق المنصة',
   promoCouponCode: 'M20',
@@ -185,9 +190,6 @@ const DEFAULT_SETTINGS = {
   bulkDiscountMinItems: 2,
   bulkDiscountPercent: 15,
   bulkDiscountMaxAmount: 150,
-  statNotebooks: '+50',
-  statTeachers: '+500',
-  statCustom: '100%',
   stages: [
     { id: 'stg_prim', name: 'المرحلة الابتدائية' },
     { id: 'stg_prep', name: 'المرحلة الإعدادية' },
@@ -379,7 +381,7 @@ const DEFAULT_PRODUCTS = [
   },
   {
     id: 'nb_1795789806',
-    title: 'منهج الترم الثاني للصف الثالث الثانوي 2027',
+    title: 'منهج الترم الثاني للصف الثالث الثانوي',
     subject: 'اللغة العربية',
     stageId: 'stg_sec',
     gradeId: 'grd_1795789612785',
@@ -419,7 +421,7 @@ const DEFAULT_COUPONS = [
 ];
 
 // ============================================================================
-// دوال المساعدة وتطبيع البيانات وضغط الصور الذكي (لتفادي حد الـ 1MB في Firestore)
+// دوال المساعدة والتخزين
 // ============================================================================
 function safeText(val, fallback = '') {
   if (val === null || val === undefined) return fallback;
@@ -445,7 +447,7 @@ function normalizeItems(rawList, fallbackList, prefix) {
   });
 }
 
-function compressImageFile(file, maxWidth = 750, quality = 0.72) {
+function compressImageFile(file, maxWidth = 650, quality = 0.72) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -616,21 +618,11 @@ function MuzakkiratiPlatformContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStage, setSelectedStage] = useState('all');
   const [selectedGrade, setSelectedGrade] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
-  const [onlyDiscounted, setOnlyDiscounted] = useState(false);
 
   const [previewProduct, setPreviewProduct] = useState(null);
   const [activeSampleIndex, setActiveSampleIndex] = useState(0);
-  const [previewZoom, setPreviewZoom] = useState(1);
 
-  const [cart, setCart] = useState(() => {
-    try {
-      const saved = localStorage.getItem('el3bakera_cart_v5');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [couponInput, setCouponInput] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState(null);
@@ -640,7 +632,6 @@ function MuzakkiratiPlatformContent() {
     seriesName: '',
     phone2: '',
     hasLogo: 'نعم، سأرسله على الواتساب',
-    logoPreview: '',
     notes: ''
   });
 
@@ -660,20 +651,9 @@ function MuzakkiratiPlatformContent() {
   const [adminSubTab, setAdminSubTab] = useState('products');
   const logoTapCountRef = useRef(0);
   const logoTapTimerRef = useRef(null);
-  const seededOnceRef = useRef(false);
+  const isSavingRef = useRef(false);
 
-  // حالات المزامنة السحابية الصريحة
-  const [cloudSyncStatus, setCloudSyncStatus] = useState('checking'); // 'checking' | 'connected' | 'local-only' | 'error'
-  const [cloudErrorMsg, setCloudErrorMsg] = useState('');
-  const [isSyncingAll, setIsSyncingAll] = useState(false);
-  const [syncProgress, setSyncProgress] = useState(0);
-  const [copiedRules, setCopiedRules] = useState(false);
-
-  useEffect(() => {
-    safeLocalSet('el3bakera_cart_v5', cart);
-  }, [cart]);
-
-  // تحميل البيانات من IndexedDB عند الفتح
+  // تحميل البيانات من IndexedDB وسحابة Firebase
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -749,6 +729,7 @@ function MuzakkiratiPlatformContent() {
     text: '',
     image: ''
   });
+  const [cloudSyncStatus, setCloudSyncStatus] = useState('checking');
   const [customFirebaseText, setCustomFirebaseText] = useState(() => {
     try {
       return localStorage.getItem('el3bakera_custom_firebase_config') || '';
@@ -762,7 +743,7 @@ function MuzakkiratiPlatformContent() {
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
+    setTimeout(() => setToast(null), 3500);
   };
 
   const normalizedStages = useMemo(
@@ -833,95 +814,15 @@ function MuzakkiratiPlatformContent() {
     }
   };
 
-  // ============================================================================
-  // دوال الكتابة السحابية المجزأة (لتفادي تجاوز 1MB وحفظ كل صورة في مستند مستقل)
-  // ============================================================================
-  const saveProductToCloud = async (productObj) => {
-    if (!db) return;
-    const { sampleImages, coverImage, ...lightProduct } = productObj;
-    // المستند الأساسي للمذكرة بدون صور ثقيلة لضمان سرعة التحميل الفائقة للعملاء
-    await setDoc(
-      doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebooks', productObj.id),
-      {
-        ...lightProduct,
-        hasCover: Boolean(coverImage),
-        samplesCount: Array.isArray(sampleImages) ? sampleImages.length : 0,
-        updatedAt: Date.now()
-      },
-      { merge: true }
-    );
-
-    // مستند مستقل للغلاف والعينات مقسم بذكاء
-    await setDoc(
-      doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebook_samples', productObj.id),
-      {
-        notebookId: productObj.id,
-        title: productObj.title,
-        coverImage: coverImage || '',
-        sampleImages: (sampleImages || []).slice(0, 6),
-        updatedAt: Date.now()
-      },
-      { merge: true }
-    );
-  };
-
-  const saveSettingsToCloud = async (cleanSettings) => {
-    if (!db) return;
-    const categoryCovers = {};
-    const lightCategories = (cleanSettings.categories || []).map((c) => {
-      if (c.coverImage) categoryCovers[c.id] = c.coverImage;
-      const { coverImage, ...rest } = c;
-      return rest;
-    });
-
-    const testimonialImages = {};
-    const lightTestimonials = (cleanSettings.testimonials || []).map((t) => {
-      if (t.image) testimonialImages[t.id] = t.image;
-      const { image, ...rest } = t;
-      return rest;
-    });
-
-    const { logoImage, heroImage, heroBgImage, ...lightSettings } = cleanSettings;
-    lightSettings.categories = lightCategories;
-    lightSettings.testimonials = lightTestimonials;
-
-    await setDoc(
-      doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'main'),
-      { ...lightSettings, updatedAt: Date.now() },
-      { merge: true }
-    );
-
-    await setDoc(
-      doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'media'),
-      {
-        logoImage: logoImage || '',
-        heroImage: heroImage || '',
-        heroBgImage: heroBgImage || '',
-        categoryCovers,
-        testimonialImages,
-        updatedAt: Date.now()
-      },
-      { merge: true }
-    );
-  };
-
-  // ============================================================================
-  // المزامنة السحابية الفورية (بدون مؤقتات قفل isSavingRef) + Auto-Seeding
-  // ============================================================================
+  // ربط ومزامنة Firebase Firestore بالكامل
   useEffect(() => {
     if (!auth) {
       setCloudSyncStatus('local-only');
       return;
     }
     signInAnonymously(auth)
-      .then(() => {
-        setCloudSyncStatus('connected');
-        setCloudErrorMsg('');
-      })
-      .catch((err) => {
-        setCloudSyncStatus('error');
-        setCloudErrorMsg(err?.message || 'تعذرت المصادقة السحابية');
-      });
+      .then(() => setCloudSyncStatus('connected'))
+      .catch(() => setCloudSyncStatus('error'));
     const unsubAuth = onAuthStateChanged(auth, (u) => setUser(u));
     return () => unsubAuth();
   }, []);
@@ -931,46 +832,12 @@ function MuzakkiratiPlatformContent() {
 
     const settingsRef = doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'main');
     const mediaRef = doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'media');
-    const productsCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebooks');
-    const samplesCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebook_samples');
-    const bundlesCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles');
-    const couponsCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons');
-    const ordersCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'orders');
 
-    // Auto-seeding: إذا كانت قاعدة البيانات السحابية فارغة تماماً عند الفتح لأول مرة، ارفع البيانات الافتراضية تلقائياً
-    const autoSeedIfCloudEmpty = async () => {
-      if (seededOnceRef.current) return;
-      seededOnceRef.current = true;
-      try {
-        const snap = await getDocs(productsCol);
-        if (snap.empty) {
-          await saveSettingsToCloud(DEFAULT_SETTINGS);
-          for (const prod of DEFAULT_PRODUCTS) {
-            await saveProductToCloud(prod);
-          }
-          for (const bnd of DEFAULT_BUNDLES) {
-            await setDoc(doc(bundlesCol, bnd.id), bnd, { merge: true });
-          }
-          for (const cp of DEFAULT_COUPONS) {
-            await setDoc(doc(couponsCol, cp.id), cp, { merge: true });
-          }
-        }
-        setCloudSyncStatus('connected');
-        setCloudErrorMsg('');
-      } catch (err) {
-        setCloudSyncStatus('error');
-        setCloudErrorMsg(err?.message || 'خطأ في صلاحيات Firestore Rules');
-      }
-    };
-    autoSeedIfCloudEmpty();
-
-    // 1. الاستماع الفوري لإعدادات المنصة
     const unsubSettings = onSnapshot(
       settingsRef,
       (snap) => {
         setCloudSyncStatus('connected');
-        setCloudErrorMsg('');
-        if (snap.exists()) {
+        if (snap.exists() && !isSavingRef.current) {
           const cloudData = snap.data();
           setSettings((prev) => {
             const mergedCategories = Array.isArray(cloudData.categories)
@@ -979,21 +846,13 @@ function MuzakkiratiPlatformContent() {
                   return { ...c, coverImage: c.coverImage || prevCat?.coverImage || '' };
                 })
               : prev.categories;
-            const mergedTestimonials = Array.isArray(cloudData.testimonials)
-              ? cloudData.testimonials.map((t) => {
-                  const prevT = (prev.testimonials || []).find((pt) => pt.id === t.id);
-                  return { ...t, image: t.image || prevT?.image || '' };
-                })
-              : prev.testimonials;
-
             const merged = {
               ...prev,
               ...cloudData,
               categories: mergedCategories,
-              testimonials: mergedTestimonials,
-              logoImage: prev.logoImage || cloudData.logoImage || '',
-              heroImage: prev.heroImage || cloudData.heroImage || '',
-              heroBgImage: prev.heroBgImage || cloudData.heroBgImage || ''
+              logoImage: cloudData.logoImage || prev.logoImage || '',
+              heroImage: cloudData.heroImage || prev.heroImage || '',
+              heroBgImage: cloudData.heroBgImage || prev.heroBgImage || ''
             };
             idbSet('settings_v5', merged);
             safeLocalSet('el3bakera_settings_v5', merged);
@@ -1001,36 +860,26 @@ function MuzakkiratiPlatformContent() {
           });
         }
       },
-      (err) => {
-        setCloudSyncStatus('error');
-        setCloudErrorMsg(err?.message || 'تعذر قراءة الإعدادات من السحابة');
-      }
+      () => setCloudSyncStatus('error')
     );
 
-    // 2. الاستماع الفوري للوسائط وصور الأقسام والتقييمات
     const unsubMedia = onSnapshot(
       mediaRef,
       (snap) => {
-        if (snap.exists()) {
+        if (snap.exists() && !isSavingRef.current) {
           const mediaData = snap.data();
           setSettings((prev) => {
             const catCovers = mediaData.categoryCovers || {};
-            const testImgs = mediaData.testimonialImages || {};
             const mergedCategories = (prev.categories || []).map((c) => ({
               ...c,
-              coverImage: catCovers[c.id] !== undefined ? catCovers[c.id] : c.coverImage || ''
-            }));
-            const mergedTestimonials = (prev.testimonials || []).map((t) => ({
-              ...t,
-              image: testImgs[t.id] !== undefined ? testImgs[t.id] : t.image || ''
+              coverImage: catCovers[c.id] || c.coverImage || ''
             }));
             const merged = {
               ...prev,
               categories: mergedCategories,
-              testimonials: mergedTestimonials,
-              logoImage: mediaData.logoImage !== undefined ? mediaData.logoImage : prev.logoImage || '',
-              heroImage: mediaData.heroImage !== undefined ? mediaData.heroImage : prev.heroImage || '',
-              heroBgImage: mediaData.heroBgImage !== undefined ? mediaData.heroBgImage : prev.heroBgImage || ''
+              logoImage: mediaData.logoImage || prev.logoImage || '',
+              heroImage: mediaData.heroImage || prev.heroImage || '',
+              heroBgImage: mediaData.heroBgImage || prev.heroBgImage || ''
             };
             idbSet('settings_v5', merged);
             return merged;
@@ -1040,18 +889,18 @@ function MuzakkiratiPlatformContent() {
       () => {}
     );
 
-    // 3. الاستماع الفوري للمذكرات (يحدث القائمة عند الإضافة أو التعديل أو الإخفاء أو الحذف)
+    const productsCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebooks');
     const unsubProducts = onSnapshot(
       productsCol,
       (snapshot) => {
-        const cloudList = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-        if (cloudList.length > 0) {
+        if (!snapshot.empty && !isSavingRef.current) {
+          const cloudList = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
           setProducts((prev) => {
             const merged = cloudList.map((item) => {
               const existing = prev.find((p) => p.id === item.id);
               return {
                 ...item,
-                coverImage: item.coverImage || existing?.coverImage || '',
+                coverImage: item.coverImage || item.image || existing?.coverImage || '',
                 sampleImages:
                   Array.isArray(item.sampleImages) && item.sampleImages.length > 0
                     ? item.sampleImages
@@ -1064,92 +913,91 @@ function MuzakkiratiPlatformContent() {
           });
         }
       },
-      (err) => {
-        setCloudSyncStatus('error');
-        setCloudErrorMsg(err?.message || 'تعذر مزامنة المذكرات');
-      }
+      () => {}
     );
 
-    // 4. الاستماع الفوري لصور الأغلفة وصفحات العينة (notebook_samples)
-    const unsubSamples = onSnapshot(
-      samplesCol,
-      (snapshot) => {
-        if (!snapshot.empty) {
-          const coverMap = {};
-          const samplesMap = {};
-          snapshot.forEach((docSnap) => {
+    const fetchSamples = async () => {
+      try {
+        const samplesSnap = await getDocs(
+          collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebook_samples')
+        );
+        if (!samplesSnap.empty) {
+          const mapByNotebook = {};
+          const coverByNotebook = {};
+          samplesSnap.forEach((docSnap) => {
             const data = docSnap.data();
-            const nbId = data.notebookId || docSnap.id;
-            if (data.coverImage !== undefined) coverMap[nbId] = data.coverImage;
-            if (Array.isArray(data.sampleImages)) samplesMap[nbId] = data.sampleImages;
+            const nbId = data.notebookId || docSnap.id.split('_')[0];
+            if (data.coverImage && nbId) coverByNotebook[nbId] = data.coverImage;
+            const foundImgs = [];
+            if (Array.isArray(data.sampleImages)) foundImgs.push(...data.sampleImages);
+            if (Array.isArray(data.images)) foundImgs.push(...data.images);
+            if (foundImgs.length > 0 && nbId) {
+              mapByNotebook[nbId] = [...(mapByNotebook[nbId] || []), ...foundImgs];
+            }
           });
 
-          setProducts((prev) => {
-            const updated = prev.map((p) => ({
-              ...p,
-              coverImage: coverMap[p.id] !== undefined ? coverMap[p.id] : p.coverImage || '',
-              sampleImages: samplesMap[p.id] !== undefined ? samplesMap[p.id] : p.sampleImages || []
-            }));
-            idbSet('products_v5', updated);
-            safeLocalSet('el3bakera_products_v5', stripHeavyProductMedia(updated));
-            return updated;
-          });
+          if (Object.keys(mapByNotebook).length > 0 || Object.keys(coverByNotebook).length > 0) {
+            setProducts((prev) => {
+              const updated = prev.map((p) => ({
+                ...p,
+                coverImage: p.coverImage || coverByNotebook[p.id] || '',
+                sampleImages:
+                  mapByNotebook[p.id] && mapByNotebook[p.id].length > 0
+                    ? Array.from(new Set([...(p.sampleImages || []), ...mapByNotebook[p.id]]))
+                    : p.sampleImages || []
+              }));
+              idbSet('products_v5', updated);
+              return updated;
+            });
+          }
         }
-      },
-      () => {}
-    );
+      } catch {}
+    };
+    fetchSamples();
 
-    // 5. الاستماع الفوري للباقات
-    const unsubBundles = onSnapshot(
-      bundlesCol,
-      (snap) => {
-        if (!snap.empty) {
-          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-          setBundles(list);
-          idbSet('bundles_v5', list);
-          safeLocalSet('el3bakera_bundles_v5', list);
-        }
-      },
-      () => {}
-    );
-
-    // 6. الاستماع الفوري للكوبونات
-    const unsubCoupons = onSnapshot(
-      couponsCol,
-      (snap) => {
-        if (!snap.empty) {
-          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-          setCoupons(list);
-          idbSet('coupons_v5', list);
-          safeLocalSet('el3bakera_coupons_v5', list);
-        }
-      },
-      () => {}
-    );
-
-    // 7. الاستماع الفوري للطلبات
+    const ordersCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'orders');
     const unsubOrders = onSnapshot(
       ordersCol,
-      (snap) => {
-        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-        setOrders(list);
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const cloudOrders = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+          cloudOrders.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+          setOrders(cloudOrders);
+        }
       },
       () => {}
     );
+
+    const bundlesCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles');
+    const unsubBundles = onSnapshot(bundlesCol, (snap) => {
+      if (!snap.empty && !isSavingRef.current) {
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        setBundles(list);
+        idbSet('bundles_v5', list);
+      }
+    });
+
+    const couponsCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons');
+    const unsubCoupons = onSnapshot(couponsCol, (snap) => {
+      if (!snap.empty && !isSavingRef.current) {
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        setCoupons(list);
+        idbSet('coupons_v5', list);
+      }
+    });
 
     return () => {
       unsubSettings();
       unsubMedia();
       unsubProducts();
-      unsubSamples();
+      unsubOrders();
       unsubBundles();
       unsubCoupons();
-      unsubOrders();
     };
   }, [user]);
 
   const saveSettings = async (updatedSettings) => {
+    isSavingRef.current = true;
     const cleanSettings = {
       ...updatedSettings,
       stages: updatedSettings.stages || normalizedStages,
@@ -1161,111 +1009,83 @@ function MuzakkiratiPlatformContent() {
     safeLocalSet('el3bakera_settings_v5', cleanSettings);
     if (db) {
       try {
-        await saveSettingsToCloud(cleanSettings);
+        const categoryCovers = {};
+        const lightCategories = (cleanSettings.categories || []).map((c) => {
+          if (c.coverImage) categoryCovers[c.id] = c.coverImage;
+          const { coverImage, ...rest } = c;
+          return rest;
+        });
+        const { logoImage, heroImage, heroBgImage, ...lightSettings } = cleanSettings;
+        lightSettings.categories = lightCategories;
+
+        await setDoc(
+          doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'main'),
+          lightSettings,
+          { merge: true }
+        );
+        await setDoc(
+          doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'media'),
+          {
+            logoImage: logoImage || '',
+            heroImage: heroImage || '',
+            heroBgImage: heroBgImage || '',
+            categoryCovers
+          },
+          { merge: true }
+        );
         setCloudSyncStatus('connected');
-        setCloudErrorMsg('');
       } catch (e) {
         setCloudSyncStatus('error');
-        setCloudErrorMsg(e?.message || 'فشل الحفظ السحابي للإعدادات');
-        showToast('تعذر الحفظ في السحابة — راجع قواعد أمان Firestore Rules بالأسفل', 'error');
+        showToast('تعذر الحفظ في السحابة — تأكد من إعدادات ربط Firebase', 'error');
       }
     }
+    setTimeout(() => {
+      isSavingRef.current = false;
+    }, 2000);
   };
 
-  // ============================================================================
-  // زر النشر والمزامنة الفورية لكافة البيانات والصور للسحابة للعملاء
-  // ============================================================================
-  const handlePublishAllToCloudNow = async () => {
-    if (!db) {
-      showToast('قاعدة البيانات السحابية غير مهيأة حالياً', 'error');
-      return;
-    }
-    setIsSyncingAll(true);
-    setSyncProgress(10);
+  const saveProductToCloud = async (productObj) => {
+    if (!db) return;
+    isSavingRef.current = true;
     try {
-      const cleanSettings = {
-        ...settings,
-        stages: normalizedStages,
-        grades: normalizedGrades,
-        categories: normalizedCategories
-      };
-      await saveSettingsToCloud(cleanSettings);
-      setSyncProgress(35);
-
-      const totalSteps = Math.max(1, products.length + bundles.length + coupons.length);
-      let completed = 0;
-
-      for (const prod of products) {
-        await saveProductToCloud(prod);
-        completed += 1;
-        setSyncProgress(35 + Math.round((completed / totalSteps) * 60));
-      }
-
-      for (const bnd of bundles) {
-        await setDoc(
-          doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles', bnd.id),
-          bnd,
-          { merge: true }
-        );
-        completed += 1;
-        setSyncProgress(35 + Math.round((completed / totalSteps) * 60));
-      }
-
-      for (const cp of coupons) {
-        await setDoc(
-          doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cp.id),
-          cp,
-          { merge: true }
-        );
-        completed += 1;
-        setSyncProgress(35 + Math.round((completed / totalSteps) * 60));
-      }
-
-      setSyncProgress(100);
-      setCloudSyncStatus('connected');
-      setCloudErrorMsg('');
-      showToast('تم نشر ومزامنة كافة المذكرات والصور والباقات والإعدادات للسحابة بنجاح! أصبحت ظاهرة لجميع العملاء الآن.');
-    } catch (err) {
-      setCloudSyncStatus('error');
-      setCloudErrorMsg(err?.message || 'خطأ في الكتابة إلى Firestore');
-      showToast('فشل الرفع السحابي! تأكد من تفعيل قواعد Firestore Rules في لوحة الإدارة.', 'error');
-    } finally {
-      setTimeout(() => {
-        setIsSyncingAll(false);
-        setSyncProgress(0);
-      }, 1200);
-    }
+      const { sampleImages, ...lightProduct } = productObj;
+      await setDoc(
+        doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebooks', productObj.id),
+        lightProduct,
+        { merge: true }
+      );
+      await setDoc(
+        doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebook_samples', productObj.id),
+        {
+          notebookId: productObj.id,
+          title: productObj.title,
+          coverImage: productObj.coverImage || '',
+          sampleImages: sampleImages || [],
+          updatedAt: new Date().toISOString()
+        },
+        { merge: true }
+      );
+    } catch {}
+    setTimeout(() => {
+      isSavingRef.current = false;
+    }, 2000);
   };
 
-  // ============================================================================
-  // فلترة وترتيب المذكرات
-  // ============================================================================
   const filteredProducts = useMemo(() => {
-    return visibleProducts
-      .filter((item) => {
-        const matchesCategory = selectedCategory === 'all' || item.categoryId === selectedCategory;
-        const matchesStage = selectedStage === 'all' || item.stageId === selectedStage;
-        const matchesGrade = selectedGrade === 'all' || item.gradeId === selectedGrade;
-        const matchesDiscount =
-          !onlyDiscounted || Number(item.oldPrice || 0) > Number(item.price || 0);
-        const q = searchQuery.trim().toLowerCase();
-        const matchesQuery =
-          !q ||
-          safeText(item.title).toLowerCase().includes(q) ||
-          safeText(item.description).toLowerCase().includes(q) ||
-          safeText(item.subject).toLowerCase().includes(q);
-        return matchesCategory && matchesStage && matchesGrade && matchesDiscount && matchesQuery;
-      })
-      .sort((a, b) => {
-        if (sortBy === 'price-asc') return Number(a.price || 0) - Number(b.price || 0);
-        if (sortBy === 'price-desc') return Number(b.price || 0) - Number(a.price || 0);
-        return (b.updatedAt || 0) - (a.updatedAt || 0);
-      });
-  }, [visibleProducts, selectedCategory, selectedStage, selectedGrade, onlyDiscounted, searchQuery, sortBy]);
+    return visibleProducts.filter((item) => {
+      const matchesCategory = selectedCategory === 'all' || item.categoryId === selectedCategory;
+      const matchesStage = selectedStage === 'all' || item.stageId === selectedStage;
+      const matchesGrade = selectedGrade === 'all' || item.gradeId === selectedGrade;
+      const q = searchQuery.trim().toLowerCase();
+      const matchesQuery =
+        !q ||
+        safeText(item.title).toLowerCase().includes(q) ||
+        safeText(item.description).toLowerCase().includes(q) ||
+        safeText(item.subject).toLowerCase().includes(q);
+      return matchesCategory && matchesStage && matchesGrade && matchesQuery;
+    });
+  }, [visibleProducts, selectedCategory, selectedStage, selectedGrade, searchQuery]);
 
-  // ============================================================================
-  // سلة الطلبات والخصومات ونموذج التخصيص
-  // ============================================================================
   const addToCart = (item, type = 'product') => {
     setCart((prev) => {
       const exists = prev.find((c) => c.id === item.id);
@@ -1336,28 +1156,20 @@ function MuzakkiratiPlatformContent() {
       showToast('يرجى إدخال اسم المعلم ورقم الهاتف الأساسي أولاً', 'error');
       return;
     }
-    const egyptPhone = /^01[0125][0-9]{8}$/;
-    if (!egyptPhone.test(customerForm.phone1.trim())) {
-      showToast('يرجى إدخال رقم هاتف مصري صحيح مكون من 11 رقماً (يبدأ بـ 010 أو 011 أو 012 أو 015)', 'error');
-      return;
-    }
     if (cart.length === 0) return;
 
-    const orderId = `ABK-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const orderId = `ORD-${Date.now().toString().slice(-6)}`;
     const newOrder = {
       id: orderId,
-      teacherName: customerForm.teacherName.trim(),
-      phone1: customerForm.phone1.trim(),
-      seriesName: customerForm.seriesName.trim(),
-      phone2: customerForm.phone2.trim(),
+      teacherName: customerForm.teacherName,
+      phone1: customerForm.phone1,
+      seriesName: customerForm.seriesName,
+      phone2: customerForm.phone2,
       hasLogo: customerForm.hasLogo,
-      logoPreview: customerForm.logoPreview || '',
-      notes: customerForm.notes.trim(),
+      notes: customerForm.notes,
       items: cart.map((i) => ({ id: i.id, title: i.title, price: i.price })),
-      subtotal: cartCalculations.subtotal,
-      discount: cartCalculations.activeDiscount,
       total: cartCalculations.total,
-      status: 'طلب جديد',
+      status: 'قيد المراجعة والتجهيز',
       createdAt: new Date().toISOString()
     };
 
@@ -1392,12 +1204,9 @@ function MuzakkiratiPlatformContent() {
     window.open(`https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`, '_blank');
     setCart([]);
     setIsCartOpen(false);
-    showToast(`تم تسجيل طلبك برقم (${orderId}) وتحويلك إلى واتساب الإدارة!`);
+    showToast('تم تسجيل طلبك في النظام وتحويلك إلى واتساب الإدارة لإرسال الشعار وتأكيد التجهيز');
   };
 
-  // ============================================================================
-  // دوال لوحة الإدارة
-  // ============================================================================
   const handleAdminLogin = (e) => {
     e.preventDefault();
     const entered = adminPinInput.trim();
@@ -1432,8 +1241,7 @@ function MuzakkiratiPlatformContent() {
       pagesCount: Number(productForm.pagesCount || 0),
       price: Number(productForm.price || 0),
       oldPrice: Number(productForm.oldPrice || 0),
-      hidden: Boolean(productForm.hidden),
-      updatedAt: Date.now()
+      hidden: Boolean(productForm.hidden)
     };
 
     const nextProducts = editingProductId
@@ -1443,20 +1251,7 @@ function MuzakkiratiPlatformContent() {
     setProducts(nextProducts);
     await idbSet('products_v5', nextProducts);
     safeLocalSet('el3bakera_products_v5', stripHeavyProductMedia(nextProducts));
-
-    try {
-      await saveProductToCloud(productObj);
-      setCloudSyncStatus('connected');
-      showToast(
-        editingProductId
-          ? 'تم تحديث بيانات المذكرة ونشرها للسحابة للعملاء فوراً!'
-          : 'تمت إضافة المذكرة ونشرها للعملاء فوراً!'
-      );
-    } catch (err) {
-      setCloudSyncStatus('error');
-      setCloudErrorMsg(err?.message || 'فشل رفع المذكرة للسحابة');
-      showToast('تم الحفظ محلياً، لكن تعذر النشر للسحابة — راجع Firestore Rules', 'error');
-    }
+    await saveProductToCloud(productObj);
 
     setEditingProductId(null);
     setProductForm({
@@ -1476,20 +1271,17 @@ function MuzakkiratiPlatformContent() {
       sampleImages: [],
       hidden: false
     });
+    showToast(editingProductId ? 'تم تحديث بيانات المذكرة وحفظها' : 'تمت إضافة المذكرة بنجاح');
   };
 
   const handleToggleProductVisibility = async (product) => {
-    const updatedProduct = { ...product, hidden: !product.hidden, updatedAt: Date.now() };
+    const updatedProduct = { ...product, hidden: !product.hidden };
     const nextProducts = products.map((p) => (p.id === product.id ? updatedProduct : p));
     setProducts(nextProducts);
     await idbSet('products_v5', nextProducts);
     safeLocalSet('el3bakera_products_v5', stripHeavyProductMedia(nextProducts));
-    try {
-      await saveProductToCloud(updatedProduct);
-      showToast(updatedProduct.hidden ? 'تم إخفاء المذكرة عن العملاء' : 'تم إظهار المذكرة للعملاء');
-    } catch {
-      showToast('تعذرت مزامنة الإخفاء مع السحابة', 'error');
-    }
+    await saveProductToCloud(updatedProduct);
+    showToast(updatedProduct.hidden ? 'تم إخفاء المذكرة عن العملاء' : 'تم إظهار المذكرة للعملاء');
   };
 
   const handleDeleteProduct = async (id) => {
@@ -1500,15 +1292,40 @@ function MuzakkiratiPlatformContent() {
     if (db) {
       try {
         await deleteDoc(doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebooks', id));
-        await deleteDoc(doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebook_samples', id));
       } catch {}
     }
-    showToast('تم حذف المذكرة نهائياً');
+    showToast('تم حذف المذكرة');
+  };
+
+  const handleSaveAllAdminChanges = async () => {
+    await saveSettings({
+      ...settings,
+      stages: normalizedStages,
+      grades: normalizedGrades,
+      categories: normalizedCategories
+    });
+    await idbSet('products_v5', products);
+    await idbSet('bundles_v5', bundles);
+    await idbSet('coupons_v5', coupons);
+    if (db) {
+      try {
+        for (const prod of products) {
+          await saveProductToCloud(prod);
+        }
+        for (const cp of coupons) {
+          await setDoc(
+            doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cp.id),
+            cp,
+            { merge: true }
+          );
+        }
+      } catch {}
+    }
+    showToast('تم حفظ ونشر جميع التعديلات للعملاء بنجاح!');
   };
 
   const handleExportBackup = () => {
     const payload = {
-      schemaVersion: '2.0',
       exportedAt: new Date().toISOString(),
       settings,
       products,
@@ -1532,7 +1349,6 @@ function MuzakkiratiPlatformContent() {
     reader.onload = async (ev) => {
       try {
         const parsed = JSON.parse(ev.target.result);
-        handleExportBackup(); // نسخة أمان تلقائية قبل الاستبدال
         if (parsed.settings) {
           await saveSettings({ ...DEFAULT_SETTINGS, ...parsed.settings });
         }
@@ -1547,22 +1363,12 @@ function MuzakkiratiPlatformContent() {
         if (Array.isArray(parsed.bundles)) {
           setBundles(parsed.bundles);
           await idbSet('bundles_v5', parsed.bundles);
-          for (const bnd of parsed.bundles) {
-            if (db) {
-              await setDoc(doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles', bnd.id), bnd, { merge: true });
-            }
-          }
         }
         if (Array.isArray(parsed.coupons)) {
           setCoupons(parsed.coupons);
           await idbSet('coupons_v5', parsed.coupons);
-          for (const cp of parsed.coupons) {
-            if (db) {
-              await setDoc(doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cp.id), cp, { merge: true });
-            }
-          }
         }
-        showToast('تم استيراد النسخة الاحتياطية ونشرها للسحابة بنجاح!');
+        showToast('تم استيراد النسخة الاحتياطية بالكامل بنجاح!');
       } catch {
         showToast('تعذر قراءة ملف JSON — تأكد من سلامة الملف', 'error');
       }
@@ -1613,6 +1419,65 @@ function MuzakkiratiPlatformContent() {
       >
         {parts.join(' • ')}
       </span>
+    );
+  };
+
+  // دالة عرض التنبيه العام المستقل (حصراً داخل نافذة المعاينة)
+  const renderGeneralNoticeBox = () => {
+    if (settings.generalNoticeEnabled === false) return null;
+    const noticeLines = safeText(
+      settings.generalNoticeText,
+      DEFAULT_SETTINGS.generalNoticeText
+    )
+      .split('\n')
+      .filter((l) => l.trim());
+    if (noticeLines.length === 0 && !settings.generalNoticeTitle) return null;
+
+    return (
+      <div
+        style={{
+          backgroundColor: settings.generalNoticeBg || '#f8fafc',
+          color: settings.generalNoticeTextColor || '#334155',
+          borderColor: settings.generalNoticeBorder || '#cbd5e1'
+        }}
+        className="p-4 rounded-2xl border-2 text-xs space-y-1.5 shadow-2xs"
+      >
+        {settings.generalNoticeTitle && (
+          <div className="font-black flex items-center gap-1.5 text-sm">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{safeText(settings.generalNoticeTitle)}</span>
+          </div>
+        )}
+        {noticeLines.map((line, idx) => (
+          <p key={idx} className="leading-relaxed font-semibold">
+            {line}
+          </p>
+        ))}
+      </div>
+    );
+  };
+
+  // دالة عرض التنبيه الخاص بالمذكرة في بطاقة مستقلة تماماً عن التنبيه العام
+  const renderProductTipBox = (tipText, compact = false) => {
+    if (settings.tipNoticeEnabled === false) return null;
+    if (compact && settings.tipShowOnCard === false) return null;
+    const text = safeText(tipText).trim();
+    if (!text) return null;
+
+    return (
+      <div
+        style={{
+          backgroundColor: settings.tipNoticeBg || '#fffbeb',
+          color: settings.tipNoticeTextColor || '#78350f',
+          borderColor: settings.tipNoticeBorder || '#fde68a'
+        }}
+        className={`${
+          compact ? 'px-2.5 py-1.5 rounded-xl text-[11px]' : 'p-3.5 rounded-2xl text-xs'
+        } border-2 font-bold flex items-start gap-2 shadow-2xs`}
+      >
+        <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+        <span className="leading-relaxed">{text}</span>
+      </div>
     );
   };
 
@@ -1869,21 +1734,15 @@ function MuzakkiratiPlatformContent() {
 
                   <div className="grid grid-cols-3 gap-4 pt-6 border-t border-white/10 max-w-lg">
                     <div>
-                      <div className="text-xl sm:text-2xl font-black text-amber-400">
-                        {safeText(settings.statNotebooks, '+50')}
-                      </div>
+                      <div className="text-xl sm:text-2xl font-black text-amber-400">+50</div>
                       <div className="text-xs text-slate-300 mt-0.5">مذكرة وبنك أسئلة</div>
                     </div>
                     <div>
-                      <div className="text-xl sm:text-2xl font-black text-emerald-400">
-                        {safeText(settings.statTeachers, '+500')}
-                      </div>
+                      <div className="text-xl sm:text-2xl font-black text-emerald-400">+500</div>
                       <div className="text-xs text-slate-300 mt-0.5">معلم يثق بنا</div>
                     </div>
                     <div>
-                      <div className="text-xl sm:text-2xl font-black text-sky-400">
-                        {safeText(settings.statCustom, '100%')}
-                      </div>
+                      <div className="text-xl sm:text-2xl font-black text-sky-400">100%</div>
                       <div className="text-xs text-slate-300 mt-0.5">تخصيص باسمك وشعارك</div>
                     </div>
                   </div>
@@ -1983,7 +1842,128 @@ function MuzakkiratiPlatformContent() {
               </div>
             </section>
 
-            {/* الإصدارات القادمة */}
+            {/* أحدث المذكرات */}
+            <section className="space-y-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl sm:text-2xl font-black text-slate-900">أحدث المذكرات المضافة</h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    اختر المذكرة لمعاينة صفحات العينة وطلبها مخصصة باسمك وشعارك
+                  </p>
+                </div>
+                <button
+                  onClick={() => navigateToTab('library')}
+                  className="text-sm font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
+                >
+                  تصفح كل المذكرات ({visibleProducts.length})
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {visibleProducts.slice(0, 6).map((product) => {
+                  const gradeObj = normalizedGrades.find((g) => g.id === product.gradeId);
+                  const catObj = normalizedCategories.find((c) => c.id === product.categoryId);
+
+                  return (
+                    <div
+                      key={product.id}
+                      className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-sm hover:shadow-xl transition-all flex flex-col"
+                    >
+                      <div
+                        onClick={() => {
+                          setPreviewProduct(product);
+                          setActiveSampleIndex(0);
+                        }}
+                        className="relative aspect-[4/3] w-full bg-gradient-to-br from-[#0f1f44] to-[#1e3a8a] cursor-pointer overflow-hidden group"
+                      >
+                        {product.coverImage ? (
+                          <img
+                            src={product.coverImage}
+                            alt={safeText(product.title)}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          />
+                        ) : (
+                          <div className="w-full h-full p-6 flex flex-col items-center justify-center text-center text-white">
+                            <FileText className="w-12 h-12 text-amber-400 mb-3" />
+                            <span className="font-black text-lg">{safeText(product.title)}</span>
+                          </div>
+                        )}
+
+                        {renderDiscountBadge(product)}
+
+                        {product.badgeText && (
+                          <span className="absolute bottom-3 right-3 max-w-[85%] truncate bg-amber-400 text-slate-950 text-[11px] font-black px-3 py-1 rounded-full shadow-md">
+                            {safeText(product.badgeText)}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-xs text-slate-500 font-semibold">
+                            <span>{gradeObj?.name || 'جميع الصفوف'}</span>
+                            <span>•</span>
+                            <span>{catObj?.name || 'مذكرة'}</span>
+                          </div>
+
+                          <h4
+                            onClick={() => {
+                              setPreviewProduct(product);
+                              setActiveSampleIndex(0);
+                            }}
+                            className="text-lg font-black text-slate-900 hover:text-blue-600 cursor-pointer line-clamp-1"
+                          >
+                            {safeText(product.title)}
+                          </h4>
+
+                          <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">
+                            {safeText(product.description)}
+                          </p>
+
+                          {renderProductTipBox(product.tipText, true)}
+                        </div>
+
+                        <div className="space-y-3 pt-2 border-t border-slate-100">
+                          <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-xl">
+                            <span>📄 {product.pagesCount || 0} صفحة PDF</span>
+                            <button
+                              onClick={() => {
+                                setPreviewProduct(product);
+                                setActiveSampleIndex(0);
+                              }}
+                              className="text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>التفاصيل والعينة</span>
+                            </button>
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="text-xl font-black text-blue-600">{product.price} ج.م</span>
+                              {Number(product.oldPrice) > Number(product.price) && (
+                                <span className="text-xs text-slate-400 line-through mr-2">
+                                  {product.oldPrice} ج.م
+                                </span>
+                              )}
+                            </div>
+
+                            <button
+                              onClick={() => addToCart(product, 'product')}
+                              className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-sm transition cursor-pointer"
+                            >
+                              أضف للسلة للتخصيص
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* الإصدارات القادمة (أسفل أحدث المذكرات المضافة) */}
             {safeUpcoming.length > 0 && (
               <section className="bg-gradient-to-l from-slate-900 via-[#0f2347] to-slate-900 rounded-3xl p-6 sm:p-8 text-white border border-slate-800 shadow-lg space-y-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2031,128 +2011,6 @@ function MuzakkiratiPlatformContent() {
                 </div>
               </section>
             )}
-
-            {/* أحدث المذكرات */}
-            <section className="space-y-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-xl sm:text-2xl font-black text-slate-900">أحدث المذكرات المضافة</h3>
-                  <p className="text-xs text-slate-500 mt-1">
-                    اختر المذكرة لمعاينة صفحات العينة وطلبها مخصصة باسمك وشعارك
-                  </p>
-                </div>
-                <button
-                  onClick={() => navigateToTab('library')}
-                  className="text-sm font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
-                >
-                  تصفح كل المذكرات ({visibleProducts.length})
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {visibleProducts.slice(0, 6).map((product) => {
-                  const gradeObj = normalizedGrades.find((g) => g.id === product.gradeId);
-                  const catObj = normalizedCategories.find((c) => c.id === product.categoryId);
-
-                  return (
-                    <div
-                      key={product.id}
-                      className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-sm hover:shadow-xl transition-all flex flex-col"
-                    >
-                      <div
-                        onClick={() => {
-                          setPreviewProduct(product);
-                          setActiveSampleIndex(0);
-                          setPreviewZoom(1);
-                        }}
-                        className="relative aspect-[4/3] w-full bg-gradient-to-br from-[#0f1f44] to-[#1e3a8a] cursor-pointer overflow-hidden group"
-                      >
-                        {product.coverImage ? (
-                          <img
-                            src={product.coverImage}
-                            alt={safeText(product.title)}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          />
-                        ) : (
-                          <div className="w-full h-full p-6 flex flex-col items-center justify-center text-center text-white">
-                            <FileText className="w-12 h-12 text-amber-400 mb-3" />
-                            <span className="font-black text-lg">{safeText(product.title)}</span>
-                          </div>
-                        )}
-
-                        {renderDiscountBadge(product)}
-
-                        {product.badgeText && (
-                          <span className="absolute bottom-3 right-3 max-w-[85%] truncate bg-amber-400 text-slate-950 text-[11px] font-black px-3 py-1 rounded-full shadow-md">
-                            {safeText(product.badgeText)}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2 text-xs text-slate-500 font-semibold">
-                            <span>{gradeObj?.name || 'جميع الصفوف'}</span>
-                            <span>•</span>
-                            <span>{catObj?.name || 'مذكرة'}</span>
-                          </div>
-
-                          <h4
-                            onClick={() => {
-                              setPreviewProduct(product);
-                              setActiveSampleIndex(0);
-                              setPreviewZoom(1);
-                            }}
-                            className="text-lg font-black text-slate-900 hover:text-blue-600 cursor-pointer line-clamp-1"
-                          >
-                            {safeText(product.title)}
-                          </h4>
-
-                          <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">
-                            {safeText(product.description)}
-                          </p>
-                        </div>
-
-                        <div className="space-y-3 pt-2 border-t border-slate-100">
-                          <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-xl">
-                            <span>📄 {product.pagesCount || 0} صفحة PDF</span>
-                            <button
-                              onClick={() => {
-                                setPreviewProduct(product);
-                                setActiveSampleIndex(0);
-                                setPreviewZoom(1);
-                              }}
-                              className="text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>التفاصيل والعينة</span>
-                            </button>
-                          </div>
-
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <span className="text-xl font-black text-blue-600">{product.price} ج.م</span>
-                              {Number(product.oldPrice) > Number(product.price) && (
-                                <span className="text-xs text-slate-400 line-through mr-2">
-                                  {product.oldPrice} ج.م
-                                </span>
-                              )}
-                            </div>
-
-                            <button
-                              onClick={() => addToCart(product, 'product')}
-                              className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-sm transition cursor-pointer"
-                            >
-                              أضف للسلة للتخصيص
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
 
             {/* آراء المعلمين */}
             {safeTestimonials.length > 0 && (
@@ -2229,18 +2087,9 @@ function MuzakkiratiPlatformContent() {
           </div>
         )}
 
-        {/* 2. مكتبة المذكرات والفلاتر المترابطة */}
+        {/* 2. مكتبة المذكرات والفلاتر (بدون التنبيه العام) */}
         {activeTab === 'library' && (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-            <div className="p-4 sm:p-5 rounded-3xl bg-amber-50 border border-amber-200 flex items-start gap-3.5 shadow-2xs">
-              <AlertCircle className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
-              <div className="text-xs sm:text-sm text-amber-950 space-y-1">
-                <div className="font-black text-amber-900">تنبيه هام للمعلمين قبل تأكيد الطلب:</div>
-                <p>• يتم تسليم المذكرة بصيغة PDF عالية الدقة جاهزة للطباعة ببيانات المعلم الخاصة دون أي بيانات تخصنا.</p>
-                <p>• تُوضع العلامة المائية باسم المعلم أو اسم السلسلة الخاص به على كافة الصفحات، وغير متاح إرسال المذكرات بدونها.</p>
-              </div>
-            </div>
-
             <div className="bg-white rounded-3xl border border-slate-200/80 p-4 sm:p-6 shadow-sm space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
                 <div className="md:col-span-6 relative">
@@ -2249,7 +2098,7 @@ function MuzakkiratiPlatformContent() {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="ابحث باسم المذكرة، المادة، الصف الدراسي، أو المحتوى..."
+                    placeholder="ابحث باسم المذكرة، الصف الدراسي، أو المحتوى..."
                     className="w-full pr-10 pl-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 text-sm focus:border-blue-500 outline-none"
                   />
                 </div>
@@ -2290,53 +2139,30 @@ function MuzakkiratiPlatformContent() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <button
+                  onClick={() => setSelectedCategory('all')}
+                  className={`px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer ${
+                    selectedCategory === 'all'
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  جميع الأقسام ({visibleProducts.length})
+                </button>
+                {normalizedCategories.map((cat) => (
                   <button
-                    onClick={() => setSelectedCategory('all')}
-                    className={`px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer ${
-                      selectedCategory === 'all'
-                        ? 'bg-slate-900 text-white'
+                    key={cat.id}
+                    onClick={() => setSelectedCategory(cat.id)}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                      selectedCategory === cat.id
+                        ? 'bg-blue-600 text-white'
                         : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                     }`}
                   >
-                    جميع الأقسام ({visibleProducts.length})
+                    {cat.name}
                   </button>
-                  {normalizedCategories.map((cat) => (
-                    <button
-                      key={cat.id}
-                      onClick={() => setSelectedCategory(cat.id)}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-                        selectedCategory === cat.id
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                      }`}
-                    >
-                      {cat.name}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3">
-                  <label className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={onlyDiscounted}
-                      onChange={(e) => setOnlyDiscounted(e.target.checked)}
-                      className="rounded text-blue-600"
-                    />
-                    <span>المخفضة فقط</span>
-                  </label>
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
-                    className="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700"
-                  >
-                    <option value="newest">الأحدث إضافة</option>
-                    <option value="price-asc">السعر: الأقل أولاً</option>
-                    <option value="price-desc">السعر: الأعلى أولاً</option>
-                  </select>
-                </div>
+                ))}
               </div>
             </div>
 
@@ -2350,7 +2176,6 @@ function MuzakkiratiPlatformContent() {
                     setSelectedStage('all');
                     setSelectedGrade('all');
                     setSearchQuery('');
-                    setOnlyDiscounted(false);
                   }}
                   className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold"
                 >
@@ -2372,7 +2197,6 @@ function MuzakkiratiPlatformContent() {
                         onClick={() => {
                           setPreviewProduct(product);
                           setActiveSampleIndex(0);
-                          setPreviewZoom(1);
                         }}
                         className="relative aspect-[4/3] w-full bg-gradient-to-br from-[#0f1f44] to-[#1e3a8a] cursor-pointer overflow-hidden group"
                       >
@@ -2410,7 +2234,6 @@ function MuzakkiratiPlatformContent() {
                             onClick={() => {
                               setPreviewProduct(product);
                               setActiveSampleIndex(0);
-                              setPreviewZoom(1);
                             }}
                             className="text-lg font-black text-slate-900 hover:text-blue-600 cursor-pointer line-clamp-1"
                           >
@@ -2421,11 +2244,7 @@ function MuzakkiratiPlatformContent() {
                             {product.description}
                           </p>
 
-                          {product.tipText && (
-                            <div className="px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200/80 text-amber-900 text-[11px] font-bold">
-                              💡 {product.tipText}
-                            </div>
-                          )}
+                          {renderProductTipBox(product.tipText, true)}
                         </div>
 
                         <div className="space-y-3 pt-2 border-t border-slate-100">
@@ -2435,7 +2254,6 @@ function MuzakkiratiPlatformContent() {
                               onClick={() => {
                                 setPreviewProduct(product);
                                 setActiveSampleIndex(0);
-                                setPreviewZoom(1);
                               }}
                               className="text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer"
                             >
@@ -2540,7 +2358,7 @@ function MuzakkiratiPlatformContent() {
           </div>
         )}
 
-        {/* 4. تتبع طلبك الآمن (يتطلب رقم الطلب ورقم الهاتف معاً) */}
+        {/* 4. تتبع طلبك */}
         {activeTab === 'track' && (
           <div className="max-w-2xl mx-auto px-4 sm:px-6 py-12">
             <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-6">
@@ -2551,7 +2369,7 @@ function MuzakkiratiPlatformContent() {
                 <div>
                   <h2 className="text-xl font-black text-slate-900">تتبع حالة طلبك</h2>
                   <p className="text-xs text-slate-500">
-                    أدخل رقم الطلب ورقم الهاتف المرتبط به معاً للاطلاع على حالة التجهيز والتسليم
+                    أدخل رقم الطلب ورقم الهاتف المسجل للاطلاع على حالة التجهيز والتسليم لحظياً
                   </p>
                 </div>
               </div>
@@ -2561,8 +2379,8 @@ function MuzakkiratiPlatformContent() {
                   type="text"
                   value={trackOrderId}
                   onChange={(e) => setTrackOrderId(e.target.value)}
-                  placeholder="رقم الطلب (مثال: ABK-2026-1234)"
-                  className="w-full px-4 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-sm outline-none focus:border-blue-600 uppercase"
+                  placeholder="رقم الطلب (مثال: ORD-123456)"
+                  className="w-full px-4 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-sm outline-none focus:border-blue-600"
                 />
                 <input
                   type="text"
@@ -2573,23 +2391,23 @@ function MuzakkiratiPlatformContent() {
                 />
               </div>
 
-              {trackPhone.trim().length >= 8 && trackOrderId.trim().length >= 4 && (
+              {(trackPhone.trim().length >= 4 || trackOrderId.trim().length >= 3) && (
                 <div className="space-y-3 pt-2">
-                  {orders.filter(
-                    (o) =>
-                      (o.phone1 || '').trim() === trackPhone.trim() &&
-                      (o.id || '').toUpperCase() === trackOrderId.trim().toUpperCase()
-                  ).length === 0 ? (
+                  {orders.filter((o) => {
+                    const matchPhone = !trackPhone.trim() || (o.phone1 || '').includes(trackPhone.trim());
+                    const matchId = !trackOrderId.trim() || (o.id || '').toLowerCase().includes(trackOrderId.trim().toLowerCase());
+                    return matchPhone && matchId;
+                  }).length === 0 ? (
                     <div className="p-4 rounded-2xl bg-slate-50 text-center text-xs text-slate-600 font-semibold">
-                      لم يتم العثور على طلب يطابق رقم الطلب ورقم الهاتف المدخلين معاً.
+                      لم يتم العثور على طلبات مطابقة لرقم الطلب ورقم الهاتف المدخل.
                     </div>
                   ) : (
                     orders
-                      .filter(
-                        (o) =>
-                          (o.phone1 || '').trim() === trackPhone.trim() &&
-                          (o.id || '').toUpperCase() === trackOrderId.trim().toUpperCase()
-                      )
+                      .filter((o) => {
+                        const matchPhone = !trackPhone.trim() || (o.phone1 || '').includes(trackPhone.trim());
+                        const matchId = !trackOrderId.trim() || (o.id || '').toLowerCase().includes(trackOrderId.trim().toLowerCase());
+                        return matchPhone && matchId;
+                      })
                       .map((ord) => (
                         <div
                           key={ord.id}
@@ -2618,109 +2436,53 @@ function MuzakkiratiPlatformContent() {
         {/* 5. لوحة الإدارة المتكاملة */}
         {activeTab === 'admin' && isAdminAuthenticated && (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-            {/* شريط الإدارة العلوي مع مؤشر السحابة وزر النشر الفوري للعملاء */}
-            <div className="bg-slate-900 text-white rounded-3xl p-5 sm:p-6 space-y-4 shadow-lg">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center font-black">
-                    <ShieldCheck className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-black">لوحة إدارة منصة العباقرة</h2>
-                    <div className="text-xs mt-0.5 flex items-center gap-2">
-                      <span
-                        className={`w-2.5 h-2.5 rounded-full ${
-                          cloudSyncStatus === 'connected'
-                            ? 'bg-emerald-400 animate-pulse'
-                            : cloudSyncStatus === 'error'
-                            ? 'bg-rose-500'
-                            : 'bg-amber-400'
-                        }`}
-                      />
-                      <span className="text-slate-300">
-                        {cloudSyncStatus === 'connected'
-                          ? `متصل بالسحابة (${PRIMARY_APP_ID}) — جميع التعديلات تظهر للعملاء فوراً ✓`
-                          : cloudSyncStatus === 'error'
-                          ? 'تنبيه: تعذر النشر للسحابة بسبب قواعد أمان Firestore Rules!'
-                          : 'جاري الاتصال بالسحابة...'}
-                      </span>
-                    </div>
-                  </div>
+            <div className="bg-slate-900 text-white rounded-3xl p-5 sm:p-6 flex flex-wrap items-center justify-between gap-4 shadow-lg">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center font-black">
+                  <ShieldCheck className="w-6 h-6" />
                 </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={handlePublishAllToCloudNow}
-                    disabled={isSyncingAll}
-                    className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black flex items-center gap-1.5 shadow cursor-pointer disabled:opacity-60"
-                  >
-                    {isSyncingAll ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <CloudUpload className="w-4 h-4" />
-                    )}
-                    <span>
-                      {isSyncingAll
-                        ? `جاري النشر للسحابة (${syncProgress}%)...`
-                        : 'نشر ومزامنة كافة البيانات والصور للسحابة للعملاء الآن'}
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={handleExportBackup}
-                    className="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>تصدير JSON</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setIsAdminAuthenticated(false);
-                      try {
-                        localStorage.removeItem('el3bakera_admin_auth');
-                      } catch {}
-                      navigateToTab('home');
-                      showToast('تم تسجيل الخروج من لوحة الإدارة');
-                    }}
-                    className="px-3.5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black flex items-center gap-1.5 shadow cursor-pointer"
-                  >
-                    <Lock className="w-4 h-4" />
-                    <span>خروج</span>
-                  </button>
+                <div>
+                  <h2 className="text-lg font-black">لوحة إدارة منصة العباقرة</h2>
+                  <p className="text-xs text-slate-400">
+                    {cloudSyncStatus === 'connected'
+                      ? `متصل بقاعدة البيانات السحابية (${PRIMARY_APP_ID}) ✓`
+                      : 'وضع المزامنة المحلية'}
+                  </p>
                 </div>
               </div>
 
-              {/* تنبيه قواعد الأمان Firestore Rules إذا كان هناك خطأ في المزامنة السحابية */}
-              {cloudSyncStatus === 'error' && (
-                <div className="p-4 rounded-2xl bg-rose-950/70 border border-rose-500/40 text-xs space-y-2.5">
-                  <div className="font-black text-amber-300 flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4" />
-                    <span>سبب عدم ظهور التعديلات للعملاء: قواعد أمان Firestore تمنع الكتابة العامة!</span>
-                  </div>
-                  <p className="text-slate-200 leading-relaxed">
-                    لحل المشكلة نهائياً، افتح مشروعك <strong>el3bakera-edu</strong> في Firebase Console ← ادخل على <strong>Firestore Database</strong> ← تبويب <strong>Rules</strong>، والصق الكود التالي ثم اضغط <strong>Publish</strong>:
-                  </p>
-                  <div className="relative bg-slate-950 p-3 rounded-xl font-mono text-[11px] text-emerald-300" dir="ltr">
-                    <pre className="overflow-x-auto">{FIRESTORE_RULES_SNIPPET}</pre>
-                    <button
-                      onClick={() => {
-                        navigator.clipboard?.writeText(FIRESTORE_RULES_SNIPPET);
-                        setCopiedRules(true);
-                        showToast('تم نسخ كود قواعد Firestore Rules!');
-                        setTimeout(() => setCopiedRules(false), 2500);
-                      }}
-                      className="absolute top-2 right-2 px-3 py-1 rounded-lg bg-blue-600 text-white font-sans font-bold text-xs flex items-center gap-1 cursor-pointer"
-                    >
-                      {copiedRules ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedRules ? 'تم النسخ' : 'نسخ القواعد'}</span>
-                    </button>
-                  </div>
-                </div>
-              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={handleSaveAllAdminChanges}
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black flex items-center gap-1.5 shadow cursor-pointer"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>حفظ ونشر جميع التعديلات للعملاء</span>
+                </button>
+                <button
+                  onClick={handleExportBackup}
+                  className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>تصدير نسخة احتياطية</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setIsAdminAuthenticated(false);
+                    try {
+                      localStorage.removeItem('el3bakera_admin_auth');
+                    } catch {}
+                    navigateToTab('home');
+                    showToast('تم تسجيل الخروج من لوحة الإدارة');
+                  }}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black flex items-center gap-1.5 shadow cursor-pointer"
+                >
+                  <Lock className="w-4 h-4" />
+                  <span>تسجيل خروج</span>
+                </button>
+              </div>
             </div>
 
-            {/* تبويبات لوحة الإدارة */}
             <div className="flex flex-wrap gap-2 bg-white p-2 rounded-2xl border border-slate-200">
               {[
                 { id: 'products', label: `المذكرات والعينات (${products.length})`, icon: BookOpen },
@@ -2728,7 +2490,7 @@ function MuzakkiratiPlatformContent() {
                 { id: 'taxonomy', label: 'المراحل والصفوف والأقسام', icon: Layers },
                 { id: 'coupons', label: `الكوبونات والعروض (${coupons.length})`, icon: Tag },
                 { id: 'orders', label: `الطلبات (${orders.length})`, icon: ShoppingCart },
-                { id: 'settings', label: 'الهوية والشعار والروابط', icon: Sliders },
+                { id: 'settings', label: 'الهوية والتنبيهات والروابط', icon: Sliders },
                 { id: 'backup', label: 'النسخ الاحتياطي JSON', icon: Database }
               ].map((tab) => {
                 const Icon = tab.icon;
@@ -2749,7 +2511,7 @@ function MuzakkiratiPlatformContent() {
               })}
             </div>
 
-            {/* تبويب 1: إدارة المذكرات والعينات */}
+            {/* تبويب 1: إدارة المذكرات */}
             {adminSubTab === 'products' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <form
@@ -2865,7 +2627,7 @@ function MuzakkiratiPlatformContent() {
                     </div>
 
                     <div>
-                      <label className="block font-bold text-slate-600 mb-1">التنبيه الخاص بالمذكرة</label>
+                      <label className="block font-bold text-slate-600 mb-1">التنبيه الخاص بالمذكرة (صندوق مستقل)</label>
                       <input
                         type="text"
                         value={productForm.tipText || ''}
@@ -2904,7 +2666,7 @@ function MuzakkiratiPlatformContent() {
                         onChange={async (e) => {
                           const f = e.target.files?.[0];
                           if (!f) return;
-                          const compressed = await compressImageFile(f, 750, 0.72);
+                          const compressed = await compressImageFile(f, 800, 0.82);
                           setProductForm((prev) => ({ ...prev, coverImage: compressed }));
                         }}
                         className="block w-full text-xs"
@@ -2920,21 +2682,21 @@ function MuzakkiratiPlatformContent() {
 
                     <div className="p-3 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-2">
                       <label className="block font-black text-emerald-900">
-                        صور صفحات العينة الداخلية (حتى 6 صفحات مضغوطة للنشر السحابي)
+                        صور صفحات العينة الداخلية
                       </label>
                       <input
                         type="file"
                         accept="image/*"
                         multiple
                         onChange={async (e) => {
-                          const files = Array.from(e.target.files || []).slice(0, 6);
+                          const files = Array.from(e.target.files || []);
                           if (files.length === 0) return;
                           const compressedList = await Promise.all(
-                            files.map((f) => compressImageFile(f, 750, 0.72))
+                            files.map((f) => compressImageFile(f, 950, 0.8))
                           );
                           setProductForm((prev) => ({
                             ...prev,
-                            sampleImages: [...(prev.sampleImages || []), ...compressedList].slice(0, 6)
+                            sampleImages: [...(prev.sampleImages || []), ...compressedList]
                           }));
                           showToast(`تم تجهيز ${compressedList.length} صورة عينة`);
                         }}
@@ -2968,7 +2730,7 @@ function MuzakkiratiPlatformContent() {
                         type="submit"
                         className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm cursor-pointer"
                       >
-                        {editingProductId ? 'حفظ ونشر التعديلات للعملاء' : 'إضافة ونشر المذكرة للعملاء'}
+                        {editingProductId ? 'حفظ التعديلات' : 'إضافة المذكرة'}
                       </button>
                       {editingProductId && (
                         <button
@@ -3133,11 +2895,11 @@ function MuzakkiratiPlatformContent() {
                           productIds: [],
                           coverImage: ''
                         });
-                        showToast('تمت إضافة الباقة ونشرها للعملاء');
+                        showToast('تمت إضافة الباقة وحفظها');
                       }}
                       className="w-full py-3 rounded-xl bg-blue-600 text-white font-black text-sm cursor-pointer"
                     >
-                      حفظ ونشر الباقة
+                      حفظ الباقة
                     </button>
                   </div>
                 </div>
@@ -3184,14 +2946,14 @@ function MuzakkiratiPlatformContent() {
                     <div>
                       <h3 className="text-base font-black text-slate-900">الأقسام الدراسية وصور الأغلفة</h3>
                       <p className="text-xs text-slate-500">
-                        يمكنك تعديل اسم كل قسم أو رفع صورة غلاف جديدة له ونشرها للعملاء مباشرة
+                        يمكنك تعديل اسم كل قسم أو رفع صورة غلاف جديدة له وحفظ التعديلات مباشرة
                       </p>
                     </div>
                     <button
-                      onClick={() => saveSettings(settings).then(() => showToast('تم حفظ ونشر الأقسام للسحابة!'))}
+                      onClick={handleSaveAllAdminChanges}
                       className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black cursor-pointer"
                     >
-                      حفظ ونشر الأقسام
+                      حفظ تعديلات الأقسام
                     </button>
                   </div>
 
@@ -3211,7 +2973,7 @@ function MuzakkiratiPlatformContent() {
                       className="sm:col-span-5 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs"
                     />
                     <button
-                      onClick={async () => {
+                      onClick={() => {
                         if (!newCategoryName.trim()) return;
                         const updatedCats = [
                           ...normalizedCategories,
@@ -3222,10 +2984,10 @@ function MuzakkiratiPlatformContent() {
                             coverImage: ''
                           }
                         ];
-                        await saveSettings({ ...settings, categories: updatedCats });
+                        saveSettings({ ...settings, categories: updatedCats });
                         setNewCategoryName('');
                         setNewCategorySubtitle('');
-                        showToast('تمت إضافة القسم ونشره للعملاء');
+                        showToast('تمت إضافة القسم بنجاح');
                       }}
                       className="sm:col-span-2 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-black cursor-pointer"
                     >
@@ -3249,9 +3011,9 @@ function MuzakkiratiPlatformContent() {
                               </div>
                             )}
                             <button
-                              onClick={async () => {
+                              onClick={() => {
                                 const updatedCats = normalizedCategories.filter((c) => c.id !== cat.id);
-                                await saveSettings({ ...settings, categories: updatedCats });
+                                saveSettings({ ...settings, categories: updatedCats });
                                 showToast('تم حذف القسم');
                               }}
                               className="absolute top-2 left-2 p-2 rounded-xl bg-rose-600 text-white shadow cursor-pointer"
@@ -3282,12 +3044,12 @@ function MuzakkiratiPlatformContent() {
                                 onChange={async (e) => {
                                   const f = e.target.files?.[0];
                                   if (!f) return;
-                                  const img = await compressImageFile(f, 750, 0.72);
+                                  const img = await compressImageFile(f, 800, 0.82);
                                   const updatedCats = normalizedCategories.map((c) =>
                                     c.id === cat.id ? { ...c, coverImage: img } : c
                                   );
                                   await saveSettings({ ...settings, categories: updatedCats });
-                                  showToast('تم تحديث ونشر صورة القسم للعملاء');
+                                  showToast('تم تحديث وحفظ صورة القسم');
                                 }}
                               />
                             </label>
@@ -3310,10 +3072,10 @@ function MuzakkiratiPlatformContent() {
                         className="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs"
                       />
                       <button
-                        onClick={async () => {
+                        onClick={() => {
                           if (!newStageName.trim()) return;
                           const next = [...normalizedStages, { id: `stg_${Date.now()}`, name: newStageName.trim() }];
-                          await saveSettings({ ...settings, stages: next });
+                          saveSettings({ ...settings, stages: next });
                           setNewStageName('');
                           showToast('تمت إضافة المرحلة');
                         }}
@@ -3327,8 +3089,8 @@ function MuzakkiratiPlatformContent() {
                         <div key={st.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 text-xs font-bold">
                           <span>{st.name}</span>
                           <button
-                            onClick={async () => {
-                              await saveSettings({
+                            onClick={() => {
+                              saveSettings({
                                 ...settings,
                                 stages: normalizedStages.filter((s) => s.id !== st.id)
                               });
@@ -3365,7 +3127,7 @@ function MuzakkiratiPlatformContent() {
                         className="sm:col-span-5 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs"
                       />
                       <button
-                        onClick={async () => {
+                        onClick={() => {
                           if (!newGradeName.trim()) return;
                           const next = [
                             ...normalizedGrades,
@@ -3375,7 +3137,7 @@ function MuzakkiratiPlatformContent() {
                               name: newGradeName.trim()
                             }
                           ];
-                          await saveSettings({ ...settings, grades: next });
+                          saveSettings({ ...settings, grades: next });
                           setNewGradeName('');
                           showToast('تمت إضافة الصف الدراسي');
                         }}
@@ -3399,8 +3161,8 @@ function MuzakkiratiPlatformContent() {
                               )}
                             </div>
                             <button
-                              onClick={async () => {
-                                await saveSettings({
+                              onClick={() => {
+                                saveSettings({
                                   ...settings,
                                   grades: normalizedGrades.filter((g) => g.id !== gr.id)
                                 });
@@ -3480,55 +3242,11 @@ function MuzakkiratiPlatformContent() {
                           );
                         }
                         setNewCouponForm({ code: '', discountPercent: 15, maxDiscount: 200, active: true });
-                        showToast('تمت إضافة الكوبون ونشره للعملاء');
+                        showToast('تمت إضافة الكوبون وحفظه');
                       }}
                       className="w-full py-3 rounded-xl bg-blue-600 text-white font-black text-sm cursor-pointer"
                     >
-                      إضافة ونشر الكوبون
-                    </button>
-                  </div>
-
-                  <div className="pt-4 border-t border-slate-100 space-y-3 text-xs">
-                    <h4 className="font-black text-slate-900">الشريط الترويجي العلوي وخصم الكميات</h4>
-                    <label className="flex items-center gap-2 font-bold">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(settings.promoEnabled)}
-                        onChange={(e) => setSettings({ ...settings, promoEnabled: e.target.checked })}
-                      />
-                      <span>تفعيل الشريط الترويجي العلوي</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={settings.promoText || ''}
-                      onChange={(e) => setSettings({ ...settings, promoText: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="text"
-                        placeholder="كود الإعلان"
-                        value={settings.promoCouponCode || ''}
-                        onChange={(e) =>
-                          setSettings({ ...settings, promoCouponCode: e.target.value.toUpperCase() })
-                        }
-                        className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                      />
-                      <input
-                        type="number"
-                        placeholder="خصم الكميات %"
-                        value={settings.bulkDiscountPercent ?? 15}
-                        onChange={(e) =>
-                          setSettings({ ...settings, bulkDiscountPercent: Number(e.target.value) })
-                        }
-                        className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                      />
-                    </div>
-                    <button
-                      onClick={() => saveSettings(settings).then(() => showToast('تم نشر إعدادات العروض للعملاء!'))}
-                      className="w-full py-2.5 rounded-xl bg-slate-900 text-white font-bold cursor-pointer"
-                    >
-                      حفظ ونشر إعدادات العروض
+                      إضافة الكوبون
                     </button>
                   </div>
                 </div>
@@ -3550,17 +3268,11 @@ function MuzakkiratiPlatformContent() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={async () => {
-                            const updatedCp = { ...cp, active: cp.active === false };
-                            const next = coupons.map((c) => (c.id === cp.id ? updatedCp : c));
+                            const next = coupons.map((c) =>
+                              c.id === cp.id ? { ...c, active: c.active === false } : c
+                            );
                             setCoupons(next);
                             await idbSet('coupons_v5', next);
-                            if (db) {
-                              await setDoc(
-                                doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cp.id),
-                                updatedCp,
-                                { merge: true }
-                              );
-                            }
                             showToast('تم تحديث حالة الكوبون');
                           }}
                           className={`px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer ${
@@ -3633,11 +3345,10 @@ function MuzakkiratiPlatformContent() {
                             }}
                             className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-bold text-xs"
                           >
-                            <option value="طلب جديد">طلب جديد</option>
-                            <option value="جارٍ التنفيذ">جارٍ التنفيذ</option>
-                            <option value="تم الانتهاء">تم الانتهاء</option>
-                            <option value="تم التسليم">تم التسليم</option>
-                            <option value="ملغي">ملغي</option>
+                            <option value="قيد المراجعة والتجهيز">قيد المراجعة والتجهيز</option>
+                            <option value="جارٍ التنفيذ والطباعة">جارٍ التنفيذ والطباعة</option>
+                            <option value="تم الانتهاء وجاهز للتسليم">تم الانتهاء وجاهز للتسليم</option>
+                            <option value="تم التسليم للعميل">تم التسليم للعميل</option>
                           </select>
                         </div>
                       </div>
@@ -3647,17 +3358,17 @@ function MuzakkiratiPlatformContent() {
               </div>
             )}
 
-            {/* تبويب 6: الهوية والشعار والروابط وتقييمات العملاء وشارة الخصم */}
+            {/* تبويب 6: الهوية والتنبيهات المنفصلة والروابط */}
             {adminSubTab === 'settings' && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs">
-                <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
+                <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-5">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-base font-black text-slate-900">الهوية والشعار وخلفية الرئيسية</h3>
+                    <h3 className="text-base font-black text-slate-900">الهوية والشعار والتحكم في التنبيهات</h3>
                     <button
-                      onClick={() => saveSettings(settings).then(() => showToast('تم حفظ ونشر كافة إعدادات الهوية للعملاء!'))}
+                      onClick={handleSaveAllAdminChanges}
                       className="px-4 py-2 rounded-xl bg-blue-600 text-white font-black cursor-pointer"
                     >
-                      حفظ ونشر للعملاء
+                      حفظ التعديلات
                     </button>
                   </div>
 
@@ -3671,9 +3382,9 @@ function MuzakkiratiPlatformContent() {
                         onChange={async (e) => {
                           const f = e.target.files?.[0];
                           if (!f) return;
-                          const img = await compressImageFile(f, 350, 0.8);
+                          const img = await compressImageFile(f, 350, 0.85);
                           await saveSettings({ ...settings, logoImage: img });
-                          showToast('تم حفظ ونشر شعار المنصة للعملاء');
+                          showToast('تم حفظ شعار المنصة');
                         }}
                       />
                     </div>
@@ -3693,26 +3404,11 @@ function MuzakkiratiPlatformContent() {
                         onChange={async (e) => {
                           const f = e.target.files?.[0];
                           if (!f) return;
-                          const img = await compressImageFile(f, 850, 0.72);
+                          const img = await compressImageFile(f, 1100, 0.78);
                           await saveSettings({ ...settings, heroBgImage: img });
-                          showToast('تم حفظ ونشر خلفية الرئيسية للعملاء');
+                          showToast('تم حفظ خلفية الشاشة الرئيسية');
                         }}
                       />
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600">
-                          درجة التعتيم: {settings.heroOverlayOpacity ?? 75}%
-                        </label>
-                        <input
-                          type="range"
-                          min="0"
-                          max="95"
-                          value={settings.heroOverlayOpacity ?? 75}
-                          onChange={(e) =>
-                            setSettings({ ...settings, heroOverlayOpacity: Number(e.target.value) })
-                          }
-                          className="w-full"
-                        />
-                      </div>
                     </div>
                   </div>
 
@@ -3724,46 +3420,6 @@ function MuzakkiratiPlatformContent() {
                       onChange={(e) => setSettings({ ...settings, platformName: e.target.value })}
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
                     />
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-600 mb-1">العنوان التسويقي الرئيسي</label>
-                    <input
-                      type="text"
-                      value={settings.heroTitle}
-                      onChange={(e) => setSettings({ ...settings, heroTitle: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="block font-bold text-slate-600 mb-1">إحصائية المذكرات</label>
-                      <input
-                        type="text"
-                        value={settings.statNotebooks || '+50'}
-                        onChange={(e) => setSettings({ ...settings, statNotebooks: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-bold text-slate-600 mb-1">إحصائية المعلمين</label>
-                      <input
-                        type="text"
-                        value={settings.statTeachers || '+500'}
-                        onChange={(e) => setSettings({ ...settings, statTeachers: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-bold text-slate-600 mb-1">نسبة التخصيص</label>
-                      <input
-                        type="text"
-                        value={settings.statCustom || '100%'}
-                        onChange={(e) => setSettings({ ...settings, statCustom: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                      />
-                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
@@ -3789,74 +3445,67 @@ function MuzakkiratiPlatformContent() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block font-bold text-slate-600 mb-1">رمز دخول الإدارة</label>
-                    <input
-                      type="text"
-                      value={settings.adminPin}
-                      onChange={(e) => setSettings({ ...settings, adminPin: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                    />
-                  </div>
-
-                  {/* التحكم الكامل في شارة الخصم */}
-                  <div className="pt-4 border-t border-slate-100 space-y-3">
-                    <h4 className="font-black text-slate-900">التحكم في شارة الخصم على المذكرات والعينات</h4>
-                    <div className="flex flex-wrap gap-4">
-                      <label className="flex items-center gap-1.5 font-bold">
+                  {/* 1. قسم التحكم الكامل في التنبيه العام (يظهر حصراً في نافذة المعاينة) */}
+                  <div className="pt-4 border-t border-slate-200 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-black text-slate-900">1. التحكم في التنبيه العام (في نافذة المعاينة فقط)</h4>
+                      <label className="flex items-center gap-1.5 font-bold text-blue-600 cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={settings.discountBadgeEnabled !== false}
+                          checked={settings.generalNoticeEnabled !== false}
                           onChange={(e) =>
-                            setSettings({ ...settings, discountBadgeEnabled: e.target.checked })
+                            setSettings({ ...settings, generalNoticeEnabled: e.target.checked })
                           }
                         />
-                        <span>إظهار الشارة</span>
-                      </label>
-                      <label className="flex items-center gap-1.5 font-bold">
-                        <input
-                          type="checkbox"
-                          checked={settings.showDiscountPercent !== false}
-                          onChange={(e) =>
-                            setSettings({ ...settings, showDiscountPercent: e.target.checked })
-                          }
-                        />
-                        <span>النسبة المئوية %</span>
-                      </label>
-                      <label className="flex items-center gap-1.5 font-bold">
-                        <input
-                          type="checkbox"
-                          checked={settings.showDiscountAmount !== false}
-                          onChange={(e) =>
-                            setSettings({ ...settings, showDiscountAmount: e.target.checked })
-                          }
-                        />
-                        <span>مبلغ التوفير ج.م</span>
+                        <span>إظهار التنبيه العام</span>
                       </label>
                     </div>
-                    <div className="grid grid-cols-3 gap-2">
+
+                    <div>
+                      <label className="block font-bold text-slate-600 mb-1">عنوان التنبيه العام</label>
+                      <input
+                        type="text"
+                        value={settings.generalNoticeTitle ?? 'تنبيه هام للمعلمين قبل تأكيد الطلب:'}
+                        onChange={(e) =>
+                          setSettings({ ...settings, generalNoticeTitle: e.target.value })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-600 mb-1">نص التنبيه العام</label>
+                      <textarea
+                        rows={3}
+                        value={settings.generalNoticeText ?? DEFAULT_SETTINGS.generalNoticeText}
+                        onChange={(e) =>
+                          setSettings({ ...settings, generalNoticeText: e.target.value })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-2">
                       <div>
                         <label className="block font-bold text-slate-600 mb-1">المكان</label>
                         <select
-                          value={settings.discountBadgePosition || 'top-left'}
+                          value={settings.generalNoticePosition || 'bottom'}
                           onChange={(e) =>
-                            setSettings({ ...settings, discountBadgePosition: e.target.value })
+                            setSettings({ ...settings, generalNoticePosition: e.target.value })
                           }
-                          className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                          className="w-full px-2 py-2 rounded-xl border border-slate-200 bg-slate-50"
                         >
-                          <option value="top-left">أعلى اليسار</option>
-                          <option value="top-right">أعلى اليمين</option>
-                          <option value="bottom-left">أسفل اليسار</option>
-                          <option value="bottom-right">أسفل اليمين</option>
+                          <option value="top">أعلى التفاصيل</option>
+                          <option value="bottom">أسفل التفاصيل</option>
                         </select>
                       </div>
                       <div>
                         <label className="block font-bold text-slate-600 mb-1">لون الخلفية</label>
                         <input
                           type="color"
-                          value={settings.discountBadgeBg || '#10b981'}
+                          value={settings.generalNoticeBg || '#f8fafc'}
                           onChange={(e) =>
-                            setSettings({ ...settings, discountBadgeBg: e.target.value })
+                            setSettings({ ...settings, generalNoticeBg: e.target.value })
                           }
                           className="w-full h-9 rounded-xl border border-slate-200"
                         />
@@ -3865,9 +3514,99 @@ function MuzakkiratiPlatformContent() {
                         <label className="block font-bold text-slate-600 mb-1">لون النص</label>
                         <input
                           type="color"
-                          value={settings.discountBadgeText || '#ffffff'}
+                          value={settings.generalNoticeTextColor || '#334155'}
                           onChange={(e) =>
-                            setSettings({ ...settings, discountBadgeText: e.target.value })
+                            setSettings({ ...settings, generalNoticeTextColor: e.target.value })
+                          }
+                          className="w-full h-9 rounded-xl border border-slate-200"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-600 mb-1">لون الإطار</label>
+                        <input
+                          type="color"
+                          value={settings.generalNoticeBorder || '#cbd5e1'}
+                          onChange={(e) =>
+                            setSettings({ ...settings, generalNoticeBorder: e.target.value })
+                          }
+                          className="w-full h-9 rounded-xl border border-slate-200"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. قسم مستقل تماماً للتحكم في التنبيه الخاص بكل مذكرة */}
+                  <div className="pt-4 border-t border-slate-200 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h4 className="font-black text-slate-900">2. التحكم في التنبيه الخاص بكل مذكرة (صندوق منفصل)</h4>
+                      <div className="flex items-center gap-3">
+                        <label className="flex items-center gap-1.5 font-bold text-emerald-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={settings.tipNoticeEnabled !== false}
+                            onChange={(e) =>
+                              setSettings({ ...settings, tipNoticeEnabled: e.target.checked })
+                            }
+                          />
+                          <span>إظهار بالمعاينة</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 font-bold text-blue-600 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={settings.tipShowOnCard !== false}
+                            onChange={(e) =>
+                              setSettings({ ...settings, tipShowOnCard: e.target.checked })
+                            }
+                          />
+                          <span>إظهار بالبطاقة</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-2">
+                      <div>
+                        <label className="block font-bold text-slate-600 mb-1">مكان الظهور</label>
+                        <select
+                          value={settings.tipNoticePosition || 'below-desc'}
+                          onChange={(e) =>
+                            setSettings({ ...settings, tipNoticePosition: e.target.value })
+                          }
+                          className="w-full px-2 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                        >
+                          <option value="above-desc">أعلى الوصف</option>
+                          <option value="below-desc">أسفل الوصف</option>
+                          <option value="before-actions">قبل أزرار الطلب</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-600 mb-1">لون الخلفية</label>
+                        <input
+                          type="color"
+                          value={settings.tipNoticeBg || '#fffbeb'}
+                          onChange={(e) =>
+                            setSettings({ ...settings, tipNoticeBg: e.target.value })
+                          }
+                          className="w-full h-9 rounded-xl border border-slate-200"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-600 mb-1">لون النص</label>
+                        <input
+                          type="color"
+                          value={settings.tipNoticeTextColor || '#78350f'}
+                          onChange={(e) =>
+                            setSettings({ ...settings, tipNoticeTextColor: e.target.value })
+                          }
+                          className="w-full h-9 rounded-xl border border-slate-200"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-600 mb-1">لون الإطار</label>
+                        <input
+                          type="color"
+                          value={settings.tipNoticeBorder || '#fde68a'}
+                          onChange={(e) =>
+                            setSettings({ ...settings, tipNoticeBorder: e.target.value })
                           }
                           className="w-full h-9 rounded-xl border border-slate-200"
                         />
@@ -3876,7 +3615,6 @@ function MuzakkiratiPlatformContent() {
                   </div>
                 </div>
 
-                {/* العمود الثاني: الروابط + الإصدارات القادمة + تقييمات العملاء + قواعد Firestore */}
                 <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-5">
                   <div className="space-y-2">
                     <h4 className="font-black text-slate-900">روابط التواصل</h4>
@@ -3941,9 +3679,9 @@ function MuzakkiratiPlatformContent() {
                     </div>
                   </div>
 
-                  {/* إدارة المذكرات قيد التجهيز */}
+                  {/* إدارة الإصدارات القادمة */}
                   <div className="pt-4 border-t border-slate-100 space-y-2.5">
-                    <h4 className="font-black text-slate-900">إدارة ركن المذكرات قيد التجهيز</h4>
+                    <h4 className="font-black text-slate-900">إدارة ركن المذكرات قيد التجهيز (أسفل المذكرات)</h4>
                     <div className="grid grid-cols-2 gap-2">
                       <input
                         type="text"
@@ -3956,7 +3694,7 @@ function MuzakkiratiPlatformContent() {
                       />
                       <input
                         type="text"
-                        placeholder="المرحلة"
+                        placeholder="المرحلة (مثلاً: المرحلة الثانوية)"
                         value={newUpcomingForm.stage}
                         onChange={(e) =>
                           setNewUpcomingForm({ ...newUpcomingForm, stage: e.target.value })
@@ -4018,128 +3756,6 @@ function MuzakkiratiPlatformContent() {
                       ))}
                     </div>
                   </div>
-
-                  {/* إدارة تقييمات العملاء */}
-                  <div className="pt-4 border-t border-slate-100 space-y-3">
-                    <h4 className="font-black text-slate-900">إدارة ركن تقييمات وآراء العملاء</h4>
-                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
-                      <div className="grid grid-cols-2 gap-2">
-                        <input
-                          type="text"
-                          placeholder="اسم المعلم / العميل"
-                          value={newTestimonialForm.teacherName}
-                          onChange={(e) =>
-                            setNewTestimonialForm({ ...newTestimonialForm, teacherName: e.target.value })
-                          }
-                          className="px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                        />
-                        <input
-                          type="text"
-                          placeholder="الصفة / المادة"
-                          value={newTestimonialForm.role}
-                          onChange={(e) =>
-                            setNewTestimonialForm({ ...newTestimonialForm, role: e.target.value })
-                          }
-                          className="px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                        />
-                      </div>
-                      <textarea
-                        rows={2}
-                        placeholder="نص التقييم..."
-                        value={newTestimonialForm.text}
-                        onChange={(e) =>
-                          setNewTestimonialForm({ ...newTestimonialForm, text: e.target.value })
-                        }
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                      />
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <label className="inline-flex items-center gap-1.5 text-blue-600 font-bold cursor-pointer hover:underline">
-                          <ImageIcon className="w-4 h-4" />
-                          <span>
-                            {newTestimonialForm.image
-                              ? 'تم إرفاق صورة التقييم ✓'
-                              : 'إرفاق صورة تقييم (سكرين شوت)'}
-                          </span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={async (e) => {
-                              const f = e.target.files?.[0];
-                              if (!f) return;
-                              const img = await compressImageFile(f, 750, 0.72);
-                              setNewTestimonialForm((prev) => ({ ...prev, image: img }));
-                            }}
-                          />
-                        </label>
-
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (!newTestimonialForm.text.trim() && !newTestimonialForm.image) {
-                              showToast('أدخل نص التقييم أو ارفع صورة على الأقل', 'error');
-                              return;
-                            }
-                            const next = [
-                              ...(settings.testimonials || []),
-                              { id: `rev_${Date.now()}`, ...newTestimonialForm }
-                            ];
-                            await saveSettings({ ...settings, testimonials: next });
-                            setNewTestimonialForm({ teacherName: '', role: '', text: '', image: '' });
-                            showToast('تمت إضافة التقييم ونشره للعملاء');
-                          }}
-                          className="px-4 py-2 rounded-xl bg-blue-600 text-white font-bold cursor-pointer"
-                        >
-                          + إضافة التقييم
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 max-h-40 overflow-y-auto">
-                      {(settings.testimonials || []).map((rev) => (
-                        <div
-                          key={rev.id}
-                          className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200"
-                        >
-                          <div className="truncate font-bold">{rev.teacherName || 'تقييم مصور'}</div>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const next = (settings.testimonials || []).filter((x) => x.id !== rev.id);
-                              await saveSettings({ ...settings, testimonials: next });
-                              showToast('تم حذف التقييم');
-                            }}
-                            className="text-rose-600 p-1.5 cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* كود قواعد أمان Firestore Rules الجاهز للنسخ */}
-                  <div className="pt-4 border-t border-slate-100 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-black text-slate-900">قواعد أمان Firestore Rules (لضمان ظهور التعديلات للعملاء)</h4>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigator.clipboard?.writeText(FIRESTORE_RULES_SNIPPET);
-                          showToast('تم نسخ كود Firestore Rules بنجاح!');
-                        }}
-                        className="px-3 py-1 rounded-lg bg-blue-600 text-white font-bold text-[11px] cursor-pointer"
-                      >
-                        نسخ الكود
-                      </button>
-                    </div>
-                    <pre
-                      dir="ltr"
-                      className="p-3 rounded-xl bg-slate-900 text-emerald-300 font-mono text-[11px] overflow-x-auto"
-                    >
-                      {FIRESTORE_RULES_SNIPPET}
-                    </pre>
-                  </div>
                 </div>
               </div>
             )}
@@ -4149,7 +3765,7 @@ function MuzakkiratiPlatformContent() {
               <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 max-w-2xl space-y-4">
                 <h3 className="text-lg font-black text-slate-900">النسخ الاحتياطي الكامل (JSON)</h3>
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  يمكنك تصدير نسخة احتياطية كاملة تشمل جميع المذكرات والصور المضغوطة والباقات والكوبونات والإعدادات في ملف واحد، أو استيراد ملف نسخة احتياطية سابقة. (ملاحظة: الملفات المرفوعة خارجياً على Google Drive تحتاج لنسخ احتياطي مستقل).
+                  يمكنك تصدير نسخة احتياطية كاملة تشمل جميع المذكرات والباقات والكوبونات والإعدادات في ملف واحد، أو استيراد ملف نسخة احتياطية سابقة.
                 </p>
                 <div className="flex flex-wrap gap-3 pt-2">
                   <button
@@ -4201,7 +3817,7 @@ function MuzakkiratiPlatformContent() {
         </div>
       </footer>
 
-      {/* معاينة المذكرة وعيناتها التفاعلية مع التكبير والتصغير والعلامة المائية */}
+      {/* معاينة المذكرة (مع التنبيه العام والتنبيه الخاص في صندوقين مستقلين) */}
       {previewProduct && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-3xl w-full overflow-hidden shadow-2xl border border-slate-200 my-auto">
@@ -4226,48 +3842,14 @@ function MuzakkiratiPlatformContent() {
                 ];
                 return allGallery.length > 0 ? (
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between bg-slate-100 px-3 py-2 rounded-xl text-xs font-bold">
-                      <span>
-                        صفحة {activeSampleIndex + 1} من {allGallery.length}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setPreviewZoom((z) => Math.max(0.75, z - 0.25))}
-                          className="p-1.5 rounded-lg bg-white border border-slate-200 cursor-pointer"
-                          title="تصغير"
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        <span>{Math.round(previewZoom * 100)}%</span>
-                        <button
-                          onClick={() => setPreviewZoom((z) => Math.min(2, z + 0.25))}
-                          className="p-1.5 rounded-lg bg-white border border-slate-200 cursor-pointer"
-                          title="تكبير"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="relative rounded-2xl overflow-auto border border-slate-200 bg-slate-900 max-h-96 flex items-center justify-center select-none">
-                      <div
-                        style={{ transform: `scale(${previewZoom})`, transformOrigin: 'center' }}
-                        className="relative transition-transform"
-                      >
-                        <img
-                          src={allGallery[activeSampleIndex] || allGallery[0]}
-                          alt={safeText(previewProduct.title)}
-                          className="max-h-96 object-contain mx-auto pointer-events-none"
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                          <span className="-rotate-30 bg-slate-950/35 text-white/60 border border-white/30 px-4 py-1 rounded-xl font-black text-sm">
-                            {settings.platformName} • نسخة معاينة
-                          </span>
-                        </div>
-                      </div>
+                    <div className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-100">
+                      <img
+                        src={allGallery[activeSampleIndex] || allGallery[0]}
+                        alt={safeText(previewProduct.title)}
+                        className="w-full max-h-96 object-contain mx-auto"
+                      />
                       {renderDiscountBadge(previewProduct)}
                     </div>
-
                     {allGallery.length > 1 && (
                       <div className="flex gap-2 overflow-x-auto pb-1">
                         {allGallery.map((img, idx) => (
@@ -4287,6 +3869,12 @@ function MuzakkiratiPlatformContent() {
                 ) : null;
               })()}
 
+              {/* موضع التنبيه العام: أعلى التفاصيل */}
+              {settings.generalNoticePosition === 'top' && renderGeneralNoticeBox()}
+
+              {/* موضع التنبيه الخاص بالمذكرة: أعلى الوصف */}
+              {settings.tipNoticePosition === 'above-desc' && renderProductTipBox(previewProduct.tipText, false)}
+
               <div className="space-y-2">
                 <h4 className="text-xl font-black text-slate-900">{safeText(previewProduct.title)}</h4>
                 <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
@@ -4294,11 +3882,17 @@ function MuzakkiratiPlatformContent() {
                 </p>
               </div>
 
-              {previewProduct.tipText && (
-                <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 text-xs font-bold">
-                  💡 {safeText(previewProduct.tipText)}
-                </div>
-              )}
+              {/* موضع التنبيه الخاص بالمذكرة: أسفل الوصف */}
+              {(settings.tipNoticePosition === 'below-desc' || !settings.tipNoticePosition) &&
+                renderProductTipBox(previewProduct.tipText, false)}
+
+              {/* موضع التنبيه العام: أسفل التفاصيل في بطاقة منفصلة */}
+              {(settings.generalNoticePosition === 'bottom' || !settings.generalNoticePosition) &&
+                renderGeneralNoticeBox()}
+
+              {/* موضع التنبيه الخاص بالمذكرة: قبل أزرار الطلب */}
+              {settings.tipNoticePosition === 'before-actions' &&
+                renderProductTipBox(previewProduct.tipText, false)}
 
               <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-slate-100">
                 <div>
@@ -4414,7 +4008,7 @@ function MuzakkiratiPlatformContent() {
                     />
                     <input
                       type="text"
-                      placeholder="رقم الهاتف الأساسي (واتساب 11 رقم) *"
+                      placeholder="رقم الهاتف الأساسي (واتساب) *"
                       value={customerForm.phone1}
                       onChange={(e) => setCustomerForm({ ...customerForm, phone1: e.target.value })}
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
