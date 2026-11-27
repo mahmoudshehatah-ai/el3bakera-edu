@@ -270,8 +270,13 @@ const normalizeNotebook = (raw, docId = '') => {
   const n = raw && typeof raw === 'object' ? raw : {};
   const cover =
     extractImageFromValue(n.coverImage) ||
+    extractImageFromValue(n.coverUrl) ||
+    extractImageFromValue(n.coverBase64) ||
     extractImageFromValue(n.cover) ||
     extractImageFromValue(n.image) ||
+    extractImageFromValue(n.imageUrl) ||
+    extractImageFromValue(n.img) ||
+    extractImageFromValue(n.photo) ||
     extractImageFromValue(n.thumbnail);
   const inlineSamples = extractAnyImagesFromDoc(n).filter((img) => img !== cover);
   return {
@@ -506,29 +511,36 @@ const mergeAndNormalizeSettings = (base, incoming) => {
   if (Array.isArray(incoming.categories) && incoming.categories.length > 0) {
     next.categories = incoming.categories.map((cat, idx) => {
       const cid = safeText(cat.id, `cat_${idx}`);
-      const existingCat = (base.categories || []).find((c) => c.id === cid);
+      const existingCat = (base.categories || []).find((c) => c.id === cid) || (base.categories || [])[idx];
       const img =
         extractImageFromValue(cat.image) ||
         extractImageFromValue(cat.coverImage) ||
         extractImageFromValue(catImagesMap[cid]) ||
         (existingCat ? existingCat.image : '');
+      const rawCatName = safeText(cat.name || cat.title || cat.label || cat.catName, '');
+      const isGenericPlaceholder = /^قسم\s*\d+$/.test(rawCatName.trim());
+      const finalCatName =
+        rawCatName && !isGenericPlaceholder
+          ? rawCatName
+          : existingCat?.name || DEFAULT_CATEGORIES[idx]?.name || `قسم ${idx + 1}`;
       return {
         id: cid,
-        name: safeText(cat.name || cat.title || cat.label, `قسم ${idx + 1}`),
-        browseMode: safeText(cat.browseMode, 'hierarchy'),
+        name: finalCatName,
+        browseMode: safeText(cat.browseMode, existingCat?.browseMode || 'hierarchy'),
         image: img,
-        stages: Array.isArray(cat.stages)
-          ? cat.stages.map((st, sIdx) => ({
-              id: safeText(st.id, `stg_${idx}_${sIdx}`),
-              name: safeText(st.name || st.title, `مرحلة ${sIdx + 1}`),
-              grades: Array.isArray(st.grades)
-                ? st.grades.map((gr, gIdx) => ({
-                    id: safeText(gr.id, `grd_${idx}_${sIdx}_${gIdx}`),
-                    name: safeText(gr.name || gr.title, `صف ${gIdx + 1}`)
-                  }))
-                : []
-            }))
-          : []
+        stages:
+          Array.isArray(cat.stages) && cat.stages.length > 0
+            ? cat.stages.map((st, sIdx) => ({
+                id: safeText(st.id, `stg_${idx}_${sIdx}`),
+                name: safeText(st.name || st.title || st.label, `مرحلة ${sIdx + 1}`),
+                grades: Array.isArray(st.grades)
+                  ? st.grades.map((gr, gIdx) => ({
+                      id: safeText(gr.id, `grd_${idx}_${sIdx}_${gIdx}`),
+                      name: safeText(gr.name || gr.title || gr.label, `صف ${gIdx + 1}`)
+                    }))
+                  : []
+              }))
+            : existingCat?.stages || []
       };
     });
   } else if (catImagesMap && typeof catImagesMap === 'object' && Object.keys(catImagesMap).length > 0) {
@@ -838,7 +850,13 @@ function MuzakkiratiApp() {
               setSettings((prev) => {
                 let merged = { ...prev };
                 snap.docs.forEach((d) => {
-                  merged = mergeAndNormalizeSettings(merged, d.data());
+                  const rawCfg = d.data() || {};
+                  // ندمج الوسائط والبيانات من config دون استبدال الأقسام إذا كانت settings أحدث
+                  const safeCfg = { ...rawCfg };
+                  if (prev.updatedAt && rawCfg.updatedAt && toTimeMs(prev.updatedAt) > toTimeMs(rawCfg.updatedAt)) {
+                    delete safeCfg.categories;
+                  }
+                  merged = mergeAndNormalizeSettings(merged, safeCfg);
                 });
                 try {
                   localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(merged));
@@ -1041,9 +1059,16 @@ function MuzakkiratiApp() {
     const stageIds = new Set((cat.stages || []).map((s) => s.id));
     const gradeIds = new Set();
     (cat.stages || []).forEach((s) => (s.grades || []).forEach((g) => gradeIds.add(g.id)));
-    return visibleNotebooks.filter(
-      (nb) => nb.categoryId === cat.id || stageIds.has(nb.stageId) || gradeIds.has(nb.gradeId)
-    ).length;
+    const catNameNorm = safeText(cat.name).trim();
+    return visibleNotebooks.filter((nb) => {
+      if (nb.categoryId === cat.id || stageIds.has(nb.stageId) || gradeIds.has(nb.gradeId)) return true;
+      if (!nb.categoryId && catNameNorm) {
+        if (catNameNorm.includes('الأول') && /أول|الأول/.test(nb.term || nb.title)) return true;
+        if (catNameNorm.includes('الثاني') && /ثاني|الثاني/.test(nb.term || nb.title)) return true;
+        if (catNameNorm.includes('التأسيس') && /تأسيس|مراجع/.test(nb.term || nb.title)) return true;
+      }
+      return false;
+    }).length;
   };
 
   const whatsNewNotebooks = useMemo(() => {
@@ -4606,80 +4631,23 @@ function AdminDashboard({
                         </button>
                       </div>
                     )}
-                  </div>
-                </div>
-              </div>
-
-              {/* تخصيص شريط الإعلان العلوي وألوانه */}
-              <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-5">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-6 rounded-full bg-amber-500" />
-                    <h3 className="font-black text-slate-900 text-base">شريط الإعلان العلوي أعلى الشاشة الرئيسية</h3>
-                  </div>
-                  <label className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-100 text-xs font-black cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={!!localSettings.promoEnabled}
-                      onChange={(e) => setLocalSettings({ ...localSettings, promoEnabled: e.target.checked })}
-                    />
-                    <span>إظهار الشريط العلوي</span>
-                  </label>
-                </div>
-
-                {/* معاينة مباشرة لشريط الإعلان */}
-                <div className="space-y-1.5">
-                  <div className="text-xs font-black text-slate-500">معاينة مباشرة لشكل الشريط:</div>
-                  <div
-                    style={{
-                      backgroundColor: localSettings.promoBgColor || '#0f172a',
-                      color: localSettings.promoTextColor || '#fde047'
-                    }}
-                    className="rounded-2xl px-4 py-3 text-xs sm:text-sm font-black flex flex-wrap items-center justify-center gap-3 shadow-inner"
-                  >
-                    <span className="inline-flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4" />
-                      <span>{localSettings.promoText || 'نص الإعلان سيظهر هنا'}</span>
-                    </span>
-                    {localSettings.promoCouponCode && (
-                      <span className="px-2.5 py-0.5 rounded-lg bg-white/15 border border-white/20 text-xs">
-                        الكوبون: {localSettings.promoCouponCode}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
-                  <div className="sm:col-span-6">
-                    <label className="block text-xs font-black text-slate-700 mb-1.5">النص المكتوب على شريط الإعلان</label>
-                    <input
-                      type="text"
-                      value={localSettings.promoText}
-                      onChange={(e) => setLocalSettings({ ...localSettings, promoText: e.target.value })}
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-xs sm:text-sm font-bold"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs font-black text-slate-700 mb-1.5">كود الكوبون</label>
-                    <input
-                      type="text"
-                      value={localSettings.promoCouponCode}
-                      onChange={(e) => setLocalSettings({ ...localSettings, promoCouponCode: e.target.value })}
-                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-black uppercase text-center"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs font-black text-slate-700 mb-1.5">لون خلفية الشريط</label>
-                    <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50">
+                    <div className="pt-2 border-t border-slate-200/80">
+                      <div className="flex items-center justify-between text-xs font-black text-slate-700 mb-1">
+                        <span>شفافية التعتيم فوق صورة الخلفية</span>
+                        <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800">
+                          {localSettings.heroOverlayOpacity ?? 78}%
+                        </span>
+                      </div>
                       <input
-                        type="color"
-                        value={localSettings.promoBgColor || '#0f172a'}
-                        onChange={(e) => setLocalSettings({ ...localSettings, promoBgColor: e.target.value })}
-                        className="w-8 h-7 rounded cursor-pointer border-0 bg-transparent"
+                        type="range"
+                        min={0}
+                        max={95}
+                        value={localSettings.heroOverlayOpacity ?? 78}
+                        onChange={(e) =>
+                          setLocalSettings({ ...localSettings, heroOverlayOpacity: Number(e.target.value) })
+                        }
+                        className="w-full cursor-pointer"
                       />
-                      <span className="text-xs font-bold text-slate-600" dir="ltr">
-                        {localSettings.promoBgColor || '#0f172a'}
-                      </span>
                     </div>
                   </div>
                   <div className="sm:col-span-2">
