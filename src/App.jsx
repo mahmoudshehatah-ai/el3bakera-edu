@@ -90,6 +90,36 @@ const safeText = (val, fallback = '') => {
   return fallback;
 };
 
+// دالة لتوحيد صيغة الأقسام والمراحل والصفوف (سواء كانت نصوصاً أو كائنات بخصائص name / title / label)
+const normalizeListItems = (list, fallbackList, idPrefix = 'item') => {
+  if (!Array.isArray(list) || list.length === 0) return fallbackList;
+  const normalized = list
+    .map((item, idx) => {
+      if (typeof item === 'string' && item.trim()) {
+        return {
+          id: fallbackList[idx]?.id || `${idPrefix}_${idx}`,
+          name: item.trim()
+        };
+      }
+      if (item && typeof item === 'object') {
+        const resolvedName = safeText(
+          item.name || item.title || item.label || item.text,
+          fallbackList[idx]?.name || ''
+        );
+        if (!resolvedName) return null;
+        return {
+          ...item,
+          id: safeText(item.id, fallbackList[idx]?.id || `${idPrefix}_${idx}`),
+          name: resolvedName
+        };
+      }
+      return null;
+    })
+    .filter(Boolean);
+
+  return normalized.length > 0 ? normalized : fallbackList;
+};
+
 const isValidImageSrc = (src) => {
   if (typeof src !== 'string') return false;
   const trimmed = src.trim();
@@ -403,12 +433,9 @@ export default function App() {
           ...DEFAULT_SETTINGS,
           ...parsed,
           logoImage: isValidImageSrc(parsed.logoImage) ? parsed.logoImage : DEFAULT_SETTINGS.logoImage,
-          stages: Array.isArray(parsed.stages) && parsed.stages.length > 0 ? parsed.stages : DEFAULT_SETTINGS.stages,
-          grades: Array.isArray(parsed.grades) && parsed.grades.length > 0 ? parsed.grades : DEFAULT_SETTINGS.grades,
-          categories:
-            Array.isArray(parsed.categories) && parsed.categories.length > 0
-              ? parsed.categories
-              : DEFAULT_SETTINGS.categories
+          stages: normalizeListItems(parsed.stages, DEFAULT_SETTINGS.stages, 'stg'),
+          grades: normalizeListItems(parsed.grades, DEFAULT_SETTINGS.grades, 'grd'),
+          categories: normalizeListItems(parsed.categories, DEFAULT_SETTINGS.categories, 'cat')
         };
       }
     } catch (e) {}
@@ -609,12 +636,9 @@ export default function App() {
           ...data,
           logoImage: isValidImageSrc(data.logoImage) ? data.logoImage : prev.logoImage,
           heroImage: isValidImageSrc(data.heroImage) ? data.heroImage : prev.heroImage,
-          stages: Array.isArray(data.stages) && data.stages.length > 0 ? data.stages : prev.stages,
-          grades: Array.isArray(data.grades) && data.grades.length > 0 ? data.grades : prev.grades,
-          categories:
-            Array.isArray(data.categories) && data.categories.length > 0
-              ? data.categories
-              : prev.categories
+          stages: normalizeListItems(data.stages, prev.stages, 'stg'),
+          grades: normalizeListItems(data.grades, prev.grades, 'grd'),
+          categories: normalizeListItems(data.categories, prev.categories, 'cat')
         }));
       },
       () => {}
@@ -921,7 +945,10 @@ export default function App() {
             whatsappNumber: safeText(s.whatsappNumber, settings.whatsappNumber),
             paymentInstructions: safeText(s.paymentInstructions, settings.paymentInstructions),
             logoImage: isValidImageSrc(s.logoImage) ? s.logoImage : settings.logoImage,
-            heroImage: isValidImageSrc(s.heroImage) ? s.heroImage : settings.heroImage
+            heroImage: isValidImageSrc(s.heroImage) ? s.heroImage : settings.heroImage,
+            stages: normalizeListItems(s.stages, settings.stages, 'stg'),
+            grades: normalizeListItems(s.grades, settings.grades, 'grd'),
+            categories: normalizeListItems(s.categories, settings.categories, 'cat')
           };
           setSettings(mergedSettings);
           saveSettingsToCloud(mergedSettings);
@@ -1363,19 +1390,25 @@ export default function App() {
                 >
                   جميع الأقسام ({products.length})
                 </button>
-                {settings.categories.map((cat) => (
-                  <button
-                    key={cat.id}
-                    onClick={() => setSelectedCategory(cat.id)}
-                    className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition cursor-pointer ${
-                      selectedCategory === cat.id
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    {cat.name}
-                  </button>
-                ))}
+                {settings.categories.map((cat, idx) => {
+                  const catLabel = safeText(
+                    cat.name || cat.title || cat.label,
+                    DEFAULT_SETTINGS.categories[idx]?.name || `قسم ${idx + 1}`
+                  );
+                  return (
+                    <button
+                      key={cat.id || idx}
+                      onClick={() => setSelectedCategory(cat.id)}
+                      className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition cursor-pointer ${
+                        selectedCategory === cat.id
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {catLabel}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -1404,10 +1437,16 @@ export default function App() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredProducts.map((product) => {
-                  const gradeName =
-                    settings.grades.find((g) => g.id === product.gradeId)?.name || 'صف دراسي';
-                  const categoryName =
-                    settings.categories.find((c) => c.id === product.categoryId)?.name || 'مذكرة';
+                  const gradeObj = settings.grades.find((g) => g.id === product.gradeId);
+                  const gradeName = safeText(
+                    gradeObj?.name || gradeObj?.title,
+                    'صف دراسي'
+                  );
+                  const catObj = settings.categories.find((c) => c.id === product.categoryId);
+                  const categoryName = safeText(
+                    catObj?.name || catObj?.title,
+                    DEFAULT_SETTINGS.categories.find((c) => c.id === product.categoryId)?.name || 'مذكرة'
+                  );
                   const inCart = cart.some((c) => c.id === product.id);
                   const savings =
                     product.oldPrice > product.price ? product.oldPrice - product.price : 0;
