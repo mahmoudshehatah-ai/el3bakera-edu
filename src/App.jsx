@@ -892,6 +892,7 @@ function MuzakkiratiPlatformContent() {
     price: 499,
     originalPrice: 650,
     badge: 'وفر 150 ج.م',
+    driveSampleUrl: '',
     productIds: []
   });
 
@@ -3287,6 +3288,11 @@ function MuzakkiratiPlatformContent() {
                             </button>
                           ))}
                         </div>
+                        {bundle.driveSampleUrl && (
+                          <div className="pt-2">
+                            {renderDriveSampleButton(bundle.driveSampleUrl, true)}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -4192,10 +4198,31 @@ function MuzakkiratiPlatformContent() {
                         className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold"
                       />
                     </div>
+                    <div>
+                      <label className="block font-bold text-slate-600 mb-1">رابط عينة Google Drive للباقة (اختياري)</label>
+                      <input
+                        type="url"
+                        dir="ltr"
+                        placeholder="https://drive.google.com/..."
+                        value={newBundleForm.driveSampleUrl || ''}
+                        onChange={(e) => setNewBundleForm({ ...newBundleForm, driveSampleUrl: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-left"
+                      />
+                    </div>
 
                     <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                      <div className="font-black text-slate-800">
-                        اختر المذكرات المشمولة داخل الباقة ({newBundleForm.productIds.length}):
+                      <div className="flex items-center justify-between gap-2 font-black text-slate-800">
+                        <span>
+                          اختر المذكرات المشمولة داخل الباقة ({newBundleForm.productIds.length}):
+                        </span>
+                        <span className="px-2.5 py-1 rounded-lg bg-blue-100 text-blue-800 text-[11px]">
+                          الإجمالي:{' '}
+                          {newBundleForm.productIds.reduce((sum, id) => {
+                            const found = products.find((p) => p.id === id);
+                            return sum + Number(found?.price || 0);
+                          }, 0)}{' '}
+                          ج.م
+                        </span>
                       </div>
                       <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
                         {products.map((prod) => {
@@ -4214,12 +4241,20 @@ function MuzakkiratiPlatformContent() {
                                   type="checkbox"
                                   checked={isChecked}
                                   onChange={() => {
-                                    setNewBundleForm((prev) => ({
-                                      ...prev,
-                                      productIds: isChecked
+                                    setNewBundleForm((prev) => {
+                                      const nextIds = isChecked
                                         ? prev.productIds.filter((id) => id !== prod.id)
-                                        : [...prev.productIds, prod.id]
-                                    }));
+                                        : [...prev.productIds, prod.id];
+                                      const computedOriginal = nextIds.reduce((sum, id) => {
+                                        const found = products.find((p) => p.id === id);
+                                        return sum + Number(found?.price || 0);
+                                      }, 0);
+                                      return {
+                                        ...prev,
+                                        productIds: nextIds,
+                                        originalPrice: computedOriginal
+                                      };
+                                    });
                                   }}
                                 />
                                 <span className="truncate">{prod.title}</span>
@@ -4262,6 +4297,7 @@ function MuzakkiratiPlatformContent() {
                             price: 499,
                             originalPrice: 650,
                             badge: 'عرض خاص',
+                            driveSampleUrl: '',
                             productIds: []
                           });
                           showToast(editingBundleId ? 'تم تحديث الباقة وحفظها بنجاح' : 'تمت إضافة الباقة وحفظها بنجاح');
@@ -4281,6 +4317,7 @@ function MuzakkiratiPlatformContent() {
                               price: 499,
                               originalPrice: 650,
                               badge: 'وفر 150 ج.م',
+                              driveSampleUrl: '',
                               productIds: []
                             });
                           }}
@@ -4323,6 +4360,7 @@ function MuzakkiratiPlatformContent() {
                               price: Number(b.price || 0),
                               originalPrice: Number(b.originalPrice || 0),
                               badge: b.badge || '',
+                              driveSampleUrl: b.driveSampleUrl || '',
                               productIds: Array.isArray(b.productIds) ? b.productIds : []
                             });
                           }}
@@ -4729,8 +4767,25 @@ function MuzakkiratiPlatformContent() {
                       </div>
 
                       <div className="p-3 rounded-2xl bg-white border border-slate-200 space-y-2">
-                        <div className="font-black text-slate-800">
-                          تحديد مذكرات معينة للعرض ({multiOfferForm.productIds.length === 0 ? 'شامل لجميع المذكرات' : `${multiOfferForm.productIds.length} مذكرات محددة`}):
+                        <div className="flex flex-wrap items-center justify-between gap-2 font-black text-slate-800">
+                          <span>
+                            تحديد مذكرات معينة للعرض ({multiOfferForm.productIds.length === 0 ? 'شامل لجميع المذكرات' : `${multiOfferForm.productIds.length} مذكرات محددة`}):
+                          </span>
+                          {multiOfferForm.productIds.length > 0 && (() => {
+                            const selectedTotal = multiOfferForm.productIds.reduce((sum, id) => {
+                              const found = products.find((p) => p.id === id);
+                              return sum + Number(found?.price || 0);
+                            }, 0);
+                            const rawDisc = Math.round((selectedTotal * Number(multiOfferForm.discountPercent || 0)) / 100);
+                            const finalDisc = multiOfferForm.maxDiscount
+                              ? Math.min(rawDisc, Number(multiOfferForm.maxDiscount))
+                              : rawDisc;
+                            return (
+                              <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 text-[11px]">
+                                الإجمالي: {selectedTotal} ج.م (بعد الخصم: {Math.max(0, selectedTotal - finalDisc)} ج.م)
+                              </span>
+                            );
+                          })()}
                         </div>
                         <div className="max-h-36 overflow-y-auto space-y-1 pr-1">
                           {products.map((prod) => {
@@ -4759,6 +4814,7 @@ function MuzakkiratiPlatformContent() {
                                   />
                                   <span className="truncate">{prod.title}</span>
                                 </div>
+                                <span className="text-[11px] font-bold shrink-0">{prod.price} ج.م</span>
                               </label>
                             );
                           })}
