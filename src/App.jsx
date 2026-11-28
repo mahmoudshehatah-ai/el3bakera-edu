@@ -1014,7 +1014,10 @@ function MuzakkiratiPlatformContent() {
             }
             if (cloudSamples && cloudSamples.length > 0) {
               const currentSamples = Array.isArray(nextProd.sampleImages) ? nextProd.sampleImages : [];
-              if (cloudSamples.length >= currentSamples.length && cloudSamples[0] !== currentSamples[0]) {
+              if (
+                cloudSamples.length !== currentSamples.length ||
+                cloudSamples[0] !== currentSamples[0]
+              ) {
                 changed = true;
                 nextProd = { ...nextProd, sampleImages: cloudSamples };
               }
@@ -1215,9 +1218,13 @@ function MuzakkiratiPlatformContent() {
         { merge: true }
       );
       await saveMediaAssetToCloud(db, PRIMARY_APP_ID, `prod_cover_${productObj.id}`, coverImage || '');
-      const samplesList = Array.isArray(sampleImages) ? sampleImages.slice(0, 6) : [];
+      const samplesList = Array.isArray(sampleImages) ? sampleImages.slice(0, 25) : [];
       for (let i = 0; i < samplesList.length; i++) {
         await saveMediaAssetToCloud(db, PRIMARY_APP_ID, `prod_sample_${productObj.id}_${i}`, samplesList[i]);
+      }
+      // تنظيف أي صور زائدة في السحابة إذا قام المدير بحذف بعض العينات
+      for (let j = samplesList.length; j < 25; j++) {
+        await saveMediaAssetToCloud(db, PRIMARY_APP_ID, `prod_sample_${productObj.id}_${j}`, '');
       }
       await setDoc(
         doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebook_samples', productObj.id),
