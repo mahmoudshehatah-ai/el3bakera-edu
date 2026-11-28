@@ -189,13 +189,22 @@ const DEFAULT_SETTINGS = {
   driveBtnLabel: 'عينة Google Drive',
   driveBtnBg: '#059669',
   driveBtnText: '#ffffff',
-  multiOfferEnabled: true,
-  multiOfferBadge: '🔥 عرض خاص عند طلب أكثر من مذكرة',
-  multiOfferTitle: 'احصل على خصم تلقائي {percent}% عند اختيار {min} مذكرات أو أكثر!',
-  multiOfferSubtitle:
-    'اجمع أي مذكرات أو بوكليتات من مختلف الصفوف والمراحل في سلة واحدة وسيتم تطبيق الخصم تلقائياً بحد أقصى {max} ج.م.',
-  multiOfferBg: '#0f172a',
-  multiOfferAccent: '#facc15',
+  multiOffers: [
+    {
+      id: 'mo_default_1',
+      active: true,
+      badge: '🔥 عرض خاص عند طلب أكثر من مذكرة',
+      title: 'احصل على خصم تلقائي 15% عند اختيار مذكرتين أو أكثر!',
+      subtitle:
+        'اجمع أي مذكرات أو بوكليتات من مختلف الصفوف والمراحل في سلة واحدة وسيتم تطبيق الخصم تلقائياً بحد أقصى 150 ج.م.',
+      minItems: 2,
+      discountPercent: 15,
+      maxDiscount: 150,
+      productIds: [], // مصفوفة فارغة = يسري على جميع المذكرات
+      bgColor: '#0f172a',
+      accentColor: '#facc15'
+    }
+  ],
   promoEnabled: true,
   promoText: 'عرض خاص للمعلمين: خصم 15% على جميع المذكرات بمناسبة إطلاق المنصة',
   promoCouponCode: 'M20',
@@ -869,10 +878,23 @@ function MuzakkiratiPlatformContent() {
     price: 499,
     originalPrice: 650,
     badge: 'وفر 150 ج.م',
-    productIds: [],
-    coverImage: ''
+    productIds: []
   });
   const [editingBundleId, setEditingBundleId] = useState(null);
+
+  const [newMultiOfferForm, setNewMultiOfferForm] = useState({
+    badge: '🔥 عرض خاص عند طلب أكثر من مذكرة',
+    title: '',
+    subtitle: '',
+    minItems: 2,
+    discountPercent: 15,
+    maxDiscount: 150,
+    productIds: [],
+    bgColor: '#0f172a',
+    accentColor: '#facc15',
+    active: true
+  });
+  const [editingMultiOfferId, setEditingMultiOfferId] = useState(null);
 
   const [newCouponForm, setNewCouponForm] = useState({
     code: '',
@@ -937,6 +959,29 @@ function MuzakkiratiPlatformContent() {
     () => (Array.isArray(settings.testimonials) ? settings.testimonials : []),
     [settings.testimonials]
   );
+  const safeMultiOffers = useMemo(() => {
+    if (Array.isArray(settings.multiOffers)) return settings.multiOffers;
+    if (settings.bulkDiscountEnabled !== false) {
+      return [
+        {
+          id: 'mo_legacy',
+          active: settings.multiOfferEnabled !== false,
+          badge: settings.multiOfferBadge || '🔥 عرض خاص عند طلب أكثر من مذكرة',
+          title: `احصل على خصم تلقائي ${settings.bulkDiscountPercent || 15}% عند اختيار ${settings.bulkDiscountMinItems || 2} مذكرات أو أكثر!`,
+          subtitle:
+            settings.multiOfferSubtitle ||
+            `اجمع أي مذكرات أو بوكليتات في سلة واحدة وسيتم تطبيق الخصم تلقائياً بحد أقصى ${settings.bulkDiscountMaxAmount || 150} ج.م.`,
+          minItems: Number(settings.bulkDiscountMinItems || 2),
+          discountPercent: Number(settings.bulkDiscountPercent || 15),
+          maxDiscount: Number(settings.bulkDiscountMaxAmount || 150),
+          productIds: [],
+          bgColor: settings.multiOfferBg || '#0f172a',
+          accentColor: settings.multiOfferAccent || '#facc15'
+        }
+      ];
+    }
+    return [];
+  }, [settings]);
 
   const visibleProducts = useMemo(
     () => (Array.isArray(products) ? products : DEFAULT_PRODUCTS).filter((p) => p && !p.hidden),
@@ -1170,17 +1215,9 @@ function MuzakkiratiPlatformContent() {
         });
 
         setBundles((prev) => {
-          let changed = false;
-          const updated = prev.map((b) => {
-            const cloudCover = assetsMap[`bnd_cover_${b.id}`];
-            if (cloudCover && cloudCover !== b.coverImage) {
-              changed = true;
-              return { ...b, coverImage: cloudCover };
-            }
-            return b;
-          });
-          if (changed) idbSet('bundles_v5', updated);
-          return updated;
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          idbSet('bundles_v5', list);
+          return list;
         });
       },
       () => {}
@@ -1451,11 +1488,27 @@ function MuzakkiratiPlatformContent() {
     }
 
     let bulkDiscount = 0;
-    if (settings.bulkDiscountEnabled && cart.length >= Number(settings.bulkDiscountMinItems || 2)) {
-      const rawBulk = Math.round((subtotal * Number(settings.bulkDiscountPercent || 15)) / 100);
-      bulkDiscount = settings.bulkDiscountMaxAmount
-        ? Math.min(rawBulk, Number(settings.bulkDiscountMaxAmount))
-        : rawBulk;
+    let bestMultiOfferTitle = '';
+    for (const offer of safeMultiOffers) {
+      if (offer.active === false) continue;
+      const targetIds = Array.isArray(offer.productIds) ? offer.productIds : [];
+      const matchingItems =
+        targetIds.length === 0
+          ? cart
+          : cart.filter((item) => targetIds.includes(item.id));
+      if (matchingItems.length >= Number(offer.minItems || 2)) {
+        const eligibleSubtotal = matchingItems.reduce((s, it) => s + Number(it.price || 0), 0);
+        const rawOfferDisc = Math.round(
+          (eligibleSubtotal * Number(offer.discountPercent || 15)) / 100
+        );
+        const cappedOfferDisc = offer.maxDiscount
+          ? Math.min(rawOfferDisc, Number(offer.maxDiscount))
+          : rawOfferDisc;
+        if (cappedOfferDisc > bulkDiscount) {
+          bulkDiscount = cappedOfferDisc;
+          bestMultiOfferTitle = `عرض المذكرات المتعددة (${offer.discountPercent}%)`;
+        }
+      }
     }
 
     const activeDiscount = Math.max(couponDiscount, bulkDiscount);
@@ -1464,7 +1517,7 @@ function MuzakkiratiPlatformContent() {
         ? ''
         : couponDiscount >= bulkDiscount
         ? `خصم كوبون (${appliedCoupon?.code})`
-        : `خصم الكميات التلقائي (${settings.bulkDiscountPercent}%)`;
+        : bestMultiOfferTitle || 'خصم المذكرات المتعددة';
 
     return {
       subtotal,
@@ -1472,7 +1525,7 @@ function MuzakkiratiPlatformContent() {
       discountLabel,
       total: Math.max(0, subtotal - activeDiscount)
     };
-  }, [cart, appliedCoupon, settings]);
+  }, [cart, appliedCoupon, safeMultiOffers]);
 
   const handleApplyCoupon = () => {
     const code = couponInput.trim().toUpperCase();
@@ -1674,7 +1727,6 @@ function MuzakkiratiPlatformContent() {
             lightBundle,
             { merge: true }
           );
-          await saveMediaAssetToCloud(db, PRIMARY_APP_ID, `bnd_cover_${b.id}`, coverImage || '');
         }
         for (const cp of coupons) {
           await setDoc(
@@ -2082,7 +2134,7 @@ function MuzakkiratiPlatformContent() {
                     <span>{safeText(settings.heroBadge)}</span>
                   </div>
 
-                  <h2 className="text-xl sm:text-4xl lg:text-[40px] font-black leading-snug sm:leading-tight text-white">
+                  <h2 className="text-2xl sm:text-4xl lg:text-[40px] font-black leading-tight text-white">
                     {safeText(settings.heroTitle)}
                   </h2>
 
@@ -2090,66 +2142,92 @@ function MuzakkiratiPlatformContent() {
                     {safeText(settings.heroSubtitle)}
                   </p>
 
-                  <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 pt-1">
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
                     <button
                       onClick={() => navigateToTab('library')}
-                      className="px-5 py-3 sm:px-6 sm:py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs sm:text-sm shadow-lg shadow-blue-600/30 transition cursor-pointer"
+                      className="px-6 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs sm:text-sm shadow-lg shadow-blue-600/30 transition cursor-pointer"
                     >
                       استعراض جميع المذكرات
                     </button>
                     <button
                       onClick={() => navigateToTab('bundles')}
-                      className="px-5 py-3 sm:px-6 sm:py-3.5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 text-white font-bold text-xs sm:text-sm transition cursor-pointer"
+                      className="px-6 py-3.5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 text-white font-bold text-xs sm:text-sm transition cursor-pointer"
                     >
                       باقات التوفير والعروض
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2 sm:gap-4 pt-5 border-t border-white/10 max-w-lg">
-                    <div>
-                      <div className="text-lg sm:text-2xl font-black text-amber-400">+50</div>
-                      <div className="text-[11px] sm:text-xs text-slate-300 mt-0.5">مذكرة وبنك أسئلة</div>
+                  <div className="grid grid-cols-3 gap-2.5 sm:gap-4 pt-5 border-t border-white/10 max-w-xl">
+                    <div className="rounded-2xl bg-white/10 backdrop-blur-xs border border-white/15 p-3 sm:p-3.5 flex items-center gap-2.5">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-400/20 border border-amber-400/30 text-amber-300 flex items-center justify-center shrink-0">
+                        <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
+                      </div>
+                      <div>
+                        <div className="text-base sm:text-xl font-black text-amber-400 leading-none">+50</div>
+                        <div className="text-[10px] sm:text-xs text-slate-200 mt-1 font-bold">مذكرة وبنك أسئلة</div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="text-lg sm:text-2xl font-black text-emerald-400">+500</div>
-                      <div className="text-[11px] sm:text-xs text-slate-300 mt-0.5">معلم يثق بنا</div>
+                    <div className="rounded-2xl bg-white/10 backdrop-blur-xs border border-white/15 p-3 sm:p-3.5 flex items-center gap-2.5">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-400/20 border border-emerald-400/30 text-emerald-300 flex items-center justify-center shrink-0">
+                        <UserCheck className="w-4 h-4 sm:w-5 sm:h-5" />
+                      </div>
+                      <div>
+                        <div className="text-base sm:text-xl font-black text-emerald-400 leading-none">+500</div>
+                        <div className="text-[10px] sm:text-xs text-slate-200 mt-1 font-bold">معلم يثق بنا</div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="text-lg sm:text-2xl font-black text-sky-400">100%</div>
-                      <div className="text-[11px] sm:text-xs text-slate-300 mt-0.5">تخصيص باسمك وشعارك</div>
+                    <div className="rounded-2xl bg-white/10 backdrop-blur-xs border border-white/15 p-3 sm:p-3.5 flex items-center gap-2.5">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-sky-400/20 border border-sky-400/30 text-sky-300 flex items-center justify-center shrink-0">
+                        <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
+                      </div>
+                      <div>
+                        <div className="text-base sm:text-xl font-black text-sky-400 leading-none">100%</div>
+                        <div className="text-[10px] sm:text-xs text-slate-200 mt-1 font-bold">تخصيص باسمك</div>
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 <div className="lg:col-span-5">
-                  <div className="rounded-3xl bg-slate-950/65 backdrop-blur-md border border-white/15 p-5 sm:p-6 shadow-2xl space-y-4">
-                    <div className="flex items-center gap-3 pb-3 border-b border-white/10">
-                      <div className="w-10 h-10 rounded-2xl bg-amber-400/20 border border-amber-400/30 text-amber-300 flex items-center justify-center shrink-0">
-                        <UserCheck className="w-5 h-5" />
+                  <div className="rounded-3xl bg-slate-950/70 backdrop-blur-md border border-white/15 p-5 sm:p-6 shadow-2xl space-y-4">
+                    <div className="flex items-center gap-3.5 pb-3.5 border-b border-white/10">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-slate-950 flex items-center justify-center shrink-0 shadow-lg shadow-amber-400/20">
+                        <ShieldCheck className="w-6 h-6" />
                       </div>
                       <div>
-                        <h3 className="text-base font-black text-white">لماذا يثق بنا المعلمون؟</h3>
-                        <p className="text-[11px] text-slate-300">جودة تعليمية وتخصيص احترافي 100%</p>
+                        <h3 className="text-base sm:text-lg font-black text-white">لماذا يثق بنا المعلمون؟</h3>
+                        <p className="text-[11px] text-amber-300 font-bold">جودة تعليمية وتخصيص احترافي 100%</p>
                       </div>
                     </div>
 
-                    <div className="space-y-2.5">
-                      {safeTrustFeatures.map((feat, idx) => (
-                        <div
-                          key={feat.id || idx}
-                          className="rounded-2xl bg-white/10 border border-white/10 px-4 py-3 flex items-start gap-3"
-                        >
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                          <div>
-                            <div className="text-xs sm:text-sm font-bold text-white">{safeText(feat.title)}</div>
-                            {feat.desc && (
-                              <div className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
-                                {safeText(feat.desc)}
-                              </div>
-                            )}
+                    <div className="space-y-3">
+                      {safeTrustFeatures.map((feat, idx) => {
+                        const TrustIcons = [FileText, Sparkles, CheckCircle2];
+                        const TrustIcon = TrustIcons[idx % TrustIcons.length];
+                        const iconBg = [
+                          'bg-sky-500/20 text-sky-300 border-sky-400/30',
+                          'bg-amber-400/20 text-amber-300 border-amber-400/30',
+                          'bg-emerald-500/20 text-emerald-300 border-emerald-400/30'
+                        ][idx % 3];
+                        return (
+                          <div
+                            key={feat.id || idx}
+                            className="rounded-2xl bg-white/10 hover:bg-white/15 transition border border-white/10 px-4 py-3.5 flex items-start gap-3.5"
+                          >
+                            <div className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 mt-0.5 ${iconBg}`}>
+                              <TrustIcon className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <div className="text-xs sm:text-sm font-black text-white">{safeText(feat.title)}</div>
+                              {feat.desc && (
+                                <div className="text-[11px] text-slate-300 mt-1 leading-relaxed">
+                                  {safeText(feat.desc)}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -2365,54 +2443,75 @@ function MuzakkiratiPlatformContent() {
               </div>
             </section>
 
-            {/* عرض الحصول على أكثر من مذكرة */}
-            {settings.multiOfferEnabled !== false && settings.bulkDiscountEnabled !== false && (
-              <section
-                style={{ backgroundColor: settings.multiOfferBg || '#0f172a' }}
-                className="rounded-3xl p-6 sm:p-8 text-white shadow-xl border border-white/10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6"
-              >
-                <div className="space-y-2.5 max-w-2xl">
-                  <span
-                    style={{
-                      backgroundColor: settings.multiOfferAccent || '#facc15',
-                      color: '#0f172a'
-                    }}
-                    className="inline-block px-3.5 py-1 rounded-full text-xs font-black"
-                  >
-                    {safeText(settings.multiOfferBadge, '🔥 عرض خاص عند طلب أكثر من مذكرة')}
-                  </span>
-                  <h3 className="text-xl sm:text-2xl font-black leading-snug">
-                    {safeText(
-                      settings.multiOfferTitle,
-                      'احصل على خصم تلقائي {percent}% عند اختيار {min} مذكرات أو أكثر!'
-                    )
-                      .replace('{percent}', String(settings.bulkDiscountPercent || 15))
-                      .replace('{min}', String(settings.bulkDiscountMinItems || 2))
-                      .replace('{max}', String(settings.bulkDiscountMaxAmount || 150))}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                    {safeText(
-                      settings.multiOfferSubtitle,
-                      'اجمع أي مذكرات أو بوكليتات من مختلف الصفوف والمراحل في سلة واحدة وسيتم تطبيق الخصم تلقائياً بحد أقصى {max} ج.م.'
-                    )
-                      .replace('{percent}', String(settings.bulkDiscountPercent || 15))
-                      .replace('{min}', String(settings.bulkDiscountMinItems || 2))
-                      .replace('{max}', String(settings.bulkDiscountMaxAmount || 150))}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-3 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => navigateToTab('library')}
-                    style={{
-                      backgroundColor: settings.multiOfferAccent || '#facc15',
-                      color: '#0f172a'
-                    }}
-                    className="px-6 py-3.5 rounded-2xl font-black text-xs sm:text-sm shadow-lg hover:opacity-95 transition cursor-pointer"
-                  >
-                    اختر مذكراتك الآن واستفد بالخصم
-                  </button>
-                </div>
+            {/* عروض الحصول على أكثر من مذكرة */}
+            {safeMultiOffers.filter((o) => o.active !== false).length > 0 && (
+              <section className="space-y-4">
+                {safeMultiOffers
+                  .filter((o) => o.active !== false)
+                  .map((offer) => {
+                    const specificProds = Array.isArray(offer.productIds)
+                      ? offer.productIds.map((pid) => products.find((p) => p.id === pid)).filter(Boolean)
+                      : [];
+                    return (
+                      <div
+                        key={offer.id}
+                        style={{ backgroundColor: offer.bgColor || '#0f172a' }}
+                        className="rounded-3xl p-6 sm:p-8 text-white shadow-xl border border-white/10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6"
+                      >
+                        <div className="space-y-2.5 max-w-2xl">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              style={{
+                                backgroundColor: offer.accentColor || '#facc15',
+                                color: '#0f172a'
+                              }}
+                              className="inline-block px-3.5 py-1 rounded-full text-xs font-black"
+                            >
+                              {safeText(offer.badge, '🔥 عرض خاص عند طلب أكثر من مذكرة')}
+                            </span>
+                            <span className="px-3 py-1 rounded-full bg-white/10 text-white text-[11px] font-bold">
+                              {specificProds.length > 0
+                                ? `يسري على ${specificProds.length} مذكرات محددة`
+                                : 'يسري على جميع المذكرات'}
+                            </span>
+                          </div>
+                          <h3 className="text-xl sm:text-2xl font-black leading-snug">
+                            {safeText(offer.title)}
+                          </h3>
+                          {offer.subtitle && (
+                            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                              {safeText(offer.subtitle)}
+                            </p>
+                          )}
+                          {specificProds.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                              {specificProds.map((sp) => (
+                                <span
+                                  key={sp.id}
+                                  className="px-2.5 py-1 rounded-xl bg-white/10 border border-white/15 text-[11px] font-bold text-amber-200"
+                                >
+                                  • {sp.title}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => navigateToTab('library')}
+                            style={{
+                              backgroundColor: offer.accentColor || '#facc15',
+                              color: '#0f172a'
+                            }}
+                            className="px-6 py-3.5 rounded-2xl font-black text-xs sm:text-sm shadow-lg hover:opacity-95 transition cursor-pointer"
+                          >
+                            اختر مذكراتك الآن واستفد بالخصم
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
               </section>
             )}
 
@@ -2858,56 +2957,73 @@ function MuzakkiratiPlatformContent() {
                   onClick={() => navigateToTab('library')}
                   className="px-5 py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm shadow-lg transition cursor-pointer"
                 >
-                  تصفح جميع المذكرات الفردية
+                  تصفح جميع المذكرات
                 </button>
               </div>
             </div>
 
-            {settings.multiOfferEnabled !== false && settings.bulkDiscountEnabled !== false && (
-              <div
-                style={{ backgroundColor: settings.multiOfferBg || '#0f172a' }}
-                className="rounded-3xl p-6 sm:p-7 text-white shadow-lg border border-white/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-5"
-              >
-                <div className="space-y-1.5">
-                  <span
-                    style={{
-                      backgroundColor: settings.multiOfferAccent || '#facc15',
-                      color: '#0f172a'
-                    }}
-                    className="inline-block px-3 py-0.5 rounded-full text-[11px] font-black"
-                  >
-                    {safeText(settings.multiOfferBadge, '🔥 عرض خاص عند طلب أكثر من مذكرة')}
-                  </span>
-                  <h3 className="text-lg sm:text-xl font-black">
-                    {safeText(
-                      settings.multiOfferTitle,
-                      'احصل على خصم تلقائي {percent}% عند اختيار {min} مذكرات أو أكثر!'
-                    )
-                      .replace('{percent}', String(settings.bulkDiscountPercent || 15))
-                      .replace('{min}', String(settings.bulkDiscountMinItems || 2))
-                      .replace('{max}', String(settings.bulkDiscountMaxAmount || 150))}
-                  </h3>
-                  <p className="text-xs text-slate-300 leading-relaxed">
-                    {safeText(
-                      settings.multiOfferSubtitle,
-                      'اجمع أي مذكرات أو بوكليتات من مختلف الصفوف والمراحل في سلة واحدة وسيتم تطبيق الخصم تلقائياً بحد أقصى {max} ج.م.'
-                    )
-                      .replace('{percent}', String(settings.bulkDiscountPercent || 15))
-                      .replace('{min}', String(settings.bulkDiscountMinItems || 2))
-                      .replace('{max}', String(settings.bulkDiscountMaxAmount || 150))}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => navigateToTab('library')}
-                  style={{
-                    backgroundColor: settings.multiOfferAccent || '#facc15',
-                    color: '#0f172a'
-                  }}
-                  className="px-5 py-3 rounded-2xl font-black text-xs shadow shrink-0 cursor-pointer"
-                >
-                  كوّن مجموعتك الآن
-                </button>
+            {safeMultiOffers.filter((o) => o.active !== false).length > 0 && (
+              <div className="space-y-4">
+                {safeMultiOffers
+                  .filter((o) => o.active !== false)
+                  .map((offer) => {
+                    const specificProds = Array.isArray(offer.productIds)
+                      ? offer.productIds.map((pid) => products.find((p) => p.id === pid)).filter(Boolean)
+                      : [];
+                    return (
+                      <div
+                        key={offer.id}
+                        style={{ backgroundColor: offer.bgColor || '#0f172a' }}
+                        className="rounded-3xl p-6 sm:p-7 text-white shadow-lg border border-white/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-5"
+                      >
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              style={{
+                                backgroundColor: offer.accentColor || '#facc15',
+                                color: '#0f172a'
+                              }}
+                              className="inline-block px-3 py-0.5 rounded-full text-[11px] font-black"
+                            >
+                              {safeText(offer.badge, '🔥 عرض خاص عند طلب أكثر من مذكرة')}
+                            </span>
+                            <span className="px-2.5 py-0.5 rounded-full bg-white/10 text-[11px] font-bold">
+                              {specificProds.length > 0
+                                ? `محدد لـ ${specificProds.length} مذكرات`
+                                : 'شامل جميع المذكرات'}
+                            </span>
+                          </div>
+                          <h3 className="text-lg sm:text-xl font-black">{safeText(offer.title)}</h3>
+                          {offer.subtitle && (
+                            <p className="text-xs text-slate-300 leading-relaxed">{safeText(offer.subtitle)}</p>
+                          )}
+                          {specificProds.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                              {specificProds.map((sp) => (
+                                <span
+                                  key={sp.id}
+                                  className="px-2.5 py-0.5 rounded-lg bg-white/10 text-[11px] font-bold text-amber-200"
+                                >
+                                  • {sp.title}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => navigateToTab('library')}
+                          style={{
+                            backgroundColor: offer.accentColor || '#facc15',
+                            color: '#0f172a'
+                          }}
+                          className="px-5 py-3 rounded-2xl font-black text-xs shadow shrink-0 cursor-pointer"
+                        >
+                          كوّن مجموعتك الآن
+                        </button>
+                      </div>
+                    );
+                  })}
               </div>
             )}
 
@@ -2931,51 +3047,39 @@ function MuzakkiratiPlatformContent() {
                     className="group bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-md hover:shadow-2xl transition-all flex flex-col justify-between"
                   >
                     <div>
-                      <div className="relative bg-gradient-to-bl from-[#0b1938] via-[#132b5e] to-[#1d4ed8] p-6 sm:p-7 text-white overflow-hidden">
-                        {bundle.coverImage && (
-                          <>
-                            <img
-                              src={bundle.coverImage}
-                              alt={safeText(bundle.title)}
-                              className="absolute inset-0 w-full h-full object-cover opacity-30 group-hover:scale-105 transition-transform duration-500"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/60 to-slate-950/40" />
-                          </>
-                        )}
-                        <div className="relative z-10 space-y-3">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="inline-flex items-center gap-1.5 bg-amber-400 text-slate-950 text-xs font-black px-3.5 py-1 rounded-full shadow">
-                              <Package className="w-3.5 h-3.5" />
-                              <span>
-                                {bundle.badge || (savedAmount > 0 ? `وفر ${savedAmount} ج.م` : 'باقة مميزة')}
-                              </span>
+                      <div className="bg-gradient-to-bl from-[#0b1938] via-[#132b5e] to-[#1d4ed8] p-6 sm:p-7 text-white space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="inline-flex items-center gap-1.5 bg-amber-400 text-slate-950 text-xs font-black px-3.5 py-1 rounded-full shadow">
+                            <Package className="w-3.5 h-3.5" />
+                            <span>
+                              {bundle.badge || (savedAmount > 0 ? `وفر ${savedAmount} ج.م` : 'باقة مميزة')}
                             </span>
-                            {savedPercent > 0 && (
-                              <span className="px-3 py-1 rounded-full bg-emerald-500 text-white text-xs font-black shadow">
-                                خصم {savedPercent}%
-                              </span>
-                            )}
-                          </div>
-                          <h3 className="text-xl sm:text-2xl font-black leading-snug">
-                            {safeText(bundle.title)}
-                          </h3>
-                          <p className="text-xs sm:text-sm text-blue-100 leading-relaxed">
-                            {safeText(bundle.subtitle)}
-                          </p>
+                          </span>
+                          {savedPercent > 0 && (
+                            <span className="px-3 py-1 rounded-full bg-emerald-500 text-white text-xs font-black shadow">
+                              خصم {savedPercent}%
+                            </span>
+                          )}
                         </div>
+                        <h3 className="text-xl sm:text-2xl font-black leading-snug">
+                          {safeText(bundle.title)}
+                        </h3>
+                        <p className="text-xs sm:text-sm text-blue-100 leading-relaxed">
+                          {safeText(bundle.subtitle)}
+                        </p>
                       </div>
 
-                      <div className="p-6 space-y-3">
+                      <div className="p-6 space-y-4">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-black text-slate-700">
                             محتويات الباقة ({includedProducts.length} مذكرات):
                           </span>
                           <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full">
-                            شاملة التخصيص والطباعة
+                            اضغط على أي مذكرة للمعاينة
                           </span>
                         </div>
 
-                        <div className="space-y-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                           {includedProducts.map((prod) => (
                             <div
                               key={prod.id}
@@ -2984,26 +3088,26 @@ function MuzakkiratiPlatformContent() {
                                 setActiveSampleIndex(0);
                                 setIsSampleFullscreen(false);
                               }}
-                              className="p-2.5 rounded-2xl bg-slate-50 hover:bg-blue-50/70 border border-slate-200/80 flex items-center justify-between gap-3 cursor-pointer transition"
+                              className="p-3 rounded-2xl bg-slate-50 hover:bg-blue-50/80 border border-slate-200/90 hover:border-blue-300 flex flex-col items-center text-center gap-2 cursor-pointer transition shadow-2xs"
                             >
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                <img
-                                  src={prod.coverImage || resolvedLogo}
-                                  alt={safeText(prod.title)}
-                                  className="w-10 h-10 rounded-xl object-cover border border-slate-200 shrink-0"
-                                />
-                                <div className="min-w-0">
-                                  <div className="text-xs sm:text-sm font-black text-slate-900 truncate">
-                                    {safeText(prod.title)}
-                                  </div>
-                                  <div className="text-[11px] text-slate-500">
-                                    {prod.pagesCount || 0} صفحة • قيمة فردية {prod.price} ج.م
-                                  </div>
-                                </div>
+                              <div className="text-xs font-black text-slate-900 leading-snug line-clamp-2 min-h-[2.25rem] flex items-center justify-center">
+                                {safeText(prod.title)}
                               </div>
-                              <span className="text-[11px] font-bold text-blue-600 shrink-0 flex items-center gap-1">
-                                <Eye className="w-3.5 h-3.5" />
-                                <span>معاينة</span>
+
+                              <div className="w-14 h-16 rounded-xl overflow-hidden bg-gradient-to-br from-[#0f1f44] to-[#1e3a8a] border border-slate-200 flex items-center justify-center shrink-0 shadow-xs">
+                                {prod.coverImage ? (
+                                  <img
+                                    src={prod.coverImage}
+                                    alt={safeText(prod.title)}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <FileText className="w-6 h-6 text-amber-400" />
+                                )}
+                              </div>
+
+                              <span className="text-[10px] font-bold text-blue-600 bg-white px-2 py-0.5 rounded-full border border-slate-200/80">
+                                {prod.pagesCount || 0} صفحة • معاينة
                               </span>
                             </div>
                           ))}
@@ -3936,36 +4040,6 @@ function MuzakkiratiPlatformContent() {
                         className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
                       />
                     </div>
-                    <div className="p-3 rounded-2xl bg-blue-50/60 border border-blue-200 space-y-2">
-                      <label className="block font-black text-blue-900">صورة غلاف الباقة (اختياري)</label>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={async (e) => {
-                          const f = e.target.files?.[0];
-                          if (!f) return;
-                          const img = await compressImageFile(f, 800, 0.82);
-                          setNewBundleForm((prev) => ({ ...prev, coverImage: img }));
-                        }}
-                        className="block w-full text-xs"
-                      />
-                      {newBundleForm.coverImage && (
-                        <div className="flex items-center gap-2">
-                          <img
-                            src={newBundleForm.coverImage}
-                            alt=""
-                            className="h-16 w-24 rounded-xl object-cover border"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setNewBundleForm((prev) => ({ ...prev, coverImage: '' }))}
-                            className="text-rose-600 font-bold hover:underline"
-                          >
-                            إزالة الصورة
-                          </button>
-                        </div>
-                      )}
-                    </div>
                     <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
                       <div className="font-black text-slate-800">
                         اختر المذكرات المشمولة داخل الباقة ({newBundleForm.productIds.length}):
@@ -4023,13 +4097,11 @@ function MuzakkiratiPlatformContent() {
                           setBundles(next);
                           await idbSet('bundles_v5', next);
                           if (db) {
-                            const { coverImage, ...lightBundle } = bObj;
                             await setDoc(
                               doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles', bObj.id),
-                              lightBundle,
+                              bObj,
                               { merge: true }
                             );
-                            await saveMediaAssetToCloud(db, PRIMARY_APP_ID, `bnd_cover_${bObj.id}`, coverImage || '');
                           }
                           setEditingBundleId(null);
                           setNewBundleForm({
@@ -4038,8 +4110,7 @@ function MuzakkiratiPlatformContent() {
                             price: 499,
                             originalPrice: 650,
                             badge: 'وفر 150 ج.م',
-                            productIds: [],
-                            coverImage: ''
+                            productIds: []
                           });
                           showToast(editingBundleId ? '✓ تم حفظ تعديلات الباقة بنجاح' : '✓ تمت إضافة الباقة وحفظها بنجاح');
                         }}
@@ -4058,8 +4129,7 @@ function MuzakkiratiPlatformContent() {
                               price: 499,
                               originalPrice: 650,
                               badge: 'وفر 150 ج.م',
-                              productIds: [],
-                              coverImage: ''
+                              productIds: []
                             });
                           }}
                           className="px-4 py-3 rounded-xl bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
@@ -4103,8 +4173,7 @@ function MuzakkiratiPlatformContent() {
                               price: Number(b.price || 0),
                               originalPrice: Number(b.originalPrice || 0),
                               badge: b.badge || '',
-                              productIds: Array.isArray(b.productIds) ? b.productIds : [],
-                              coverImage: b.coverImage || ''
+                              productIds: Array.isArray(b.productIds) ? b.productIds : []
                             });
                           }}
                           title="تعديل الباقة"
@@ -4408,30 +4477,30 @@ function MuzakkiratiPlatformContent() {
                   <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
                     <div className="flex items-center justify-between">
                       <h3 className="text-base font-black text-slate-900">الشريط الترويجي العلوي</h3>
-                      <label className="inline-flex items-center gap-1.5 font-bold text-blue-600 cursor-pointer">
+                      <label className="flex items-center gap-1.5 font-bold text-blue-600 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={settings.promoEnabled !== false}
-                          onChange={(e) => setSettings({ ...settings, promoEnabled: e.target.checked })}
+                          onChange={(e) =>
+                            setSettings({ ...settings, promoEnabled: e.target.checked })
+                          }
                         />
-                        <span>إظهار الشريط</span>
+                        <span>مفعّل</span>
                       </label>
                     </div>
-                    <div>
-                      <label className="block font-bold text-slate-600 mb-1">نص العرض الترويجي</label>
-                      <input
-                        type="text"
-                        value={settings.promoText || ''}
-                        onChange={(e) => setSettings({ ...settings, promoText: e.target.value })}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                      />
-                    </div>
+                    <input
+                      type="text"
+                      value={settings.promoText}
+                      onChange={(e) => setSettings({ ...settings, promoText: e.target.value })}
+                      placeholder="نص العرض العلوي..."
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
+                    />
                     <div className="grid grid-cols-3 gap-2">
                       <div>
-                        <label className="block font-bold text-slate-600 mb-1">كود الخصم المعروض</label>
+                        <label className="block font-bold text-slate-600 mb-1">كود الكوبون</label>
                         <input
                           type="text"
-                          value={settings.promoCouponCode || ''}
+                          value={settings.promoCouponCode}
                           onChange={(e) =>
                             setSettings({ ...settings, promoCouponCode: e.target.value.toUpperCase() })
                           }
@@ -4443,7 +4512,9 @@ function MuzakkiratiPlatformContent() {
                         <input
                           type="color"
                           value={settings.promoBgColor || '#0654d0'}
-                          onChange={(e) => setSettings({ ...settings, promoBgColor: e.target.value })}
+                          onChange={(e) =>
+                            setSettings({ ...settings, promoBgColor: e.target.value })
+                          }
                           className="w-full h-9 rounded-xl border border-slate-200"
                         />
                       </div>
@@ -4452,7 +4523,9 @@ function MuzakkiratiPlatformContent() {
                         <input
                           type="color"
                           value={settings.promoTextColor || '#fde047'}
-                          onChange={(e) => setSettings({ ...settings, promoTextColor: e.target.value })}
+                          onChange={(e) =>
+                            setSettings({ ...settings, promoTextColor: e.target.value })
+                          }
                           className="w-full h-9 rounded-xl border border-slate-200"
                         />
                       </div>
@@ -4462,148 +4535,332 @@ function MuzakkiratiPlatformContent() {
                       onClick={handleSaveAllAdminChanges}
                       className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black cursor-pointer"
                     >
-                      حفظ ونشر الشريط الترويجي
+                      حفظ الشريط الترويجي
                     </button>
                   </div>
 
-                  {/* التحكم في عرض الحصول على أكثر من مذكرة */}
+                  {/* إدارة عروض الحصول على أكثر من مذكرة */}
                   <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h3 className="text-base font-black text-slate-900">
-                        عرض الحصول على أكثر من مذكرة (خصم الكميات)
-                      </h3>
-                      <div className="flex items-center gap-3">
-                        <label className="inline-flex items-center gap-1.5 font-bold text-emerald-600 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={settings.bulkDiscountEnabled !== false}
-                            onChange={(e) =>
-                              setSettings({ ...settings, bulkDiscountEnabled: e.target.checked })
-                            }
-                          />
-                          <span>تفعيل الخصم</span>
-                        </label>
-                        <label className="inline-flex items-center gap-1.5 font-bold text-blue-600 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={settings.multiOfferEnabled !== false}
-                            onChange={(e) =>
-                              setSettings({ ...settings, multiOfferEnabled: e.target.checked })
-                            }
-                          />
-                          <span>إظهار بطاقة العرض</span>
-                        </label>
+                      <div>
+                        <h3 className="text-base font-black text-slate-900">
+                          {editingMultiOfferId
+                            ? 'تعديل عرض المذكرات المتعددة'
+                            : 'إنشاء عروض الحصول على أكثر من مذكرة'}
+                        </h3>
+                        <p className="text-[11px] text-slate-500">
+                          أنشئ عرضاً أو أكثر وحدد ما إذا كان يسري على جميع المذكرات أو مذكرات معينة فقط
+                        </p>
                       </div>
+                      {editingMultiOfferId && (
+                        <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 font-black">
+                          وضع التعديل
+                        </span>
+                      )}
                     </div>
-                    <div className="grid grid-cols-3 gap-2">
+
+                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">عنوان العرض *</label>
+                          <input
+                            type="text"
+                            placeholder="مثال: خصم 15% عند طلب مذكرتين أو أكثر"
+                            value={newMultiOfferForm.title}
+                            onChange={(e) =>
+                              setNewMultiOfferForm({ ...newMultiOfferForm, title: e.target.value })
+                            }
+                            className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">نص الشارة العلوية</label>
+                          <input
+                            type="text"
+                            placeholder="🔥 عرض خاص عند طلب أكثر من مذكرة"
+                            value={newMultiOfferForm.badge}
+                            onChange={(e) =>
+                              setNewMultiOfferForm({ ...newMultiOfferForm, badge: e.target.value })
+                            }
+                            className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
+                          />
+                        </div>
+                      </div>
+
                       <div>
-                        <label className="block font-bold text-slate-600 mb-1">الحد الأدنى للمذكرات</label>
-                        <input
-                          type="number"
-                          value={settings.bulkDiscountMinItems || 2}
+                        <label className="block font-bold text-slate-600 mb-1">وصف العرض</label>
+                        <textarea
+                          rows={2}
+                          placeholder="اشرح تفاصيل العرض للعملاء..."
+                          value={newMultiOfferForm.subtitle}
                           onChange={(e) =>
-                            setSettings({ ...settings, bulkDiscountMinItems: Number(e.target.value) })
+                            setNewMultiOfferForm({ ...newMultiOfferForm, subtitle: e.target.value })
                           }
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
                         />
                       </div>
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">نسبة الخصم %</label>
-                        <input
-                          type="number"
-                          value={settings.bulkDiscountPercent || 15}
-                          onChange={(e) =>
-                            setSettings({ ...settings, bulkDiscountPercent: Number(e.target.value) })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">أقصى خصم (ج.م)</label>
-                        <input
-                          type="number"
-                          value={settings.bulkDiscountMaxAmount || 150}
-                          onChange={(e) =>
-                            setSettings({ ...settings, bulkDiscountMaxAmount: Number(e.target.value) })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">شارة العرض</label>
-                        <input
-                          type="text"
-                          value={settings.multiOfferBadge ?? '🔥 عرض خاص عند طلب أكثر من مذكرة'}
-                          onChange={(e) =>
-                            setSettings({ ...settings, multiOfferBadge: e.target.value })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
+
+                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">الحد الأدنى</label>
+                          <input
+                            type="number"
+                            min="2"
+                            value={newMultiOfferForm.minItems}
+                            onChange={(e) =>
+                              setNewMultiOfferForm({
+                                ...newMultiOfferForm,
+                                minItems: Number(e.target.value)
+                              })
+                            }
+                            className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-white font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">الخصم %</label>
+                          <input
+                            type="number"
+                            value={newMultiOfferForm.discountPercent}
+                            onChange={(e) =>
+                              setNewMultiOfferForm({
+                                ...newMultiOfferForm,
+                                discountPercent: Number(e.target.value)
+                              })
+                            }
+                            className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-white font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">أقصى خصم</label>
+                          <input
+                            type="number"
+                            value={newMultiOfferForm.maxDiscount}
+                            onChange={(e) =>
+                              setNewMultiOfferForm({
+                                ...newMultiOfferForm,
+                                maxDiscount: Number(e.target.value)
+                              })
+                            }
+                            className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-white font-bold"
+                          />
+                        </div>
                         <div>
                           <label className="block font-bold text-slate-600 mb-1">لون الخلفية</label>
                           <input
                             type="color"
-                            value={settings.multiOfferBg || '#0f172a'}
+                            value={newMultiOfferForm.bgColor}
                             onChange={(e) =>
-                              setSettings({ ...settings, multiOfferBg: e.target.value })
+                              setNewMultiOfferForm({ ...newMultiOfferForm, bgColor: e.target.value })
                             }
                             className="w-full h-9 rounded-xl border border-slate-200"
                           />
                         </div>
                         <div>
-                          <label className="block font-bold text-slate-600 mb-1">لون الزر والشارة</label>
+                          <label className="block font-bold text-slate-600 mb-1">لون الزر</label>
                           <input
                             type="color"
-                            value={settings.multiOfferAccent || '#facc15'}
+                            value={newMultiOfferForm.accentColor}
                             onChange={(e) =>
-                              setSettings({ ...settings, multiOfferAccent: e.target.value })
+                              setNewMultiOfferForm({ ...newMultiOfferForm, accentColor: e.target.value })
                             }
                             className="w-full h-9 rounded-xl border border-slate-200"
                           />
                         </div>
                       </div>
+
+                      <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-black text-slate-800">
+                            نطاق العرض:{' '}
+                            {newMultiOfferForm.productIds.length === 0
+                              ? 'يشمل جميع المذكرات (اتركه فارغاً للكل)'
+                              : `محدد لـ (${newMultiOfferForm.productIds.length}) مذكرات`}
+                          </span>
+                          {newMultiOfferForm.productIds.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setNewMultiOfferForm({ ...newMultiOfferForm, productIds: [] })
+                              }
+                              className="text-blue-600 font-bold hover:underline cursor-pointer"
+                            >
+                              تحديد الكل (إلغاء التخصيص)
+                            </button>
+                          )}
+                        </div>
+                        <div className="max-h-36 overflow-y-auto space-y-1 pr-1">
+                          {products.map((prod) => {
+                            const checked = newMultiOfferForm.productIds.includes(prod.id);
+                            return (
+                              <label
+                                key={prod.id}
+                                className={`flex items-center justify-between p-1.5 rounded-lg border cursor-pointer ${
+                                  checked
+                                    ? 'bg-blue-50 border-blue-300 text-blue-900 font-bold'
+                                    : 'bg-slate-50 border-slate-200 text-slate-700'
+                                }`}
+                              >
+                                <span className="flex items-center gap-2 truncate">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() =>
+                                      setNewMultiOfferForm((prev) => ({
+                                        ...prev,
+                                        productIds: checked
+                                          ? prev.productIds.filter((id) => id !== prod.id)
+                                          : [...prev.productIds, prod.id]
+                                      }))
+                                    }
+                                  />
+                                  <span className="truncate">{prod.title}</span>
+                                </span>
+                                <span className="text-[11px] shrink-0">{prod.price} ج.م</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!newMultiOfferForm.title.trim()) {
+                              showToast('يرجى إدخال عنوان العرض أولاً', 'error');
+                              return;
+                            }
+                            const offerObj = {
+                              ...newMultiOfferForm,
+                              id: editingMultiOfferId || `mo_${Date.now()}`,
+                              minItems: Number(newMultiOfferForm.minItems || 2),
+                              discountPercent: Number(newMultiOfferForm.discountPercent || 15),
+                              maxDiscount: Number(newMultiOfferForm.maxDiscount || 150)
+                            };
+                            const nextOffers = editingMultiOfferId
+                              ? safeMultiOffers.map((o) =>
+                                  o.id === editingMultiOfferId ? offerObj : o
+                                )
+                              : [offerObj, ...safeMultiOffers];
+                            setEditingMultiOfferId(null);
+                            setNewMultiOfferForm({
+                              badge: '🔥 عرض خاص عند طلب أكثر من مذكرة',
+                              title: '',
+                              subtitle: '',
+                              minItems: 2,
+                              discountPercent: 15,
+                              maxDiscount: 150,
+                              productIds: [],
+                              bgColor: '#0f172a',
+                              accentColor: '#facc15',
+                              active: true
+                            });
+                            await saveSettings({ ...settings, multiOffers: nextOffers });
+                            showToast(
+                              editingMultiOfferId
+                                ? '✓ تم تحديث العرض ونشره للعملاء'
+                                : '✓ تم إضافة العرض ونشره للعملاء'
+                            );
+                          }}
+                          className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black cursor-pointer"
+                        >
+                          {editingMultiOfferId ? 'حفظ تعديلات العرض' : '+ إضافة ونشر العرض'}
+                        </button>
+                        {editingMultiOfferId && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingMultiOfferId(null);
+                              setNewMultiOfferForm({
+                                badge: '🔥 عرض خاص عند طلب أكثر من مذكرة',
+                                title: '',
+                                subtitle: '',
+                                minItems: 2,
+                                discountPercent: 15,
+                                maxDiscount: 150,
+                                productIds: [],
+                                bgColor: '#0f172a',
+                                accentColor: '#facc15',
+                                active: true
+                              });
+                            }}
+                            className="px-4 py-2.5 rounded-xl bg-slate-200 text-slate-700 font-bold cursor-pointer"
+                          >
+                            إلغاء
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <label className="block font-bold text-slate-600 mb-1">
-                        عنوان العرض (استخدم {'{percent}'} للنسبة و {'{min}'} للعدد)
-                      </label>
-                      <input
-                        type="text"
-                        value={
-                          settings.multiOfferTitle ??
-                          'احصل على خصم تلقائي {percent}% عند اختيار {min} مذكرات أو أكثر!'
-                        }
-                        onChange={(e) =>
-                          setSettings({ ...settings, multiOfferTitle: e.target.value })
-                        }
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-bold"
-                      />
+
+                    {/* قائمة العروض الحالية */}
+                    <div className="space-y-2">
+                      {safeMultiOffers.map((off) => (
+                        <div
+                          key={off.id}
+                          className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2"
+                        >
+                          <div className="space-y-0.5">
+                            <div className="font-black text-slate-900">{off.title}</div>
+                            <div className="text-[11px] text-slate-500">
+                              خصم {off.discountPercent}% عند اختيار {off.minItems} مذكرات •{' '}
+                              {Array.isArray(off.productIds) && off.productIds.length > 0
+                                ? `محدد لـ ${off.productIds.length} مذكرات`
+                                : 'شامل جميع المذكرات'}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const nextOffers = safeMultiOffers.map((o) =>
+                                  o.id === off.id ? { ...o, active: o.active === false } : o
+                                );
+                                await saveSettings({ ...settings, multiOffers: nextOffers });
+                              }}
+                              className={`px-2.5 py-1 rounded-xl font-bold cursor-pointer ${
+                                off.active !== false
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-slate-200 text-slate-600'
+                              }`}
+                            >
+                              {off.active !== false ? 'مفعّل' : 'مخفي'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingMultiOfferId(off.id);
+                                setNewMultiOfferForm({
+                                  badge: off.badge || '',
+                                  title: off.title || '',
+                                  subtitle: off.subtitle || '',
+                                  minItems: Number(off.minItems || 2),
+                                  discountPercent: Number(off.discountPercent || 15),
+                                  maxDiscount: Number(off.maxDiscount || 150),
+                                  productIds: Array.isArray(off.productIds) ? off.productIds : [],
+                                  bgColor: off.bgColor || '#0f172a',
+                                  accentColor: off.accentColor || '#facc15',
+                                  active: off.active !== false
+                                });
+                              }}
+                              className="p-2 rounded-xl bg-blue-50 text-blue-600 cursor-pointer"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const nextOffers = safeMultiOffers.filter((o) => o.id !== off.id);
+                                await saveSettings({ ...settings, multiOffers: nextOffers });
+                                showToast('✓ تم حذف العرض');
+                              }}
+                              className="p-2 rounded-xl bg-rose-50 text-rose-600 cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <div>
-                      <label className="block font-bold text-slate-600 mb-1">وصف العرض</label>
-                      <textarea
-                        rows={2}
-                        value={
-                          settings.multiOfferSubtitle ??
-                          'اجمع أي مذكرات أو بوكليتات من مختلف الصفوف والمراحل في سلة واحدة وسيتم تطبيق الخصم تلقائياً بحد أقصى {max} ج.م.'
-                        }
-                        onChange={(e) =>
-                          setSettings({ ...settings, multiOfferSubtitle: e.target.value })
-                        }
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleSaveAllAdminChanges}
-                      className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black cursor-pointer"
-                    >
-                      حفظ ونشر عرض الحصول على أكثر من مذكرة
-                    </button>
                   </div>
                 </div>
 
