@@ -963,33 +963,44 @@ function MuzakkiratiPlatformContent() {
     if (!db) return;
 
     const settingsRef = doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'main');
+    const fastSettingsRef = doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'settings', 'main');
     const configCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config');
+
+    const applyCloudSettingsSnapshot = (cloudData) => {
+      if (!cloudData || isSavingRef.current) return;
+      setSettings((prev) => {
+        const mergedCategories = Array.isArray(cloudData.categories)
+          ? cloudData.categories.map((c) => {
+              const prevCat = (prev.categories || []).find((pc) => pc.id === c.id);
+              return { ...c, coverImage: c.coverImage || prevCat?.coverImage || '' };
+            })
+          : prev.categories;
+        const merged = {
+          ...prev,
+          ...cloudData,
+          categories: mergedCategories,
+          logoImage: cloudData.logoImage || prev.logoImage || '',
+          heroImage: cloudData.heroImage || prev.heroImage || '',
+          heroBgImage: cloudData.heroBgImage || prev.heroBgImage || ''
+        };
+        idbSet('settings_v5', merged);
+        safeLocalSet('el3bakera_settings_v5', merged);
+        return merged;
+      });
+    };
+
+    const unsubFastSettings = onSnapshot(
+      fastSettingsRef,
+      (snap) => {
+        if (snap.exists()) applyCloudSettingsSnapshot(snap.data());
+      },
+      () => {}
+    );
 
     const unsubSettings = onSnapshot(
       settingsRef,
       (snap) => {
-        if (snap.exists() && !isSavingRef.current) {
-          const cloudData = snap.data();
-          setSettings((prev) => {
-            const mergedCategories = Array.isArray(cloudData.categories)
-              ? cloudData.categories.map((c) => {
-                  const prevCat = (prev.categories || []).find((pc) => pc.id === c.id);
-                  return { ...c, coverImage: c.coverImage || prevCat?.coverImage || '' };
-                })
-              : prev.categories;
-            const merged = {
-              ...prev,
-              ...cloudData,
-              categories: mergedCategories,
-              logoImage: cloudData.logoImage || prev.logoImage || '',
-              heroImage: cloudData.heroImage || prev.heroImage || '',
-              heroBgImage: cloudData.heroBgImage || prev.heroBgImage || ''
-            };
-            idbSet('settings_v5', merged);
-            safeLocalSet('el3bakera_settings_v5', merged);
-            return merged;
-          });
-        }
+        if (snap.exists()) applyCloudSettingsSnapshot(snap.data());
       },
       () => {}
     );
@@ -1184,6 +1195,7 @@ function MuzakkiratiPlatformContent() {
     );
 
     return () => {
+      unsubFastSettings();
       unsubSettings();
       unsubMediaAssets();
       unsubLegacySamples();
@@ -1201,17 +1213,21 @@ function MuzakkiratiPlatformContent() {
     }
     showToast('جاري سحب أحدث البيانات والصور من السحابة...');
     try {
-      const [configSnap, samplesSnap, productsSnap] = await Promise.all([
+      const [fastSnap, configSnap, samplesSnap, productsSnap] = await Promise.all([
+        getDocs(collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'settings')),
         getDocs(collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config')),
         getDocs(collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebook_samples')),
         getDocs(collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebooks'))
       ]);
 
       let cloudMainSettings = null;
+      fastSnap.forEach((d) => {
+        if (d.id === 'main') cloudMainSettings = d.data();
+      });
       const assetsMap = {};
       const samplesByProduct = {};
       configSnap.forEach((d) => {
-        if (d.id === 'main') {
+        if (d.id === 'main' && !cloudMainSettings) {
           cloudMainSettings = d.data();
         } else if (d.id.startsWith('media_')) {
           const data = d.data();
@@ -1314,6 +1330,11 @@ function MuzakkiratiPlatformContent() {
 
         await setDoc(
           doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'main'),
+          lightSettings,
+          { merge: true }
+        );
+        await setDoc(
+          doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'settings', 'main'),
           lightSettings,
           { merge: true }
         );
@@ -4213,72 +4234,119 @@ function MuzakkiratiPlatformContent() {
 
                 <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-5">
                   <div className="flex items-center justify-between">
-                    <h4 className="font-black text-slate-900">روابط التواصل</h4>
+                    <div>
+                      <h4 className="font-black text-slate-900">التحكم في روابط التواصل الاجتماعي</h4>
+                      <p className="text-[11px] text-slate-500">
+                        أضف أو عدّل اسم الرابط وعنوان URL مباشرة ليظهر في نافذة (تواصل معنا) وأسفل الصفحة
+                      </p>
+                    </div>
                     <button
                       type="button"
                       onClick={handleSaveAllAdminChanges}
-                      className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black cursor-pointer"
+                      className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black cursor-pointer shadow-sm"
                     >
-                      حفظ التعديلات
+                      حفظ ونشر الروابط
                     </button>
                   </div>
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 p-3 rounded-2xl bg-slate-50 border border-slate-200">
                       <input
                         type="text"
-                        placeholder="اسم الرابط"
+                        placeholder="اسم الرابط (مثلاً: قناة اليوتيوب)"
                         value={newSocialLabel}
                         onChange={(e) => setNewSocialLabel(e.target.value)}
-                        className="sm:col-span-5 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                        className="sm:col-span-5 px-3 py-2 rounded-xl border border-slate-200 bg-white font-bold"
                       />
                       <input
                         type="url"
                         placeholder="https://..."
                         value={newSocialUrl}
                         onChange={(e) => setNewSocialUrl(e.target.value)}
-                        className="sm:col-span-5 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                        className="sm:col-span-5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-left"
                         dir="ltr"
                       />
                       <button
                         type="button"
-                        onClick={() => {
-                          if (!newSocialLabel.trim() || !newSocialUrl.trim()) return;
+                        onClick={async () => {
+                          if (!newSocialLabel.trim() || !newSocialUrl.trim()) {
+                            showToast('يرجى إدخال اسم الرابط وعنوان الرابط كاملًا', 'error');
+                            return;
+                          }
+                          const formattedUrl = /^https?:\/\//i.test(newSocialUrl.trim())
+                            ? newSocialUrl.trim()
+                            : `https://${newSocialUrl.trim()}`;
                           const next = [
-                            ...(settings.socialLinks || []),
+                            ...safeSocialLinks,
                             {
                               id: `soc_${Date.now()}`,
                               label: newSocialLabel.trim(),
-                              url: newSocialUrl.trim()
+                              url: formattedUrl
                             }
                           ];
-                          setSettings({ ...settings, socialLinks: next });
                           setNewSocialLabel('');
                           setNewSocialUrl('');
-                          showToast('تمت إضافة الرابط — اضغط حفظ التعديلات لاعتماده');
+                          await saveSettings({ ...settings, socialLinks: next });
+                          showToast('✓ تمت إضافة الرابط وحفظه للعملاء');
                         }}
-                        className="sm:col-span-2 py-2 rounded-xl bg-slate-900 text-white font-bold cursor-pointer"
+                        className="sm:col-span-2 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black cursor-pointer"
                       >
-                        إضافة
+                        + إضافة
                       </button>
                     </div>
-                    <div className="space-y-1.5">
-                      {(settings.socialLinks || []).map((soc) => (
+                    <div className="space-y-2">
+                      {safeSocialLinks.map((soc) => (
                         <div
                           key={soc.id}
-                          className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200"
+                          className="p-3 rounded-2xl bg-slate-50 border border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-2 items-center"
                         >
-                          <span className="font-bold">{soc.label}</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const next = (settings.socialLinks || []).filter((s) => s.id !== soc.id);
+                          <input
+                            type="text"
+                            value={safeText(soc.label)}
+                            onChange={(e) => {
+                              const next = safeSocialLinks.map((s) =>
+                                s.id === soc.id ? { ...s, label: e.target.value } : s
+                              );
                               setSettings({ ...settings, socialLinks: next });
-                              showToast('تم حذف الرابط — اضغط حفظ التعديلات لاعتماده');
                             }}
-                            className="text-rose-600 cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                            placeholder="اسم الرابط"
+                            className="sm:col-span-4 px-3 py-2 rounded-xl border border-slate-200 bg-white font-bold"
+                          />
+                          <input
+                            type="url"
+                            value={safeText(soc.url)}
+                            onChange={(e) => {
+                              const next = safeSocialLinks.map((s) =>
+                                s.id === soc.id ? { ...s, url: e.target.value } : s
+                              );
+                              setSettings({ ...settings, socialLinks: next });
+                            }}
+                            placeholder="https://..."
+                            className="sm:col-span-6 px-3 py-2 rounded-xl border border-slate-200 bg-white text-left"
+                            dir="ltr"
+                          />
+                          <div className="sm:col-span-2 flex items-center justify-end gap-1.5">
+                            <a
+                              href={soc.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              title="تجربة فتح الرابط"
+                              className="p-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100"
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                            </a>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const next = safeSocialLinks.filter((s) => s.id !== soc.id);
+                                await saveSettings({ ...settings, socialLinks: next });
+                                showToast('✓ تم حذف الرابط وحفظ التعديل');
+                              }}
+                              title="حذف الرابط"
+                              className="p-2 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
