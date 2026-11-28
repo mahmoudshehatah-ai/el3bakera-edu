@@ -1706,12 +1706,6 @@ function MuzakkiratiPlatformInner() {
       ''
     )}?text=${encodeURIComponent(msg)}`;
 
-    // فتح نافذة الواتساب فوراً داخل حدث النقر حتى لا يحظرها متصفح الهاتف
-    let waWin = null;
-    try {
-      waWin = window.open(waUrl, '_blank');
-    } catch {}
-
     let savedToCloud = false;
     try {
       const { db, auth } = firebaseServices;
@@ -1721,7 +1715,7 @@ function MuzakkiratiPlatformInner() {
       if (db) {
         const basePath = ['artifacts', 'el3bakera-edu', 'public', 'data'];
         const { logoDataUrl, ...orderMeta } = newOrder;
-        const chunkSize = 450000;
+        const chunkSize = 400000;
         const chunks = [];
         if (logoDataUrl) {
           for (let i = 0; i < logoDataUrl.length; i += chunkSize) {
@@ -1768,11 +1762,21 @@ function MuzakkiratiPlatformInner() {
     setIsCartOpen(false);
     setIsSubmittingOrder(false);
 
-    if (!waWin || waWin.closed || typeof waWin.closed === 'undefined') {
-      window.location.href = waUrl;
-    } else if (savedToCloud) {
-      showToast(`تم تسجيل طلبك رقم ${orderId} وإرساله للإدارة وواتساب!`);
+    if (savedToCloud) {
+      showToast(`تم تسجيل طلبك رقم ${orderId} بنجاح! جاري تحويلك إلى واتساب...`);
     }
+
+    // الانتقال إلى واتساب بعد ضمان حفظ الطلب في السحابة حتى لا يقطع متصفح الهاتف الاتصال
+    setTimeout(() => {
+      try {
+        const waWin = window.open(waUrl, '_blank');
+        if (!waWin || waWin.closed || typeof waWin.closed === 'undefined') {
+          window.location.href = waUrl;
+        }
+      } catch {
+        window.location.href = waUrl;
+      }
+    }, 350);
   };
 
   const handleSampleMouseDown = (e) => {
@@ -5784,36 +5788,70 @@ function MuzakkiratiPlatformInner() {
                     )}
 
                     {customerForm.hasLogo === 'رفع صورة الشعار الآن بالجودة الكاملة' && (
-                      <div className="p-3 rounded-2xl bg-blue-50 border border-blue-200 space-y-2">
-                        <label className="block font-black text-blue-950">
-                          اختر ملف الشعار الأصلي (يُرفع بجودته الكاملة دون ضغط):
+                      <div className="p-3.5 rounded-2xl bg-blue-50 border border-blue-200 space-y-2.5">
+                        <div className="font-black text-blue-950">
+                          اختر صورة الشعار من الهاتف أو الجهاز (بالجودة الكاملة):
+                        </div>
+                        <label className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-black text-xs flex items-center justify-center gap-2 cursor-pointer shadow-sm transition touch-manipulation">
+                          <Upload className="w-4 h-4 shrink-0" />
+                          <span>
+                            {customerForm.logoFileName
+                              ? 'تغيير صورة الشعار المختارة'
+                              : 'اضغط هنا لاختيار صورة من المعرض'}
+                          </span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const reader = new FileReader();
+                              reader.onload = (ev) => {
+                                setCustomerForm((prev) => ({
+                                  ...prev,
+                                  logoFileName: file.name,
+                                  logoDataUrl: ev.target?.result || ''
+                                }));
+                                showToast(`تم إرفاق الشعار (${file.name}) بالجودة الكاملة`);
+                              };
+                              reader.readAsDataURL(file);
+                            }}
+                            className="hidden"
+                          />
                         </label>
-                        <input
-                          type="file"
-                          accept="image/*,.svg,.pdf"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            const reader = new FileReader();
-                            reader.onload = (ev) => {
-                              setCustomerForm((prev) => ({
-                                ...prev,
-                                logoFileName: file.name,
-                                logoDataUrl: ev.target?.result || ''
-                              }));
-                              showToast(`تم إرفاق الشعار (${file.name}) بالجودة الكاملة`);
-                            };
-                            reader.readAsDataURL(file);
-                          }}
-                          className="w-full text-xs"
-                        />
-                        {customerForm.logoDataUrl && customerForm.logoDataUrl.startsWith('data:image') && (
-                          <div className="flex items-center gap-2 pt-1">
-                            <img
-                              src={customerForm.logoDataUrl}
-                              alt="معاينة الشعار"
-                              className="w-12 h-12 rounded-xl object-contain bg-white border border-slate-200 p-1"
-                            />
+
+                        <label className="block text-center text-[11px] font-bold text-blue-700 underline cursor-pointer">
+                          أو اضغط لإرفاق ملف PDF / SVG
+                          <input
+                            type="file"
+                            accept=".pdf,.svg,application/pdf,image/svg+xml"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const reader = new FileReader();
+                              reader.onload = (ev) => {
+                                setCustomerForm((prev) => ({
+                                  ...prev,
+                                  logoFileName: file.name,
+                                  logoDataUrl: ev.target?.result || ''
+                                }));
+                                showToast(`تم إرفاق الملف (${file.name}) بالجودة الكاملة`);
+                              };
+                              reader.readAsDataURL(file);
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+
+                        {customerForm.logoDataUrl && (
+                          <div className="flex items-center gap-2.5 p-2 rounded-xl bg-white border border-blue-200">
+                            {customerForm.logoDataUrl.startsWith('data:image') && (
+                              <img
+                                src={customerForm.logoDataUrl}
+                                alt="معاينة الشعار"
+                                className="w-12 h-12 rounded-xl object-contain bg-slate-50 border border-slate-200 p-1 shrink-0"
+                              />
+                            )}
                             <span className="text-[11px] font-black text-emerald-700 truncate">
                               ✓ جاهز بالجودة الكاملة: {customerForm.logoFileName}
                             </span>
