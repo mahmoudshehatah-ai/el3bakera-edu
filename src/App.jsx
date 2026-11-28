@@ -644,6 +644,8 @@ function MuzakkiratiPlatformInner() {
     seriesName: '',
     phone2: '',
     hasLogo: 'سأرسله على واتساب',
+    logoFileName: '',
+    logoDataUrl: '',
     notes: ''
   });
 
@@ -1608,6 +1610,8 @@ function MuzakkiratiPlatformInner() {
       seriesName: customerForm.seriesName.trim(),
       phone2: customerForm.phone2.trim(),
       hasLogo: customerForm.hasLogo,
+      logoFileName: customerForm.logoFileName || '',
+      logoDataUrl: customerForm.logoDataUrl || '',
       notes: customerForm.notes.trim(),
       items: cart.map((x) => ({ id: x.id, title: x.title, price: x.price })),
       subtotal: cartTotals.subtotal,
@@ -1623,7 +1627,21 @@ function MuzakkiratiPlatformInner() {
       const { db } = firebaseServices;
       if (db) {
         const basePath = ['artifacts', 'el3bakera-edu', 'public', 'data'];
-        await setDoc(doc(db, ...basePath, 'orders', orderId), newOrder);
+        // حفظ بيانات الطلب الأساسية (وإذا كان الشعار كبيراً يُحفظ في مستند مستقل بالجودة الكاملة)
+        const { logoDataUrl, ...orderMeta } = newOrder;
+        await setDoc(doc(db, ...basePath, 'orders', orderId), {
+          ...orderMeta,
+          hasUploadedLogo: Boolean(logoDataUrl),
+          logoDataUrl: logoDataUrl && logoDataUrl.length <= 850000 ? logoDataUrl : ''
+        });
+        if (logoDataUrl && logoDataUrl.length > 850000) {
+          await setDoc(doc(db, ...basePath, 'config', `order_logo_${orderId}`), {
+            orderId,
+            logoFileName: newOrder.logoFileName,
+            dataUrl: logoDataUrl,
+            updatedAt: serverTimestamp()
+          });
+        }
       }
     } catch {}
 
@@ -1638,7 +1656,7 @@ function MuzakkiratiPlatformInner() {
       `📱 رقم الهاتف: *${newOrder.phone1}*`,
       newOrder.seriesName ? `📚 اسم السلسلة: *${newOrder.seriesName}*` : '',
       newOrder.phone2 ? `📞 هاتف إضافي: *${newOrder.phone2}*` : '',
-      `🎨 الشعار الخاص: *${newOrder.hasLogo}*`,
+      `🎨 الشعار الخاص: *${newOrder.hasLogo}*${newOrder.logoFileName ? ` (مرفق: ${newOrder.logoFileName})` : ''}`,
       newOrder.notes ? `📝 ملاحظات: ${newOrder.notes}` : '',
       `------------------------`,
       `📦 *المذكرات المطلوبة:*`,
@@ -1660,6 +1678,16 @@ function MuzakkiratiPlatformInner() {
 
     setCart([]);
     setAppliedCoupon(null);
+    setCustomerForm({
+      teacherName: '',
+      phone1: '',
+      seriesName: '',
+      phone2: '',
+      hasLogo: 'سأرسله على واتساب',
+      logoFileName: '',
+      logoDataUrl: '',
+      notes: ''
+    });
     setIsCartOpen(false);
     showToast(`تم تسجيل طلبك رقم ${orderId} وتحويلك للواتساب!`);
   };
@@ -4800,21 +4828,165 @@ function MuzakkiratiPlatformInner() {
             ------------------------------------------ */}
             {adminTab === 'orders' && (
               <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 space-y-4 text-xs">
-                <h3 className="text-base font-black text-slate-900">سجل طلبات المعلمين ({orders.length})</h3>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-base font-black text-slate-900">سجل طلبات المعلمين ({orders.length})</h3>
+                  {orders.some((o) => o.status === 'تم التسليم ومكتمل') && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const completedIds = orders
+                          .filter((o) => o.status === 'تم التسليم ومكتمل')
+                          .map((o) => o.id);
+                        setOrders((prev) => prev.filter((o) => o.status !== 'تم التسليم ومكتمل'));
+                        try {
+                          const { db } = firebaseServices;
+                          if (db) {
+                            const basePath = ['artifacts', 'el3bakera-edu', 'public', 'data'];
+                            await Promise.all(
+                              completedIds.map((id) =>
+                                deleteDoc(doc(db, ...basePath, 'orders', id)).catch(() => {})
+                              )
+                            );
+                          }
+                        } catch {}
+                        showToast(`تم حذف ${completedIds.length} طلب مكتمل بنجاح`);
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-black cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>حذف جميع الطلبات المكتملة</span>
+                    </button>
+                  )}
+                </div>
+
                 {orders.length === 0 ? (
                   <p className="text-slate-500 font-bold py-8 text-center">لا توجد طلبات مسجلة حتى الآن.</p>
                 ) : (
                   <div className="space-y-3">
                     {orders.map((ord) => (
-                      <div key={ord.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5">
+                      <div
+                        key={ord.id}
+                        className={`p-4 rounded-2xl border space-y-2.5 ${
+                          ord.status === 'تم التسليم ومكتمل'
+                            ? 'bg-emerald-50/40 border-emerald-200'
+                            : 'bg-slate-50 border-slate-200'
+                        }`}
+                      >
                         <div className="flex flex-wrap items-center justify-between gap-2 font-black">
-                          <span className="text-blue-600">
-                            #{ord.id} — {ord.teacherName} ({ord.phone1})
-                          </span>
-                          <span className="text-emerald-700">{ord.total} ج.م</span>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-blue-600">
+                              #{ord.id} — {ord.teacherName} ({ord.phone1})
+                            </span>
+                            {ord.seriesName && (
+                              <span className="px-2 py-0.5 rounded-lg bg-white border border-slate-200 text-slate-700">
+                                سلسلة: {ord.seriesName}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className="text-emerald-700 text-sm">{ord.total} ج.م</span>
+                            <select
+                              value={ord.status || 'قيد المراجعة والتجهيز'}
+                              onChange={async (e) => {
+                                const nextStatus = e.target.value;
+                                setOrders((prev) =>
+                                  prev.map((item) =>
+                                    item.id === ord.id ? { ...item, status: nextStatus } : item
+                                  )
+                                );
+                                try {
+                                  const { db } = firebaseServices;
+                                  if (db) {
+                                    await setDoc(
+                                      doc(db, 'artifacts', 'el3bakera-edu', 'public', 'data', 'orders', ord.id),
+                                      { status: nextStatus },
+                                      { merge: true }
+                                    );
+                                  }
+                                } catch {}
+                                showToast('تم تحديث حالة الطلب');
+                              }}
+                              className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white font-black text-[11px]"
+                            >
+                              <option value="قيد المراجعة والتجهيز">قيد المراجعة والتجهيز</option>
+                              <option value="جاري التنفيذ والتخصيص">جاري التنفيذ والتخصيص</option>
+                              <option value="تم التسليم ومكتمل">تم التسليم ومكتمل</option>
+                            </select>
+
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setOrders((prev) => prev.filter((item) => item.id !== ord.id));
+                                try {
+                                  const { db } = firebaseServices;
+                                  if (db) {
+                                    const basePath = ['artifacts', 'el3bakera-edu', 'public', 'data'];
+                                    await deleteDoc(doc(db, ...basePath, 'orders', ord.id));
+                                    await deleteDoc(doc(db, ...basePath, 'config', `order_logo_${ord.id}`)).catch(
+                                      () => {}
+                                    );
+                                  }
+                                } catch {}
+                                showToast('تم حذف الطلب بنجاح');
+                              }}
+                              className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 cursor-pointer"
+                              title="حذف الطلب"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
+
                         <div className="text-slate-600 font-bold">
                           المذكرات: {(ord.items || []).map((i) => i.title).join(' + ')}
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+                          <span>
+                            الشعار: <strong>{safeText(ord.hasLogo)}</strong>
+                            {ord.notes ? ` • ملاحظات: ${ord.notes}` : ''}
+                          </span>
+
+                          {(ord.logoDataUrl || ord.hasUploadedLogo) && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                let finalLogoUrl = ord.logoDataUrl;
+                                if (!finalLogoUrl && firebaseServices.db) {
+                                  try {
+                                    const snap = await getDoc(
+                                      doc(
+                                        firebaseServices.db,
+                                        'artifacts',
+                                        'el3bakera-edu',
+                                        'public',
+                                        'data',
+                                        'config',
+                                        `order_logo_${ord.id}`
+                                      )
+                                    );
+                                    if (snap.exists()) finalLogoUrl = snap.data()?.dataUrl;
+                                  } catch {}
+                                }
+                                if (!finalLogoUrl) {
+                                  showToast('ملف الشعار غير متوفر', 'error');
+                                  return;
+                                }
+                                const a = document.createElement('a');
+                                a.href = finalLogoUrl;
+                                a.download = ord.logoFileName || `logo_${ord.teacherName}_${ord.id}.png`;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                showToast('تم تحميل شعار المعلم بالجودة الكاملة');
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black cursor-pointer"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              <span>تحميل شعار المعلم بالجودة الكاملة</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -5559,9 +5731,51 @@ function MuzakkiratiPlatformInner() {
                       onChange={(e) => setCustomerForm({ ...customerForm, hasLogo: e.target.value })}
                       className="w-full px-3 py-2.5 rounded-xl border border-slate-200 font-bold"
                     >
+                      <option value="رفع صورة الشعار الآن بالجودة الكاملة">
+                        رفع صورة الشعار الآن بالجودة الكاملة
+                      </option>
                       <option value="سأرسله على واتساب">لدي شعار خاص وسأرسله على واتساب</option>
                       <option value="بدون شعار (الاسم فقط)">بدون شعار (كتابة الاسم ورقم الهاتف فقط)</option>
                     </select>
+
+                    {customerForm.hasLogo === 'رفع صورة الشعار الآن بالجودة الكاملة' && (
+                      <div className="p-3 rounded-2xl bg-blue-50 border border-blue-200 space-y-2">
+                        <label className="block font-black text-blue-950">
+                          اختر ملف الشعار الأصلي (يُرفع بجودته الكاملة دون ضغط):
+                        </label>
+                        <input
+                          type="file"
+                          accept="image/*,.svg,.pdf"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            const reader = new FileReader();
+                            reader.onload = (ev) => {
+                              setCustomerForm((prev) => ({
+                                ...prev,
+                                logoFileName: file.name,
+                                logoDataUrl: ev.target?.result || ''
+                              }));
+                              showToast(`تم إرفاق الشعار (${file.name}) بالجودة الكاملة`);
+                            };
+                            reader.readAsDataURL(file);
+                          }}
+                          className="w-full text-xs"
+                        />
+                        {customerForm.logoDataUrl && customerForm.logoDataUrl.startsWith('data:image') && (
+                          <div className="flex items-center gap-2 pt-1">
+                            <img
+                              src={customerForm.logoDataUrl}
+                              alt="معاينة الشعار"
+                              className="w-12 h-12 rounded-xl object-contain bg-white border border-slate-200 p-1"
+                            />
+                            <span className="text-[11px] font-black text-emerald-700 truncate">
+                              ✓ جاهز بالجودة الكاملة: {customerForm.logoFileName}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <textarea
                       rows={2}
                       placeholder="أي ملاحظات إضافية للتصميم..."
