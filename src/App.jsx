@@ -637,6 +637,7 @@ function MuzakkiratiPlatformInner() {
     }
   });
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const [couponInput, setCouponInput] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [customerForm, setCustomerForm] = useState({
@@ -645,6 +646,7 @@ function MuzakkiratiPlatformInner() {
     seriesName: '',
     phone2: '',
     hasLogo: 'سأرسله على واتساب',
+    logoText: '',
     logoFileName: '',
     logoDataUrl: '',
     notes: ''
@@ -1624,6 +1626,7 @@ function MuzakkiratiPlatformInner() {
 
   const handleConfirmOrder = async (e) => {
     e.preventDefault();
+    if (isSubmittingOrder) return;
     if (cart.length === 0) {
       showToast('سلة الطلبات فارغة', 'error');
       return;
@@ -1639,7 +1642,15 @@ function MuzakkiratiPlatformInner() {
       showToast('يرجى اختيار ملف صورة الشعار أولاً أو تغيير خيار الشعار', 'error');
       return;
     }
+    if (
+      customerForm.hasLogo === 'كتابة نص الشعار' &&
+      !customerForm.logoText.trim()
+    ) {
+      showToast('يرجى كتابة نص الشعار المطلوب وضعه على المذكرة', 'error');
+      return;
+    }
 
+    setIsSubmittingOrder(true);
     const orderId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
     const newOrder = {
       id: orderId,
@@ -1648,6 +1659,7 @@ function MuzakkiratiPlatformInner() {
       seriesName: customerForm.seriesName.trim(),
       phone2: customerForm.phone2.trim(),
       hasLogo: customerForm.hasLogo,
+      logoText: customerForm.hasLogo === 'كتابة نص الشعار' ? customerForm.logoText.trim() : '',
       logoFileName: customerForm.logoFileName || '',
       logoDataUrl: customerForm.logoDataUrl || '',
       notes: customerForm.notes.trim(),
@@ -1661,12 +1673,50 @@ function MuzakkiratiPlatformInner() {
       createdAtStr: new Date().toLocaleString('ar-EG')
     };
 
+    const itemsLines = cart.map((i, idx) => `${idx + 1}. ${i.title} (${i.price} ج.م)`).join('\n');
+    const logoSummary =
+      newOrder.hasLogo === 'كتابة نص الشعار'
+        ? `نص الشعار: "${newOrder.logoText}"`
+        : `${newOrder.hasLogo}${newOrder.logoFileName ? ` (مرفق: ${newOrder.logoFileName})` : ''}`;
+
+    const msg = [
+      `السلام عليكم، طلب تخصيص مذكرات جديد من *${safeText(settings.platformName)}*`,
+      `رقم الطلب: *${orderId}*`,
+      `------------------------`,
+      `👤 اسم المعلم: *${newOrder.teacherName}*`,
+      `📱 رقم الهاتف: *${newOrder.phone1}*`,
+      newOrder.seriesName ? `📚 اسم السلسلة: *${newOrder.seriesName}*` : '',
+      newOrder.phone2 ? `📞 هاتف إضافي: *${newOrder.phone2}*` : '',
+      `🎨 الشعار الخاص: *${logoSummary}*`,
+      newOrder.notes ? `📝 ملاحظات: ${newOrder.notes}` : '',
+      `------------------------`,
+      `📦 *المذكرات المطلوبة:*`,
+      itemsLines,
+      `------------------------`,
+      `الإجمالي قبل الخصم: ${cartTotals.subtotal} ج.م`,
+      cartTotals.finalDiscount > 0 ? `الخصم (${cartTotals.discountReason}): -${cartTotals.finalDiscount} ج.م` : '',
+      `💰 *المطلوب سداده: ${cartTotals.total} ج.م*`,
+      `💳 التحويل على فودافون كاش / إنستاباي: *${safeText(settings.vodafoneCashNumber)}*`
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const waUrl = `https://wa.me/${safeText(settings.whatsappNumber, '201068481536').replace(
+      /\D/g,
+      ''
+    )}?text=${encodeURIComponent(msg)}`;
+
+    // فتح نافذة الواتساب فوراً داخل حدث النقر حتى لا يحظرها متصفح الهاتف
+    let waWin = null;
+    try {
+      waWin = window.open(waUrl, '_blank');
+    } catch {}
+
+    let savedToCloud = false;
     try {
       const { db, auth } = firebaseServices;
       if (auth && !auth.currentUser) {
-        try {
-          await signInAnonymously(auth);
-        } catch {}
+        await signInAnonymously(auth);
       }
       if (db) {
         const basePath = ['artifacts', 'el3bakera-edu', 'public', 'data'];
@@ -1694,43 +1744,13 @@ function MuzakkiratiPlatformInner() {
             });
           }
         }
+        savedToCloud = true;
       }
     } catch (err) {
-      if (customerForm.logoDataUrl) {
-        showToast('تعذر رفع الشعار للسحابة؛ يرجى إرساله على واتساب مع الطلب', 'error');
-      }
+      showToast('تعذر حفظ الطلب في السحابة تلقائياً، سيتم إرساله عبر واتساب مباشرة', 'error');
     }
 
     setOrders((prev) => [newOrder, ...prev]);
-
-    const itemsLines = cart.map((i, idx) => `${idx + 1}. ${i.title} (${i.price} ج.م)`).join('\n');
-    const msg = [
-      `السلام عليكم، طلب تخصيص مذكرات جديد من *${safeText(settings.platformName)}*`,
-      `رقم الطلب: *${orderId}*`,
-      `------------------------`,
-      `👤 اسم المعلم: *${newOrder.teacherName}*`,
-      `📱 رقم الهاتف: *${newOrder.phone1}*`,
-      newOrder.seriesName ? `📚 اسم السلسلة: *${newOrder.seriesName}*` : '',
-      newOrder.phone2 ? `📞 هاتف إضافي: *${newOrder.phone2}*` : '',
-      `🎨 الشعار الخاص: *${newOrder.hasLogo}*${newOrder.logoFileName ? ` (مرفق: ${newOrder.logoFileName})` : ''}`,
-      newOrder.notes ? `📝 ملاحظات: ${newOrder.notes}` : '',
-      `------------------------`,
-      `📦 *المذكرات المطلوبة:*`,
-      itemsLines,
-      `------------------------`,
-      `الإجمالي قبل الخصم: ${cartTotals.subtotal} ج.م`,
-      cartTotals.finalDiscount > 0 ? `الخصم (${cartTotals.discountReason}): -${cartTotals.finalDiscount} ج.م` : '',
-      `💰 *المطلوب سداده: ${cartTotals.total} ج.م*`,
-      `💳 التحويل على فودافون كاش / إنستاباي: *${safeText(settings.vodafoneCashNumber)}*`
-    ]
-      .filter(Boolean)
-      .join('\n');
-
-    const waUrl = `https://wa.me/${safeText(settings.whatsappNumber, '201068481536').replace(
-      /\D/g,
-      ''
-    )}?text=${encodeURIComponent(msg)}`;
-    window.open(waUrl, '_blank');
 
     setCart([]);
     setAppliedCoupon(null);
@@ -1740,79 +1760,18 @@ function MuzakkiratiPlatformInner() {
       seriesName: '',
       phone2: '',
       hasLogo: 'سأرسله على واتساب',
+      logoText: '',
       logoFileName: '',
       logoDataUrl: '',
       notes: ''
     });
     setIsCartOpen(false);
-    showToast(`تم تسجيل طلبك رقم ${orderId} وتحويلك للواتساب!`);
-  };
+    setIsSubmittingOrder(false);
 
-  // ==========================================
-  // 9. السحب باللمس والفأرة ولوحة المفاتيح للعينات
-  // ==========================================
-  const previewImagesList = useMemo(() => {
-    if (!previewProduct) return [];
-    const list = [];
-    if (previewProduct.coverImage) list.push(previewProduct.coverImage);
-    if (Array.isArray(previewProduct.sampleImages)) {
-      previewProduct.sampleImages.forEach((img) => {
-        if (img && img !== previewProduct.coverImage) list.push(img);
-      });
-    }
-    return list;
-  }, [previewProduct]);
-
-  const goNextSample = () => {
-    if (previewImagesList.length <= 1) return;
-    setActiveSampleIdx((prev) => (prev + 1) % previewImagesList.length);
-  };
-
-  const goPrevSample = () => {
-    if (previewImagesList.length <= 1) return;
-    setActiveSampleIdx((prev) => (prev - 1 + previewImagesList.length) % previewImagesList.length);
-  };
-
-  useEffect(() => {
-    if (!previewProduct) return;
-    const handleKeyDown = (e) => {
-      if (e.key === 'ArrowLeft') goNextSample();
-      if (e.key === 'ArrowRight') goPrevSample();
-      if (e.key === 'Escape') {
-        if (isFullscreenSample) setIsFullscreenSample(false);
-        else setPreviewProduct(null);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [previewProduct, previewImagesList.length, isFullscreenSample]);
-
-  useEffect(() => {
-    const container = thumbnailsContainerRef.current;
-    if (!container) return;
-    const activeThumb = container.children[activeSampleIdx];
-    if (activeThumb) {
-      activeThumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-    }
-  }, [activeSampleIdx]);
-
-  const handleSampleTouchStart = (e) => {
-    touchStartXRef.current = e.touches[0].clientX;
-    touchStartYRef.current = e.touches[0].clientY;
-  };
-
-  const handleSampleTouchEnd = (e) => {
-    if (touchStartXRef.current === null || touchStartYRef.current === null) return;
-    const deltaX = e.changedTouches[0].clientX - touchStartXRef.current;
-    const deltaY = e.changedTouches[0].clientY - touchStartYRef.current;
-    touchStartXRef.current = null;
-    touchStartYRef.current = null;
-    if (Math.abs(deltaX) > 35 && Math.abs(deltaX) > Math.abs(deltaY)) {
-      if (deltaX > 0) {
-        goNextSample();
-      } else {
-        goPrevSample();
-      }
+    if (!waWin || waWin.closed || typeof waWin.closed === 'undefined') {
+      window.location.href = waUrl;
+    } else if (savedToCloud) {
+      showToast(`تم تسجيل طلبك رقم ${orderId} وإرساله للإدارة وواتساب!`);
     }
   };
 
@@ -4995,7 +4954,10 @@ function MuzakkiratiPlatformInner() {
                         </div>
 
                         <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
-                          <span>الشعار: {safeText(ord.hasLogo)}</span>
+                          <span>
+                            الشعار: {safeText(ord.hasLogo)}
+                            {ord.logoText ? ` — النص: "${safeText(ord.logoText)}"` : ''}
+                          </span>
 
                           {(ord.logoDataUrl || ord.hasUploadedLogo || ord.hasLogo === 'رفع صورة الشعار الآن بالجودة الكاملة') && (
                             <button
@@ -5801,9 +5763,25 @@ function MuzakkiratiPlatformInner() {
                       <option value="رفع صورة الشعار الآن بالجودة الكاملة">
                         رفع صورة الشعار الآن بالجودة الكاملة
                       </option>
+                      <option value="كتابة نص الشعار">كتابة نص الشعار (نص يوضع على الغلاف والصفحات)</option>
                       <option value="سأرسله على واتساب">لدي شعار خاص وسأرسله على واتساب</option>
                       <option value="بدون شعار (الاسم فقط)">بدون شعار (كتابة الاسم ورقم الهاتف فقط)</option>
                     </select>
+
+                    {customerForm.hasLogo === 'كتابة نص الشعار' && (
+                      <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 space-y-1.5">
+                        <label className="block font-black text-amber-950">
+                          اكتب نص الشعار المطلوب:
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="مثال: سلسلة الأوائل في اللغة العربية - أ/ أحمد"
+                          value={customerForm.logoText}
+                          onChange={(e) => setCustomerForm({ ...customerForm, logoText: e.target.value })}
+                          className="w-full px-3 py-2 rounded-xl border border-amber-300 bg-white font-bold"
+                        />
+                      </div>
+                    )}
 
                     {customerForm.hasLogo === 'رفع صورة الشعار الآن بالجودة الكاملة' && (
                       <div className="p-3 rounded-2xl bg-blue-50 border border-blue-200 space-y-2">
@@ -5852,9 +5830,10 @@ function MuzakkiratiPlatformInner() {
                     />
                     <button
                       type="submit"
-                      className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm shadow-lg cursor-pointer"
+                      disabled={isSubmittingOrder}
+                      className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-black text-sm shadow-lg cursor-pointer touch-manipulation"
                     >
-                      تأكيد الطلب وإرساله عبر واتساب
+                      {isSubmittingOrder ? 'جاري تسجيل وإرسال الطلب...' : 'تأكيد الطلب وإرساله عبر واتساب'}
                     </button>
                   </form>
                 </>
