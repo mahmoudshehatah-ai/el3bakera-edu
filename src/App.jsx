@@ -3212,8 +3212,9 @@ function MuzakkiratiPlatformContent() {
                     className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-md hover:shadow-xl transition flex flex-col justify-between"
                   >
                     <div>
-                      <div className="bg-gradient-to-bl from-[#081229] via-[#0f2454] to-[#1d4ed8] p-6 text-white relative">
-                        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                      {/* غلاف الباقة التلقائي الذي يعرض محتويات الباقة على هيئة أيقونات صغيرة وفوقها اسم المذكرة */}
+                      <div className="bg-gradient-to-bl from-[#081229] via-[#0f2454] to-[#1d4ed8] p-5 sm:p-6 text-white relative space-y-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
                           {bundle.badge && (
                             <span className="inline-block bg-amber-400 text-slate-950 text-xs font-black px-3.5 py-1 rounded-full shadow">
                               {bundle.badge}
@@ -3223,51 +3224,73 @@ function MuzakkiratiPlatformContent() {
                             تشمل {includedProds.length} مذكرات
                           </span>
                         </div>
-                        <h3 className="text-xl sm:text-2xl font-black leading-snug">{bundle.title}</h3>
-                        <p className="text-xs sm:text-sm text-blue-100 mt-2 leading-relaxed">{bundle.subtitle}</p>
+
+                        {includedProds.length > 0 && (
+                          <div className="rounded-2xl bg-slate-950/45 border border-white/15 p-3.5">
+                            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
+                              {includedProds.map((prod) => (
+                                <div
+                                  key={prod.id}
+                                  onClick={() => {
+                                    setPreviewProduct(prod);
+                                    setActiveSampleIndex(0);
+                                  }}
+                                  className="rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 p-2 flex flex-col items-center justify-between text-center gap-1.5 cursor-pointer transition group"
+                                  title={`معاينة: ${prod.title}`}
+                                >
+                                  <span className="text-[10px] sm:text-[11px] font-black text-amber-200 group-hover:text-white leading-tight line-clamp-2 min-h-[2rem] flex items-center justify-center">
+                                    {prod.title}
+                                  </span>
+                                  {prod.coverImage ? (
+                                    <img
+                                      src={prod.coverImage}
+                                      alt={prod.title}
+                                      className="w-10 h-12 sm:w-11 sm:h-14 rounded-lg object-cover border border-white/25 shadow group-hover:scale-105 transition"
+                                    />
+                                  ) : (
+                                    <div className="w-10 h-12 sm:w-11 sm:h-14 rounded-lg bg-amber-400/20 border border-amber-300/30 text-amber-300 flex items-center justify-center shrink-0">
+                                      <FileText className="w-5 h-5" />
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div>
+                          <h3 className="text-xl sm:text-2xl font-black leading-snug">{bundle.title}</h3>
+                          <p className="text-xs sm:text-sm text-blue-100 mt-1.5 leading-relaxed">{bundle.subtitle}</p>
+                        </div>
                       </div>
 
-                      <div className="p-6 space-y-3.5">
+                      <div className="p-5 sm:p-6 space-y-2.5">
                         <div className="text-xs font-black text-slate-600 flex items-center justify-between">
-                          <span>محتويات الباقة (اضغط على أي مذكرة للمعاينة):</span>
+                          <span>تفاصيل المذكرات المشمولة (اضغط للمعاينة):</span>
                           {savedAmount > 0 && (
                             <span className="text-emerald-600 font-black">توفير {savedAmount} ج.م</span>
                           )}
                         </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <div className="flex flex-wrap gap-2">
                           {includedProds.map((prod) => (
-                            <div
+                            <button
                               key={prod.id}
+                              type="button"
                               onClick={() => {
                                 setPreviewProduct(prod);
                                 setActiveSampleIndex(0);
                               }}
-                              className="p-3 rounded-2xl bg-slate-50 hover:bg-blue-50 border border-slate-200/90 hover:border-blue-300 flex flex-col items-center text-center gap-2 transition cursor-pointer group"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 text-xs font-bold text-slate-800 hover:text-blue-700 transition cursor-pointer"
                             >
-                              <div className="text-xs font-black text-slate-900 group-hover:text-blue-700 leading-snug line-clamp-2 min-h-[2.2rem] flex items-center justify-center">
-                                {prod.title}
-                              </div>
-                              {prod.coverImage ? (
-                                <img
-                                  src={prod.coverImage}
-                                  alt={prod.title}
-                                  className="w-12 h-14 rounded-xl object-cover border border-slate-200 shadow-2xs group-hover:scale-105 transition"
-                                />
-                              ) : (
-                                <div className="w-12 h-14 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
-                                  <FileText className="w-6 h-6" />
-                                </div>
-                              )}
-                              <span className="text-[10px] font-bold text-slate-500">
-                                {prod.pagesCount} صفحة • معاينة
-                              </span>
-                            </div>
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                              <span>{prod.title}</span>
+                            </button>
                           ))}
                         </div>
                       </div>
                     </div>
 
-                    <div className="p-6 bg-slate-50 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                    <div className="p-5 sm:p-6 bg-slate-50 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <div className="text-2xl font-black text-blue-600">{bundle.price} ج.م</div>
                         {Number(bundle.originalPrice) > Number(bundle.price) && (
