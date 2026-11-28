@@ -33,17 +33,18 @@ import {
   Database,
   Star,
   UserCheck,
+  LogIn,
   RefreshCw,
-  LogIn
+  Gift
 } from 'lucide-react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
   getAuth,
   signInAnonymously,
-  onAuthStateChanged,
-  GoogleAuthProvider,
   signInWithPopup,
-  signOut
+  GoogleAuthProvider,
+  signOut,
+  onAuthStateChanged
 } from 'firebase/auth';
 import {
   getFirestore,
@@ -87,12 +88,15 @@ const activeFirebaseConfig = resolveFirebaseConfig();
 let app = null;
 let auth = null;
 let db = null;
+let googleProvider = null;
 
 if (activeFirebaseConfig && activeFirebaseConfig.apiKey) {
   try {
     app = getApps().length ? getApp() : initializeApp(activeFirebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
+    googleProvider = new GoogleAuthProvider();
+    googleProvider.setCustomParameters({ prompt: 'select_account' });
   } catch (err) {
     console.warn('Firebase init skipped:', err);
   }
@@ -153,6 +157,22 @@ const DEFAULT_LOGO_SVG = `data:image/svg+xml;utf8,${encodeURIComponent(
   </svg>`
 )}`;
 
+const DEFAULT_MULTI_OFFERS = [
+  {
+    id: 'moff_default_1',
+    active: true,
+    title: 'عرض خاص عند طلب أكثر من مذكرة!',
+    subtitle: 'اطلب مذكرتين فأكثر واحصل على خصم تلقائي 15% يطبق مباشرة في سلة الطلبات مخصصة باسمك وشعارك.',
+    badgeText: 'وفر حتى 150 ج.م تلقائياً',
+    minItems: 2,
+    discountPercent: 15,
+    maxDiscount: 150,
+    productIds: [],
+    bgColor: '#0f172a',
+    textColor: '#ffffff'
+  }
+];
+
 const DEFAULT_SETTINGS = {
   platformName: 'منصة العباقرة للمذكرات التعليمية',
   platformTagline: 'مذكرات دراسية احترافية مخصصة باسمك وبياناتك الخاصة',
@@ -170,6 +190,13 @@ const DEFAULT_SETTINGS = {
   discountBadgePosition: 'top-left',
   discountBadgeBg: '#10b981',
   discountBadgeText: '#ffffff',
+  // إعدادات زر معاينة Google Drive
+  driveButtonEnabled: true,
+  driveButtonShowOnCard: true,
+  driveButtonText: 'معاينة عينة Google Drive',
+  driveButtonBg: '#ecfdf5',
+  driveButtonTextColor: '#047857',
+  // إعدادات التنبيه العام المنفصلة (يظهر حصراً في نافذة المعاينة)
   generalNoticeEnabled: true,
   generalNoticeTitle: 'تنبيه هام للمعلمين قبل تأكيد الطلب:',
   generalNoticeText:
@@ -177,34 +204,14 @@ const DEFAULT_SETTINGS = {
   generalNoticePosition: 'bottom',
   generalNoticeBg: '#f8fafc',
   generalNoticeTextColor: '#334155',
-  generalNoticeBorder: '#cbd5e1',
+  // إعدادات التنبيه الخاص بكل مذكرة (مستقل تماماً عن التنبيه العام)
   tipNoticeEnabled: true,
   tipShowOnCard: true,
   tipNoticePosition: 'below-desc',
   tipNoticeBg: '#fffbeb',
   tipNoticeTextColor: '#78350f',
-  tipNoticeBorder: '#fde68a',
-  driveBtnEnabled: true,
-  driveBtnShowOnCard: true,
-  driveBtnLabel: 'عينة Google Drive',
-  driveBtnBg: '#059669',
-  driveBtnText: '#ffffff',
-  multiOffers: [
-    {
-      id: 'mo_default_1',
-      active: true,
-      badge: '🔥 عرض خاص عند طلب أكثر من مذكرة',
-      title: 'احصل على خصم تلقائي 15% عند اختيار مذكرتين أو أكثر!',
-      subtitle:
-        'اجمع أي مذكرات أو بوكليتات من مختلف الصفوف والمراحل في سلة واحدة وسيتم تطبيق الخصم تلقائياً بحد أقصى 150 ج.م.',
-      minItems: 2,
-      discountPercent: 15,
-      maxDiscount: 150,
-      productIds: [], // مصفوفة فارغة = يسري على جميع المذكرات
-      bgColor: '#0f172a',
-      accentColor: '#facc15'
-    }
-  ],
+  // عروض الحصول على أكثر من مذكرة
+  multiOffers: DEFAULT_MULTI_OFFERS,
   promoEnabled: true,
   promoText: 'عرض خاص للمعلمين: خصم 15% على جميع المذكرات بمناسبة إطلاق المنصة',
   promoCouponCode: 'M20',
@@ -254,9 +261,9 @@ const DEFAULT_SETTINGS = {
     }
   ],
   socialLinks: [
-    { id: 'soc_fb', label: 'صفحة الفيسبوك', url: 'https://www.facebook.com/share/17bS2p2v12/' },
-    { id: 'soc_wa', label: 'جروب الواتساب', url: 'https://chat.whatsapp.com/I8vT9t7k8t60H5H7s5X2yG' },
-    { id: 'soc_tg', label: 'قناة التيليجرام', url: 'https://t.me/el3bakera_edu' }
+    { id: 'soc_fb', platform: 'facebook', label: 'صفحة الفيسبوك', url: 'https://www.facebook.com/share/17bS2p2v12/' },
+    { id: 'soc_wa', platform: 'whatsapp', label: 'جروب الواتساب', url: 'https://chat.whatsapp.com/I8vT9t7k8t60H5H7s5X2yG' },
+    { id: 'soc_tg', platform: 'telegram', label: 'قناة التيليجرام', url: 'https://t.me/el3bakera_edu' }
   ],
   trustFeatures: [
     {
@@ -436,8 +443,7 @@ const DEFAULT_BUNDLES = [
     price: 649,
     originalPrice: 895,
     badge: 'وفر 246 ج.م',
-    productIds: ['nb_1795789801', 'nb_1795789802', 'nb_1795789803', 'nb_1795789804', 'nb_1795789805'],
-    coverImage: ''
+    productIds: ['nb_1795789801', 'nb_1795789802', 'nb_1795789803', 'nb_1795789804', 'nb_1795789805']
   }
 ];
 
@@ -448,7 +454,7 @@ const DEFAULT_COUPONS = [
 ];
 
 // ============================================================================
-// دوال المساعدة والتخزين والضغط
+// دوال المساعدة والتخزين
 // ============================================================================
 function safeText(val, fallback = '') {
   if (val === null || val === undefined) return fallback;
@@ -474,7 +480,36 @@ function normalizeItems(rawList, fallbackList, prefix) {
   });
 }
 
-function compressImageFile(file, maxWidth = 700, quality = 0.72) {
+function renderSocialPlatformIcon(soc, className = 'w-4 h-4') {
+  const url = safeText(soc?.url).toLowerCase();
+  const label = safeText(soc?.label).toLowerCase();
+  const platform = safeText(soc?.platform).toLowerCase();
+
+  if (platform === 'facebook' || url.includes('facebook.com') || url.includes('fb.com') || label.includes('فيس')) {
+    return (
+      <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H8v-3h2V9.5C10 7.57 11.57 6 13.5 6H16v3h-2c-.55 0-1 .45-1 1v2h3v3h-3v6.95c5.05-.5 9-4.76 9-9.95z" />
+      </svg>
+    );
+  }
+  if (platform === 'telegram' || url.includes('t.me') || url.includes('telegram') || label.includes('تيليجرام') || label.includes('تليجرام')) {
+    return (
+      <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
+      </svg>
+    );
+  }
+  if (platform === 'whatsapp' || url.includes('wa.me') || url.includes('whatsapp') || label.includes('واتس')) {
+    return (
+      <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.006c.106.005.249-.04.39.298.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.86s.274.072.376-.043c.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.045.072.045.419-.1.824zM12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2.546 20.2c-.151.512.334.996.846.846l3.032-.892A9.954 9.954 0 0 0 12 22c5.523 0 10-4.477 10-10S17.523 2 12 2z" />
+      </svg>
+    );
+  }
+  return <ExternalLink className={className} />;
+}
+
+function compressImageFile(file, maxWidth = 550, quality = 0.65) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -501,36 +536,37 @@ function compressImageFile(file, maxWidth = 700, quality = 0.72) {
   });
 }
 
-function recompressDataUrl(dataUrl, maxWidth = 650, quality = 0.65) {
+function recompressDataUrl(dataUrl, maxWidth = 750, quality = 0.65) {
   return new Promise((resolve) => {
-    if (!dataUrl || typeof dataUrl !== 'string' || dataUrl.length <= 580000) {
+    if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image')) {
       resolve(dataUrl);
       return;
     }
     const img = new Image();
     img.onload = () => {
-      const canvas = document.createElement('canvas');
-      let width = img.width;
-      let height = img.height;
-      if (width > maxWidth) {
-        height = Math.round((height * maxWidth) / width);
-        width = maxWidth;
+      try {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      } catch {
+        resolve(dataUrl);
       }
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
-      let out = canvas.toDataURL('image/jpeg', quality);
-      if (out.length > 650000) {
-        out = canvas.toDataURL('image/jpeg', 0.5);
-      }
-      resolve(out);
     };
     img.onerror = () => resolve(dataUrl);
     img.src = dataUrl;
   });
 }
 
+// تقسيم وحفظ كل صورة في مستند منفصل في السحابة مع ضغط تلقائي ذكي إذا تجاوز الحجم 650KB
 async function saveMediaAssetToCloud(dbInstance, appId, assetId, dataUrl) {
   if (!dbInstance) return;
   const mediaCol = collection(dbInstance, 'artifacts', appId, 'public', 'data', 'config');
@@ -541,13 +577,16 @@ async function saveMediaAssetToCloud(dbInstance, appId, assetId, dataUrl) {
     } catch {}
     return;
   }
-  const safeDataUrl = await recompressDataUrl(dataUrl, 680, 0.68);
-  if (safeDataUrl.length > 820000) {
-    throw new Error('حجم الصورة كبير جداً');
+  let finalDataUrl = dataUrl;
+  if (finalDataUrl.length > 650000) {
+    finalDataUrl = await recompressDataUrl(finalDataUrl, 750, 0.65);
+  }
+  if (finalDataUrl.length > 650000) {
+    finalDataUrl = await recompressDataUrl(finalDataUrl, 560, 0.55);
   }
   await setDoc(doc(mediaCol, docId), {
     assetId,
-    dataUrl: safeDataUrl,
+    dataUrl: finalDataUrl,
     updatedAt: Date.now()
   });
 }
@@ -616,54 +655,27 @@ function stripHeavyProductMedia(list) {
   }));
 }
 
-function renderSocialIcon(label = '', url = '') {
-  const txt = `${label} ${url}`.toLowerCase();
-  if (txt.includes('face') || txt.includes('فيس')) {
-    return (
-      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H8v-3h2V9.5C10 7.57 11.57 6 13.5 6H16v3h-2c-.55 0-1 .45-1 1v2h3v3h-3v6.95c5.05-.5 9-4.76 9-9.95z" />
-      </svg>
-    );
-  }
-  if (txt.includes('t.me') || txt.includes('tele') || txt.includes('تيليجرام') || txt.includes('تليجرام')) {
-    return (
-      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
-      </svg>
-    );
-  }
-  if (txt.includes('whats') || txt.includes('واتس')) {
-    return (
-      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.006c.106.005.249-.04.39.298.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.86s.274.072.376-.043c.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.045.072.045.419-.1.824zM12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z" />
-      </svg>
-    );
-  }
-  return <ExternalLink className="w-4 h-4 shrink-0" />;
-}
-
 // ============================================================================
 // المكون الرئيسي للمنصة
 // ============================================================================
 function MuzakkiratiPlatformContent() {
   const [user, setUser] = useState(null);
-  const [adminGoogleUser, setAdminGoogleUser] = useState(null);
 
   const [activeTab, setActiveTab] = useState(() => {
     try {
-      const isAuth = localStorage.getItem('el3bakera_admin_auth') === 'true';
-      const savedTab = localStorage.getItem('el3bakera_active_tab') || 'home';
-      if (savedTab === 'admin' && !isAuth) return 'home';
-      return savedTab;
+      const saved = localStorage.getItem('el3bakera_active_tab') || 'home';
+      const isAuthed = localStorage.getItem('el3bakera_admin_auth') === 'true';
+      if (saved === 'admin' && !isAuthed) return 'home';
+      return saved;
     } catch {
       return 'home';
     }
   });
   const [tabHistory, setTabHistory] = useState(() => {
     try {
-      const isAuth = localStorage.getItem('el3bakera_admin_auth') === 'true';
-      const initial = localStorage.getItem('el3bakera_active_tab') || 'home';
-      if (initial === 'admin' && !isAuth) return ['home'];
+      const saved = localStorage.getItem('el3bakera_active_tab') || 'home';
+      const isAuthed = localStorage.getItem('el3bakera_admin_auth') === 'true';
+      const initial = saved === 'admin' && !isAuthed ? 'home' : saved;
       return initial === 'home' ? ['home'] : ['home', initial];
     } catch {
       return ['home'];
@@ -683,7 +695,7 @@ function MuzakkiratiPlatformContent() {
   };
 
   const handleGoBack = () => {
-    if (previewProduct || isSampleFullscreen) {
+    if (previewProduct) {
       setPreviewProduct(null);
       setIsSampleFullscreen(false);
       return;
@@ -700,29 +712,28 @@ function MuzakkiratiPlatformContent() {
       setIsAdminModalOpen(false);
       return;
     }
-    if (tabHistory.length > 1) {
-      const nextHistory = tabHistory.slice(0, -1);
-      const prevTab = nextHistory[nextHistory.length - 1] || 'home';
-      setTabHistory(nextHistory);
-      setActiveTab(prevTab);
-      try {
-        localStorage.setItem('el3bakera_active_tab', prevTab);
-      } catch {}
-    } else {
+    setTabHistory((prev) => {
+      if (prev.length > 1) {
+        const nextHistory = prev.slice(0, -1);
+        const prevTab = nextHistory[nextHistory.length - 1] || 'home';
+        setActiveTab(prevTab);
+        try {
+          localStorage.setItem('el3bakera_active_tab', prevTab);
+        } catch {}
+        return nextHistory;
+      }
       setActiveTab('home');
-      setTabHistory(['home']);
       try {
         localStorage.setItem('el3bakera_active_tab', 'home');
       } catch {}
-    }
+      return ['home'];
+    });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const [settings, setSettings] = useState(() => {
     try {
-      const saved =
-        localStorage.getItem('el3bakera_settings_v6') ||
-        localStorage.getItem('el3bakera_settings_v5');
+      const saved = localStorage.getItem('el3bakera_settings_v7');
       return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
     } catch {
       return DEFAULT_SETTINGS;
@@ -741,7 +752,8 @@ function MuzakkiratiPlatformContent() {
   const [bundles, setBundles] = useState(() => {
     try {
       const saved = localStorage.getItem('el3bakera_bundles_v5');
-      return saved ? JSON.parse(saved) : DEFAULT_BUNDLES;
+      const parsed = saved ? JSON.parse(saved) : DEFAULT_BUNDLES;
+      return Array.isArray(parsed) ? parsed : DEFAULT_BUNDLES;
     } catch {
       return DEFAULT_BUNDLES;
     }
@@ -750,7 +762,8 @@ function MuzakkiratiPlatformContent() {
   const [coupons, setCoupons] = useState(() => {
     try {
       const saved = localStorage.getItem('el3bakera_coupons_v5');
-      return saved ? JSON.parse(saved) : DEFAULT_COUPONS;
+      const parsed = saved ? JSON.parse(saved) : DEFAULT_COUPONS;
+      return Array.isArray(parsed) ? parsed : DEFAULT_COUPONS;
     } catch {
       return DEFAULT_COUPONS;
     }
@@ -765,6 +778,9 @@ function MuzakkiratiPlatformContent() {
   const [previewProduct, setPreviewProduct] = useState(null);
   const [activeSampleIndex, setActiveSampleIndex] = useState(0);
   const [isSampleFullscreen, setIsSampleFullscreen] = useState(false);
+  const touchStartXRef = useRef(null);
+  const touchEndXRef = useRef(null);
+  const sampleThumbsRef = useRef(null);
 
   const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -801,11 +817,8 @@ function MuzakkiratiPlatformContent() {
 
   // ربط زر الرجوع الفعلي في الهاتف والمتصفح
   useEffect(() => {
-    try {
-      window.history.replaceState({ tab: activeTab }, '', activeTab === 'admin' ? '#admin' : `#${activeTab}`);
-    } catch {}
     const onPopState = (event) => {
-      if (previewProduct || isSampleFullscreen) {
+      if (previewProduct) {
         setPreviewProduct(null);
         setIsSampleFullscreen(false);
         return;
@@ -830,14 +843,14 @@ function MuzakkiratiPlatformContent() {
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, [previewProduct, isSampleFullscreen, isCartOpen, isContactModalOpen, isAdminModalOpen]);
+  }, [previewProduct, isCartOpen, isContactModalOpen, isAdminModalOpen]);
 
-  // تحميل البيانات من IndexedDB
+  // تحميل البيانات من IndexedDB عند بدء التشغيل
   useEffect(() => {
     let mounted = true;
     (async () => {
       const [idbSettings, idbProducts, idbBundles, idbCoupons] = await Promise.all([
-        idbGet('settings_v6'),
+        idbGet('settings_v7'),
         idbGet('products_v5'),
         idbGet('bundles_v5'),
         idbGet('coupons_v5')
@@ -872,6 +885,7 @@ function MuzakkiratiPlatformContent() {
     hidden: false
   });
 
+  const [editingBundleId, setEditingBundleId] = useState(null);
   const [newBundleForm, setNewBundleForm] = useState({
     title: '',
     subtitle: '',
@@ -880,21 +894,20 @@ function MuzakkiratiPlatformContent() {
     badge: 'وفر 150 ج.م',
     productIds: []
   });
-  const [editingBundleId, setEditingBundleId] = useState(null);
 
-  const [newMultiOfferForm, setNewMultiOfferForm] = useState({
-    badge: '🔥 عرض خاص عند طلب أكثر من مذكرة',
+  const [editingMultiOfferId, setEditingMultiOfferId] = useState(null);
+  const [multiOfferForm, setMultiOfferForm] = useState({
     title: '',
     subtitle: '',
+    badgeText: 'وفر 15% تلقائياً',
     minItems: 2,
     discountPercent: 15,
     maxDiscount: 150,
     productIds: [],
     bgColor: '#0f172a',
-    accentColor: '#facc15',
+    textColor: '#ffffff',
     active: true
   });
-  const [editingMultiOfferId, setEditingMultiOfferId] = useState(null);
 
   const [newCouponForm, setNewCouponForm] = useState({
     code: '',
@@ -916,13 +929,8 @@ function MuzakkiratiPlatformContent() {
     status: 'جاري التجهيز والتنسيق',
     expectedDate: 'قريباً'
   });
-  const [newTestimonialForm, setNewTestimonialForm] = useState({
-    teacherName: '',
-    role: '',
-    text: '',
-    image: ''
-  });
   const [cloudSyncStatus, setCloudSyncStatus] = useState('checking');
+
   const [toast, setToast] = useState(null);
   const [copiedCode, setCopiedCode] = useState(false);
 
@@ -930,6 +938,10 @@ function MuzakkiratiPlatformContent() {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3500);
   };
+
+  const isOfficialAdminGoogle = Boolean(
+    user && user.email && ADMIN_EMAILS.includes(user.email.toLowerCase())
+  );
 
   const normalizedStages = useMemo(
     () => normalizeItems(settings.stages, DEFAULT_SETTINGS.stages, 'stg'),
@@ -959,64 +971,17 @@ function MuzakkiratiPlatformContent() {
     () => (Array.isArray(settings.testimonials) ? settings.testimonials : []),
     [settings.testimonials]
   );
-  const safeMultiOffers = useMemo(() => {
-    if (Array.isArray(settings.multiOffers)) return settings.multiOffers;
-    if (settings.bulkDiscountEnabled !== false) {
-      return [
-        {
-          id: 'mo_legacy',
-          active: settings.multiOfferEnabled !== false,
-          badge: settings.multiOfferBadge || '🔥 عرض خاص عند طلب أكثر من مذكرة',
-          title: `احصل على خصم تلقائي ${settings.bulkDiscountPercent || 15}% عند اختيار ${settings.bulkDiscountMinItems || 2} مذكرات أو أكثر!`,
-          subtitle:
-            settings.multiOfferSubtitle ||
-            `اجمع أي مذكرات أو بوكليتات في سلة واحدة وسيتم تطبيق الخصم تلقائياً بحد أقصى ${settings.bulkDiscountMaxAmount || 150} ج.م.`,
-          minItems: Number(settings.bulkDiscountMinItems || 2),
-          discountPercent: Number(settings.bulkDiscountPercent || 15),
-          maxDiscount: Number(settings.bulkDiscountMaxAmount || 150),
-          productIds: [],
-          bgColor: settings.multiOfferBg || '#0f172a',
-          accentColor: settings.multiOfferAccent || '#facc15'
-        }
-      ];
-    }
-    return [];
-  }, [settings]);
+  const safeMultiOffers = useMemo(
+    () => (Array.isArray(settings.multiOffers) ? settings.multiOffers : DEFAULT_MULTI_OFFERS),
+    [settings.multiOffers]
+  );
 
   const visibleProducts = useMemo(
     () => (Array.isArray(products) ? products : DEFAULT_PRODUCTS).filter((p) => p && !p.hidden),
     [products]
   );
 
-  // تسجيل الدخول للإدارة بحساب جوجل الرسمي
-  const handleAdminGoogleSignIn = async () => {
-    if (!auth) {
-      showToast('خدمة المصادقة غير مهيأة حالياً', 'error');
-      return;
-    }
-    try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: 'select_account' });
-      const res = await signInWithPopup(auth, provider);
-      const email = (res.user?.email || '').toLowerCase();
-      if (!ADMIN_EMAILS.includes(email)) {
-        await signOut(auth);
-        await signInAnonymously(auth).catch(() => {});
-        showToast('عذراً، هذا الحساب غير مصرح له بإدارة المنصة', 'error');
-        return;
-      }
-      localStorage.removeItem('el3bakera_manual_logout');
-      setAdminGoogleUser(res.user);
-      setIsAdminAuthenticated(true);
-      localStorage.setItem('el3bakera_admin_auth', 'true');
-      setIsAdminModalOpen(false);
-      navigateToTab('admin');
-      showToast(`✓ تم ربط حساب المدير (${email}) بنجاح!`);
-    } catch (err) {
-      showToast(`تعذر تسجيل الدخول بجوجل (${err?.code || 'خطأ'})`, 'error');
-    }
-  };
-
+  // فتح الإدارة عبر #admin أو 5 نقرات على الشعار
   useEffect(() => {
     const checkAdminHash = () => {
       if (window.location.hash === '#admin') {
@@ -1043,17 +1008,44 @@ function MuzakkiratiPlatformContent() {
       }
     } catch {}
     setIsAdminAuthenticated(false);
-    setAdminGoogleUser(null);
     setIsAdminModalOpen(false);
     setTabHistory(['home']);
     setActiveTab('home');
     if (auth) {
       try {
         await signOut(auth);
-        await signInAnonymously(auth).catch(() => {});
       } catch {}
     }
     showToast('تم تسجيل الخروج من لوحة الإدارة بأمان');
+  };
+
+  const handleAdminGoogleSignIn = async () => {
+    if (!auth || !googleProvider) {
+      showToast('خدمة تسجيل الدخول بجوجل غير مهيأة', 'error');
+      return;
+    }
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const email = (result.user?.email || '').toLowerCase();
+      if (ADMIN_EMAILS.includes(email)) {
+        try {
+          localStorage.removeItem('el3bakera_manual_logout');
+          localStorage.setItem('el3bakera_admin_auth', 'true');
+        } catch {}
+        setIsAdminAuthenticated(true);
+        setIsAdminModalOpen(false);
+        navigateToTab('admin');
+        showToast(`تم ربط حساب المدير الرسمي (${result.user.email}) بنجاح!`);
+      } else {
+        showToast(
+          `تم الدخول بحساب ${result.user?.email}، ولكن قواعد Firestore تقبل حسابات الإدارة المعتمدة فقط.`,
+          'error'
+        );
+      }
+    } catch (err) {
+      console.error('Google sign-in error:', err);
+      showToast(`تعذر تسجيل الدخول بجوجل (${err?.code || 'خطأ'})`, 'error');
+    }
   };
 
   const handleLogoSecretTap = () => {
@@ -1075,35 +1067,37 @@ function MuzakkiratiPlatformContent() {
     }
   };
 
-  // ربط Firebase Auth
+  // ربط ومزامنة Firebase Firestore بالكامل
   useEffect(() => {
     if (!auth) {
       setCloudSyncStatus('local-only');
       return;
     }
     const unsubAuth = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      const email = (u?.email || '').toLowerCase();
-      const manualOut = localStorage.getItem('el3bakera_manual_logout') === 'true';
-      if (ADMIN_EMAILS.includes(email) && !manualOut) {
-        setAdminGoogleUser(u);
-        setIsAdminAuthenticated(true);
-        try {
-          localStorage.setItem('el3bakera_admin_auth', 'true');
-        } catch {}
-      } else if (!u) {
-        signInAnonymously(auth).catch(() => {});
+      if (u) {
+        setUser(u);
+        setCloudSyncStatus('connected');
+        const manualOut = localStorage.getItem('el3bakera_manual_logout') === 'true';
+        if (u.email && ADMIN_EMAILS.includes(u.email.toLowerCase()) && !manualOut) {
+          setIsAdminAuthenticated(true);
+          try {
+            localStorage.setItem('el3bakera_admin_auth', 'true');
+          } catch {}
+        }
+      } else {
+        signInAnonymously(auth)
+          .then(() => setCloudSyncStatus('connected'))
+          .catch(() => setCloudSyncStatus('error'));
       }
     });
     return () => unsubAuth();
   }, []);
 
-  // استماع لحظي لجميع مجموعات Firestore
   useEffect(() => {
     if (!db) return;
 
-    const settingsFastRef = doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'settings', 'main');
-    const settingsLegacyRef = doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'main');
+    const fastSettingsRef = doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'settings', 'main');
+    const legacySettingsRef = doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'main');
     const configCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config');
 
     const applyCloudSettingsSnapshot = (cloudData) => {
@@ -1123,14 +1117,14 @@ function MuzakkiratiPlatformContent() {
           heroImage: cloudData.heroImage || prev.heroImage || '',
           heroBgImage: cloudData.heroBgImage || prev.heroBgImage || ''
         };
-        idbSet('settings_v6', merged);
-        safeLocalSet('el3bakera_settings_v6', merged);
+        idbSet('settings_v7', merged);
+        safeLocalSet('el3bakera_settings_v7', merged);
         return merged;
       });
     };
 
     const unsubFastSettings = onSnapshot(
-      settingsFastRef,
+      fastSettingsRef,
       (snap) => {
         setCloudSyncStatus('connected');
         if (snap.exists()) applyCloudSettingsSnapshot(snap.data());
@@ -1139,7 +1133,7 @@ function MuzakkiratiPlatformContent() {
     );
 
     const unsubSettings = onSnapshot(
-      settingsLegacyRef,
+      legacySettingsRef,
       (snap) => {
         setCloudSyncStatus('connected');
         if (snap.exists()) applyCloudSettingsSnapshot(snap.data());
@@ -1147,46 +1141,34 @@ function MuzakkiratiPlatformContent() {
       () => setCloudSyncStatus('error')
     );
 
+    // 2. الاستماع لجميع مستندات الصور المنفصلة (الشعار، الخلفية، أغلفة الأقسام، أغلفة المذكرات وصفحات العينات)
     const unsubMediaAssets = onSnapshot(
       configCol,
       (snapshot) => {
         if (snapshot.empty || isSavingRef.current) return;
         const assetsMap = {};
-        const samplesMap = {};
-
         snapshot.forEach((d) => {
           if (d.id.startsWith('media_')) {
             const data = d.data();
             const key = data.assetId || d.id.replace('media_', '');
-            if (data.dataUrl) {
-              assetsMap[key] = data.dataUrl;
-              const sampleMatch = key.match(/^prod_sample_(.+)_(\d+)$/);
-              if (sampleMatch) {
-                const prodId = sampleMatch[1];
-                const idx = Number(sampleMatch[2]);
-                if (!samplesMap[prodId]) samplesMap[prodId] = [];
-                samplesMap[prodId][idx] = data.dataUrl;
-              }
-            }
+            if (data.dataUrl) assetsMap[key] = data.dataUrl;
           }
         });
 
         setSettings((prev) => {
           const updatedCategories = (prev.categories || []).map((c) => ({
             ...c,
-            coverImage:
-              assetsMap[`cat_${c.id}`] !== undefined ? assetsMap[`cat_${c.id}`] : c.coverImage || ''
+            coverImage: assetsMap[`cat_${c.id}`] !== undefined ? assetsMap[`cat_${c.id}`] : (c.coverImage || '')
           }));
           const merged = {
             ...prev,
-            logoImage: assetsMap.logoImage !== undefined ? assetsMap.logoImage : prev.logoImage || '',
-            heroImage: assetsMap.heroImage !== undefined ? assetsMap.heroImage : prev.heroImage || '',
-            heroBgImage:
-              assetsMap.heroBgImage !== undefined ? assetsMap.heroBgImage : prev.heroBgImage || '',
+            logoImage: assetsMap.logoImage !== undefined ? assetsMap.logoImage : (prev.logoImage || ''),
+            heroImage: assetsMap.heroImage !== undefined ? assetsMap.heroImage : (prev.heroImage || ''),
+            heroBgImage: assetsMap.heroBgImage !== undefined ? assetsMap.heroBgImage : (prev.heroBgImage || ''),
             categories: updatedCategories
           };
-          idbSet('settings_v6', merged);
-          safeLocalSet('el3bakera_settings_v6', merged);
+          idbSet('settings_v7', merged);
+          safeLocalSet('el3bakera_settings_v7', merged);
           return merged;
         });
 
@@ -1194,10 +1176,14 @@ function MuzakkiratiPlatformContent() {
           let changed = false;
           const updated = prev.map((p) => {
             const cloudCover = assetsMap[`prod_cover_${p.id}`];
-            const cloudSamples = samplesMap[p.id] ? samplesMap[p.id].filter(Boolean) : null;
+            const recoveredSamples = [];
+            for (let i = 0; i < 25; i++) {
+              const sImg = assetsMap[`prod_sample_${p.id}_${i}`];
+              if (sImg) recoveredSamples.push(sImg);
+            }
             const nextCover = cloudCover || p.coverImage || '';
             const nextSamples =
-              cloudSamples && cloudSamples.length > 0 ? cloudSamples : p.sampleImages || [];
+              recoveredSamples.length > 0 ? recoveredSamples : p.sampleImages || [];
             if (
               nextCover !== (p.coverImage || '') ||
               nextSamples.length !== (p.sampleImages || []).length
@@ -1217,6 +1203,48 @@ function MuzakkiratiPlatformContent() {
       () => {}
     );
 
+    // 2ب. الاستماع لمجموعة notebook_samples لاستعادة أي عينات مخزنة بالصيغة القديمة
+    const legacySamplesCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebook_samples');
+    const unsubLegacySamples = onSnapshot(
+      legacySamplesCol,
+      (snapshot) => {
+        if (snapshot.empty || isSavingRef.current) return;
+        const legacyMap = {};
+        snapshot.forEach((d) => {
+          const data = d.data();
+          const nbId = data.notebookId || d.id;
+          const imgs =
+            (Array.isArray(data.sampleImages) && data.sampleImages) ||
+            (Array.isArray(data.images) && data.images) ||
+            (Array.isArray(data.samples) && data.samples) ||
+            [];
+          if (imgs.length > 0) {
+            legacyMap[nbId] = imgs;
+          }
+        });
+        if (Object.keys(legacyMap).length > 0) {
+          setProducts((prev) => {
+            let changed = false;
+            const updated = prev.map((p) => {
+              const legacyImgs = legacyMap[p.id];
+              if (legacyImgs && legacyImgs.length > (p.sampleImages || []).length) {
+                changed = true;
+                return { ...p, sampleImages: legacyImgs };
+              }
+              return p;
+            });
+            if (changed) {
+              idbSet('products_v5', updated);
+              safeLocalSet('el3bakera_products_v5', stripHeavyProductMedia(updated));
+            }
+            return updated;
+          });
+        }
+      },
+      () => {}
+    );
+
+    // 3. الاستماع للمذكرات
     const productsCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebooks');
     const unsubProducts = onSnapshot(
       productsCol,
@@ -1244,6 +1272,7 @@ function MuzakkiratiPlatformContent() {
       () => {}
     );
 
+    // 4. الاستماع للطلبات لحظياً
     const ordersCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'orders');
     const unsubOrders = onSnapshot(
       ordersCol,
@@ -1257,20 +1286,15 @@ function MuzakkiratiPlatformContent() {
       () => {}
     );
 
+    // 5. الاستماع للباقات والكوبونات
     const bundlesCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles');
     const unsubBundles = onSnapshot(
       bundlesCol,
       (snap) => {
         if (!snap.empty && !isSavingRef.current) {
-          setBundles((prev) => {
-            const list = snap.docs.map((d) => {
-              const data = { id: d.id, ...d.data() };
-              const prevB = prev.find((pb) => pb.id === d.id);
-              return { ...data, coverImage: data.coverImage || prevB?.coverImage || '' };
-            });
-            idbSet('bundles_v5', list);
-            return list;
-          });
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          setBundles(list);
+          idbSet('bundles_v5', list);
         }
       },
       () => {}
@@ -1293,6 +1317,7 @@ function MuzakkiratiPlatformContent() {
       unsubFastSettings();
       unsubSettings();
       unsubMediaAssets();
+      unsubLegacySamples();
       unsubProducts();
       unsubOrders();
       unsubBundles();
@@ -1300,50 +1325,73 @@ function MuzakkiratiPlatformContent() {
     };
   }, [user]);
 
+  // سحب فوري لجميع الصور والأغلفة والعينات من السحابة لتحديث كاش المتصفح
   const handleForcePullFromCloud = async () => {
     if (!db) {
-      showToast('السحابة غير متصلة', 'error');
+      showToast('لا يوجد اتصال بقاعدة البيانات السحابية حالياً', 'error');
       return;
     }
-    showToast('جاري سحب وتحديث كافة البيانات والصور من السحابة...');
+    showToast('جاري سحب وتحديث جميع الصور والعينات من السحابة...');
     try {
-      const [configSnap, notebooksSnap] = await Promise.all([
+      const [configSnap, legacySnap, notebooksSnap] = await Promise.all([
         getDocs(collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config')),
+        getDocs(collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebook_samples')),
         getDocs(collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebooks'))
       ]);
+
       const assetsMap = {};
-      const samplesMap = {};
       configSnap.forEach((d) => {
         if (d.id.startsWith('media_')) {
           const data = d.data();
           const key = data.assetId || d.id.replace('media_', '');
-          if (data.dataUrl) {
-            assetsMap[key] = data.dataUrl;
-            const m = key.match(/^prod_sample_(.+)_(\d+)$/);
-            if (m) {
-              if (!samplesMap[m[1]]) samplesMap[m[1]] = [];
-              samplesMap[m[1]][Number(m[2])] = data.dataUrl;
-            }
-          }
+          if (data.dataUrl) assetsMap[key] = data.dataUrl;
         }
       });
-      if (!notebooksSnap.empty) {
-        const pulled = notebooksSnap.docs.map((d) => {
-          const base = { id: d.id, ...d.data() };
-          const cloudSamples = samplesMap[d.id] ? samplesMap[d.id].filter(Boolean) : [];
-          return {
-            ...base,
-            coverImage: assetsMap[`prod_cover_${d.id}`] || base.coverImage || '',
-            sampleImages: cloudSamples.length > 0 ? cloudSamples : base.sampleImages || []
-          };
-        });
-        setProducts(pulled);
-        await idbSet('products_v5', pulled);
-        safeLocalSet('el3bakera_products_v5', stripHeavyProductMedia(pulled));
-      }
-      showToast('✓ تم سحب وتحديث جميع البيانات والصور بنجاح!');
+
+      const legacyMap = {};
+      legacySnap.forEach((d) => {
+        const data = d.data();
+        const nbId = data.notebookId || d.id;
+        const imgs =
+          (Array.isArray(data.sampleImages) && data.sampleImages) ||
+          (Array.isArray(data.images) && data.images) ||
+          (Array.isArray(data.samples) && data.samples) ||
+          [];
+        if (imgs.length > 0) legacyMap[nbId] = imgs;
+      });
+
+      const cloudProducts = notebooksSnap.empty
+        ? products
+        : notebooksSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+      const hydratedProducts = cloudProducts.map((p) => {
+        const existing = products.find((ep) => ep.id === p.id);
+        const mediaSamples = [];
+        for (let i = 0; i < 25; i++) {
+          const sImg = assetsMap[`prod_sample_${p.id}_${i}`];
+          if (sImg) mediaSamples.push(sImg);
+        }
+        const bestSamples =
+          mediaSamples.length > 0
+            ? mediaSamples
+            : legacyMap[p.id] && legacyMap[p.id].length > 0
+            ? legacyMap[p.id]
+            : existing?.sampleImages || p.sampleImages || [];
+        const bestCover = assetsMap[`prod_cover_${p.id}`] || existing?.coverImage || p.coverImage || '';
+        return {
+          ...p,
+          coverImage: bestCover,
+          sampleImages: bestSamples
+        };
+      });
+
+      setProducts(hydratedProducts);
+      await idbSet('products_v5', hydratedProducts);
+      safeLocalSet('el3bakera_products_v5', stripHeavyProductMedia(hydratedProducts));
+      showToast('✓ تم سحب وتحديث كافة الصور والعينات من السحابة بنجاح!');
     } catch (err) {
-      showToast(`تعذر السحب من السحابة: ${err?.code || ''}`, 'error');
+      console.error('Pull from cloud failed:', err);
+      showToast(`تعذر سحب البيانات: ${err?.code || 'خطأ في الشبكة'}`, 'error');
     }
   };
 
@@ -1356,10 +1404,18 @@ function MuzakkiratiPlatformContent() {
       categories: updatedSettings.categories || normalizedCategories
     };
     setSettings(cleanSettings);
-    await idbSet('settings_v6', cleanSettings);
-    safeLocalSet('el3bakera_settings_v6', cleanSettings);
+    await idbSet('settings_v7', cleanSettings);
+    safeLocalSet('el3bakera_settings_v7', cleanSettings);
     let cloudSaved = false;
     if (db) {
+      if (!isOfficialAdminGoogle) {
+        showToast(
+          'تم الحفظ محلياً فقط! اضغط على زر "ربط حساب جوجل للإدارة" بالأعلى ليتم النشر للعملاء.',
+          'error'
+        );
+        isSavingRef.current = false;
+        return false;
+      }
       try {
         const lightCategories = (cleanSettings.categories || []).map(({ coverImage, ...rest }) => rest);
         const { logoImage, heroImage, heroBgImage, ...lightSettings } = cleanSettings;
@@ -1391,10 +1447,7 @@ function MuzakkiratiPlatformContent() {
       } catch (e) {
         console.error('Firebase save error:', e);
         setCloudSyncStatus('error');
-        showToast(
-          `يرجى ربط حساب جوجل للإدارة أولاً ليسمح Firebase بالحفظ (${e?.code || 'permission-denied'})`,
-          'error'
-        );
+        showToast(`تم الحفظ محلياً، وتعذر النشر للسحابة: ${e?.code || 'تحقق من Firestore Rules'}`, 'error');
       }
     }
     setTimeout(() => {
@@ -1404,8 +1457,13 @@ function MuzakkiratiPlatformContent() {
   };
 
   const saveProductToCloud = async (productObj) => {
-    if (!db) return;
+    if (!db) return false;
+    if (!isOfficialAdminGoogle) {
+      showToast('تم الحفظ محلياً! اربط حساب جوجل للإدارة بالأعلى لنشر المذكرة للعملاء.', 'error');
+      return false;
+    }
     isSavingRef.current = true;
+    let success = false;
     try {
       const { sampleImages, coverImage, ...lightProduct } = productObj;
       await setDoc(
@@ -1415,11 +1473,12 @@ function MuzakkiratiPlatformContent() {
       );
       await saveMediaAssetToCloud(db, PRIMARY_APP_ID, `prod_cover_${productObj.id}`, coverImage || '');
       const samplesList = Array.isArray(sampleImages) ? sampleImages.slice(0, 25) : [];
-      for (let i = 0; i < samplesList.length; i++) {
-        await saveMediaAssetToCloud(db, PRIMARY_APP_ID, `prod_sample_${productObj.id}_${i}`, samplesList[i]);
-      }
-      for (let j = samplesList.length; j < 25; j++) {
-        await saveMediaAssetToCloud(db, PRIMARY_APP_ID, `prod_sample_${productObj.id}_${j}`, '');
+      for (let i = 0; i < 25; i++) {
+        if (i < samplesList.length) {
+          await saveMediaAssetToCloud(db, PRIMARY_APP_ID, `prod_sample_${productObj.id}_${i}`, samplesList[i]);
+        } else {
+          await saveMediaAssetToCloud(db, PRIMARY_APP_ID, `prod_sample_${productObj.id}_${i}`, '');
+        }
       }
       await setDoc(
         doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebook_samples', productObj.id),
@@ -1431,13 +1490,15 @@ function MuzakkiratiPlatformContent() {
         },
         { merge: true }
       );
+      success = true;
     } catch (e) {
       console.error('Product cloud save error:', e);
-      showToast(`تعذر رفع صور المذكرة للسحابة: ${e?.code || e?.message || 'خطأ'}`, 'error');
+      showToast(`تعذر رفع صور المذكرة للسحابة: ${e?.code || e?.message || 'خطأ في الاتصال'}`, 'error');
     }
     setTimeout(() => {
       isSavingRef.current = false;
     }, 1500);
+    return success;
   };
 
   const filteredProducts = useMemo(() => {
@@ -1481,37 +1542,49 @@ function MuzakkiratiPlatformContent() {
         : raw;
     }
 
-    let bulkDiscount = 0;
-    let bestMultiOfferTitle = '';
+    let bestOfferDiscount = 0;
+    let bestOfferTitle = '';
+
     for (const offer of safeMultiOffers) {
       if (offer.active === false) continue;
       const targetIds = Array.isArray(offer.productIds) ? offer.productIds : [];
       const matchingItems =
         targetIds.length === 0
           ? cart
-          : cart.filter((item) => targetIds.includes(item.id));
+          : cart.filter((cItem) => targetIds.includes(cItem.id));
+
       if (matchingItems.length >= Number(offer.minItems || 2)) {
-        const eligibleSubtotal = matchingItems.reduce((s, it) => s + Number(it.price || 0), 0);
-        const rawOfferDisc = Math.round(
-          (eligibleSubtotal * Number(offer.discountPercent || 15)) / 100
-        );
-        const cappedOfferDisc = offer.maxDiscount
-          ? Math.min(rawOfferDisc, Number(offer.maxDiscount))
-          : rawOfferDisc;
-        if (cappedOfferDisc > bulkDiscount) {
-          bulkDiscount = cappedOfferDisc;
-          bestMultiOfferTitle = `عرض المذكرات المتعددة (${offer.discountPercent}%)`;
+        const eligibleSum = matchingItems.reduce((s, x) => s + Number(x.price || 0), 0);
+        const rawOffer = Math.round((eligibleSum * Number(offer.discountPercent || 0)) / 100);
+        const cappedOffer = offer.maxDiscount
+          ? Math.min(rawOffer, Number(offer.maxDiscount))
+          : rawOffer;
+        if (cappedOffer > bestOfferDiscount) {
+          bestOfferDiscount = cappedOffer;
+          bestOfferTitle = `${safeText(offer.title, 'عرض التجميع')} (${offer.discountPercent}%)`;
         }
       }
     }
 
-    const activeDiscount = Math.max(couponDiscount, bulkDiscount);
+    if (
+      bestOfferDiscount === 0 &&
+      settings.bulkDiscountEnabled &&
+      cart.length >= Number(settings.bulkDiscountMinItems || 2)
+    ) {
+      const rawBulk = Math.round((subtotal * Number(settings.bulkDiscountPercent || 15)) / 100);
+      bestOfferDiscount = settings.bulkDiscountMaxAmount
+        ? Math.min(rawBulk, Number(settings.bulkDiscountMaxAmount))
+        : rawBulk;
+      bestOfferTitle = `خصم الكميات التلقائي (${settings.bulkDiscountPercent}%)`;
+    }
+
+    const activeDiscount = Math.max(couponDiscount, bestOfferDiscount);
     const discountLabel =
       activeDiscount === 0
         ? ''
-        : couponDiscount >= bulkDiscount
+        : couponDiscount >= bestOfferDiscount
         ? `خصم كوبون (${appliedCoupon?.code})`
-        : bestMultiOfferTitle || 'خصم المذكرات المتعددة';
+        : bestOfferTitle;
 
     return {
       subtotal,
@@ -1519,7 +1592,7 @@ function MuzakkiratiPlatformContent() {
       discountLabel,
       total: Math.max(0, subtotal - activeDiscount)
     };
-  }, [cart, appliedCoupon, safeMultiOffers]);
+  }, [cart, appliedCoupon, settings, safeMultiOffers]);
 
   const handleApplyCoupon = () => {
     const code = couponInput.trim().toUpperCase();
@@ -1566,8 +1639,7 @@ function MuzakkiratiPlatformContent() {
     }
 
     const itemsLines = cart.map((i, idx) => `${idx + 1}. ${i.title} (${i.price} ج.م)`).join('\n');
-    const msg =
-      `السلام عليكم، أرغب في طلب المذكرات التالية مخصصة باسمي من *${settings.platformName}*:\n\n` +
+    const msg = `السلام عليكم، أرغب في طلب المذكرات التالية مخصصة باسمي من *${settings.platformName}*:\n\n` +
       `*رقم الطلب:* ${orderId}\n` +
       `*اسم المعلم:* ${customerForm.teacherName}\n` +
       `*اسم السلسلة:* ${customerForm.seriesName || 'غير محدد'}\n` +
@@ -1601,16 +1673,16 @@ function MuzakkiratiPlatformContent() {
       showToast('رمز المرور غير صحيح', 'error');
       return;
     }
-    localStorage.removeItem('el3bakera_manual_logout');
     setIsAdminAuthenticated(true);
     try {
+      localStorage.removeItem('el3bakera_manual_logout');
       localStorage.setItem('el3bakera_admin_auth', 'true');
     } catch {}
     setIsAdminModalOpen(false);
     navigateToTab('admin');
     setAdminPinInput('');
     setShowAdminPin(false);
-    showToast('تم تسجيل الدخول إلى لوحة الإدارة بنجاح');
+    showToast('تم فتح لوحة الإدارة — تأكد من ربط حساب جوجل لحفظ التعديلات في السحابة');
   };
 
   const handleSaveProduct = async (e) => {
@@ -1674,7 +1746,7 @@ function MuzakkiratiPlatformContent() {
     setProducts(nextProducts);
     await idbSet('products_v5', nextProducts);
     safeLocalSet('el3bakera_products_v5', stripHeavyProductMedia(nextProducts));
-    if (db) {
+    if (db && isOfficialAdminGoogle) {
       try {
         await deleteDoc(doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebooks', id));
       } catch {}
@@ -1683,53 +1755,51 @@ function MuzakkiratiPlatformContent() {
   };
 
   const handleSaveAllAdminChanges = async () => {
-    showToast('جاري حفظ ونشر جميع التعديلات...');
+    if (db && !isOfficialAdminGoogle) {
+      showToast(
+        'تنبيه: اضغط أولاً على زر "ربط حساب جوجل للإدارة" الأصفر بالأعلى ليتمكن Firebase من نشر تعديلاتك للعملاء!',
+        'error'
+      );
+      return;
+    }
+    showToast('جاري حفظ ونشر جميع التعديلات وصور العينات للعملاء...');
     const ok = await saveSettings({
       ...settings,
       stages: normalizedStages,
       grades: normalizedGrades,
       categories: normalizedCategories
     });
-    const storedProducts = await idbGet('products_v5');
-    const latestProducts =
-      Array.isArray(storedProducts) && storedProducts.length > 0
-        ? products.map((p) => {
-            const sp = storedProducts.find((item) => item.id === p.id);
-            return {
-              ...p,
-              coverImage: p.coverImage || sp?.coverImage || '',
-              sampleImages:
-                Array.isArray(p.sampleImages) && p.sampleImages.length > 0
-                  ? p.sampleImages
-                  : sp?.sampleImages || []
-            };
-          })
-        : products;
+    const latestProducts = (await idbGet('products_v5')) || products;
+    const latestBundles = (await idbGet('bundles_v5')) || bundles;
+    const latestCoupons = (await idbGet('coupons_v5')) || coupons;
 
     await idbSet('products_v5', latestProducts);
-    await idbSet('bundles_v5', bundles);
-    await idbSet('coupons_v5', coupons);
+    await idbSet('bundles_v5', latestBundles);
+    await idbSet('coupons_v5', latestCoupons);
+
     if (db && ok) {
       try {
-        for (const prod of latestProducts) {
+        for (let idx = 0; idx < latestProducts.length; idx++) {
+          const prod = latestProducts[idx];
+          showToast(`جاري مزامنة المذكرة (${idx + 1}/${latestProducts.length}): ${prod.title}...`);
           await saveProductToCloud(prod);
         }
-        for (const b of bundles) {
-          const { coverImage, ...lightBundle } = b;
+        for (const bnd of latestBundles) {
+          const { coverImage, ...cleanBundle } = bnd;
           await setDoc(
-            doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles', b.id),
-            lightBundle,
+            doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles', bnd.id),
+            cleanBundle,
             { merge: true }
           );
         }
-        for (const cp of coupons) {
+        for (const cp of latestCoupons) {
           await setDoc(
             doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cp.id),
             cp,
             { merge: true }
           );
         }
-        showToast('✓ تم حفظ ونشر جميع التعديلات والصور للعملاء بنجاح!');
+        showToast('✓ تم حفظ ونشر جميع التعديلات وصور العينات للعملاء بنجاح!');
       } catch (err) {
         showToast(`تم حفظ الإعدادات وتعذرت مزامنة بعض العناصر: ${err?.code || ''}`, 'error');
       }
@@ -1800,6 +1870,65 @@ function MuzakkiratiPlatformContent() {
 
   const resolvedLogo = settings.logoImage || DEFAULT_LOGO_SVG;
 
+  // دعم التنقل بأسهم لوحة المفاتيح وتركيز المصغرات أثناء معاينة العينات
+  useEffect(() => {
+    if (!previewProduct) return;
+    const allGallery = [
+      ...(previewProduct.coverImage ? [previewProduct.coverImage] : []),
+      ...(Array.isArray(previewProduct.sampleImages) ? previewProduct.sampleImages : [])
+    ];
+    if (allGallery.length <= 1) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'ArrowLeft') {
+        setActiveSampleIndex((prev) => (prev < allGallery.length - 1 ? prev + 1 : 0));
+      } else if (e.key === 'ArrowRight') {
+        setActiveSampleIndex((prev) => (prev > 0 ? prev - 1 : allGallery.length - 1));
+      } else if (e.key === 'Escape') {
+        if (isSampleFullscreen) {
+          setIsSampleFullscreen(false);
+        } else {
+          setPreviewProduct(null);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewProduct, isSampleFullscreen]);
+
+  useEffect(() => {
+    if (!sampleThumbsRef.current) return;
+    const activeThumb = sampleThumbsRef.current.children[activeSampleIndex];
+    if (activeThumb && typeof activeThumb.scrollIntoView === 'function') {
+      activeThumb.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+  }, [activeSampleIndex]);
+
+  const handleSampleTouchStart = (e) => {
+    touchEndXRef.current = null;
+    touchStartXRef.current = e.targetTouches?.[0]?.clientX ?? null;
+  };
+
+  const handleSampleTouchMove = (e) => {
+    touchEndXRef.current = e.targetTouches?.[0]?.clientX ?? null;
+  };
+
+  const handleSampleTouchEnd = (totalCount) => {
+    if (touchStartXRef.current === null || touchEndXRef.current === null || totalCount <= 1) return;
+    const distance = touchStartXRef.current - touchEndXRef.current;
+    const minSwipeDistance = 40;
+    if (Math.abs(distance) < minSwipeDistance) return;
+    if (distance > 0) {
+      // سحب لليسار -> الصفحة التالية
+      setActiveSampleIndex((prev) => (prev < totalCount - 1 ? prev + 1 : 0));
+    } else {
+      // سحب لليمين -> الصفحة السابقة
+      setActiveSampleIndex((prev) => (prev > 0 ? prev - 1 : totalCount - 1));
+    }
+    touchStartXRef.current = null;
+    touchEndXRef.current = null;
+  };
+
   const renderDiscountBadge = (product) => {
     if (settings.discountBadgeEnabled === false) return null;
     const oldP = Number(product.oldPrice || 0);
@@ -1836,9 +1965,42 @@ function MuzakkiratiPlatformContent() {
     );
   };
 
+  // دالة عرض زر معاينة Google Drive بلونه ونصه المخصص
+  const renderDriveSampleButton = (url, compact = false) => {
+    if (settings.driveButtonEnabled === false) return null;
+    if (compact && settings.driveButtonShowOnCard === false) return null;
+    const cleanUrl = safeText(url).trim();
+    if (!cleanUrl || cleanUrl === 'https://drive.google.com/') return null;
+
+    return (
+      <a
+        href={cleanUrl}
+        target="_blank"
+        rel="noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          backgroundColor: settings.driveButtonBg || '#ecfdf5',
+          color: settings.driveButtonTextColor || '#047857'
+        }}
+        className={`${
+          compact
+            ? 'w-full py-2 px-3 rounded-xl text-xs justify-center'
+            : 'px-4 py-3 rounded-2xl text-xs'
+        } font-black inline-flex items-center gap-1.5 shadow-2xs hover:opacity-90 transition`}
+      >
+        <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+        <span>{safeText(settings.driveButtonText, 'معاينة عينة Google Drive')}</span>
+      </a>
+    );
+  };
+
+  // دالة عرض التنبيه العام المستقل (حصراً داخل نافذة المعاينة، بدون تحكم بلون الإطار)
   const renderGeneralNoticeBox = () => {
     if (settings.generalNoticeEnabled === false) return null;
-    const noticeLines = safeText(settings.generalNoticeText, DEFAULT_SETTINGS.generalNoticeText)
+    const noticeLines = safeText(
+      settings.generalNoticeText,
+      DEFAULT_SETTINGS.generalNoticeText
+    )
       .split('\n')
       .filter((l) => l.trim());
     if (noticeLines.length === 0 && !settings.generalNoticeTitle) return null;
@@ -1866,6 +2028,7 @@ function MuzakkiratiPlatformContent() {
     );
   };
 
+  // دالة عرض التنبيه الخاص بالمذكرة في بطاقة مستقلة تماماً عن التنبيه العام
   const renderProductTipBox = (tipText, compact = false) => {
     if (settings.tipNoticeEnabled === false) return null;
     if (compact && settings.tipShowOnCard === false) return null;
@@ -1888,9 +2051,80 @@ function MuzakkiratiPlatformContent() {
     );
   };
 
+  // بطاقة عروض الحصول على أكثر من مذكرة (تُعرض للمعلمين)
+  const renderMultiNotebookOffersBanner = () => {
+    const activeOffers = safeMultiOffers.filter((o) => o && o.active !== false);
+    if (activeOffers.length === 0) return null;
+
+    return (
+      <div className="space-y-4">
+        {activeOffers.map((offer) => {
+          const targetProds = Array.isArray(offer.productIds)
+            ? offer.productIds
+                .map((pid) => products.find((p) => p.id === pid))
+                .filter(Boolean)
+            : [];
+
+          return (
+            <div
+              key={offer.id}
+              style={{
+                backgroundColor: offer.bgColor || '#0f172a',
+                color: offer.textColor || '#ffffff'
+              }}
+              className="rounded-3xl p-5 sm:p-6 shadow-xl border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+            >
+              <div className="flex items-start gap-3.5 flex-1">
+                <div className="w-12 h-12 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center shrink-0 shadow-md">
+                  <Gift className="w-6 h-6" />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="font-black text-base sm:text-lg">{safeText(offer.title)}</h4>
+                    {offer.badgeText && (
+                      <span className="px-3 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[11px] font-black">
+                        {safeText(offer.badgeText)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs sm:text-sm opacity-90 leading-relaxed">
+                    {safeText(offer.subtitle)}
+                  </p>
+                  {targetProds.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <span className="text-[11px] opacity-80 font-bold">يسري على:</span>
+                      {targetProds.map((tp) => (
+                        <span
+                          key={tp.id}
+                          className="px-2.5 py-0.5 rounded-full bg-white/15 text-[11px] font-bold"
+                        >
+                          {tp.title}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {activeTab !== 'library' && (
+                <button
+                  type="button"
+                  onClick={() => navigateToTab('library')}
+                  className="px-5 py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs shrink-0 shadow cursor-pointer transition"
+                >
+                  اختر مذكراتك الآن
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <div dir="rtl" className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#f4f6fa] text-slate-900 font-sans flex flex-col">
-      {/* إشعار Toast عائم */}
+      {/* إشعار Toast عائم يظهر بوضوح فوق جميع النوافذ */}
       {toast && (
         <div
           className={`fixed bottom-5 right-4 left-4 sm:left-auto sm:right-5 z-[100] flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl text-white text-xs sm:text-sm font-black transition-all border ${
@@ -1928,7 +2162,7 @@ function MuzakkiratiPlatformContent() {
         </div>
       )}
 
-      {/* الهيدر الرئيسي المتجاوب بالكامل */}
+      {/* الهيدر الرئيسي المتجاوب بالكامل مع الهاتف */}
       <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur border-b border-slate-200/80">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-2">
           <div
@@ -2100,11 +2334,11 @@ function MuzakkiratiPlatformContent() {
       )}
 
       {/* المحتوى الرئيسي */}
-      <main className="flex-1 w-full">
+      <main className="flex-1">
         {/* 1. الصفحة الرئيسية */}
         {activeTab === 'home' && (
-          <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-10 sm:space-y-12">
-            <section className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-bl from-[#0b1938] via-[#0e224d] to-[#081229] text-white p-5 sm:p-10 lg:p-12 shadow-xl border border-slate-800">
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8 space-y-10 sm:space-y-12">
+            <section className="relative overflow-hidden rounded-3xl bg-gradient-to-bl from-[#081229] via-[#0e224d] to-[#173370] text-white p-5 sm:p-10 lg:p-12 shadow-2xl border border-slate-800">
               {settings.heroBgImage && (
                 <>
                   <img
@@ -2122,99 +2356,110 @@ function MuzakkiratiPlatformContent() {
                   />
                 </>
               )}
-              <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-center">
-                <div className="lg:col-span-7 space-y-4 sm:space-y-6 text-right">
-                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-400/15 border border-amber-400/30 text-amber-300 text-[11px] sm:text-xs font-bold">
+              <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-7 sm:gap-8 items-center">
+                <div className="lg:col-span-7 space-y-5 sm:space-y-6 text-right">
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-400/15 border border-amber-400/35 text-amber-300 text-[11px] sm:text-xs font-bold shadow-xs">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300 shrink-0" />
                     <span>{safeText(settings.heroBadge)}</span>
                   </div>
 
-                  <h2 className="text-2xl sm:text-4xl lg:text-[40px] font-black leading-tight text-white">
+                  <h2 className="text-xl sm:text-4xl lg:text-[40px] font-black leading-snug sm:leading-tight text-white">
                     {safeText(settings.heroTitle)}
                   </h2>
 
-                  <p className="text-xs sm:text-base text-slate-300 leading-relaxed max-w-2xl">
+                  <p className="text-xs sm:text-base text-slate-200 leading-relaxed max-w-2xl">
                     {safeText(settings.heroSubtitle)}
                   </p>
 
-                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 pt-1">
                     <button
                       onClick={() => navigateToTab('library')}
-                      className="px-6 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs sm:text-sm shadow-lg shadow-blue-600/30 transition cursor-pointer"
+                      className="inline-flex items-center gap-2 px-5 py-3 sm:px-6 sm:py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs sm:text-sm shadow-lg shadow-blue-600/30 transition cursor-pointer"
                     >
-                      استعراض جميع المذكرات
+                      <BookOpen className="w-4 h-4 shrink-0" />
+                      <span>استعراض جميع المذكرات</span>
                     </button>
                     <button
                       onClick={() => navigateToTab('bundles')}
-                      className="px-6 py-3.5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 text-white font-bold text-xs sm:text-sm transition cursor-pointer"
+                      className="inline-flex items-center gap-2 px-5 py-3 sm:px-6 sm:py-3.5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/20 text-white font-bold text-xs sm:text-sm transition cursor-pointer"
                     >
-                      باقات التوفير والعروض
+                      <Package className="w-4 h-4 text-amber-300 shrink-0" />
+                      <span>باقات التوفير والعروض</span>
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2.5 sm:gap-4 pt-5 border-t border-white/10 max-w-xl">
-                    <div className="rounded-2xl bg-white/10 backdrop-blur-xs border border-white/15 p-3 sm:p-3.5 flex items-center gap-2.5">
-                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-400/20 border border-amber-400/30 text-amber-300 flex items-center justify-center shrink-0">
-                        <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
+                  {/* بطاقات الإحصائيات المطورة بأيقونات وتدرجات احترافية */}
+                  <div className="grid grid-cols-3 gap-2.5 sm:gap-4 pt-5 border-t border-white/15">
+                    <div className="rounded-2xl bg-gradient-to-br from-white/15 to-white/5 backdrop-blur-xs border border-white/15 p-3 sm:p-4 flex items-center gap-2.5 shadow-lg">
+                      <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-amber-400/20 border border-amber-300/35 text-amber-300 flex items-center justify-center shrink-0">
+                        <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
                       </div>
                       <div>
-                        <div className="text-base sm:text-xl font-black text-amber-400 leading-none">+50</div>
+                        <div className="text-base sm:text-2xl font-black text-amber-400 leading-none">+50</div>
                         <div className="text-[10px] sm:text-xs text-slate-200 mt-1 font-bold">مذكرة وبنك أسئلة</div>
                       </div>
                     </div>
-                    <div className="rounded-2xl bg-white/10 backdrop-blur-xs border border-white/15 p-3 sm:p-3.5 flex items-center gap-2.5">
-                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-400/20 border border-emerald-400/30 text-emerald-300 flex items-center justify-center shrink-0">
+
+                    <div className="rounded-2xl bg-gradient-to-br from-white/15 to-white/5 backdrop-blur-xs border border-white/15 p-3 sm:p-4 flex items-center gap-2.5 shadow-lg">
+                      <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-emerald-400/20 border border-emerald-300/35 text-emerald-300 flex items-center justify-center shrink-0">
                         <UserCheck className="w-4 h-4 sm:w-5 sm:h-5" />
                       </div>
                       <div>
-                        <div className="text-base sm:text-xl font-black text-emerald-400 leading-none">+500</div>
+                        <div className="text-base sm:text-2xl font-black text-emerald-400 leading-none">+500</div>
                         <div className="text-[10px] sm:text-xs text-slate-200 mt-1 font-bold">معلم يثق بنا</div>
                       </div>
                     </div>
-                    <div className="rounded-2xl bg-white/10 backdrop-blur-xs border border-white/15 p-3 sm:p-3.5 flex items-center gap-2.5">
-                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-sky-400/20 border border-sky-400/30 text-sky-300 flex items-center justify-center shrink-0">
-                        <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
+
+                    <div className="rounded-2xl bg-gradient-to-br from-white/15 to-white/5 backdrop-blur-xs border border-white/15 p-3 sm:p-4 flex items-center gap-2.5 shadow-lg">
+                      <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-sky-400/20 border border-sky-300/35 text-sky-300 flex items-center justify-center shrink-0">
+                        <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5" />
                       </div>
                       <div>
-                        <div className="text-base sm:text-xl font-black text-sky-400 leading-none">100%</div>
-                        <div className="text-[10px] sm:text-xs text-slate-200 mt-1 font-bold">تخصيص باسمك</div>
+                        <div className="text-base sm:text-2xl font-black text-sky-400 leading-none">100%</div>
+                        <div className="text-[10px] sm:text-xs text-slate-200 mt-1 font-bold">باسمك وشعارك</div>
                       </div>
                     </div>
                   </div>
                 </div>
 
+                {/* بطاقة الثقة المطورة بأيقونات وتدرجات بصرية */}
                 <div className="lg:col-span-5">
-                  <div className="rounded-3xl bg-slate-950/70 backdrop-blur-md border border-white/15 p-5 sm:p-6 shadow-2xl space-y-4">
-                    <div className="flex items-center gap-3.5 pb-3.5 border-b border-white/10">
-                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-slate-950 flex items-center justify-center shrink-0 shadow-lg shadow-amber-400/20">
-                        <ShieldCheck className="w-6 h-6" />
+                  <div className="rounded-3xl bg-slate-950/70 backdrop-blur-md border border-white/15 p-4 sm:p-6 shadow-2xl space-y-3.5">
+                    <div className="flex items-center gap-3 pb-3 border-b border-white/10">
+                      <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-slate-950 flex items-center justify-center shrink-0 shadow-lg">
+                        <Sparkles className="w-6 h-6" />
                       </div>
                       <div>
-                        <h3 className="text-base sm:text-lg font-black text-white">لماذا يثق بنا المعلمون؟</h3>
+                        <h3 className="text-sm sm:text-base font-black text-white">لماذا يثق بنا المعلمون؟</h3>
                         <p className="text-[11px] text-amber-300 font-bold">جودة تعليمية وتخصيص احترافي 100%</p>
                       </div>
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="space-y-2.5">
                       {safeTrustFeatures.map((feat, idx) => {
-                        const TrustIcons = [FileText, Sparkles, CheckCircle2];
+                        const TrustIcons = [BookOpen, UserCheck, ShieldCheck];
                         const TrustIcon = TrustIcons[idx % TrustIcons.length];
-                        const iconBg = [
-                          'bg-sky-500/20 text-sky-300 border-sky-400/30',
+                        const badgeColors = [
+                          'bg-blue-500/20 text-blue-300 border-blue-400/30',
                           'bg-amber-400/20 text-amber-300 border-amber-400/30',
                           'bg-emerald-500/20 text-emerald-300 border-emerald-400/30'
-                        ][idx % 3];
+                        ];
                         return (
                           <div
                             key={feat.id || idx}
-                            className="rounded-2xl bg-white/10 hover:bg-white/15 transition border border-white/10 px-4 py-3.5 flex items-start gap-3.5"
+                            className="rounded-2xl bg-white/10 hover:bg-white/15 transition border border-white/10 px-3.5 py-3 flex items-start gap-3"
                           >
-                            <div className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 mt-0.5 ${iconBg}`}>
+                            <div
+                              className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 mt-0.5 ${
+                                badgeColors[idx % badgeColors.length]
+                              }`}
+                            >
                               <TrustIcon className="w-4 h-4" />
                             </div>
                             <div>
                               <div className="text-xs sm:text-sm font-black text-white">{safeText(feat.title)}</div>
                               {feat.desc && (
-                                <div className="text-[11px] text-slate-300 mt-1 leading-relaxed">
+                                <div className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
                                   {safeText(feat.desc)}
                                 </div>
                               )}
@@ -2228,10 +2473,13 @@ function MuzakkiratiPlatformContent() {
               </div>
             </section>
 
+            {/* بطاقات عروض الحصول على أكثر من مذكرة */}
+            {renderMultiNotebookOffersBanner()}
+
             {/* الأقسام الدراسية */}
             <section className="space-y-5">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg sm:text-2xl font-black text-slate-900">الأقسام الدراسية</h3>
+                <h3 className="text-xl sm:text-2xl font-black text-slate-900">الأقسام الدراسية</h3>
                 <button
                   onClick={() => {
                     setSelectedCategory('all');
@@ -2239,7 +2487,7 @@ function MuzakkiratiPlatformContent() {
                     setSelectedGrade('all');
                     navigateToTab('library');
                   }}
-                  className="text-xs sm:text-sm font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
+                  className="text-sm font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
                 >
                   عرض الكل ({visibleProducts.length})
                 </button>
@@ -2295,14 +2543,14 @@ function MuzakkiratiPlatformContent() {
             <section className="space-y-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg sm:text-2xl font-black text-slate-900">أحدث المذكرات المضافة</h3>
+                  <h3 className="text-xl sm:text-2xl font-black text-slate-900">أحدث المذكرات المضافة</h3>
                   <p className="text-xs text-slate-500 mt-1">
                     اختر المذكرة لمعاينة صفحات العينة وطلبها مخصصة باسمك وشعارك
                   </p>
                 </div>
                 <button
                   onClick={() => navigateToTab('library')}
-                  className="text-xs sm:text-sm font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
+                  className="text-sm font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
                 >
                   تصفح كل المذكرات ({visibleProducts.length})
                 </button>
@@ -2322,7 +2570,6 @@ function MuzakkiratiPlatformContent() {
                         onClick={() => {
                           setPreviewProduct(product);
                           setActiveSampleIndex(0);
-                          setIsSampleFullscreen(false);
                         }}
                         className="relative aspect-[4/3] w-full bg-gradient-to-br from-[#0f1f44] to-[#1e3a8a] cursor-pointer overflow-hidden group"
                       >
@@ -2360,7 +2607,6 @@ function MuzakkiratiPlatformContent() {
                             onClick={() => {
                               setPreviewProduct(product);
                               setActiveSampleIndex(0);
-                              setIsSampleFullscreen(false);
                             }}
                             className="text-lg font-black text-slate-900 hover:text-blue-600 cursor-pointer line-clamp-1"
                           >
@@ -2374,45 +2620,27 @@ function MuzakkiratiPlatformContent() {
                           {renderProductTipBox(product.tipText, true)}
                         </div>
 
-                        <div className="space-y-3 pt-2 border-t border-slate-100">
-                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-xl">
+                        <div className="space-y-2.5 pt-2 border-t border-slate-100">
+                          <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-xl">
                             <span>📄 {product.pagesCount || 0} صفحة PDF</span>
-                            <div className="flex items-center gap-2">
-                              {settings.driveBtnEnabled !== false &&
-                                settings.driveBtnShowOnCard !== false &&
-                                product.driveSampleUrl && (
-                                  <a
-                                    href={product.driveSampleUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    onClick={(e) => e.stopPropagation()}
-                                    style={{
-                                      backgroundColor: settings.driveBtnBg || '#059669',
-                                      color: settings.driveBtnText || '#ffffff'
-                                    }}
-                                    className="px-2.5 py-1 rounded-lg font-black text-[11px] inline-flex items-center gap-1 shadow-2xs hover:opacity-90 transition"
-                                  >
-                                    <span>{safeText(settings.driveBtnLabel, 'عينة Drive')}</span>
-                                    <ExternalLink className="w-3 h-3" />
-                                  </a>
-                                )}
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setPreviewProduct(product);
-                                  setActiveSampleIndex(0);
-                                  setIsSampleFullscreen(false);
-                                }}
-                                className="text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer touch-manipulation py-1 px-1.5"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                                <span>التفاصيل والعينة</span>
-                              </button>
-                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewProduct(product);
+                                setActiveSampleIndex(0);
+                                setIsSampleFullscreen(false);
+                              }}
+                              className="text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer touch-manipulation py-1 px-2"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>التفاصيل والعينة</span>
+                            </button>
                           </div>
 
-                          <div className="flex items-center justify-between">
+                          {renderDriveSampleButton(product.driveSampleUrl, true)}
+
+                          <div className="flex items-center justify-between pt-1">
                             <div>
                               <span className="text-xl font-black text-blue-600">{product.price} ج.م</span>
                               {Number(product.oldPrice) > Number(product.price) && (
@@ -2437,79 +2665,7 @@ function MuzakkiratiPlatformContent() {
               </div>
             </section>
 
-            {/* عروض الحصول على أكثر من مذكرة */}
-            {safeMultiOffers.filter((o) => o.active !== false).length > 0 && (
-              <section className="space-y-4">
-                {safeMultiOffers
-                  .filter((o) => o.active !== false)
-                  .map((offer) => {
-                    const specificProds = Array.isArray(offer.productIds)
-                      ? offer.productIds.map((pid) => products.find((p) => p.id === pid)).filter(Boolean)
-                      : [];
-                    return (
-                      <div
-                        key={offer.id}
-                        style={{ backgroundColor: offer.bgColor || '#0f172a' }}
-                        className="rounded-3xl p-6 sm:p-8 text-white shadow-xl border border-white/10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6"
-                      >
-                        <div className="space-y-2.5 max-w-2xl">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span
-                              style={{
-                                backgroundColor: offer.accentColor || '#facc15',
-                                color: '#0f172a'
-                              }}
-                              className="inline-block px-3.5 py-1 rounded-full text-xs font-black"
-                            >
-                              {safeText(offer.badge, '🔥 عرض خاص عند طلب أكثر من مذكرة')}
-                            </span>
-                            <span className="px-3 py-1 rounded-full bg-white/10 text-white text-[11px] font-bold">
-                              {specificProds.length > 0
-                                ? `يسري على ${specificProds.length} مذكرات محددة`
-                                : 'يسري على جميع المذكرات'}
-                            </span>
-                          </div>
-                          <h3 className="text-xl sm:text-2xl font-black leading-snug">
-                            {safeText(offer.title)}
-                          </h3>
-                          {offer.subtitle && (
-                            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                              {safeText(offer.subtitle)}
-                            </p>
-                          )}
-                          {specificProds.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 pt-1">
-                              {specificProds.map((sp) => (
-                                <span
-                                  key={sp.id}
-                                  className="px-2.5 py-1 rounded-xl bg-white/10 border border-white/15 text-[11px] font-bold text-amber-200"
-                                >
-                                  • {sp.title}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-3 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => navigateToTab('library')}
-                            style={{
-                              backgroundColor: offer.accentColor || '#facc15',
-                              color: '#0f172a'
-                            }}
-                            className="px-6 py-3.5 rounded-2xl font-black text-xs sm:text-sm shadow-lg hover:opacity-95 transition cursor-pointer"
-                          >
-                            اختر مذكراتك الآن واستفد بالخصم
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-              </section>
-            )}
-
-            {/* الإصدارات القادمة */}
+            {/* الإصدارات القادمة (أسفل أحدث المذكرات المضافة) */}
             {safeUpcoming.length > 0 && (
               <section className="bg-gradient-to-l from-slate-900 via-[#0f2347] to-slate-900 rounded-3xl p-6 sm:p-8 text-white border border-slate-800 shadow-lg space-y-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2519,7 +2675,7 @@ function MuzakkiratiPlatformContent() {
                     </div>
                     <div>
                       <h3 className="text-lg sm:text-xl font-black text-white">
-                        قريباً على المنصة — مذكرات وبنوك أسئلة قيد التجهيز
+                        مذكرات وبنوك أسئلة قيد التجهيز والإصدار قريباً
                       </h3>
                       <p className="text-xs text-slate-300">
                         نعمل حالياً على إعداد وتنسيق هذه الإصدارات لتكون متاحة للحجز والتخصيص قريباً
@@ -2563,7 +2719,7 @@ function MuzakkiratiPlatformContent() {
               <section className="space-y-5">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-lg sm:text-2xl font-black text-slate-900">
+                    <h3 className="text-xl sm:text-2xl font-black text-slate-900">
                       {safeText(settings.testimonialsTitle, 'آراء وتقييمات المعلمين في مذكراتنا')}
                     </h3>
                     <p className="text-xs text-slate-500 mt-1">
@@ -2633,9 +2789,12 @@ function MuzakkiratiPlatformContent() {
           </div>
         )}
 
-        {/* 2. مكتبة المذكرات */}
+        {/* 2. مكتبة المذكرات والأقسام والمراحل */}
         {activeTab === 'library' && (
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
+            {renderMultiNotebookOffersBanner()}
+
+            {/* بطاقات المراحل الدراسية */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-base sm:text-lg font-black text-slate-900">اختر المرحلة الدراسية</h3>
@@ -2812,7 +2971,6 @@ function MuzakkiratiPlatformContent() {
                         onClick={() => {
                           setPreviewProduct(product);
                           setActiveSampleIndex(0);
-                          setIsSampleFullscreen(false);
                         }}
                         className="relative aspect-[4/3] w-full bg-gradient-to-br from-[#0f1f44] to-[#1e3a8a] cursor-pointer overflow-hidden group"
                       >
@@ -2850,7 +3008,6 @@ function MuzakkiratiPlatformContent() {
                             onClick={() => {
                               setPreviewProduct(product);
                               setActiveSampleIndex(0);
-                              setIsSampleFullscreen(false);
                             }}
                             className="text-lg font-black text-slate-900 hover:text-blue-600 cursor-pointer line-clamp-1"
                           >
@@ -2864,45 +3021,27 @@ function MuzakkiratiPlatformContent() {
                           {renderProductTipBox(product.tipText, true)}
                         </div>
 
-                        <div className="space-y-3 pt-2 border-t border-slate-100">
-                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-xl">
+                        <div className="space-y-2.5 pt-2 border-t border-slate-100">
+                          <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-xl">
                             <span>📄 {product.pagesCount} صفحة PDF</span>
-                            <div className="flex items-center gap-2">
-                              {settings.driveBtnEnabled !== false &&
-                                settings.driveBtnShowOnCard !== false &&
-                                product.driveSampleUrl && (
-                                  <a
-                                    href={product.driveSampleUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    onClick={(e) => e.stopPropagation()}
-                                    style={{
-                                      backgroundColor: settings.driveBtnBg || '#059669',
-                                      color: settings.driveBtnText || '#ffffff'
-                                    }}
-                                    className="px-2.5 py-1 rounded-lg font-black text-[11px] inline-flex items-center gap-1 shadow-2xs hover:opacity-90 transition"
-                                  >
-                                    <span>{safeText(settings.driveBtnLabel, 'عينة Drive')}</span>
-                                    <ExternalLink className="w-3 h-3" />
-                                  </a>
-                                )}
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setPreviewProduct(product);
-                                  setActiveSampleIndex(0);
-                                  setIsSampleFullscreen(false);
-                                }}
-                                className="text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer touch-manipulation py-1 px-1.5"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                                <span>التفاصيل والعينة</span>
-                              </button>
-                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewProduct(product);
+                                setActiveSampleIndex(0);
+                                setIsSampleFullscreen(false);
+                              }}
+                              className="text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer touch-manipulation py-1 px-2"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>التفاصيل والعينة</span>
+                            </button>
                           </div>
 
-                          <div className="flex items-center justify-between">
+                          {renderDriveSampleButton(product.driveSampleUrl, true)}
+
+                          <div className="flex items-center justify-between pt-1">
                             <div>
                               <span className="text-xl font-black text-blue-600">{product.price} ج.م</span>
                               {product.oldPrice > product.price && (
@@ -2931,177 +3070,196 @@ function MuzakkiratiPlatformContent() {
 
         {/* 3. العروض والباقات */}
         {activeTab === 'bundles' && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-            <div className="bg-gradient-to-l from-[#0b1938] via-[#132c63] to-[#1d4ed8] rounded-3xl p-6 sm:p-9 text-white flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 shadow-xl border border-blue-800/60">
-              <div className="space-y-2 max-w-2xl">
-                <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-xs font-black">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>باقات التوفير الحصرية للمعلمين</span>
-                </span>
-                <h2 className="text-2xl sm:text-3xl font-black leading-tight">
-                  باقات شاملة بأسعار مخفضة وتخصيص كامل باسمك وشعارك
-                </h2>
-                <p className="text-xs sm:text-sm text-blue-100 leading-relaxed">
-                  وفر أكثر عند حجز باقة متكاملة من المذكرات وبنوك الأسئلة، أو استفد من عرض الحصول على أكثر من مذكرة بخصم تلقائي {settings.bulkDiscountPercent}% في السلة.
-                </p>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-3 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => navigateToTab('library')}
-                  className="px-5 py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm shadow-lg transition cursor-pointer"
-                >
-                  تصفح جميع المذكرات
-                </button>
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8">
+            <div className="relative overflow-hidden bg-gradient-to-bl from-[#081229] via-[#0f2454] to-[#1d4ed8] rounded-3xl p-6 sm:p-10 text-white shadow-2xl border border-blue-800/60">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-7 items-center">
+                <div className="lg:col-span-7 space-y-4">
+                  <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-xs font-black">
+                    <Sparkles className="w-4 h-4" />
+                    <span>باقات التوفير الحصرية للمعلمين</span>
+                  </span>
+                  <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black leading-tight">
+                    باقات شاملة بأسعار مخفضة وتخصيص كامل باسمك وشعارك
+                  </h2>
+                  <p className="text-xs sm:text-sm text-blue-100 leading-relaxed max-w-2xl">
+                    وفر أكثر عند حجز باقة متكاملة من المذكرات وبنوك الأسئلة، أو استفد من عروض الحصول على أكثر من مذكرة بخصومات تلقائية فورية في السلة.
+                  </p>
+
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => navigateToTab('library')}
+                      className="px-6 py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-amber-400/20 transition cursor-pointer"
+                    >
+                      تصفح جميع المذكرات
+                    </button>
+                  </div>
+
+                  {/* بطاقات إحصائيات الباقات والتوفير بتدرجات بصرية فاخرة */}
+                  <div className="grid grid-cols-3 gap-2.5 sm:gap-4 pt-5 border-t border-white/15">
+                    <div className="rounded-2xl bg-gradient-to-br from-white/15 to-white/5 backdrop-blur-xs border border-white/15 p-3 sm:p-4 flex items-center gap-2.5 shadow-lg">
+                      <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-amber-400/25 border border-amber-300/40 text-amber-300 flex items-center justify-center shrink-0">
+                        <Package className="w-4 h-4 sm:w-5 sm:h-5" />
+                      </div>
+                      <div>
+                        <div className="text-base sm:text-xl font-black text-amber-300 leading-none">
+                          {bundles.length}
+                        </div>
+                        <div className="text-[10px] sm:text-xs text-slate-200 mt-1 font-bold">
+                          باقات متكاملة
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl bg-gradient-to-br from-white/15 to-white/5 backdrop-blur-xs border border-white/15 p-3 sm:p-4 flex items-center gap-2.5 shadow-lg">
+                      <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-emerald-400/25 border border-emerald-300/40 text-emerald-300 flex items-center justify-center shrink-0">
+                        <Tag className="w-4 h-4 sm:w-5 sm:h-5" />
+                      </div>
+                      <div>
+                        <div className="text-base sm:text-xl font-black text-emerald-300 leading-none">
+                          حتى 30%
+                        </div>
+                        <div className="text-[10px] sm:text-xs text-slate-200 mt-1 font-bold">
+                          توفير فوري
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl bg-gradient-to-br from-white/15 to-white/5 backdrop-blur-xs border border-white/15 p-3 sm:p-4 flex items-center gap-2.5 shadow-lg">
+                      <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-sky-400/25 border border-sky-300/40 text-sky-300 flex items-center justify-center shrink-0">
+                        <UserCheck className="w-4 h-4 sm:w-5 sm:h-5" />
+                      </div>
+                      <div>
+                        <div className="text-base sm:text-xl font-black text-sky-300 leading-none">
+                          100%
+                        </div>
+                        <div className="text-[10px] sm:text-xs text-slate-200 mt-1 font-bold">
+                          باسمك وشعارك
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ركن مزايا وثقة الباقات للمعلمين */}
+                <div className="lg:col-span-5">
+                  <div className="rounded-3xl bg-slate-950/70 backdrop-blur-md border border-white/15 p-5 sm:p-6 shadow-2xl space-y-3.5">
+                    <div className="flex items-center gap-3 pb-3 border-b border-white/10">
+                      <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-slate-950 flex items-center justify-center shrink-0 shadow-lg">
+                        <ShieldCheck className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-black text-white">مميزات حجز الباقات الشاملة</h3>
+                        <p className="text-[11px] text-amber-300 font-bold">أعلى قيمة تعليمية وأقل تكلفة للمعلم</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      {[
+                        {
+                          title: 'تخصيص موحّد لجميع مذكرات الباقة',
+                          desc: 'يُطبع اسمك ورقم هاتفك وشعار سلسلتك على أغلفة وصفحات كل مذكرة في الباقة.',
+                          icon: Sparkles,
+                          tone: 'bg-amber-400/20 text-amber-300 border-amber-400/30'
+                        },
+                        {
+                          title: 'توفير مالي مضاعف مقارنة بالطلب الفردي',
+                          desc: 'خصومات حصرية على الباقات المجمعة مع إمكانية تطبيق كوبونات الخصم.',
+                          icon: Tag,
+                          tone: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30'
+                        },
+                        {
+                          title: 'جاهزة للطباعة الفورية بصيغة PDF',
+                          desc: 'تنسيق احترافي عالي الدقة ومُراجع بالكامل لتسليمه لطلابك فوراً.',
+                          icon: CheckCircle2,
+                          tone: 'bg-sky-500/20 text-sky-300 border-sky-400/30'
+                        }
+                      ].map((item, i) => {
+                        const ItemIcon = item.icon;
+                        return (
+                          <div
+                            key={i}
+                            className="rounded-2xl bg-white/10 border border-white/10 px-4 py-3 flex items-start gap-3"
+                          >
+                            <div className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 mt-0.5 ${item.tone}`}>
+                              <ItemIcon className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <div className="text-xs sm:text-sm font-black text-white">{item.title}</div>
+                              <div className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">{item.desc}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {safeMultiOffers.filter((o) => o.active !== false).length > 0 && (
-              <div className="space-y-4">
-                {safeMultiOffers
-                  .filter((o) => o.active !== false)
-                  .map((offer) => {
-                    const specificProds = Array.isArray(offer.productIds)
-                      ? offer.productIds.map((pid) => products.find((p) => p.id === pid)).filter(Boolean)
-                      : [];
-                    return (
-                      <div
-                        key={offer.id}
-                        style={{ backgroundColor: offer.bgColor || '#0f172a' }}
-                        className="rounded-3xl p-6 sm:p-7 text-white shadow-lg border border-white/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-5"
-                      >
-                        <div className="space-y-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span
-                              style={{
-                                backgroundColor: offer.accentColor || '#facc15',
-                                color: '#0f172a'
-                              }}
-                              className="inline-block px-3 py-0.5 rounded-full text-[11px] font-black"
-                            >
-                              {safeText(offer.badge, '🔥 عرض خاص عند طلب أكثر من مذكرة')}
-                            </span>
-                            <span className="px-2.5 py-0.5 rounded-full bg-white/10 text-[11px] font-bold">
-                              {specificProds.length > 0
-                                ? `محدد لـ ${specificProds.length} مذكرات`
-                                : 'شامل جميع المذكرات'}
-                            </span>
-                          </div>
-                          <h3 className="text-lg sm:text-xl font-black">{safeText(offer.title)}</h3>
-                          {offer.subtitle && (
-                            <p className="text-xs text-slate-300 leading-relaxed">{safeText(offer.subtitle)}</p>
-                          )}
-                          {specificProds.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 pt-1">
-                              {specificProds.map((sp) => (
-                                <span
-                                  key={sp.id}
-                                  className="px-2.5 py-0.5 rounded-lg bg-white/10 text-[11px] font-bold text-amber-200"
-                                >
-                                  • {sp.title}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => navigateToTab('library')}
-                          style={{
-                            backgroundColor: offer.accentColor || '#facc15',
-                            color: '#0f172a'
-                          }}
-                          className="px-5 py-3 rounded-2xl font-black text-xs shadow shrink-0 cursor-pointer"
-                        >
-                          كوّن مجموعتك الآن
-                        </button>
-                      </div>
-                    );
-                  })}
-              </div>
-            )}
+            {renderMultiNotebookOffersBanner()}
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-7">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {bundles.map((bundle) => {
-                const includedProducts = (bundle.productIds || [])
+                const includedProds = (bundle.productIds || [])
                   .map((pid) => products.find((p) => p.id === pid))
                   .filter(Boolean);
-                const savedAmount =
-                  Number(bundle.originalPrice || 0) > Number(bundle.price || 0)
-                    ? Number(bundle.originalPrice) - Number(bundle.price)
-                    : 0;
-                const savedPercent =
-                  savedAmount > 0
-                    ? Math.round((savedAmount / Number(bundle.originalPrice)) * 100)
-                    : 0;
+                const savedAmount = Math.max(0, Number(bundle.originalPrice || 0) - Number(bundle.price || 0));
 
                 return (
                   <div
                     key={bundle.id}
-                    className="group bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-md hover:shadow-2xl transition-all flex flex-col justify-between"
+                    className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-md hover:shadow-xl transition flex flex-col justify-between"
                   >
                     <div>
-                      <div className="bg-gradient-to-bl from-[#0b1938] via-[#132b5e] to-[#1d4ed8] p-6 sm:p-7 text-white space-y-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <span className="inline-flex items-center gap-1.5 bg-amber-400 text-slate-950 text-xs font-black px-3.5 py-1 rounded-full shadow">
-                            <Package className="w-3.5 h-3.5" />
-                            <span>
-                              {bundle.badge || (savedAmount > 0 ? `وفر ${savedAmount} ج.م` : 'باقة مميزة')}
-                            </span>
-                          </span>
-                          {savedPercent > 0 && (
-                            <span className="px-3 py-1 rounded-full bg-emerald-500 text-white text-xs font-black shadow">
-                              خصم {savedPercent}%
+                      <div className="bg-gradient-to-bl from-[#081229] via-[#0f2454] to-[#1d4ed8] p-6 text-white relative">
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                          {bundle.badge && (
+                            <span className="inline-block bg-amber-400 text-slate-950 text-xs font-black px-3.5 py-1 rounded-full shadow">
+                              {bundle.badge}
                             </span>
                           )}
+                          <span className="text-xs bg-white/15 px-3 py-1 rounded-full font-bold">
+                            تشمل {includedProds.length} مذكرات
+                          </span>
                         </div>
-                        <h3 className="text-xl sm:text-2xl font-black leading-snug">
-                          {safeText(bundle.title)}
-                        </h3>
-                        <p className="text-xs sm:text-sm text-blue-100 leading-relaxed">
-                          {safeText(bundle.subtitle)}
-                        </p>
+                        <h3 className="text-xl sm:text-2xl font-black leading-snug">{bundle.title}</h3>
+                        <p className="text-xs sm:text-sm text-blue-100 mt-2 leading-relaxed">{bundle.subtitle}</p>
                       </div>
 
-                      <div className="p-6 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-black text-slate-700">
-                            محتويات الباقة ({includedProducts.length} مذكرات):
-                          </span>
-                          <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full">
-                            اضغط على أي مذكرة للمعاينة
-                          </span>
+                      <div className="p-6 space-y-3.5">
+                        <div className="text-xs font-black text-slate-600 flex items-center justify-between">
+                          <span>محتويات الباقة (اضغط على أي مذكرة للمعاينة):</span>
+                          {savedAmount > 0 && (
+                            <span className="text-emerald-600 font-black">توفير {savedAmount} ج.م</span>
+                          )}
                         </div>
-
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                          {includedProducts.map((prod) => (
+                          {includedProds.map((prod) => (
                             <div
                               key={prod.id}
                               onClick={() => {
                                 setPreviewProduct(prod);
                                 setActiveSampleIndex(0);
-                                setIsSampleFullscreen(false);
                               }}
-                              className="p-3 rounded-2xl bg-slate-50 hover:bg-blue-50/80 border border-slate-200/90 hover:border-blue-300 flex flex-col items-center text-center gap-2 cursor-pointer transition shadow-2xs"
+                              className="p-3 rounded-2xl bg-slate-50 hover:bg-blue-50 border border-slate-200/90 hover:border-blue-300 flex flex-col items-center text-center gap-2 transition cursor-pointer group"
                             >
-                              <div className="text-xs font-black text-slate-900 leading-snug line-clamp-2 min-h-[2.25rem] flex items-center justify-center">
-                                {safeText(prod.title)}
+                              <div className="text-xs font-black text-slate-900 group-hover:text-blue-700 leading-snug line-clamp-2 min-h-[2.2rem] flex items-center justify-center">
+                                {prod.title}
                               </div>
-
-                              <div className="w-14 h-16 rounded-xl overflow-hidden bg-gradient-to-br from-[#0f1f44] to-[#1e3a8a] border border-slate-200 flex items-center justify-center shrink-0 shadow-xs">
-                                {prod.coverImage ? (
-                                  <img
-                                    src={prod.coverImage}
-                                    alt={safeText(prod.title)}
-                                    className="w-full h-full object-cover"
-                                  />
-                                ) : (
-                                  <FileText className="w-6 h-6 text-amber-400" />
-                                )}
-                              </div>
-
-                              <span className="text-[10px] font-bold text-blue-600 bg-white px-2 py-0.5 rounded-full border border-slate-200/80">
-                                {prod.pagesCount || 0} صفحة • معاينة
+                              {prod.coverImage ? (
+                                <img
+                                  src={prod.coverImage}
+                                  alt={prod.title}
+                                  className="w-12 h-14 rounded-xl object-cover border border-slate-200 shadow-2xs group-hover:scale-105 transition"
+                                />
+                              ) : (
+                                <div className="w-12 h-14 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                                  <FileText className="w-6 h-6" />
+                                </div>
+                              )}
+                              <span className="text-[10px] font-bold text-slate-500">
+                                {prod.pagesCount} صفحة • معاينة
                               </span>
                             </div>
                           ))}
@@ -3109,26 +3267,21 @@ function MuzakkiratiPlatformContent() {
                       </div>
                     </div>
 
-                    <div className="p-6 bg-slate-50 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-4">
+                    <div className="p-6 bg-slate-50 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <div className="text-[11px] font-bold text-slate-500">سعر الباقة بالكامل:</div>
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-2xl sm:text-3xl font-black text-blue-600">
-                            {bundle.price} ج.م
-                          </span>
-                          {Number(bundle.originalPrice) > Number(bundle.price) && (
-                            <span className="text-xs sm:text-sm text-slate-400 line-through font-bold">
-                              {bundle.originalPrice} ج.م
-                            </span>
-                          )}
-                        </div>
+                        <div className="text-2xl font-black text-blue-600">{bundle.price} ج.م</div>
+                        {Number(bundle.originalPrice) > Number(bundle.price) && (
+                          <div className="text-xs text-slate-400 line-through">
+                            بدلاً من {bundle.originalPrice} ج.م
+                          </div>
+                        )}
                       </div>
 
                       <button
                         onClick={() => addToCart(bundle, 'bundle')}
-                        className="px-6 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs sm:text-sm shadow-lg shadow-blue-600/20 transition cursor-pointer"
+                        className="px-6 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-md transition cursor-pointer"
                       >
-                        أضف الباقة للسلة للتخصيص
+                        اطلب الباقة الآن
                       </button>
                     </div>
                   </div>
@@ -3223,20 +3376,20 @@ function MuzakkiratiPlatformContent() {
                 </div>
                 <div>
                   <h2 className="text-base sm:text-lg font-black">لوحة إدارة منصة العباقرة</h2>
-                  <p className="text-xs text-slate-300 mt-0.5">
-                    {adminGoogleUser
-                      ? `متصل بحساب المدير الرسمي (${adminGoogleUser.email}) ✓ — جميع التعديلات تُحفظ وتُعرض للعملاء فوراً`
-                      : 'تنبيه: اضغط "ربط حساب جوجل للإدارة" ليسمح Firebase بحفظ التعديلات للعملاء'}
+                  <p className="text-xs text-slate-300">
+                    {isOfficialAdminGoogle
+                      ? `متصل بحساب المدير الرسمي (${user?.email}) ✓ — جميع التعديلات تُحفظ وتُعرض للعملاء فوراً`
+                      : 'تنبيه: يجب ربط حساب جوجل للإدارة ليسمح Firebase بحفظ التعديلات للعملاء'}
                   </p>
                 </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                {!adminGoogleUser && (
+                {!isOfficialAdminGoogle && (
                   <button
                     type="button"
                     onClick={handleAdminGoogleSignIn}
-                    className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow cursor-pointer"
+                    className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow cursor-pointer animate-pulse"
                   >
                     <LogIn className="w-4 h-4" />
                     <span>ربط حساب جوجل للإدارة (مطلوب للحفظ)</span>
@@ -3245,9 +3398,9 @@ function MuzakkiratiPlatformContent() {
                 <button
                   type="button"
                   onClick={handleForcePullFromCloud}
-                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sky-300 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                  className="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-black flex items-center gap-1.5 shadow cursor-pointer"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" />
+                  <RefreshCw className="w-4 h-4" />
                   <span>سحب الصور من السحابة</span>
                 </button>
                 <button
@@ -3305,36 +3458,119 @@ function MuzakkiratiPlatformContent() {
               })}
             </div>
 
-            {/* تبويب 1: المذكرات والعينات */}
+            {/* تبويب 1: إدارة المذكرات + إعدادات زر Google Drive والتنبيهات */}
             {adminSubTab === 'products' && (
               <div className="space-y-6">
-                <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 space-y-5 text-xs">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
+                {/* بطاقة التحكم في زر معاينة Google Drive */}
+                <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 space-y-4 text-xs shadow-2xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <ExternalLink className="w-5 h-5 text-emerald-600" />
+                      <h3 className="text-base font-black text-slate-900">التحكم في زر معاينة عينة Google Drive</h3>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-4">
+                      <label className="flex items-center gap-1.5 font-bold text-emerald-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={settings.driveButtonEnabled !== false}
+                          onChange={(e) =>
+                            setSettings({ ...settings, driveButtonEnabled: e.target.checked })
+                          }
+                        />
+                        <span>إظهار الزر للعملاء</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 font-bold text-blue-600 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={settings.driveButtonShowOnCard !== false}
+                          onChange={(e) =>
+                            setSettings({ ...settings, driveButtonShowOnCard: e.target.checked })
+                          }
+                        />
+                        <span>إظهاره على بطاقة المذكرة</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleSaveAllAdminChanges}
+                        className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black cursor-pointer"
+                      >
+                        حفظ التعديلات
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                    <div className="sm:col-span-5">
+                      <label className="block font-bold text-slate-600 mb-1">نص الزر</label>
+                      <input
+                        type="text"
+                        value={settings.driveButtonText ?? 'معاينة عينة Google Drive'}
+                        onChange={(e) =>
+                          setSettings({ ...settings, driveButtonText: e.target.value })
+                        }
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block font-bold text-slate-600 mb-1">لون الخلفية</label>
+                      <input
+                        type="color"
+                        value={settings.driveButtonBg || '#ecfdf5'}
+                        onChange={(e) =>
+                          setSettings({ ...settings, driveButtonBg: e.target.value })
+                        }
+                        className="w-full h-10 rounded-xl border border-slate-200 cursor-pointer"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block font-bold text-slate-600 mb-1">لون النص</label>
+                      <input
+                        type="color"
+                        value={settings.driveButtonTextColor || '#047857'}
+                        onChange={(e) =>
+                          setSettings({ ...settings, driveButtonTextColor: e.target.value })
+                        }
+                        className="w-full h-10 rounded-xl border border-slate-200 cursor-pointer"
+                      />
+                    </div>
+                    <div className="sm:col-span-3">
+                      <div className="text-[11px] font-bold text-slate-500 mb-1">معاينة شكل الزر:</div>
+                      <div
+                        style={{
+                          backgroundColor: settings.driveButtonBg || '#ecfdf5',
+                          color: settings.driveButtonTextColor || '#047857'
+                        }}
+                        className="py-2.5 px-3 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 border border-black/10"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>{safeText(settings.driveButtonText, 'معاينة عينة Google Drive')}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* بطاقة التحكم المطورة والمبسطة في التنبيهات */}
+                <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 space-y-5 text-xs shadow-2xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <h3 className="text-base font-black text-slate-900">
-                        إعدادات التنبيهات وزر Google Drive الخاصة بالمذكرات
-                      </h3>
-                      <p className="text-[11px] text-slate-500">
-                        تحكم في التنبيه العام، والتنبيه الخاص بكل مذكرة، وزر عينة Google Drive بسهولة
-                      </p>
+                      <h3 className="text-base font-black text-slate-900">إعدادات التنبيهات المبسطة للمذكرات</h3>
+                      <p className="text-slate-500 mt-0.5">اختر قالباً جاهزاً أو خصص الخلفية ولون النص وشاهد المعاينة المباشرة</p>
                     </div>
                     <button
                       type="button"
                       onClick={handleSaveAllAdminChanges}
                       className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black cursor-pointer shadow-sm"
                     >
-                      حفظ ونشر الإعدادات
+                      حفظ ونشر تعديلات التنبيهات
                     </button>
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* 1. التنبيه العام */}
-                    <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/80 border border-slate-200/80 space-y-4">
+                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3.5">
                       <div className="flex items-center justify-between">
-                        <h4 className="font-black text-sm text-slate-900">
-                          1. التنبيه العام (في نافذة المعاينة فقط)
-                        </h4>
-                        <label className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-slate-200 font-bold text-blue-600 cursor-pointer">
+                        <h4 className="font-black text-sm text-slate-900">1. التنبيه العام (في نافذة المعاينة)</h4>
+                        <label className="flex items-center gap-1.5 font-bold text-blue-600 cursor-pointer bg-white px-3 py-1.5 rounded-xl border border-slate-200">
                           <input
                             type="checkbox"
                             checked={settings.generalNoticeEnabled !== false}
@@ -3342,7 +3578,7 @@ function MuzakkiratiPlatformContent() {
                               setSettings({ ...settings, generalNoticeEnabled: e.target.checked })
                             }
                           />
-                          <span>مفعّل</span>
+                          <span>إظهار التنبيه العام</span>
                         </label>
                       </div>
 
@@ -3354,7 +3590,7 @@ function MuzakkiratiPlatformContent() {
                           onChange={(e) =>
                             setSettings({ ...settings, generalNoticeTitle: e.target.value })
                           }
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-bold"
+                          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white font-bold"
                         />
                       </div>
 
@@ -3366,12 +3602,12 @@ function MuzakkiratiPlatformContent() {
                           onChange={(e) =>
                             setSettings({ ...settings, generalNoticeText: e.target.value })
                           }
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white leading-relaxed"
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white leading-relaxed"
                         />
                       </div>
 
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1.5">قوالب ألوان جاهزة:</label>
+                      <div className="space-y-1.5">
+                        <span className="block font-bold text-slate-600">قوالب ألوان جاهزة بضغطة واحدة:</span>
                         <div className="flex flex-wrap gap-2">
                           {[
                             { name: 'رمادي هادئ', bg: '#f8fafc', text: '#334155' },
@@ -3399,7 +3635,7 @@ function MuzakkiratiPlatformContent() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-2.5">
+                      <div className="grid grid-cols-3 gap-2">
                         <div>
                           <label className="block font-bold text-slate-600 mb-1">مكان الظهور</label>
                           <select
@@ -3437,211 +3673,119 @@ function MuzakkiratiPlatformContent() {
                         </div>
                       </div>
 
-                      <div className="pt-2 border-t border-slate-200/80 space-y-1.5">
-                        <span className="text-[11px] font-bold text-slate-500">معاينة مباشرة:</span>
+                      <div className="pt-1">
+                        <span className="block text-[11px] font-bold text-slate-500 mb-1.5">معاينة حية للتنبيه العام:</span>
                         {renderGeneralNoticeBox()}
                       </div>
                     </div>
 
                     {/* 2. التنبيه الخاص بكل مذكرة */}
-                    <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/80 border border-slate-200/80 space-y-4">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <h4 className="font-black text-sm text-slate-900">
-                          2. التنبيه الخاص بكل مذكرة (صندوق منفصل)
-                        </h4>
-                        <div className="flex items-center gap-2">
-                          <label className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-slate-200 font-bold text-emerald-700 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={settings.tipNoticeEnabled !== false}
-                              onChange={(e) =>
-                                setSettings({ ...settings, tipNoticeEnabled: e.target.checked })
-                              }
-                            />
-                            <span>بالمعاينة</span>
-                          </label>
-                          <label className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-slate-200 font-bold text-blue-600 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={settings.tipShowOnCard !== false}
-                              onChange={(e) =>
-                                setSettings({ ...settings, tipShowOnCard: e.target.checked })
-                              }
-                            />
-                            <span>بالبطاقة</span>
-                          </label>
+                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3.5 flex flex-col justify-between">
+                      <div className="space-y-3.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h4 className="font-black text-sm text-slate-900">2. التنبيه الخاص بكل مذكرة</h4>
+                          <div className="flex items-center gap-2">
+                            <label className="flex items-center gap-1.5 font-bold text-emerald-700 cursor-pointer bg-white px-2.5 py-1.5 rounded-xl border border-slate-200">
+                              <input
+                                type="checkbox"
+                                checked={settings.tipNoticeEnabled !== false}
+                                onChange={(e) =>
+                                  setSettings({ ...settings, tipNoticeEnabled: e.target.checked })
+                                }
+                              />
+                              <span>بالمعاينة</span>
+                            </label>
+                            <label className="flex items-center gap-1.5 font-bold text-blue-600 cursor-pointer bg-white px-2.5 py-1.5 rounded-xl border border-slate-200">
+                              <input
+                                type="checkbox"
+                                checked={settings.tipShowOnCard !== false}
+                                onChange={(e) =>
+                                  setSettings({ ...settings, tipShowOnCard: e.target.checked })
+                                }
+                              />
+                              <span>بالبطاقة</span>
+                            </label>
+                          </div>
                         </div>
-                      </div>
 
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1.5">قوالب ألوان جاهزة:</label>
-                        <div className="flex flex-wrap gap-2">
-                          {[
-                            { name: 'ذهبي دافئ', bg: '#fffbeb', text: '#78350f' },
-                            { name: 'أزرق ملكي', bg: '#1d4ed8', text: '#ffffff' },
-                            { name: 'أخضر زمردي', bg: '#059669', text: '#ffffff' },
-                            { name: 'أزرق فاتح', bg: '#eff6ff', text: '#1e40af' },
-                            { name: 'وردي تنبيهي', bg: '#fff1f2', text: '#9f1239' }
-                          ].map((preset) => (
-                            <button
-                              key={preset.name}
-                              type="button"
-                              onClick={() =>
-                                setSettings({
-                                  ...settings,
-                                  tipNoticeBg: preset.bg,
-                                  tipNoticeTextColor: preset.text
-                                })
+                        <div className="space-y-1.5">
+                          <span className="block font-bold text-slate-600">قوالب ألوان جاهزة بضغطة واحدة:</span>
+                          <div className="flex flex-wrap gap-2">
+                            {[
+                              { name: 'ذهبي دافئ', bg: '#fffbeb', text: '#78350f' },
+                              { name: 'أزرق ملكي', bg: '#1d4ed8', text: '#ffffff' },
+                              { name: 'أخضر زمردي', bg: '#ecfdf5', text: '#065f46' },
+                              { name: 'وردي تنبيهي', bg: '#fff1f2', text: '#9f1239' },
+                              { name: 'كحلي داكن', bg: '#0f172a', text: '#fde047' }
+                            ].map((preset) => (
+                              <button
+                                key={preset.name}
+                                type="button"
+                                onClick={() =>
+                                  setSettings({
+                                    ...settings,
+                                    tipNoticeBg: preset.bg,
+                                    tipNoticeTextColor: preset.text
+                                  })
+                                }
+                                style={{ backgroundColor: preset.bg, color: preset.text }}
+                                className="px-3 py-1.5 rounded-xl border border-black/15 font-black text-[11px] shadow-2xs hover:scale-105 transition cursor-pointer"
+                              >
+                                {preset.name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <label className="block font-bold text-slate-600 mb-1">مكان الظهور</label>
+                            <select
+                              value={settings.tipNoticePosition || 'below-desc'}
+                              onChange={(e) =>
+                                setSettings({ ...settings, tipNoticePosition: e.target.value })
                               }
-                              style={{ backgroundColor: preset.bg, color: preset.text }}
-                              className="px-3 py-1.5 rounded-xl border border-black/15 font-black text-[11px] shadow-2xs hover:scale-105 transition cursor-pointer"
+                              className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-white font-bold"
                             >
-                              {preset.name}
-                            </button>
-                          ))}
+                              <option value="above-desc">أعلى الوصف</option>
+                              <option value="below-desc">أسفل الوصف</option>
+                              <option value="before-actions">قبل أزرار الطلب</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block font-bold text-slate-600 mb-1">لون الخلفية</label>
+                            <input
+                              type="color"
+                              value={settings.tipNoticeBg || '#fffbeb'}
+                              onChange={(e) =>
+                                setSettings({ ...settings, tipNoticeBg: e.target.value })
+                              }
+                              className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-bold text-slate-600 mb-1">لون النص</label>
+                            <input
+                              type="color"
+                              value={settings.tipNoticeTextColor || '#78350f'}
+                              onChange={(e) =>
+                                setSettings({ ...settings, tipNoticeTextColor: e.target.value })
+                              }
+                              className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
+                            />
+                          </div>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-2.5">
-                        <div>
-                          <label className="block font-bold text-slate-600 mb-1">مكان الظهور</label>
-                          <select
-                            value={settings.tipNoticePosition || 'below-desc'}
-                            onChange={(e) =>
-                              setSettings({ ...settings, tipNoticePosition: e.target.value })
-                            }
-                            className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-white font-bold"
-                          >
-                            <option value="above-desc">أعلى الوصف</option>
-                            <option value="below-desc">أسفل الوصف</option>
-                            <option value="before-actions">قبل أزرار الطلب</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block font-bold text-slate-600 mb-1">لون الخلفية</label>
-                          <input
-                            type="color"
-                            value={settings.tipNoticeBg || '#fffbeb'}
-                            onChange={(e) =>
-                              setSettings({ ...settings, tipNoticeBg: e.target.value })
-                            }
-                            className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-bold text-slate-600 mb-1">لون النص</label>
-                          <input
-                            type="color"
-                            value={settings.tipNoticeTextColor || '#78350f'}
-                            onChange={(e) =>
-                              setSettings({ ...settings, tipNoticeTextColor: e.target.value })
-                            }
-                            className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="pt-3 border-t border-slate-200/80 space-y-2">
-                        <span className="text-[11px] font-bold text-slate-500">معاينة مباشرة للتنبيه الخاص:</span>
-                        {renderProductTipBox('ملاحظة: للمراجعة المُثلى اطلبها مع بوكليت الاختبارات', false)}
-                        <button
-                          type="button"
-                          onClick={handleSaveAllAdminChanges}
-                          className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs shadow-sm cursor-pointer"
-                        >
-                          حفظ ونشر تعديلات التنبيهات
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 3. التحكم الكامل في زر معاينة Google Drive */}
-                  <div className="p-4 sm:p-5 rounded-2xl bg-emerald-50/50 border border-emerald-200 space-y-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <h4 className="font-black text-sm text-slate-900">
-                          3. التحكم في زر معاينة Google Drive للعملاء
-                        </h4>
-                        <p className="text-[11px] text-slate-500">
-                          تحكم في إظهار الزر على بطاقة المذكرة وفي نافذة التفاصيل، مع تخصيص نصه وألوانه
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <label className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-slate-200 font-bold text-emerald-700 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={settings.driveBtnEnabled !== false}
-                            onChange={(e) =>
-                              setSettings({ ...settings, driveBtnEnabled: e.target.checked })
-                            }
-                          />
-                          <span>تفعيل الزر</span>
-                        </label>
-                        <label className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-slate-200 font-bold text-blue-600 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={settings.driveBtnShowOnCard !== false}
-                            onChange={(e) =>
-                              setSettings({ ...settings, driveBtnShowOnCard: e.target.checked })
-                            }
-                          />
-                          <span>إظهاره على البطاقة</span>
-                        </label>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-                      <div className="sm:col-span-4">
-                        <label className="block font-bold text-slate-600 mb-1">نص الزر</label>
-                        <input
-                          type="text"
-                          value={settings.driveBtnLabel ?? 'عينة Google Drive'}
-                          onChange={(e) =>
-                            setSettings({ ...settings, driveBtnLabel: e.target.value })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-bold"
-                        />
-                      </div>
-                      <div className="sm:col-span-2">
-                        <label className="block font-bold text-slate-600 mb-1">لون الزر</label>
-                        <input
-                          type="color"
-                          value={settings.driveBtnBg || '#059669'}
-                          onChange={(e) =>
-                            setSettings({ ...settings, driveBtnBg: e.target.value })
-                          }
-                          className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
-                        />
-                      </div>
-                      <div className="sm:col-span-2">
-                        <label className="block font-bold text-slate-600 mb-1">لون النص</label>
-                        <input
-                          type="color"
-                          value={settings.driveBtnText || '#ffffff'}
-                          onChange={(e) =>
-                            setSettings({ ...settings, driveBtnText: e.target.value })
-                          }
-                          className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
-                        />
-                      </div>
-                      <div className="sm:col-span-4 flex items-center justify-between gap-2 bg-white p-2.5 rounded-xl border border-slate-200">
-                        <span className="text-[11px] font-bold text-slate-500">معاينة:</span>
-                        <span
-                          style={{
-                            backgroundColor: settings.driveBtnBg || '#059669',
-                            color: settings.driveBtnText || '#ffffff'
-                          }}
-                          className="px-3 py-1.5 rounded-xl font-black text-xs inline-flex items-center gap-1.5 shadow-2xs"
-                        >
-                          <span>{safeText(settings.driveBtnLabel, 'عينة Google Drive')}</span>
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </span>
+                      <div className="pt-2">
+                        <span className="block text-[11px] font-bold text-slate-500 mb-1.5">معاينة حية لتنبيه المذكرة:</span>
+                        {renderProductTipBox('ملاحظة: للمراجعة المُثلى اطلبها مع بوكليت الاختبارات الشاملة', false)}
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* نموذج إضافة/تعديل المذكرة وقائمة المذكرات */}
+                {/* نموذج إضافة/تعديل المذكرات + قائمة المذكرات */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                   <form
                     onSubmit={handleSaveProduct}
@@ -3965,20 +4109,13 @@ function MuzakkiratiPlatformContent() {
               </div>
             )}
 
-            {/* تبويب 2: إدارة الباقات */}
+            {/* تبويب 2: إدارة الباقات (إضافة + تعديل كامل بدون صورة غلاف) */}
             {adminSubTab === 'bundles' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 p-6 space-y-4 h-fit">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-base font-black text-slate-900">
-                      {editingBundleId ? 'تعديل بيانات الباقة' : 'إضافة باقة مخفضة جديدة'}
-                    </h3>
-                    {editingBundleId && (
-                      <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 text-[11px] font-black">
-                        وضع التعديل
-                      </span>
-                    )}
-                  </div>
+                  <h3 className="text-base font-black text-slate-900">
+                    {editingBundleId ? 'تعديل بيانات الباقة' : 'إضافة باقة مخفضة جديدة'}
+                  </h3>
                   <div className="space-y-3 text-xs">
                     <div>
                       <label className="block font-bold text-slate-600 mb-1">اسم الباقة *</label>
@@ -3994,7 +4131,7 @@ function MuzakkiratiPlatformContent() {
                       <label className="block font-bold text-slate-600 mb-1">وصف الباقة</label>
                       <textarea
                         rows={2}
-                        placeholder="وصف مختصر لمميزات الباقة..."
+                        placeholder="وصف مختصر لمزايا الباقة..."
                         value={newBundleForm.subtitle}
                         onChange={(e) => setNewBundleForm({ ...newBundleForm, subtitle: e.target.value })}
                         className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
@@ -4005,17 +4142,15 @@ function MuzakkiratiPlatformContent() {
                         <label className="block font-bold text-slate-600 mb-1">سعر الباقة (ج.م)</label>
                         <input
                           type="number"
-                          placeholder="سعر الباقة"
                           value={newBundleForm.price}
                           onChange={(e) => setNewBundleForm({ ...newBundleForm, price: Number(e.target.value) })}
                           className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold"
                         />
                       </div>
                       <div>
-                        <label className="block font-bold text-slate-600 mb-1">السعر الأصلي (ج.م)</label>
+                        <label className="block font-bold text-slate-600 mb-1">السعر الأصلي قبل الخصم</label>
                         <input
                           type="number"
-                          placeholder="السعر الأصلي"
                           value={newBundleForm.originalPrice}
                           onChange={(e) =>
                             setNewBundleForm({ ...newBundleForm, originalPrice: Number(e.target.value) })
@@ -4028,12 +4163,13 @@ function MuzakkiratiPlatformContent() {
                       <label className="block font-bold text-slate-600 mb-1">شارة التوفير</label>
                       <input
                         type="text"
-                        placeholder="مثال: وفر 246 ج.م"
+                        placeholder="مثال: وفر 150 ج.م"
                         value={newBundleForm.badge}
                         onChange={(e) => setNewBundleForm({ ...newBundleForm, badge: e.target.value })}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold"
                       />
                     </div>
+
                     <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
                       <div className="font-black text-slate-800">
                         اختر المذكرات المشمولة داخل الباقة ({newBundleForm.productIds.length}):
@@ -4071,7 +4207,8 @@ function MuzakkiratiPlatformContent() {
                         })}
                       </div>
                     </div>
-                    <div className="flex gap-2">
+
+                    <div className="flex gap-2 pt-1">
                       <button
                         type="button"
                         onClick={async () => {
@@ -4079,20 +4216,18 @@ function MuzakkiratiPlatformContent() {
                             showToast('يرجى إدخال اسم الباقة أولاً', 'error');
                             return;
                           }
-                          const bObj = {
-                            ...newBundleForm,
-                            id: editingBundleId || `bnd_${Date.now()}`,
-                            price: Number(newBundleForm.price || 0),
-                            originalPrice: Number(newBundleForm.originalPrice || 0)
-                          };
+                          const bId = editingBundleId || `bnd_${Date.now()}`;
+                          const { coverImage, ...cleanBundleData } = newBundleForm;
+                          const bObj = { ...cleanBundleData, id: bId };
                           const next = editingBundleId
-                            ? bundles.map((x) => (x.id === editingBundleId ? bObj : x))
+                            ? bundles.map((item) => (item.id === editingBundleId ? bObj : item))
                             : [bObj, ...bundles];
                           setBundles(next);
                           await idbSet('bundles_v5', next);
-                          if (db) {
+                          safeLocalSet('el3bakera_bundles_v5', next);
+                          if (db && isOfficialAdminGoogle) {
                             await setDoc(
-                              doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles', bObj.id),
+                              doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles', bId),
                               bObj,
                               { merge: true }
                             );
@@ -4103,14 +4238,14 @@ function MuzakkiratiPlatformContent() {
                             subtitle: '',
                             price: 499,
                             originalPrice: 650,
-                            badge: 'وفر 150 ج.م',
+                            badge: 'عرض خاص',
                             productIds: []
                           });
-                          showToast(editingBundleId ? '✓ تم حفظ تعديلات الباقة بنجاح' : '✓ تمت إضافة الباقة وحفظها بنجاح');
+                          showToast(editingBundleId ? 'تم تحديث الباقة وحفظها بنجاح' : 'تمت إضافة الباقة وحفظها بنجاح');
                         }}
                         className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm cursor-pointer"
                       >
-                        {editingBundleId ? 'حفظ تعديلات الباقة' : 'حفظ الباقة'}
+                        {editingBundleId ? 'حفظ تعديلات الباقة' : 'إضافة الباقة'}
                       </button>
                       {editingBundleId && (
                         <button
@@ -4126,7 +4261,7 @@ function MuzakkiratiPlatformContent() {
                               productIds: []
                             });
                           }}
-                          className="px-4 py-3 rounded-xl bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
+                          className="px-4 py-3 rounded-xl bg-slate-200 text-slate-700 font-bold cursor-pointer"
                         >
                           إلغاء
                         </button>
@@ -4139,15 +4274,13 @@ function MuzakkiratiPlatformContent() {
                   {bundles.map((b) => (
                     <div
                       key={b.id}
-                      className={`bg-white rounded-2xl border p-4 flex items-center justify-between gap-3 ${
-                        editingBundleId === b.id ? 'border-blue-500 ring-2 ring-blue-100' : 'border-slate-200'
-                      }`}
+                      className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center justify-between gap-3 shadow-2xs"
                     >
-                      <div className="space-y-1">
+                      <div className="space-y-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <h4 className="font-black text-sm">{b.title}</h4>
+                          <h4 className="font-black text-sm text-slate-900 truncate">{b.title}</h4>
                           {b.badge && (
-                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[10px] font-black">
+                            <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[10px] font-black shrink-0">
                               {b.badge}
                             </span>
                           )}
@@ -4170,8 +4303,8 @@ function MuzakkiratiPlatformContent() {
                               productIds: Array.isArray(b.productIds) ? b.productIds : []
                             });
                           }}
+                          className="p-2 rounded-xl bg-blue-50 text-blue-600 cursor-pointer"
                           title="تعديل الباقة"
-                          className="p-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 cursor-pointer"
                         >
                           <Edit3 className="w-4 h-4" />
                         </button>
@@ -4181,16 +4314,16 @@ function MuzakkiratiPlatformContent() {
                             const next = bundles.filter((x) => x.id !== b.id);
                             setBundles(next);
                             await idbSet('bundles_v5', next);
-                            if (db) {
+                            safeLocalSet('el3bakera_bundles_v5', next);
+                            if (db && isOfficialAdminGoogle) {
                               await deleteDoc(
                                 doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles', b.id)
                               );
                             }
-                            if (editingBundleId === b.id) setEditingBundleId(null);
                             showToast('تم حذف الباقة');
                           }}
+                          className="p-2 rounded-xl bg-rose-50 text-rose-600 cursor-pointer"
                           title="حذف الباقة"
-                          className="p-2 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 cursor-pointer"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -4463,253 +4596,146 @@ function MuzakkiratiPlatformContent() {
               </div>
             )}
 
-            {/* تبويب 4: الكوبونات والعروض */}
+            {/* تبويب 4: إدارة الكوبونات والشريط الترويجي وعروض الحصول على أكثر من مذكرة */}
             {adminSubTab === 'coupons' && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 text-xs">
-                <div className="lg:col-span-6 space-y-6">
-                  {/* الشريط الترويجي العلوي */}
-                  <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-base font-black text-slate-900">الشريط الترويجي العلوي</h3>
-                      <label className="flex items-center gap-1.5 font-bold text-blue-600 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={settings.promoEnabled !== false}
-                          onChange={(e) =>
-                            setSettings({ ...settings, promoEnabled: e.target.checked })
-                          }
-                        />
-                        <span>مفعّل</span>
-                      </label>
-                    </div>
-                    <input
-                      type="text"
-                      value={settings.promoText}
-                      onChange={(e) => setSettings({ ...settings, promoText: e.target.value })}
-                      placeholder="نص العرض العلوي..."
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                    />
-                    <div className="grid grid-cols-3 gap-2">
+              <div className="space-y-6 text-xs">
+                {/* قسم إنشاء وإدارة عروض الحصول على أكثر من مذكرة (عروض متعددة + تحديد مذكرات معينة أو الكل) */}
+                <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-5 shadow-2xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Gift className="w-5 h-5 text-amber-500" />
                       <div>
-                        <label className="block font-bold text-slate-600 mb-1">كود الكوبون</label>
-                        <input
-                          type="text"
-                          value={settings.promoCouponCode}
-                          onChange={(e) =>
-                            setSettings({ ...settings, promoCouponCode: e.target.value.toUpperCase() })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-black uppercase"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">لون الخلفية</label>
-                        <input
-                          type="color"
-                          value={settings.promoBgColor || '#0654d0'}
-                          onChange={(e) =>
-                            setSettings({ ...settings, promoBgColor: e.target.value })
-                          }
-                          className="w-full h-9 rounded-xl border border-slate-200"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">لون النص</label>
-                        <input
-                          type="color"
-                          value={settings.promoTextColor || '#fde047'}
-                          onChange={(e) =>
-                            setSettings({ ...settings, promoTextColor: e.target.value })
-                          }
-                          className="w-full h-9 rounded-xl border border-slate-200"
-                        />
+                        <h3 className="text-base font-black text-slate-900">عروض الحصول على أكثر من مذكرة (عروض متعددة)</h3>
+                        <p className="text-slate-500 mt-0.5">أنشئ عرضاً أو أكثر وحدد له نسبة الخصم والمذكرات المشمولة (أو اتركها بدون تحديد ليشمل جميع المذكرات)</p>
                       </div>
                     </div>
                     <button
                       type="button"
                       onClick={handleSaveAllAdminChanges}
-                      className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black cursor-pointer"
+                      className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black cursor-pointer"
                     >
-                      حفظ الشريط الترويجي
+                      حفظ ونشر العروض
                     </button>
                   </div>
 
-                  {/* إدارة عروض الحصول على أكثر من مذكرة */}
-                  <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    {/* نموذج إضافة / تعديل عرض */}
+                    <div className="lg:col-span-5 p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                      <h4 className="font-black text-sm text-slate-900">
+                        {editingMultiOfferId ? 'تعديل العرض الحالي' : 'إضافة عرض جديد عند طلب أكثر من مذكرة'}
+                      </h4>
                       <div>
-                        <h3 className="text-base font-black text-slate-900">
-                          {editingMultiOfferId
-                            ? 'تعديل عرض المذكرات المتعددة'
-                            : 'إنشاء عروض الحصول على أكثر من مذكرة'}
-                        </h3>
-                        <p className="text-[11px] text-slate-500">
-                          أنشئ عرضاً أو أكثر وحدد ما إذا كان يسري على جميع المذكرات أو مذكرات معينة فقط
-                        </p>
+                        <label className="block font-bold text-slate-600 mb-1">عنوان العرض *</label>
+                        <input
+                          type="text"
+                          placeholder="مثال: عرض خاص عند طلب مذكرتين فأكثر!"
+                          value={multiOfferForm.title}
+                          onChange={(e) => setMultiOfferForm({ ...multiOfferForm, title: e.target.value })}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-bold"
+                        />
                       </div>
-                      {editingMultiOfferId && (
-                        <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 font-black">
-                          وضع التعديل
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <div>
-                          <label className="block font-bold text-slate-600 mb-1">عنوان العرض *</label>
-                          <input
-                            type="text"
-                            placeholder="مثال: خصم 15% عند طلب مذكرتين أو أكثر"
-                            value={newMultiOfferForm.title}
-                            onChange={(e) =>
-                              setNewMultiOfferForm({ ...newMultiOfferForm, title: e.target.value })
-                            }
-                            className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-bold"
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-bold text-slate-600 mb-1">نص الشارة العلوية</label>
-                          <input
-                            type="text"
-                            placeholder="🔥 عرض خاص عند طلب أكثر من مذكرة"
-                            value={newMultiOfferForm.badge}
-                            onChange={(e) =>
-                              setNewMultiOfferForm({ ...newMultiOfferForm, badge: e.target.value })
-                            }
-                            className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                          />
-                        </div>
-                      </div>
-
                       <div>
                         <label className="block font-bold text-slate-600 mb-1">وصف العرض</label>
                         <textarea
                           rows={2}
-                          placeholder="اشرح تفاصيل العرض للعملاء..."
-                          value={newMultiOfferForm.subtitle}
-                          onChange={(e) =>
-                            setNewMultiOfferForm({ ...newMultiOfferForm, subtitle: e.target.value })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
+                          placeholder="مثال: احصل على خصم 15% تلقائياً عند إضافة مذكرتين إلى السلة..."
+                          value={multiOfferForm.subtitle}
+                          onChange={(e) => setMultiOfferForm({ ...multiOfferForm, subtitle: e.target.value })}
+                          className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white"
                         />
                       </div>
-
-                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                      <div className="grid grid-cols-3 gap-2">
                         <div>
-                          <label className="block font-bold text-slate-600 mb-1">الحد الأدنى</label>
+                          <label className="block font-bold text-slate-600 mb-1">أقل عدد مذكرات</label>
                           <input
                             type="number"
-                            min="2"
-                            value={newMultiOfferForm.minItems}
-                            onChange={(e) =>
-                              setNewMultiOfferForm({
-                                ...newMultiOfferForm,
-                                minItems: Number(e.target.value)
-                              })
-                            }
-                            className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-white font-bold"
+                            min={2}
+                            value={multiOfferForm.minItems}
+                            onChange={(e) => setMultiOfferForm({ ...multiOfferForm, minItems: Number(e.target.value) })}
+                            className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-bold"
                           />
                         </div>
                         <div>
-                          <label className="block font-bold text-slate-600 mb-1">الخصم %</label>
+                          <label className="block font-bold text-slate-600 mb-1">نسبة الخصم %</label>
                           <input
                             type="number"
-                            value={newMultiOfferForm.discountPercent}
-                            onChange={(e) =>
-                              setNewMultiOfferForm({
-                                ...newMultiOfferForm,
-                                discountPercent: Number(e.target.value)
-                              })
-                            }
-                            className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-white font-bold"
+                            value={multiOfferForm.discountPercent}
+                            onChange={(e) => setMultiOfferForm({ ...multiOfferForm, discountPercent: Number(e.target.value) })}
+                            className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-bold"
                           />
                         </div>
                         <div>
-                          <label className="block font-bold text-slate-600 mb-1">أقصى خصم</label>
+                          <label className="block font-bold text-slate-600 mb-1">أقصى خصم ج.م</label>
                           <input
                             type="number"
-                            value={newMultiOfferForm.maxDiscount}
-                            onChange={(e) =>
-                              setNewMultiOfferForm({
-                                ...newMultiOfferForm,
-                                maxDiscount: Number(e.target.value)
-                              })
-                            }
-                            className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-white font-bold"
+                            value={multiOfferForm.maxDiscount}
+                            onChange={(e) => setMultiOfferForm({ ...multiOfferForm, maxDiscount: Number(e.target.value) })}
+                            className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-bold"
                           />
                         </div>
-                        <div>
-                          <label className="block font-bold text-slate-600 mb-1">لون الخلفية</label>
+                      </div>
+                      <div className="grid grid-cols-12 gap-2">
+                        <div className="col-span-6">
+                          <label className="block font-bold text-slate-600 mb-1">نص الشارة الذهبية</label>
+                          <input
+                            type="text"
+                            placeholder="وفر حتى 150 ج.م"
+                            value={multiOfferForm.badgeText}
+                            onChange={(e) => setMultiOfferForm({ ...multiOfferForm, badgeText: e.target.value })}
+                            className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-bold"
+                          />
+                        </div>
+                        <div className="col-span-3">
+                          <label className="block font-bold text-slate-600 mb-1">الخلفية</label>
                           <input
                             type="color"
-                            value={newMultiOfferForm.bgColor}
-                            onChange={(e) =>
-                              setNewMultiOfferForm({ ...newMultiOfferForm, bgColor: e.target.value })
-                            }
-                            className="w-full h-9 rounded-xl border border-slate-200"
+                            value={multiOfferForm.bgColor}
+                            onChange={(e) => setMultiOfferForm({ ...multiOfferForm, bgColor: e.target.value })}
+                            className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
                           />
                         </div>
-                        <div>
-                          <label className="block font-bold text-slate-600 mb-1">لون الزر</label>
+                        <div className="col-span-3">
+                          <label className="block font-bold text-slate-600 mb-1">لون النص</label>
                           <input
                             type="color"
-                            value={newMultiOfferForm.accentColor}
-                            onChange={(e) =>
-                              setNewMultiOfferForm({ ...newMultiOfferForm, accentColor: e.target.value })
-                            }
-                            className="w-full h-9 rounded-xl border border-slate-200"
+                            value={multiOfferForm.textColor}
+                            onChange={(e) => setMultiOfferForm({ ...multiOfferForm, textColor: e.target.value })}
+                            className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
                           />
                         </div>
                       </div>
 
-                      <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="font-black text-slate-800">
-                            نطاق العرض:{' '}
-                            {newMultiOfferForm.productIds.length === 0
-                              ? 'يشمل جميع المذكرات (اتركه فارغاً للكل)'
-                              : `محدد لـ (${newMultiOfferForm.productIds.length}) مذكرات`}
-                          </span>
-                          {newMultiOfferForm.productIds.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setNewMultiOfferForm({ ...newMultiOfferForm, productIds: [] })
-                              }
-                              className="text-blue-600 font-bold hover:underline cursor-pointer"
-                            >
-                              تحديد الكل (إلغاء التخصيص)
-                            </button>
-                          )}
+                      <div className="p-3 rounded-2xl bg-white border border-slate-200 space-y-2">
+                        <div className="font-black text-slate-800">
+                          تحديد مذكرات معينة للعرض ({multiOfferForm.productIds.length === 0 ? 'شامل لجميع المذكرات' : `${multiOfferForm.productIds.length} مذكرات محددة`}):
                         </div>
                         <div className="max-h-36 overflow-y-auto space-y-1 pr-1">
                           {products.map((prod) => {
-                            const checked = newMultiOfferForm.productIds.includes(prod.id);
+                            const isChecked = multiOfferForm.productIds.includes(prod.id);
                             return (
                               <label
                                 key={prod.id}
-                                className={`flex items-center justify-between p-1.5 rounded-lg border cursor-pointer ${
-                                  checked
+                                className={`flex items-center justify-between gap-2 p-2 rounded-xl border cursor-pointer transition ${
+                                  isChecked
                                     ? 'bg-blue-50 border-blue-300 text-blue-900 font-bold'
                                     : 'bg-slate-50 border-slate-200 text-slate-700'
                                 }`}
                               >
-                                <span className="flex items-center gap-2 truncate">
+                                <div className="flex items-center gap-2 truncate">
                                   <input
                                     type="checkbox"
-                                    checked={checked}
-                                    onChange={() =>
-                                      setNewMultiOfferForm((prev) => ({
+                                    checked={isChecked}
+                                    onChange={() => {
+                                      setMultiOfferForm((prev) => ({
                                         ...prev,
-                                        productIds: checked
+                                        productIds: isChecked
                                           ? prev.productIds.filter((id) => id !== prod.id)
                                           : [...prev.productIds, prod.id]
-                                      }))
-                                    }
+                                      }));
+                                    }}
                                   />
                                   <span className="truncate">{prod.title}</span>
-                                </span>
-                                <span className="text-[11px] shrink-0">{prod.price} ج.م</span>
+                                </div>
                               </label>
                             );
                           })}
@@ -4720,65 +4746,56 @@ function MuzakkiratiPlatformContent() {
                         <button
                           type="button"
                           onClick={async () => {
-                            if (!newMultiOfferForm.title.trim()) {
+                            if (!multiOfferForm.title.trim()) {
                               showToast('يرجى إدخال عنوان العرض أولاً', 'error');
                               return;
                             }
                             const offerObj = {
-                              ...newMultiOfferForm,
-                              id: editingMultiOfferId || `mo_${Date.now()}`,
-                              minItems: Number(newMultiOfferForm.minItems || 2),
-                              discountPercent: Number(newMultiOfferForm.discountPercent || 15),
-                              maxDiscount: Number(newMultiOfferForm.maxDiscount || 150)
+                              ...multiOfferForm,
+                              id: editingMultiOfferId || `moff_${Date.now()}`
                             };
                             const nextOffers = editingMultiOfferId
-                              ? safeMultiOffers.map((o) =>
-                                  o.id === editingMultiOfferId ? offerObj : o
-                                )
+                              ? safeMultiOffers.map((o) => (o.id === editingMultiOfferId ? offerObj : o))
                               : [offerObj, ...safeMultiOffers];
+                            await saveSettings({ ...settings, multiOffers: nextOffers });
                             setEditingMultiOfferId(null);
-                            setNewMultiOfferForm({
-                              badge: '🔥 عرض خاص عند طلب أكثر من مذكرة',
+                            setMultiOfferForm({
                               title: '',
                               subtitle: '',
+                              badgeText: 'وفر 15% تلقائياً',
                               minItems: 2,
                               discountPercent: 15,
                               maxDiscount: 150,
                               productIds: [],
                               bgColor: '#0f172a',
-                              accentColor: '#facc15',
+                              textColor: '#ffffff',
                               active: true
                             });
-                            await saveSettings({ ...settings, multiOffers: nextOffers });
-                            showToast(
-                              editingMultiOfferId
-                                ? '✓ تم تحديث العرض ونشره للعملاء'
-                                : '✓ تم إضافة العرض ونشره للعملاء'
-                            );
+                            showToast(editingMultiOfferId ? 'تم تحديث العرض وحفظه' : 'تمت إضافة العرض وحفظه بنجاح');
                           }}
-                          className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black cursor-pointer"
+                          className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm cursor-pointer"
                         >
-                          {editingMultiOfferId ? 'حفظ تعديلات العرض' : '+ إضافة ونشر العرض'}
+                          {editingMultiOfferId ? 'حفظ تعديلات العرض' : '+ إضافة وحفظ العرض'}
                         </button>
                         {editingMultiOfferId && (
                           <button
                             type="button"
                             onClick={() => {
                               setEditingMultiOfferId(null);
-                              setNewMultiOfferForm({
-                                badge: '🔥 عرض خاص عند طلب أكثر من مذكرة',
+                              setMultiOfferForm({
                                 title: '',
                                 subtitle: '',
+                                badgeText: 'وفر 15% تلقائياً',
                                 minItems: 2,
                                 discountPercent: 15,
                                 maxDiscount: 150,
                                 productIds: [],
                                 bgColor: '#0f172a',
-                                accentColor: '#facc15',
+                                textColor: '#ffffff',
                                 active: true
                               });
                             }}
-                            className="px-4 py-2.5 rounded-xl bg-slate-200 text-slate-700 font-bold cursor-pointer"
+                            className="px-4 py-3 rounded-xl bg-slate-200 text-slate-700 font-bold cursor-pointer"
                           >
                             إلغاء
                           </button>
@@ -4786,66 +4803,297 @@ function MuzakkiratiPlatformContent() {
                       </div>
                     </div>
 
-                    {/* قائمة العروض الحالية */}
-                    <div className="space-y-2">
-                      {safeMultiOffers.map((off) => (
-                        <div
-                          key={off.id}
-                          className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2"
-                        >
-                          <div className="space-y-0.5">
-                            <div className="font-black text-slate-900">{off.title}</div>
-                            <div className="text-[11px] text-slate-500">
-                              خصم {off.discountPercent}% عند اختيار {off.minItems} مذكرات •{' '}
-                              {Array.isArray(off.productIds) && off.productIds.length > 0
-                                ? `محدد لـ ${off.productIds.length} مذكرات`
-                                : 'شامل جميع المذكرات'}
+                    {/* قائمة العروض المضافة */}
+                    <div className="lg:col-span-7 space-y-3">
+                      {safeMultiOffers.length === 0 ? (
+                        <div className="p-8 rounded-2xl bg-slate-50 border border-slate-200 text-center text-slate-500 font-bold">
+                          لا توجد عروض مضافة حالياً — أضف أول عرض من النموذج المجاور.
+                        </div>
+                      ) : (
+                        safeMultiOffers.map((off) => (
+                          <div
+                            key={off.id}
+                            className={`p-4 rounded-2xl border flex items-center justify-between gap-3 ${
+                              off.active === false ? 'bg-slate-50 border-slate-200 opacity-60' : 'bg-white border-slate-200 shadow-2xs'
+                            }`}
+                          >
+                            <div className="space-y-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span
+                                  style={{ backgroundColor: off.bgColor || '#0f172a', color: off.textColor || '#fff' }}
+                                  className="px-2.5 py-0.5 rounded-lg font-black text-[11px]"
+                                >
+                                  خصم {off.discountPercent}% عند {off.minItems}+ مذكرات
+                                </span>
+                                <h4 className="font-black text-sm text-slate-900 truncate">{off.title}</h4>
+                              </div>
+                              <p className="text-slate-500 truncate">{off.subtitle}</p>
+                              <div className="text-[11px] font-bold text-blue-600">
+                                {Array.isArray(off.productIds) && off.productIds.length > 0
+                                  ? `يسري على ${off.productIds.length} مذكرات محددة`
+                                  : 'شامل لجميع مذكرات المنصة'}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const nextOffers = safeMultiOffers.map((item) =>
+                                    item.id === off.id ? { ...item, active: item.active === false } : item
+                                  );
+                                  await saveSettings({ ...settings, multiOffers: nextOffers });
+                                  showToast('تم تحديث حالة العرض');
+                                }}
+                                className={`px-2.5 py-1.5 rounded-xl font-bold cursor-pointer ${
+                                  off.active === false
+                                    ? 'bg-amber-100 text-amber-900'
+                                    : 'bg-emerald-50 text-emerald-700'
+                                }`}
+                              >
+                                {off.active === false ? 'مخفي' : 'مفعّل'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingMultiOfferId(off.id);
+                                  setMultiOfferForm({
+                                    title: off.title || '',
+                                    subtitle: off.subtitle || '',
+                                    badgeText: off.badgeText || '',
+                                    minItems: Number(off.minItems || 2),
+                                    discountPercent: Number(off.discountPercent || 15),
+                                    maxDiscount: Number(off.maxDiscount || 150),
+                                    productIds: Array.isArray(off.productIds) ? off.productIds : [],
+                                    bgColor: off.bgColor || '#0f172a',
+                                    textColor: off.textColor || '#ffffff',
+                                    active: off.active !== false
+                                  });
+                                }}
+                                className="p-2 rounded-xl bg-blue-50 text-blue-600 cursor-pointer"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const nextOffers = safeMultiOffers.filter((item) => item.id !== off.id);
+                                  await saveSettings({ ...settings, multiOffers: nextOffers });
+                                  showToast('تم حذف العرض');
+                                }}
+                                className="p-2 rounded-xl bg-rose-50 text-rose-600 cursor-pointer"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             </div>
                           </div>
-                          <div className="flex items-center gap-1.5">
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* الشريط الترويجي العلوي وكوبونات الخصم */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                  <div className="lg:col-span-5 space-y-6">
+                    <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-base font-black text-slate-900">الشريط الترويجي العلوي</h3>
+                        <label className="flex items-center gap-1.5 font-bold text-blue-600 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={settings.promoEnabled !== false}
+                            onChange={(e) => setSettings({ ...settings, promoEnabled: e.target.checked })}
+                          />
+                          <span>تفعيل الشريط</span>
+                        </label>
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-slate-600 mb-1">نص العرض الترويجي</label>
+                        <input
+                          type="text"
+                          value={settings.promoText || ''}
+                          onChange={(e) => setSettings({ ...settings, promoText: e.target.value })}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">كود الخصم</label>
+                          <input
+                            type="text"
+                            value={settings.promoCouponCode || ''}
+                            onChange={(e) =>
+                              setSettings({ ...settings, promoCouponCode: e.target.value.toUpperCase() })
+                            }
+                            className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 uppercase font-black"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">لون الخلفية</label>
+                          <input
+                            type="color"
+                            value={settings.promoBgColor || '#0654d0'}
+                            onChange={(e) => setSettings({ ...settings, promoBgColor: e.target.value })}
+                            className="w-full h-9 rounded-xl border border-slate-200"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">لون النص</label>
+                          <input
+                            type="color"
+                            value={settings.promoTextColor || '#fde047'}
+                            onChange={(e) => setSettings({ ...settings, promoTextColor: e.target.value })}
+                            className="w-full h-9 rounded-xl border border-slate-200"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleSaveAllAdminChanges}
+                        className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black cursor-pointer"
+                      >
+                        حفظ إعدادات الشريط
+                      </button>
+                    </div>
+
+                    <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
+                      <h3 className="text-base font-black text-slate-900">إضافة كوبون خصم جديد</h3>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">الكود *</label>
+                          <input
+                            type="text"
+                            placeholder="M20"
+                            value={newCouponForm.code}
+                            onChange={(e) =>
+                              setNewCouponForm({ ...newCouponForm, code: e.target.value.toUpperCase() })
+                            }
+                            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 uppercase font-black"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">نسبة الخصم %</label>
+                          <input
+                            type="number"
+                            value={newCouponForm.discountPercent}
+                            onChange={(e) =>
+                              setNewCouponForm({ ...newCouponForm, discountPercent: Number(e.target.value) })
+                            }
+                            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">أقصى خصم ج.م</label>
+                          <input
+                            type="number"
+                            value={newCouponForm.maxDiscount}
+                            onChange={(e) =>
+                              setNewCouponForm({ ...newCouponForm, maxDiscount: Number(e.target.value) })
+                            }
+                            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold"
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!newCouponForm.code.trim()) {
+                            showToast('يرجى كتابة كود الخصم أولاً', 'error');
+                            return;
+                          }
+                          const cpObj = {
+                            ...newCouponForm,
+                            id: `cp_${Date.now()}`,
+                            code: newCouponForm.code.trim().toUpperCase(),
+                            active: true
+                          };
+                          const next = [cpObj, ...coupons];
+                          setCoupons(next);
+                          await idbSet('coupons_v5', next);
+                          safeLocalSet('el3bakera_coupons_v5', next);
+                          if (db && isOfficialAdminGoogle) {
+                            await setDoc(
+                              doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cpObj.id),
+                              cpObj
+                            );
+                          }
+                          setNewCouponForm({ code: '', discountPercent: 15, maxDiscount: 200, active: true });
+                          showToast(`تمت إضافة الكوبون ${cpObj.code} بنجاح`);
+                        }}
+                        className="w-full py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black cursor-pointer"
+                      >
+                        + إضافة الكوبون الآن
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="lg:col-span-7 bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
+                    <h3 className="text-base font-black text-slate-900">
+                      الكوبونات المتاحة على المنصة ({coupons.length})
+                    </h3>
+                    <div className="space-y-2.5">
+                      {coupons.map((cp) => (
+                        <div
+                          key={cp.id}
+                          className="p-4 rounded-2xl border border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="px-3 py-1.5 rounded-xl bg-blue-600 text-white font-black text-sm">
+                              {cp.code}
+                            </span>
+                            <div>
+                              <div className="font-black text-slate-900">
+                                خصم {cp.discountPercent}% (بحد أقصى {cp.maxDiscount || 200} ج.م)
+                              </div>
+                              <div className="text-[11px] text-slate-500">
+                                {cp.active !== false ? 'مفعّل ويعمل في السلة' : 'معطّل حالياً'}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
                             <button
                               type="button"
                               onClick={async () => {
-                                const nextOffers = safeMultiOffers.map((o) =>
-                                  o.id === off.id ? { ...o, active: o.active === false } : o
-                                );
-                                await saveSettings({ ...settings, multiOffers: nextOffers });
+                                const updated = { ...cp, active: cp.active === false };
+                                const next = coupons.map((c) => (c.id === cp.id ? updated : c));
+                                setCoupons(next);
+                                await idbSet('coupons_v5', next);
+                                safeLocalSet('el3bakera_coupons_v5', next);
+                                if (db && isOfficialAdminGoogle) {
+                                  await setDoc(
+                                    doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cp.id),
+                                    updated,
+                                    { merge: true }
+                                  );
+                                }
+                                showToast(updated.active ? 'تم تفعيل الكوبون' : 'تم تعطيل الكوبون');
                               }}
-                              className={`px-2.5 py-1 rounded-xl font-bold cursor-pointer ${
-                                off.active !== false
+                              className={`px-3 py-1.5 rounded-xl font-bold cursor-pointer ${
+                                cp.active !== false
                                   ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-slate-200 text-slate-600'
+                                  : 'bg-amber-100 text-amber-800'
                               }`}
                             >
-                              {off.active !== false ? 'مفعّل' : 'مخفي'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingMultiOfferId(off.id);
-                                setNewMultiOfferForm({
-                                  badge: off.badge || '',
-                                  title: off.title || '',
-                                  subtitle: off.subtitle || '',
-                                  minItems: Number(off.minItems || 2),
-                                  discountPercent: Number(off.discountPercent || 15),
-                                  maxDiscount: Number(off.maxDiscount || 150),
-                                  productIds: Array.isArray(off.productIds) ? off.productIds : [],
-                                  bgColor: off.bgColor || '#0f172a',
-                                  accentColor: off.accentColor || '#facc15',
-                                  active: off.active !== false
-                                });
-                              }}
-                              className="p-2 rounded-xl bg-blue-50 text-blue-600 cursor-pointer"
-                            >
-                              <Edit3 className="w-4 h-4" />
+                              {cp.active !== false ? 'مفعّل' : 'معطّل'}
                             </button>
                             <button
                               type="button"
                               onClick={async () => {
-                                const nextOffers = safeMultiOffers.filter((o) => o.id !== off.id);
-                                await saveSettings({ ...settings, multiOffers: nextOffers });
-                                showToast('✓ تم حذف العرض');
+                                const next = coupons.filter((c) => c.id !== cp.id);
+                                setCoupons(next);
+                                await idbSet('coupons_v5', next);
+                                safeLocalSet('el3bakera_coupons_v5', next);
+                                if (db && isOfficialAdminGoogle) {
+                                  await deleteDoc(
+                                    doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cp.id)
+                                  );
+                                }
+                                showToast('تم حذف الكوبون');
                               }}
                               className="p-2 rounded-xl bg-rose-50 text-rose-600 cursor-pointer"
                             >
@@ -4855,133 +5103,6 @@ function MuzakkiratiPlatformContent() {
                         </div>
                       ))}
                     </div>
-                  </div>
-                </div>
-
-                {/* إضافة وإدارة كوبونات الخصم */}
-                <div className="lg:col-span-6 bg-white rounded-3xl border border-slate-200 p-6 space-y-4 h-fit">
-                  <h3 className="text-base font-black text-slate-900">إضافة وإدارة كوبونات الخصم</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
-                    <input
-                      type="text"
-                      placeholder="كود الكوبون (مثال: SAVE20)"
-                      value={newCouponForm.code}
-                      onChange={(e) =>
-                        setNewCouponForm({ ...newCouponForm, code: e.target.value.toUpperCase() })
-                      }
-                      className="sm:col-span-4 px-3 py-2 rounded-xl border border-slate-200 bg-white font-black uppercase"
-                    />
-                    <input
-                      type="number"
-                      placeholder="نسبة الخصم %"
-                      value={newCouponForm.discountPercent}
-                      onChange={(e) =>
-                        setNewCouponForm({
-                          ...newCouponForm,
-                          discountPercent: Number(e.target.value)
-                        })
-                      }
-                      className="sm:col-span-3 px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                    />
-                    <input
-                      type="number"
-                      placeholder="أقصى خصم ج.م"
-                      value={newCouponForm.maxDiscount}
-                      onChange={(e) =>
-                        setNewCouponForm({ ...newCouponForm, maxDiscount: Number(e.target.value) })
-                      }
-                      className="sm:col-span-3 px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                    />
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const cleanCode = newCouponForm.code.trim().toUpperCase();
-                        if (!cleanCode) {
-                          showToast('يرجى إدخال كود الكوبون أولاً', 'error');
-                          return;
-                        }
-                        const cpObj = {
-                          id: `cp_${Date.now()}`,
-                          code: cleanCode,
-                          discountPercent: Number(newCouponForm.discountPercent || 10),
-                          maxDiscount: Number(newCouponForm.maxDiscount || 200),
-                          active: true
-                        };
-                        const next = [cpObj, ...coupons];
-                        setCoupons(next);
-                        await idbSet('coupons_v5', next);
-                        if (db) {
-                          await setDoc(
-                            doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cpObj.id),
-                            cpObj
-                          );
-                        }
-                        setNewCouponForm({ code: '', discountPercent: 15, maxDiscount: 200, active: true });
-                        showToast(`تمت إضافة كوبون ${cleanCode} بنجاح`);
-                      }}
-                      className="sm:col-span-2 py-2 rounded-xl bg-blue-600 text-white font-black cursor-pointer"
-                    >
-                      + إضافة
-                    </button>
-                  </div>
-
-                  <div className="space-y-2">
-                    {coupons.map((cp) => (
-                      <div
-                        key={cp.id}
-                        className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-200"
-                      >
-                        <div>
-                          <span className="font-black text-sm text-slate-900">{cp.code}</span>
-                          <span className="text-slate-500 mr-2">
-                            • خصم {cp.discountPercent}% (بحد أقصى {cp.maxDiscount} ج.م)
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const next = coupons.map((c) =>
-                                c.id === cp.id ? { ...c, active: c.active === false } : c
-                              );
-                              setCoupons(next);
-                              await idbSet('coupons_v5', next);
-                              if (db) {
-                                await setDoc(
-                                  doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cp.id),
-                                  { active: cp.active === false },
-                                  { merge: true }
-                                );
-                              }
-                            }}
-                            className={`px-3 py-1 rounded-xl font-bold cursor-pointer ${
-                              cp.active !== false
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-slate-200 text-slate-600'
-                            }`}
-                          >
-                            {cp.active !== false ? 'مفعّل' : 'معطّل'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const next = coupons.filter((c) => c.id !== cp.id);
-                              setCoupons(next);
-                              await idbSet('coupons_v5', next);
-                              if (db) {
-                                await deleteDoc(
-                                  doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cp.id)
-                                );
-                              }
-                              showToast('تم حذف الكوبون');
-                            }}
-                            className="p-2 rounded-xl bg-rose-50 text-rose-600 cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
                   </div>
                 </div>
               </div>
@@ -5015,7 +5136,7 @@ function MuzakkiratiPlatformContent() {
                               const newStatus = e.target.value;
                               const updated = orders.map((o) => (o.id === ord.id ? { ...o, status: newStatus } : o));
                               setOrders(updated);
-                              if (db) {
+                              if (db && isOfficialAdminGoogle) {
                                 await setDoc(
                                   doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'orders', ord.id),
                                   { status: newStatus },
@@ -5102,24 +5223,6 @@ function MuzakkiratiPlatformContent() {
                           showToast('تم تجهيز صورة الخلفية — اضغط على زر "حفظ التعديلات" لاعتمادها');
                         }}
                       />
-                      <div className="pt-1">
-                        <label className="block text-[11px] font-bold text-slate-600">
-                          درجة التعتيم: {settings.heroOverlayOpacity ?? 75}%
-                        </label>
-                        <input
-                          type="range"
-                          min="0"
-                          max="95"
-                          value={settings.heroOverlayOpacity ?? 75}
-                          onChange={(e) =>
-                            setSettings((prev) => ({
-                              ...prev,
-                              heroOverlayOpacity: Number(e.target.value)
-                            }))
-                          }
-                          className="w-full"
-                        />
-                      </div>
                       {settings.heroBgImage && (
                         <button
                           type="button"
@@ -5168,16 +5271,6 @@ function MuzakkiratiPlatformContent() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block font-bold text-slate-600 mb-1">رمز دخول الإدارة</label>
-                    <input
-                      type="text"
-                      value={settings.adminPin}
-                      onChange={(e) => setSettings({ ...settings, adminPin: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                    />
-                  </div>
-
                   <button
                     type="button"
                     onClick={handleSaveAllAdminChanges}
@@ -5187,15 +5280,9 @@ function MuzakkiratiPlatformContent() {
                   </button>
                 </div>
 
-                {/* إدارة روابط التواصل والإصدارات القادمة */}
                 <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-5">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-black text-base text-slate-900">إدارة روابط التواصل الاجتماعي</h4>
-                      <p className="text-[11px] text-slate-500">
-                        عدّل اسم أي رابط أو عنوانه مباشرة وسيُحفظ للعملاء فوراً
-                      </p>
-                    </div>
+                    <h4 className="font-black text-slate-900">التحكم الكامل في روابط التواصل الاجتماعي</h4>
                     <button
                       type="button"
                       onClick={handleSaveAllAdminChanges}
@@ -5204,9 +5291,8 @@ function MuzakkiratiPlatformContent() {
                       حفظ التعديلات
                     </button>
                   </div>
-
                   <div className="space-y-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 p-3 rounded-2xl bg-slate-50 border border-slate-200">
                       <input
                         type="text"
                         placeholder="اسم الرابط (مثلاً: قناة التيليجرام)"
@@ -5225,7 +5311,10 @@ function MuzakkiratiPlatformContent() {
                       <button
                         type="button"
                         onClick={async () => {
-                          if (!newSocialLabel.trim() || !newSocialUrl.trim()) return;
+                          if (!newSocialLabel.trim() || !newSocialUrl.trim()) {
+                            showToast('يرجى كتابة اسم الرابط وعنوان الـ URL أولاً', 'error');
+                            return;
+                          }
                           const next = [
                             ...(settings.socialLinks || []),
                             {
@@ -5234,13 +5323,12 @@ function MuzakkiratiPlatformContent() {
                               url: newSocialUrl.trim()
                             }
                           ];
-                          const updated = { ...settings, socialLinks: next };
+                          await saveSettings({ ...settings, socialLinks: next });
                           setNewSocialLabel('');
                           setNewSocialUrl('');
-                          await saveSettings(updated);
-                          showToast('✓ تمت إضافة الرابط وحفظه للعملاء');
+                          showToast('تمت إضافة الرابط وحفظه بنجاح!');
                         }}
-                        className="sm:col-span-2 py-2 rounded-xl bg-slate-900 text-white font-bold cursor-pointer"
+                        className="sm:col-span-2 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold cursor-pointer"
                       >
                         + إضافة
                       </button>
@@ -5253,20 +5341,26 @@ function MuzakkiratiPlatformContent() {
                           className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2"
                         >
                           <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
-                            <input
-                              type="text"
-                              value={soc.label || ''}
-                              onChange={(e) => {
-                                const next = (settings.socialLinks || []).map((s) =>
-                                  s.id === soc.id ? { ...s, label: e.target.value } : s
-                                );
-                                setSettings({ ...settings, socialLinks: next });
-                              }}
-                              placeholder="اسم الرابط"
-                              className="sm:col-span-4 px-3 py-2 rounded-xl border border-slate-200 bg-white font-bold"
-                            />
+                            <div className="sm:col-span-4 flex items-center gap-2">
+                              <span className="w-8 h-8 rounded-lg bg-slate-900 text-amber-400 flex items-center justify-center shrink-0">
+                                {renderSocialPlatformIcon(soc, 'w-4 h-4')}
+                              </span>
+                              <input
+                                type="text"
+                                value={soc.label || ''}
+                                onChange={(e) => {
+                                  const next = (settings.socialLinks || []).map((s) =>
+                                    s.id === soc.id ? { ...s, label: e.target.value } : s
+                                  );
+                                  setSettings({ ...settings, socialLinks: next });
+                                }}
+                                placeholder="اسم الرابط"
+                                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-bold"
+                              />
+                            </div>
                             <input
                               type="url"
+                              dir="ltr"
                               value={soc.url || ''}
                               onChange={(e) => {
                                 const next = (settings.socialLinks || []).map((s) =>
@@ -5275,7 +5369,6 @@ function MuzakkiratiPlatformContent() {
                                 setSettings({ ...settings, socialLinks: next });
                               }}
                               placeholder="https://..."
-                              dir="ltr"
                               className="sm:col-span-6 px-3 py-2 rounded-xl border border-slate-200 bg-white text-left"
                             />
                             <div className="sm:col-span-2 flex items-center justify-end gap-1.5">
@@ -5284,8 +5377,8 @@ function MuzakkiratiPlatformContent() {
                                   href={soc.url}
                                   target="_blank"
                                   rel="noreferrer"
+                                  className="p-2 rounded-xl bg-blue-50 text-blue-600"
                                   title="تجربة فتح الرابط"
-                                  className="p-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100"
                                 >
                                   <ExternalLink className="w-4 h-4" />
                                 </a>
@@ -5295,10 +5388,10 @@ function MuzakkiratiPlatformContent() {
                                 onClick={async () => {
                                   const next = (settings.socialLinks || []).filter((s) => s.id !== soc.id);
                                   await saveSettings({ ...settings, socialLinks: next });
-                                  showToast('✓ تم حذف الرابط وحفظ التغيير');
+                                  showToast('تم حذف الرابط وحفظ التعديل');
                                 }}
+                                className="p-2 rounded-xl bg-rose-50 text-rose-600 cursor-pointer"
                                 title="حذف الرابط"
-                                className="p-2 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 cursor-pointer"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -5311,7 +5404,7 @@ function MuzakkiratiPlatformContent() {
 
                   {/* إدارة الإصدارات القادمة */}
                   <div className="pt-4 border-t border-slate-100 space-y-2.5">
-                    <h4 className="font-black text-slate-900">إدارة ركن قريباً على المنصة</h4>
+                    <h4 className="font-black text-slate-900">إدارة ركن المذكرات قيد التجهيز (أسفل المذكرات)</h4>
                     <div className="grid grid-cols-2 gap-2">
                       <input
                         type="text"
@@ -5348,14 +5441,14 @@ function MuzakkiratiPlatformContent() {
                             ...(settings.upcomingNotebooks || []),
                             { id: `up_${Date.now()}`, ...newUpcomingForm }
                           ];
+                          await saveSettings({ ...settings, upcomingNotebooks: next });
                           setNewUpcomingForm({
                             title: '',
                             stage: 'المرحلة الإعدادية',
                             status: 'جاري التجهيز والتنسيق',
                             expectedDate: 'قريباً'
                           });
-                          await saveSettings({ ...settings, upcomingNotebooks: next });
-                          showToast('✓ تمت الإضافة والحفظ للعملاء');
+                          showToast('تمت الإضافة وحفظها بنجاح');
                         }}
                         className="py-2 rounded-xl bg-slate-900 text-white font-bold cursor-pointer"
                       >
@@ -5376,100 +5469,7 @@ function MuzakkiratiPlatformContent() {
                                 (u) => u.id !== up.id
                               );
                               await saveSettings({ ...settings, upcomingNotebooks: next });
-                              showToast('✓ تم الحذف والحفظ');
-                            }}
-                            className="text-rose-600 cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* إدارة آراء وتقييمات المعلمين */}
-                  <div className="pt-4 border-t border-slate-100 space-y-2.5">
-                    <h4 className="font-black text-slate-900">إدارة آراء وتقييمات المعلمين</h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="text"
-                        placeholder="اسم المعلم (اختياري)"
-                        value={newTestimonialForm.teacherName}
-                        onChange={(e) =>
-                          setNewTestimonialForm({ ...newTestimonialForm, teacherName: e.target.value })
-                        }
-                        className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                      />
-                      <input
-                        type="text"
-                        placeholder="الصفة / المادة (اختياري)"
-                        value={newTestimonialForm.role}
-                        onChange={(e) =>
-                          setNewTestimonialForm({ ...newTestimonialForm, role: e.target.value })
-                        }
-                        className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                      />
-                    </div>
-                    <textarea
-                      rows={2}
-                      placeholder="نص التقييم (اختياري في حال رفع صورة تقييم)..."
-                      value={newTestimonialForm.text}
-                      onChange={(e) =>
-                        setNewTestimonialForm({ ...newTestimonialForm, text: e.target.value })
-                      }
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                    />
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <label className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 font-bold cursor-pointer inline-flex items-center gap-1.5">
-                        <ImageIcon className="w-4 h-4 text-blue-600" />
-                        <span>{newTestimonialForm.image ? 'تم إرفاق صورة ✓' : 'إرفاق صورة تقييم'}</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={async (e) => {
-                            const f = e.target.files?.[0];
-                            if (!f) return;
-                            const img = await compressImageFile(f, 750, 0.8);
-                            setNewTestimonialForm((prev) => ({ ...prev, image: img }));
-                          }}
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (!newTestimonialForm.text.trim() && !newTestimonialForm.image) {
-                            showToast('يرجى كتابة نص التقييم أو إرفاق صورة', 'error');
-                            return;
-                          }
-                          const next = [
-                            ...(settings.testimonials || []),
-                            { id: `rev_${Date.now()}`, ...newTestimonialForm }
-                          ];
-                          setNewTestimonialForm({ teacherName: '', role: '', text: '', image: '' });
-                          await saveSettings({ ...settings, testimonials: next });
-                          showToast('✓ تمت إضافة التقييم ونشره للعملاء');
-                        }}
-                        className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold cursor-pointer"
-                      >
-                        + نشر التقييم
-                      </button>
-                    </div>
-                    <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                      {(settings.testimonials || []).map((rev) => (
-                        <div
-                          key={rev.id}
-                          className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200"
-                        >
-                          <span className="font-bold truncate">
-                            {rev.teacherName || rev.text || 'تقييم مصور'}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const next = (settings.testimonials || []).filter((r) => r.id !== rev.id);
-                              await saveSettings({ ...settings, testimonials: next });
-                              showToast('✓ تم حذف التقييم');
+                              showToast('تم الحذف وحفظ التعديل');
                             }}
                             className="text-rose-600 cursor-pointer"
                           >
@@ -5485,7 +5485,7 @@ function MuzakkiratiPlatformContent() {
                     onClick={handleSaveAllAdminChanges}
                     className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-md cursor-pointer"
                   >
-                    حفظ ونشر جميع التعديلات للعملاء الآن
+                    حفظ ونشر تعديلات الروابط والإصدارات القادمة
                   </button>
                 </div>
               </div>
@@ -5539,9 +5539,9 @@ function MuzakkiratiPlatformContent() {
                 href={soc.url}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-200 hover:text-amber-400 transition"
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 hover:text-amber-400 transition"
               >
-                {renderSocialIcon(soc.label, soc.url)}
+                {renderSocialPlatformIcon(soc, 'w-4 h-4 text-amber-400 shrink-0')}
                 <span>{safeText(soc.label)}</span>
               </a>
             ))}
@@ -5744,7 +5744,9 @@ function MuzakkiratiPlatformContent() {
                   className="w-full p-3.5 rounded-2xl bg-slate-50 hover:bg-blue-50 border border-slate-200 text-slate-800 hover:text-blue-700 font-bold text-xs sm:text-sm flex items-center justify-between transition"
                 >
                   <span className="flex items-center gap-2.5">
-                    {renderSocialIcon(soc.label, soc.url)}
+                    <span className="w-8 h-8 rounded-xl bg-slate-900 text-amber-400 flex items-center justify-center shrink-0">
+                      {renderSocialPlatformIcon(soc, 'w-4 h-4')}
+                    </span>
                     <span>{safeText(soc.label)}</span>
                   </span>
                   <ExternalLink className="w-4 h-4 text-slate-400" />
@@ -5755,7 +5757,7 @@ function MuzakkiratiPlatformContent() {
         </div>
       )}
 
-      {/* نافذة تسجيل دخول الإدارة */}
+      {/* نافذة تسجيل دخول الإدارة الآمنة مع خيار تسجيل الدخول بجوجل */}
       {isAdminModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-200 space-y-5">
@@ -5783,16 +5785,16 @@ function MuzakkiratiPlatformContent() {
             <button
               type="button"
               onClick={handleAdminGoogleSignIn}
-              className="w-full py-3.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-amber-400 font-black text-sm shadow flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-3.5 px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 text-amber-400 font-black text-xs sm:text-sm flex items-center justify-center gap-2.5 shadow cursor-pointer"
             >
               <LogIn className="w-4 h-4" />
-              <span>تسجيل الدخول بحساب المدير الرسمي (Google)</span>
+              <span>تسجيل الدخول بحساب جوجل الرسمي للإدارة</span>
             </button>
 
-            <div className="relative flex py-1 items-center">
-              <div className="flex-grow border-t border-slate-200"></div>
-              <span className="flex-shrink mx-3 text-[11px] text-slate-400 font-bold">أو برمز المرور</span>
-              <div className="flex-grow border-t border-slate-200"></div>
+            <div className="relative flex items-center justify-center">
+              <div className="border-t border-slate-200 w-full" />
+              <span className="bg-white px-3 text-[11px] text-slate-400 font-bold">أو برمز المرور</span>
+              <div className="border-t border-slate-200 w-full" />
             </div>
 
             <form onSubmit={handleAdminLogin} className="space-y-4">
@@ -5825,7 +5827,7 @@ function MuzakkiratiPlatformContent() {
         </div>
       )}
 
-      {/* معاينة المذكرة وعارض العينات */}
+      {/* معاينة المذكرة وعارض العينات بملء الشاشة مع دعم السحب باللمس لليمين واليسار */}
       {previewProduct && (
         <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
           <div
@@ -5871,11 +5873,17 @@ function MuzakkiratiPlatformContent() {
                 ];
                 return allGallery.length > 0 ? (
                   <div className="space-y-3">
-                    <div className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-950 flex items-center justify-center">
+                    <div
+                      onTouchStart={handleSampleTouchStart}
+                      onTouchMove={handleSampleTouchMove}
+                      onTouchEnd={() => handleSampleTouchEnd(allGallery.length)}
+                      className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-950 flex items-center justify-center select-none touch-pan-y"
+                    >
                       <img
                         src={allGallery[activeSampleIndex] || allGallery[0]}
                         alt={safeText(previewProduct.title)}
-                        className={`w-full object-contain mx-auto transition-all ${
+                        draggable={false}
+                        className={`w-full object-contain mx-auto transition-all pointer-events-none ${
                           isSampleFullscreen ? 'max-h-[72vh]' : 'max-h-80 sm:max-h-96'
                         }`}
                       />
@@ -5890,7 +5898,8 @@ function MuzakkiratiPlatformContent() {
                                 prev > 0 ? prev - 1 : allGallery.length - 1
                               )
                             }
-                            className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 text-slate-900 shadow-lg flex items-center justify-center cursor-pointer touch-manipulation"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 hover:bg-white text-slate-900 shadow-lg flex items-center justify-center cursor-pointer touch-manipulation"
+                            title="الصفحة السابقة"
                           >
                             <ChevronRight className="w-5 h-5" />
                           </button>
@@ -5901,25 +5910,31 @@ function MuzakkiratiPlatformContent() {
                                 prev < allGallery.length - 1 ? prev + 1 : 0
                               )
                             }
-                            className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 text-slate-900 shadow-lg flex items-center justify-center cursor-pointer touch-manipulation"
+                            className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 hover:bg-white text-slate-900 shadow-lg flex items-center justify-center cursor-pointer touch-manipulation"
+                            title="الصفحة التالية"
                           >
                             <ChevronLeft className="w-5 h-5" />
                           </button>
-                          <span className="absolute bottom-3 left-3 px-3 py-1 rounded-full bg-slate-900/80 text-white text-xs font-black">
-                            صفحة {activeSampleIndex + 1} من {allGallery.length}
-                          </span>
+                          <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between pointer-events-none">
+                            <span className="px-3 py-1 rounded-full bg-slate-900/85 text-white text-xs font-black">
+                              صفحة {activeSampleIndex + 1} من {allGallery.length}
+                            </span>
+                            <span className="px-2.5 py-1 rounded-full bg-black/60 text-slate-200 text-[10px] font-bold sm:hidden">
+                              اسحب يميناً أو يساراً للتنقل
+                            </span>
+                          </div>
                         </>
                       )}
                     </div>
                     {allGallery.length > 1 && (
-                      <div className="flex gap-2 overflow-x-auto pb-1">
+                      <div ref={sampleThumbsRef} className="flex gap-2 overflow-x-auto pb-1 scroll-smooth">
                         {allGallery.map((img, idx) => (
                           <button
                             type="button"
                             key={idx}
                             onClick={() => setActiveSampleIndex(idx)}
-                            className={`w-16 h-20 rounded-xl overflow-hidden border-2 shrink-0 cursor-pointer touch-manipulation ${
-                              activeSampleIndex === idx ? 'border-blue-600' : 'border-transparent opacity-70'
+                            className={`w-16 h-20 rounded-xl overflow-hidden border-2 shrink-0 cursor-pointer touch-manipulation transition ${
+                              activeSampleIndex === idx ? 'border-blue-600 scale-105' : 'border-transparent opacity-70'
                             }`}
                           >
                             <img src={img} alt="" className="w-full h-full object-cover" />
@@ -5935,7 +5950,10 @@ function MuzakkiratiPlatformContent() {
                 );
               })()}
 
+              {/* موضع التنبيه العام: أعلى التفاصيل */}
               {settings.generalNoticePosition === 'top' && renderGeneralNoticeBox()}
+
+              {/* موضع التنبيه الخاص بالمذكرة: أعلى الوصف */}
               {settings.tipNoticePosition === 'above-desc' && renderProductTipBox(previewProduct.tipText, false)}
 
               <div className="space-y-2">
@@ -5945,12 +5963,15 @@ function MuzakkiratiPlatformContent() {
                 </p>
               </div>
 
+              {/* موضع التنبيه الخاص بالمذكرة: أسفل الوصف */}
               {(settings.tipNoticePosition === 'below-desc' || !settings.tipNoticePosition) &&
                 renderProductTipBox(previewProduct.tipText, false)}
 
+              {/* موضع التنبيه العام: أسفل التفاصيل في بطاقة منفصلة */}
               {(settings.generalNoticePosition === 'bottom' || !settings.generalNoticePosition) &&
                 renderGeneralNoticeBox()}
 
+              {/* موضع التنبيه الخاص بالمذكرة: قبل أزرار الطلب */}
               {settings.tipNoticePosition === 'before-actions' &&
                 renderProductTipBox(previewProduct.tipText, false)}
 
@@ -5965,21 +5986,7 @@ function MuzakkiratiPlatformContent() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2.5">
-                  {settings.driveBtnEnabled !== false && previewProduct.driveSampleUrl && (
-                    <a
-                      href={previewProduct.driveSampleUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{
-                        backgroundColor: settings.driveBtnBg || '#059669',
-                        color: settings.driveBtnText || '#ffffff'
-                      }}
-                      className="px-4 py-3 rounded-2xl text-xs font-black inline-flex items-center gap-1.5 shadow hover:opacity-95 transition"
-                    >
-                      <span>{safeText(settings.driveBtnLabel, 'معاينة Google Drive')}</span>
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
-                  )}
+                  {renderDriveSampleButton(previewProduct.driveSampleUrl, false)}
                   <button
                     type="button"
                     onClick={() => {
