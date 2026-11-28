@@ -1294,76 +1294,6 @@ function MuzakkiratiPlatformContent() {
     }
   };
 
-  useEffect(() => {
-    const onPopState = (event) => {
-      if (previewProduct || isSampleFullscreen) {
-        setPreviewProduct(null);
-        setIsSampleFullscreen(false);
-        return;
-      }
-      if (isCartOpen) {
-        setIsCartOpen(false);
-        return;
-      }
-      if (isContactModalOpen) {
-        setIsContactModalOpen(false);
-        return;
-      }
-      const targetTab = event.state?.tab || 'home';
-      setActiveTab(targetTab);
-      try {
-        localStorage.setItem('el3bakera_active_tab', targetTab);
-      } catch {}
-    };
-    window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
-  }, [previewProduct, isSampleFullscreen, isCartOpen, isContactModalOpen]);
-
-  const navigateToTab = (newTab) => {
-    if (newTab === activeTab) return;
-    setTabHistory((prev) => [...prev, newTab]);
-    setActiveTab(newTab);
-    try {
-      localStorage.setItem('el3bakera_active_tab', newTab);
-      window.history.pushState({ tab: newTab }, '', newTab === 'admin' ? '#admin' : `#${newTab}`);
-    } catch {}
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleGoBack = (e) => {
-    if (e && typeof e.preventDefault === 'function') e.preventDefault();
-    if (previewProduct || isSampleFullscreen) {
-      setPreviewProduct(null);
-      setIsSampleFullscreen(false);
-      return;
-    }
-    if (isCartOpen) {
-      setIsCartOpen(false);
-      return;
-    }
-    if (isContactModalOpen) {
-      setIsContactModalOpen(false);
-      return;
-    }
-    setTabHistory((prev) => {
-      if (prev.length > 1) {
-        const nextHistory = prev.slice(0, -1);
-        const prevTab = nextHistory[nextHistory.length - 1] || 'home';
-        setActiveTab(prevTab);
-        try {
-          localStorage.setItem('el3bakera_active_tab', prevTab);
-        } catch {}
-        return nextHistory;
-      }
-      setActiveTab('home');
-      try {
-        localStorage.setItem('el3bakera_active_tab', 'home');
-      } catch {}
-      return ['home'];
-    });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
   const saveSettings = async (updatedSettings) => {
     isSavingRef.current = true;
     const cleanSettings = {
@@ -3221,296 +3151,471 @@ function MuzakkiratiPlatformContent() {
                     onSubmit={handleSaveProduct}
                     className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 p-6 space-y-4 h-fit"
                   >
-                          {normalizedStages.map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                    <h3 className="text-base font-black text-slate-900">
+                      {editingProductId ? 'تعديل بيانات المذكرة' : 'إضافة مذكرة جديدة'}
+                    </h3>
 
+                    <div className="space-y-3 text-xs">
                       <div>
-                        <label className="block font-bold text-slate-600 mb-1">الصف الدراسي</label>
-                        <select
-                          value={productForm.gradeId}
-                          onChange={(e) => setProductForm({ ...productForm, gradeId: e.target.value })}
-                          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
-                        >
-                          {normalizedGrades.map((g) => (
-                            <option key={g.id} value={g.id}>
-                              {g.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">القسم</label>
-                        <select
-                          value={productForm.categoryId}
-                          onChange={(e) => setProductForm({ ...productForm, categoryId: e.target.value })}
-                          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
-                        >
-                          {normalizedCategories.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">عدد الصفحات</label>
+                        <label className="block font-bold text-slate-600 mb-1">عنوان المذكرة *</label>
                         <input
-                          type="number"
-                          value={productForm.pagesCount}
-                          onChange={(e) => setProductForm({ ...productForm, pagesCount: e.target.value })}
-                          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
+                          type="text"
+                          required
+                          value={productForm.title}
+                          onChange={(e) => setProductForm({ ...productForm, title: e.target.value })}
+                          placeholder="مثال: بنك مراجعة الصف الثالث الإعدادي"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
                         />
                       </div>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">السعر بعد الخصم (ج.م)</label>
-                        <input
-                          type="number"
-                          value={productForm.price}
-                          onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
-                          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">السعر قبل الخصم (ج.م)</label>
-                        <input
-                          type="number"
-                          value={productForm.oldPrice}
-                          onChange={(e) => setProductForm({ ...productForm, oldPrice: e.target.value })}
-                          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block font-bold text-slate-600 mb-1">الشريط الذهبي فوق المذكرة</label>
-                      <input
-                        type="text"
-                        value={productForm.badgeText || ''}
-                        onChange={(e) => setProductForm({ ...productForm, badgeText: e.target.value })}
-                        placeholder="مثال: الخيار الأفضل للمراجعة"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block font-bold text-slate-600 mb-1">التنبيه الخاص بالمذكرة (صندوق مستقل)</label>
-                      <input
-                        type="text"
-                        value={productForm.tipText || ''}
-                        onChange={(e) => setProductForm({ ...productForm, tipText: e.target.value })}
-                        placeholder="مثال: ملاحظة: للمراجعة المُثلى اطلبها مع البوكليت"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block font-bold text-slate-600 mb-1">رابط عينة Google Drive</label>
-                      <input
-                        type="url"
-                        value={productForm.driveSampleUrl}
-                        onChange={(e) => setProductForm({ ...productForm, driveSampleUrl: e.target.value })}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none text-left"
-                        dir="ltr"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block font-bold text-slate-600 mb-1">وصف المذكرة</label>
-                      <textarea
-                        rows={3}
-                        value={productForm.description}
-                        onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
-                      />
-                    </div>
-
-                    <div className="p-3 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-2">
-                      <label className="block font-black text-blue-900">صورة غلاف المذكرة</label>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={async (e) => {
-                          const f = e.target.files?.[0];
-                          if (!f) return;
-                          const compressed = await compressImageFile(f, 800, 0.82);
-                          setProductForm((prev) => ({ ...prev, coverImage: compressed }));
-                        }}
-                        className="block w-full text-xs"
-                      />
-                      {productForm.coverImage && (
-                        <img
-                          src={productForm.coverImage}
-                          alt="معاينة الغلاف"
-                          className="h-24 rounded-xl object-cover border"
-                        />
-                      )}
-                    </div>
-
-                    <div className="p-3 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-2">
-                      <label className="block font-black text-emerald-900">
-                        صور صفحات العينة الداخلية
-                      </label>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={async (e) => {
-                          const files = Array.from(e.target.files || []);
-                          if (files.length === 0) return;
-                          const compressedList = await Promise.all(
-                            files.map((f) => compressImageFile(f, 950, 0.8))
-                          );
-                          setProductForm((prev) => ({
-                            ...prev,
-                            sampleImages: [...(prev.sampleImages || []), ...compressedList]
-                          }));
-                          showToast(`تم تجهيز ${compressedList.length} صورة عينة`);
-                        }}
-                        className="block w-full text-xs"
-                      />
-                      {Array.isArray(productForm.sampleImages) && productForm.sampleImages.length > 0 && (
-                        <div className="flex flex-wrap gap-2 pt-1">
-                          {productForm.sampleImages.map((img, i) => (
-                            <div key={i} className="relative">
-                              <img src={img} alt="" className="w-14 h-16 object-cover rounded-lg border" />
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setProductForm((prev) => ({
-                                    ...prev,
-                                    sampleImages: prev.sampleImages.filter((_, idx) => idx !== i)
-                                  }))
-                                }
-                                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-600 text-white flex items-center justify-center text-[10px]"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          ))}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">المرحلة</label>
+                          <select
+                            value={productForm.stageId}
+                            onChange={(e) => setProductForm({ ...productForm, stageId: e.target.value })}
+                            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
+                          >
+                            {normalizedStages.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name}
+                              </option>
+                            ))}
+                          </select>
                         </div>
-                      )}
-                    </div>
 
-                    <div className="flex gap-2 pt-2">
-                      <button
-                        type="submit"
-                        className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm cursor-pointer"
-                      >
-                        {editingProductId ? 'حفظ التعديلات' : 'إضافة المذكرة'}
-                      </button>
-                      {editingProductId && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingProductId(null);
-                            setProductForm({
-                              title: '',
-                              subject: 'اللغة العربية',
-                              stageId: 'stg_prep',
-                              gradeId: 'grd_1795789580003',
-                              categoryId: 'cat_term1',
-                              pagesCount: 80,
-                              price: 149,
-                              oldPrice: 200,
-                              badgeText: '',
-                              tipText: '',
-                              description: '',
-                              driveSampleUrl: 'https://drive.google.com/',
-                              coverImage: '',
-                              sampleImages: [],
-                              hidden: false
-                            });
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">الصف الدراسي</label>
+                          <select
+                            value={productForm.gradeId}
+                            onChange={(e) => setProductForm({ ...productForm, gradeId: e.target.value })}
+                            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
+                          >
+                            {normalizedGrades.map((g) => (
+                              <option key={g.id} value={g.id}>
+                                {g.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">القسم</label>
+                          <select
+                            value={productForm.categoryId}
+                            onChange={(e) => setProductForm({ ...productForm, categoryId: e.target.value })}
+                            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
+                          >
+                            {normalizedCategories.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">عدد الصفحات</label>
+                          <input
+                            type="number"
+                            value={productForm.pagesCount}
+                            onChange={(e) => setProductForm({ ...productForm, pagesCount: e.target.value })}
+                            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">السعر بعد الخصم (ج.م)</label>
+                          <input
+                            type="number"
+                            value={productForm.price}
+                            onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
+                            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">السعر قبل الخصم (ج.م)</label>
+                          <input
+                            type="number"
+                            value={productForm.oldPrice}
+                            onChange={(e) => setProductForm({ ...productForm, oldPrice: e.target.value })}
+                            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-slate-600 mb-1">الشريط الذهبي فوق المذكرة</label>
+                        <input
+                          type="text"
+                          value={productForm.badgeText || ''}
+                          onChange={(e) => setProductForm({ ...productForm, badgeText: e.target.value })}
+                          placeholder="مثال: الخيار الأفضل للمراجعة"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-slate-600 mb-1">التنبيه الخاص بالمذكرة (صندوق مستقل)</label>
+                        <input
+                          type="text"
+                          value={productForm.tipText || ''}
+                          onChange={(e) => setProductForm({ ...productForm, tipText: e.target.value })}
+                          placeholder="مثال: ملاحظة: للمراجعة المُثلى اطلبها مع البوكليت"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-slate-600 mb-1">رابط عينة Google Drive</label>
+                        <input
+                          type="url"
+                          value={productForm.driveSampleUrl}
+                          onChange={(e) => setProductForm({ ...productForm, driveSampleUrl: e.target.value })}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none text-left"
+                          dir="ltr"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-slate-600 mb-1">وصف المذكرة</label>
+                        <textarea
+                          rows={3}
+                          value={productForm.description}
+                          onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
+                        />
+                      </div>
+
+                      <div className="p-3 rounded-2xl bg-blue-50/70 border border-blue-200 space-y-2">
+                        <label className="block font-black text-blue-900">صورة غلاف المذكرة</label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={async (e) => {
+                            const f = e.target.files?.[0];
+                            if (!f) return;
+                            const compressed = await compressImageFile(f, 800, 0.82);
+                            setProductForm((prev) => ({ ...prev, coverImage: compressed }));
                           }}
-                          className="px-4 py-3 rounded-xl bg-slate-200 text-slate-700 font-bold"
+                          className="block w-full text-xs"
+                        />
+                        {productForm.coverImage && (
+                          <img
+                            src={productForm.coverImage}
+                            alt="معاينة الغلاف"
+                            className="h-24 rounded-xl object-cover border"
+                          />
+                        )}
+                      </div>
+
+                      <div className="p-3 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-2">
+                        <label className="block font-black text-emerald-900">
+                          صور صفحات العينة الداخلية
+                        </label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={async (e) => {
+                            const files = Array.from(e.target.files || []);
+                            if (files.length === 0) return;
+                            const compressedList = await Promise.all(
+                              files.map((f) => compressImageFile(f, 950, 0.8))
+                            );
+                            setProductForm((prev) => ({
+                              ...prev,
+                              sampleImages: [...(prev.sampleImages || []), ...compressedList]
+                            }));
+                            showToast(`تم تجهيز ${compressedList.length} صورة عينة`);
+                          }}
+                          className="block w-full text-xs"
+                        />
+                        {Array.isArray(productForm.sampleImages) && productForm.sampleImages.length > 0 && (
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            {productForm.sampleImages.map((img, i) => (
+                              <div key={i} className="relative">
+                                <img src={img} alt="" className="w-14 h-16 object-cover rounded-lg border" />
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setProductForm((prev) => ({
+                                      ...prev,
+                                      sampleImages: prev.sampleImages.filter((_, idx) => idx !== i)
+                                    }))
+                                  }
+                                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-600 text-white flex items-center justify-center text-[10px]"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex gap-2 pt-2">
+                        <button
+                          type="submit"
+                          className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm cursor-pointer"
                         >
-                          إلغاء
+                          {editingProductId ? 'حفظ التعديلات' : 'إضافة المذكرة'}
                         </button>
-                      )}
+                        {editingProductId && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingProductId(null);
+                              setProductForm({
+                                title: '',
+                                subject: 'اللغة العربية',
+                                stageId: 'stg_prep',
+                                gradeId: 'grd_1795789580003',
+                                categoryId: 'cat_term1',
+                                pagesCount: 80,
+                                price: 149,
+                                oldPrice: 200,
+                                badgeText: '',
+                                tipText: '',
+                                description: '',
+                                driveSampleUrl: 'https://drive.google.com/',
+                                coverImage: '',
+                                sampleImages: [],
+                                hidden: false
+                              });
+                            }}
+                            className="px-4 py-3 rounded-xl bg-slate-200 text-slate-700 font-bold"
+                          >
+                            إلغاء
+                          </button>
+                        )}
+                      </div>
                     </div>
+                  </form>
+
+                  <div className="lg:col-span-7 space-y-3">
+                    {products.map((prod) => (
+                      <div
+                        key={prod.id}
+                        className={`bg-white rounded-2xl border p-4 flex items-center justify-between gap-4 shadow-2xs transition ${
+                          prod.hidden ? 'border-amber-300 bg-amber-50/30 opacity-75' : 'border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3.5">
+                          <img
+                            src={prod.coverImage || resolvedLogo}
+                            alt={prod.title}
+                            className="w-16 h-16 rounded-xl object-cover border border-slate-200 shrink-0"
+                          />
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-black text-sm text-slate-900">{prod.title}</h4>
+                              {prod.hidden && (
+                                <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-950 text-[10px] font-black">
+                                  مخفية
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-slate-500 mt-1">
+                              {prod.price} ج.م • {prod.pagesCount} صفحة •{' '}
+                              <span className="text-emerald-600 font-bold">
+                                {(prod.sampleImages || []).length} عينة
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => handleToggleProductVisibility(prod)}
+                            title={prod.hidden ? 'إظهار المذكرة' : 'إخفاء المذكرة'}
+                            className={`p-2 rounded-xl transition cursor-pointer ${
+                              prod.hidden
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            {prod.hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingProductId(prod.id);
+                              setProductForm({
+                                ...prod,
+                                badgeText: prod.badgeText || '',
+                                tipText: prod.tipText || '',
+                                sampleImages: prod.sampleImages || []
+                              });
+                            }}
+                            className="p-2 rounded-xl bg-blue-50 text-blue-600 cursor-pointer"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteProduct(prod.id)}
+                            className="p-2 rounded-xl bg-rose-50 text-rose-600 cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </form>
+                </div>
+              </div>
+            )}
+
+            {/* تبويب 2: إدارة الباقات */}
+            {adminSubTab === 'bundles' && (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
+                  <h3 className="text-base font-black text-slate-900">إضافة باقة مخفضة جديدة</h3>
+                  <div className="space-y-3 text-xs">
+                    <input
+                      type="text"
+                      placeholder="اسم الباقة"
+                      value={newBundleForm.title}
+                      onChange={(e) => setNewBundleForm({ ...newBundleForm, title: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
+                    />
+                    <input
+                      type="text"
+                      placeholder="وصف الباقة"
+                      value={newBundleForm.subtitle}
+                      onChange={(e) => setNewBundleForm({ ...newBundleForm, subtitle: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="number"
+                        placeholder="سعر الباقة"
+                        value={newBundleForm.price}
+                        onChange={(e) => setNewBundleForm({ ...newBundleForm, price: Number(e.target.value) })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
+                      />
+                      <input
+                        type="number"
+                        placeholder="السعر الأصلي"
+                        value={newBundleForm.originalPrice}
+                        onChange={(e) =>
+                          setNewBundleForm({ ...newBundleForm, originalPrice: Number(e.target.value) })
+                        }
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="شارة التوفير (مثال: وفر 150 ج.م)"
+                      value={newBundleForm.badge}
+                      onChange={(e) => setNewBundleForm({ ...newBundleForm, badge: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
+                    />
+                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                      <div className="font-black text-slate-800">
+                        اختر المذكرات المشمولة داخل الباقة ({newBundleForm.productIds.length}):
+                      </div>
+                      <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1">
+                        {products.map((prod) => {
+                          const isChecked = newBundleForm.productIds.includes(prod.id);
+                          return (
+                            <label
+                              key={prod.id}
+                              className={`flex items-center justify-between gap-2 p-2 rounded-xl border cursor-pointer transition ${
+                                isChecked
+                                  ? 'bg-blue-50 border-blue-300 text-blue-900 font-bold'
+                                  : 'bg-white border-slate-200 text-slate-700'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 truncate">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    setNewBundleForm((prev) => ({
+                                      ...prev,
+                                      productIds: isChecked
+                                        ? prev.productIds.filter((id) => id !== prod.id)
+                                        : [...prev.productIds, prod.id]
+                                    }));
+                                  }}
+                                />
+                                <span className="truncate">{prod.title}</span>
+                              </div>
+                              <span className="text-[11px] font-bold shrink-0">{prod.price} ج.م</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        if (!newBundleForm.title.trim()) {
+                          showToast('يرجى إدخال اسم الباقة أولاً', 'error');
+                          return;
+                        }
+                        const bObj = { ...newBundleForm, id: `bnd_${Date.now()}` };
+                        const next = [bObj, ...bundles];
+                        setBundles(next);
+                        await idbSet('bundles_v5', next);
+                        if (db) {
+                          await setDoc(
+                            doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles', bObj.id),
+                            bObj
+                          );
+                        }
+                        setNewBundleForm({
+                          title: '',
+                          subtitle: '',
+                          price: 499,
+                          originalPrice: 650,
+                          badge: 'عرض خاص',
+                          productIds: [],
+                          coverImage: ''
+                        });
+                        showToast('تمت إضافة الباقة وحفظها بنجاح');
+                      }}
+                      className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm cursor-pointer"
+                    >
+                      حفظ الباقة
+                    </button>
+                  </div>
+                </div>
 
                 <div className="lg:col-span-7 space-y-3">
-                  {products.map((prod) => (
+                  {bundles.map((b) => (
                     <div
-                      key={prod.id}
-                      className={`bg-white rounded-2xl border p-4 flex items-center justify-between gap-4 shadow-2xs transition ${
-                        prod.hidden ? 'border-amber-300 bg-amber-50/30 opacity-75' : 'border-slate-200'
-                      }`}
+                      key={b.id}
+                      className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center justify-between gap-3"
                     >
-                      <div className="flex items-center gap-3.5">
-                        <img
-                          src={prod.coverImage || resolvedLogo}
-                          alt={prod.title}
-                          className="w-16 h-16 rounded-xl object-cover border border-slate-200 shrink-0"
-                        />
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-black text-sm text-slate-900">{prod.title}</h4>
-                            {prod.hidden && (
-                              <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-950 text-[10px] font-black">
-                                مخفية
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-xs text-slate-500 mt-1">
-                            {prod.price} ج.م • {prod.pagesCount} صفحة •{' '}
-                            <span className="text-emerald-600 font-bold">
-                              {(prod.sampleImages || []).length} عينة
-                            </span>
-                          </div>
-                        </div>
+                      <div className="space-y-1">
+                        <h4 className="font-black text-sm">{b.title}</h4>
+                        <p className="text-xs text-slate-500">
+                          {b.price} ج.م (بدلاً من {b.originalPrice} ج.م) • تشمل {(b.productIds || []).length} مذكرات
+                        </p>
                       </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          onClick={() => handleToggleProductVisibility(prod)}
-                          title={prod.hidden ? 'إظهار المذكرة' : 'إخفاء المذكرة'}
-                          className={`p-2 rounded-xl transition cursor-pointer ${
-                            prod.hidden
-                              ? 'bg-amber-100 text-amber-800'
-                              : 'bg-slate-100 text-slate-600'
-                          }`}
-                        >
-                          {prod.hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditingProductId(prod.id);
-                            setProductForm({
-                              ...prod,
-                              badgeText: prod.badgeText || '',
-                              tipText: prod.tipText || '',
-                              sampleImages: prod.sampleImages || []
-                            });
-                          }}
-                          className="p-2 rounded-xl bg-blue-50 text-blue-600 cursor-pointer"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteProduct(prod.id)}
-                          className="p-2 rounded-xl bg-rose-50 text-rose-600 cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                      <button
+                        onClick={async () => {
+                          const next = bundles.filter((x) => x.id !== b.id);
+                          setBundles(next);
+                          await idbSet('bundles_v5', next);
+                          if (db) {
+                            await deleteDoc(
+                              doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles', b.id)
+                            );
+                          }
+                          showToast('تم حذف الباقة');
+                        }}
+                        className="p-2 rounded-xl bg-rose-50 text-rose-600 cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   ))}
                 </div>
-              </div>
               </div>
             )}
 
@@ -3776,36 +3881,34 @@ function MuzakkiratiPlatformContent() {
               </div>
             )}
 
-            {/* تبويب 4: الكوبونات والعروض */}
+            {/* تبويب 4: إدارة الكوبونات والعروض */}
             {adminSubTab === 'coupons' && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 text-xs">
-                <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 p-6 space-y-4 h-fit">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
                   <h3 className="text-base font-black text-slate-900">إضافة كوبون خصم جديد</h3>
-                  <input
-                    type="text"
-                    placeholder="كود الكوبون (مثال: VIP2026)"
-                    value={newCouponForm.code}
-                    onChange={(e) =>
-                      setNewCouponForm({ ...newCouponForm, code: e.target.value.toUpperCase() })
-                    }
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 uppercase"
-                  />
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block font-bold text-slate-600 mb-1">نسبة الخصم %</label>
+                  <div className="space-y-3 text-xs">
+                    <input
+                      type="text"
+                      placeholder="كود الخصم (مثال: SUMMER25)"
+                      value={newCouponForm.code}
+                      onChange={(e) =>
+                        setNewCouponForm({ ...newCouponForm, code: e.target.value.toUpperCase() })
+                      }
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 uppercase"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
                       <input
                         type="number"
+                        placeholder="نسبة الخصم %"
                         value={newCouponForm.discountPercent}
                         onChange={(e) =>
                           setNewCouponForm({ ...newCouponForm, discountPercent: Number(e.target.value) })
                         }
                         className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
                       />
-                    </div>
-                    <div>
-                      <label className="block font-bold text-slate-600 mb-1">الحد الأقصى (ج.م)</label>
                       <input
                         type="number"
+                        placeholder="أقصى مبلغ خصم (ج.م)"
                         value={newCouponForm.maxDiscount}
                         onChange={(e) =>
                           setNewCouponForm({ ...newCouponForm, maxDiscount: Number(e.target.value) })
@@ -3813,49 +3916,53 @@ function MuzakkiratiPlatformContent() {
                         className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
                       />
                     </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!newCouponForm.code.trim()) {
+                          showToast('يرجى إدخال كود الخصم', 'error');
+                          return;
+                        }
+                        const cpObj = {
+                          ...newCouponForm,
+                          id: `cp_${Date.now()}`,
+                          code: newCouponForm.code.trim().toUpperCase()
+                        };
+                        const next = [cpObj, ...coupons];
+                        setCoupons(next);
+                        await idbSet('coupons_v5', next);
+                        if (db) {
+                          await setDoc(
+                            doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cpObj.id),
+                            cpObj
+                          );
+                        }
+                        setNewCouponForm({ code: '', discountPercent: 15, maxDiscount: 200, active: true });
+                        showToast('تمت إضافة الكوبون بنجاح');
+                      }}
+                      className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm cursor-pointer"
+                    >
+                      حفظ الكوبون
+                    </button>
                   </div>
-                  <button
-                    onClick={async () => {
-                      if (!newCouponForm.code.trim()) return;
-                      const cpObj = {
-                        ...newCouponForm,
-                        id: `cp_${Date.now()}`,
-                        code: newCouponForm.code.trim().toUpperCase(),
-                        active: true
-                      };
-                      const next = [cpObj, ...coupons];
-                      setCoupons(next);
-                      await idbSet('coupons_v5', next);
-                      if (db) {
-                        await setDoc(
-                          doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cpObj.id),
-                          cpObj
-                        );
-                      }
-                      setNewCouponForm({ code: '', discountPercent: 15, maxDiscount: 200, active: true });
-                      showToast('تمت إضافة الكوبون وحفظه');
-                    }}
-                    className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm cursor-pointer"
-                  >
-                    إضافة الكوبون
-                  </button>
                 </div>
 
                 <div className="lg:col-span-7 space-y-3">
                   {coupons.map((cp) => (
                     <div
                       key={cp.id}
-                      className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center justify-between"
+                      className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center justify-between gap-3"
                     >
                       <div>
-                        <span className="font-black text-sm text-slate-900">{cp.code}</span>
-                        <span className="text-xs text-slate-500 mr-3">
-                          خصم {cp.discountPercent}% (بحد أقصى {cp.maxDiscount} ج.م)
-                        </span>
+                        <div className="font-black text-sm text-slate-900">{cp.code}</div>
+                        <div className="text-xs text-slate-500">
+                          خصم {cp.discountPercent}% • بحد أقصى {cp.maxDiscount} ج.م
+                        </div>
                       </div>
                       <button
+                        type="button"
                         onClick={async () => {
-                          const next = coupons.filter((c) => c.id !== cp.id);
+                          const next = coupons.filter((x) => x.id !== cp.id);
                           setCoupons(next);
                           await idbSet('coupons_v5', next);
                           if (db) {
