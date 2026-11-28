@@ -1213,12 +1213,6 @@ function MuzakkiratiPlatformContent() {
           }
           return updated;
         });
-
-        setBundles((prev) => {
-          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-          idbSet('bundles_v5', list);
-          return list;
-        });
       },
       () => {}
     );
