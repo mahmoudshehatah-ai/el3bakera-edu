@@ -563,6 +563,7 @@ function MuzakkiratiPlatformInner() {
         return {
           ...DEFAULT_SETTINGS,
           ...parsed,
+          heroBgImage: parsed.heroBgImage || parsed.heroImage || DEFAULT_SETTINGS.heroBgImage,
           discountBadge: { ...DEFAULT_SETTINGS.discountBadge, ...(parsed.discountBadge || {}) },
           generalNotice: { ...DEFAULT_SETTINGS.generalNotice, ...(parsed.generalNotice || {}) },
           productNoticeStyle: { ...DEFAULT_SETTINGS.productNoticeStyle, ...(parsed.productNoticeStyle || {}) },
@@ -574,6 +575,27 @@ function MuzakkiratiPlatformInner() {
           testimonials: normalizeItems(parsed.testimonials, DEFAULT_SETTINGS.testimonials),
           trustPoints: normalizeItems(parsed.trustPoints, DEFAULT_SETTINGS.trustPoints),
           multiOffers: normalizeItems(parsed.multiOffers, DEFAULT_MULTI_OFFERS)
+        };
+      }
+      // استعادة تلقائية من المفتاح السابق v6 إذا كان موجوداً
+      const savedV6 = localStorage.getItem('el3bakera_settings_v6') || localStorage.getItem('el3bakera_settings_v5');
+      if (savedV6) {
+        const parsed6 = JSON.parse(savedV6);
+        return {
+          ...DEFAULT_SETTINGS,
+          ...parsed6,
+          heroBgImage: parsed6.heroBgImage || parsed6.heroImage || DEFAULT_SETTINGS.heroBgImage,
+          discountBadge: { ...DEFAULT_SETTINGS.discountBadge, ...(parsed6.discountBadge || {}) },
+          generalNotice: { ...DEFAULT_SETTINGS.generalNotice, ...(parsed6.generalNotice || {}) },
+          productNoticeStyle: { ...DEFAULT_SETTINGS.productNoticeStyle, ...(parsed6.productNoticeStyle || {}) },
+          stages: normalizeItems(parsed6.stages, DEFAULT_SETTINGS.stages),
+          grades: normalizeItems(parsed6.grades, DEFAULT_SETTINGS.grades),
+          categories: normalizeItems(parsed6.categories, DEFAULT_SETTINGS.categories),
+          socialLinks: normalizeItems(parsed6.socialLinks, DEFAULT_SETTINGS.socialLinks),
+          upcomingItems: normalizeItems(parsed6.upcomingItems, DEFAULT_SETTINGS.upcomingItems),
+          testimonials: normalizeItems(parsed6.testimonials, DEFAULT_SETTINGS.testimonials),
+          trustPoints: normalizeItems(parsed6.trustPoints, DEFAULT_SETTINGS.trustPoints),
+          multiOffers: normalizeItems(parsed6.multiOffers, DEFAULT_MULTI_OFFERS)
         };
       }
     } catch {}
@@ -869,24 +891,50 @@ function MuzakkiratiPlatformInner() {
   useEffect(() => {
     let mounted = true;
     (async () => {
-      const [localProds, localBundles, localCoupons, localSettings] = await Promise.all([
+      const [
+        localProds,
+        localProdsOld,
+        localBundles,
+        localBundlesOld,
+        localCoupons,
+        localCouponsOld,
+        localSettings,
+        localSettingsOld
+      ] = await Promise.all([
         idbGet('products_v6'),
+        idbGet('products_v5'),
         idbGet('bundles_v6'),
+        idbGet('bundles_v5'),
         idbGet('coupons_v6'),
-        idbGet('settings_v7')
+        idbGet('coupons_v5'),
+        idbGet('settings_v7'),
+        idbGet('settings_v6')
       ]);
       if (!mounted) return;
-      if (Array.isArray(localProds) && localProds.length > 0) setProducts(localProds);
-      if (Array.isArray(localBundles) && localBundles.length > 0) setBundles(localBundles);
-      if (Array.isArray(localCoupons) && localCoupons.length > 0) setCoupons(localCoupons);
-      if (localSettings && typeof localSettings === 'object') {
+      const chosenProds = (Array.isArray(localProds) && localProds.length > 0) ? localProds : localProdsOld;
+      const chosenBundles = (Array.isArray(localBundles) && localBundles.length > 0) ? localBundles : localBundlesOld;
+      const chosenCoupons = (Array.isArray(localCoupons) && localCoupons.length > 0) ? localCoupons : localCouponsOld;
+      const chosenSettings = localSettings || localSettingsOld;
+
+      if (Array.isArray(chosenProds) && chosenProds.length > 0) setProducts(chosenProds);
+      if (Array.isArray(chosenBundles) && chosenBundles.length > 0) setBundles(chosenBundles);
+      if (Array.isArray(chosenCoupons) && chosenCoupons.length > 0) setCoupons(chosenCoupons);
+      if (chosenSettings && typeof chosenSettings === 'object') {
         setSettings((prev) => ({
           ...prev,
-          ...localSettings,
-          discountBadge: { ...prev.discountBadge, ...(localSettings.discountBadge || {}) },
-          generalNotice: { ...prev.generalNotice, ...(localSettings.generalNotice || {}) },
-          productNoticeStyle: { ...prev.productNoticeStyle, ...(localSettings.productNoticeStyle || {}) },
-          multiOffers: normalizeItems(localSettings.multiOffers, prev.multiOffers || DEFAULT_MULTI_OFFERS)
+          ...chosenSettings,
+          heroBgImage: chosenSettings.heroBgImage || chosenSettings.heroImage || prev.heroBgImage,
+          discountBadge: { ...prev.discountBadge, ...(chosenSettings.discountBadge || {}) },
+          generalNotice: { ...prev.generalNotice, ...(chosenSettings.generalNotice || {}) },
+          productNoticeStyle: { ...prev.productNoticeStyle, ...(chosenSettings.productNoticeStyle || {}) },
+          stages: normalizeItems(chosenSettings.stages, prev.stages),
+          grades: normalizeItems(chosenSettings.grades, prev.grades),
+          categories: normalizeItems(chosenSettings.categories, prev.categories),
+          socialLinks: normalizeItems(chosenSettings.socialLinks, prev.socialLinks),
+          upcomingItems: normalizeItems(chosenSettings.upcomingItems, prev.upcomingItems),
+          testimonials: normalizeItems(chosenSettings.testimonials, prev.testimonials),
+          trustPoints: normalizeItems(chosenSettings.trustPoints, prev.trustPoints),
+          multiOffers: normalizeItems(chosenSettings.multiOffers, prev.multiOffers || DEFAULT_MULTI_OFFERS)
         }));
       }
     })();
@@ -915,12 +963,20 @@ function MuzakkiratiPlatformInner() {
         const merged = {
           ...prev,
           ...raw,
+          logoImage: raw.logoImage || prev.logoImage,
+          heroBgImage: raw.heroBgImage || raw.heroImage || prev.heroBgImage,
           discountBadge: { ...prev.discountBadge, ...(raw.discountBadge || {}) },
           generalNotice: { ...prev.generalNotice, ...(raw.generalNotice || {}) },
           productNoticeStyle: { ...prev.productNoticeStyle, ...(raw.productNoticeStyle || {}) },
           stages: normalizeItems(raw.stages, prev.stages),
           grades: normalizeItems(raw.grades, prev.grades),
-          categories: normalizeItems(raw.categories, prev.categories),
+          categories: normalizeItems(raw.categories, prev.categories).map((c) => {
+            const existingCat = prev.categories?.find((pc) => pc.id === c.id);
+            return {
+              ...c,
+              coverImage: c.coverImage || existingCat?.coverImage || makeCoverSvg(c.name, '', '#1e3a8a', '#2563eb')
+            };
+          }),
           socialLinks: normalizeItems(raw.socialLinks, prev.socialLinks),
           upcomingItems: normalizeItems(raw.upcomingItems, prev.upcomingItems),
           testimonials: normalizeItems(raw.testimonials, prev.testimonials),
@@ -935,10 +991,11 @@ function MuzakkiratiPlatformInner() {
       });
     };
 
-    // جلب فوري عند الفتح لضمان ظهور آخر التعديلات على الهاتف والكمبيوتر فوراً
-    getDoc(settingsDocRef)
-      .then((snap) => {
-        if (snap.exists()) applyCloudSettingsSnapshot(snap.data());
+    // جلب فوري عند الفتح من config/main و settings/main
+    Promise.all([getDoc(configMainDocRef), getDoc(settingsDocRef)])
+      .then(([cfgSnap, setSnap]) => {
+        if (cfgSnap.exists()) applyCloudSettingsSnapshot(cfgSnap.data());
+        if (setSnap.exists()) applyCloudSettingsSnapshot(setSnap.data());
       })
       .catch(() => {});
 
@@ -2207,7 +2264,7 @@ function MuzakkiratiPlatformInner() {
                     </div>
 
                     <div className="space-y-3">
-                      {settings.trustPoints.map((tp, idx) => (
+                      {normalizeItems(settings.trustPoints, DEFAULT_SETTINGS.trustPoints).map((tp, idx) => (
                         <div
                           key={tp.id || idx}
                           className="p-3.5 rounded-2xl bg-slate-950/40 border border-white/10 flex items-start gap-3"
@@ -2218,7 +2275,7 @@ function MuzakkiratiPlatformInner() {
                           <div>
                             <h4 className="text-xs font-black text-white">{safeText(tp.title)}</h4>
                             <p className="text-[11px] text-slate-300 font-medium mt-0.5 leading-relaxed">
-                              {safeText(tp.desc)}
+                              {safeText(tp.desc || tp.subtitle)}
                             </p>
                           </div>
                         </div>
@@ -2391,24 +2448,50 @@ function MuzakkiratiPlatformInner() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  {settings.testimonials.map((rev) => (
-                    <div
-                      key={rev.id}
-                      className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-3"
-                    >
-                      <div className="flex items-center gap-1 text-amber-400">
-                        {[...Array(5)].map((_, i) => (
-                          <Star key={i} className="w-4 h-4 fill-amber-400" />
-                        ))}
+                  {settings.testimonials.map((rev) => {
+                    const authorName = safeText(rev.author || rev.name || 'معلم بالمنصة');
+                    const authorRole = safeText(rev.role || rev.subtitle || '');
+                    return (
+                      <div
+                        key={rev.id}
+                        className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm flex flex-col justify-between space-y-4"
+                      >
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-black">
+                              تقييم موثق
+                            </span>
+                            <div className="flex items-center gap-1 text-amber-400">
+                              {[...Array(5)].map((_, i) => (
+                                <Star key={i} className="w-4 h-4 fill-amber-400" />
+                              ))}
+                            </div>
+                          </div>
+                          <p className="text-xs sm:text-sm text-slate-700 font-medium leading-relaxed">
+                            "{safeText(rev.text)}"
+                          </p>
+                          {rev.image && (
+                            <img
+                              src={rev.image}
+                              alt={authorName}
+                              className="w-full max-h-48 object-contain rounded-2xl border border-slate-100 bg-slate-50"
+                            />
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 pt-3 border-t border-slate-100">
+                          <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-700 font-black text-xs flex items-center justify-center shrink-0">
+                            {authorName.charAt(0)}
+                          </div>
+                          <div>
+                            <div className="text-xs font-black text-slate-900">{authorName}</div>
+                            {authorRole && (
+                              <div className="text-[11px] text-slate-500 font-semibold">{authorRole}</div>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <p className="text-xs sm:text-sm text-slate-700 font-medium leading-relaxed">
-                        "{safeText(rev.text)}"
-                      </p>
-                      <div className="text-xs font-black text-slate-900 pt-2 border-t border-slate-100">
-                        {safeText(rev.author)}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </section>
             )}
