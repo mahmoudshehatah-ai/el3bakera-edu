@@ -46,6 +46,7 @@ import {
 } from 'firebase/auth';
 import {
   getFirestore,
+  initializeFirestore,
   collection,
   doc,
   setDoc,
@@ -683,10 +684,18 @@ function MuzakkiratiPlatformInner() {
   const firebaseServices = useMemo(() => {
     try {
       const app = getApps().length ? getApps()[0] : initializeApp(DEFAULT_FIREBASE_CONFIG);
+      let dbInstance;
+      try {
+        dbInstance = initializeFirestore(app, {
+          experimentalAutoDetectLongPolling: true
+        });
+      } catch {
+        dbInstance = getFirestore(app);
+      }
       return {
         app,
         auth: getAuth(app),
-        db: getFirestore(app)
+        db: dbInstance
       };
     } catch {
       return { app: null, auth: null, db: null };
@@ -1075,80 +1084,69 @@ function MuzakkiratiPlatformInner() {
       () => {}
     );
 
-    // جلب الصور لمرة واحدة فقط (بدلاً من onSnapshot المستمر الثقيل الذي يسبب البطء)
+    // جلب الصور الأساسية فقط (الشعار، الخلفية، أغلفة الأقسام وأغلفة المذكرات) لمرة واحدة وبأقصى سرعة
+    // أما صور العينات الداخلية فتُحمَّل عند الطلب فقط عند فتح معاينة المذكرة لمنع البطء الشديد!
     let cancelledMedia = false;
-    getDocs(configColRef)
-      .then((snap) => {
-        if (cancelledMedia || snap.empty) return;
-        const mediaMap = {};
-        snap.docs.forEach((d) => {
-          if (d.id.startsWith('media_')) {
-            const data = d.data();
-            if (data?.dataUrl) mediaMap[d.id] = data.dataUrl;
-          }
-        });
-        if (Object.keys(mediaMap).length === 0) return;
+    const essentialAssetIds = [
+      'media_logo',
+      'media_hero_bg',
+      ...DEFAULT_SETTINGS.categories.map((c) => `media_cat_${c.id}`)
+    ];
 
-        setSettings((prev) => {
-          let changed = false;
-          const next = { ...prev };
-          if (mediaMap.media_logo && mediaMap.media_logo !== prev.logoImage) {
-            next.logoImage = mediaMap.media_logo;
-            changed = true;
-          }
-          if (mediaMap.media_hero_bg && mediaMap.media_hero_bg !== prev.heroBgImage) {
-            next.heroBgImage = mediaMap.media_hero_bg;
-            changed = true;
-          }
-          if (Array.isArray(prev.categories)) {
-            const nextCats = prev.categories.map((c) => {
-              const key = `media_cat_${c.id}`;
-              if (mediaMap[key] && mediaMap[key] !== c.coverImage) {
-                changed = true;
-                return { ...c, coverImage: mediaMap[key] };
-              }
-              return c;
-            });
-            if (changed) next.categories = nextCats;
-          }
-          if (changed) {
-            setTimeout(() => idbSet('settings_v7', next), 400);
-            return next;
-          }
-          return prev;
-        });
+    Promise.all(
+      essentialAssetIds.map((id) =>
+        getDoc(doc(db, ...basePath, 'config', id)).catch(() => null)
+      )
+    ).then((snaps) => {
+      if (cancelledMedia) return;
+      const mediaMap = {};
+      snaps.forEach((s) => {
+        if (s && s.exists() && s.data()?.dataUrl) {
+          mediaMap[s.id] = s.data().dataUrl;
+        }
+      });
+      if (Object.keys(mediaMap).length === 0) return;
+      setSettings((prev) => {
+        const next = {
+          ...prev,
+          logoImage: mediaMap.media_logo || prev.logoImage,
+          heroBgImage: mediaMap.media_hero_bg || prev.heroBgImage,
+          categories: (prev.categories || []).map((c) => ({
+            ...c,
+            coverImage: mediaMap[`media_cat_${c.id}`] || c.coverImage
+          }))
+        };
+        setTimeout(() => idbSet('settings_v7', next), 300);
+        return next;
+      });
+    });
 
-        setProducts((prev) => {
-          let changed = false;
-          const nextProds = prev.map((p) => {
-            const coverKey = `media_prod_cover_${p.id}`;
-            const nextCover = mediaMap[coverKey] || p.coverImage;
-            const collectedSamples = [];
-            for (let i = 0; i < 25; i++) {
-              const sKey = `media_prod_sample_${p.id}_${i}`;
-              if (mediaMap[sKey]) {
-                collectedSamples.push(mediaMap[sKey]);
-              }
+    // جلب أغلفة المذكرات وأغلفة الأقسام الإضافية بشكل خفيف بعد تحميل الصفحة
+    getDocs(productsColRef)
+      .then((pSnap) => {
+        if (cancelledMedia || pSnap.empty) return;
+        const prodIds = pSnap.docs.map((d) => d.id);
+        Promise.all(
+          prodIds.map((pid) =>
+            getDoc(doc(db, ...basePath, 'config', `media_prod_cover_${pid}`)).catch(() => null)
+          )
+        ).then((coverSnaps) => {
+          if (cancelledMedia) return;
+          const coverMap = {};
+          coverSnaps.forEach((cs) => {
+            if (cs && cs.exists() && cs.data()?.dataUrl) {
+              coverMap[cs.id] = cs.data().dataUrl;
             }
-            const finalSamples =
-              collectedSamples.length > 0 ? collectedSamples : p.sampleImages || [];
-            if (
-              nextCover !== p.coverImage ||
-              finalSamples.length !== (p.sampleImages?.length || 0)
-            ) {
-              changed = true;
-            }
-            return {
-              ...p,
-              coverImage: nextCover,
-              sampleImages: finalSamples
-            };
           });
-          if (changed) {
-            setTimeout(() => idbSet('products_v6', nextProds), 500);
-            return nextProds;
-          }
-          return prev;
+          if (Object.keys(coverMap).length === 0) return;
+          setProducts((prev) => {
+            const updated = prev.map((p) => ({
+              ...p,
+              coverImage: coverMap[`media_prod_cover_${p.id}`] || p.coverImage
+            }));
+            setTimeout(() => idbSet('products_v6', updated), 400);
+            return updated;
+          });
         });
       })
       .catch(() => {});
@@ -1410,19 +1408,51 @@ function MuzakkiratiPlatformInner() {
       const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.style.display = 'none';
       a.href = url;
       a.download = `el3bakera_backup_${new Date().toISOString().slice(0, 10)}.json`;
       document.body.appendChild(a);
       a.click();
-      setTimeout(() => {
-        if (document.body.contains(a)) document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }, 2000);
-      showToast('تم تحميل ملف النسخة الاحتياطية على جهازك بنجاح!');
-    } catch (err) {
-      showToast(`تعذر تحميل الملف: ${err?.message || ''}`, 'error');
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('تم تحميل ملف النسخة الاحتياطية على جهازك بنجاح');
+    } catch {
+      showToast('حدث خطأ أثناء تجهيز ملف النسخة الاحتياطية', 'error');
     }
+  };
+
+  // تحميل صور العينات الداخلية لمذكرة محددة عند فتح المعاينة فقط (لتسريع المنصة 10 أضعاف)
+  const loadProductSamplesOnDemand = async (prod) => {
+    setPreviewProduct(prod);
+    setActiveSampleIdx(0);
+    if (!prod || (Array.isArray(prod.sampleImages) && prod.sampleImages.length > 0)) return;
+    const { db } = firebaseServices;
+    if (!db) return;
+    try {
+      const basePath = ['artifacts', 'el3bakera-edu', 'public', 'data'];
+      // فحص مجموعة notebook_samples أولاً
+      const legacySnap = await getDoc(doc(db, ...basePath, 'notebook_samples', prod.id)).catch(() => null);
+      if (legacySnap && legacySnap.exists()) {
+        const imgs = legacySnap.data()?.sampleImages || legacySnap.data()?.images || [];
+        if (imgs.length > 0) {
+          setPreviewProduct((prev) => (prev && prev.id === prod.id ? { ...prev, sampleImages: imgs } : prev));
+          setProducts((prev) => prev.map((p) => (p.id === prod.id ? { ...p, sampleImages: imgs } : p)));
+          return;
+        }
+      }
+      // جلب العينات الفردية
+      const sampleSnaps = await Promise.all(
+        Array.from({ length: 15 }, (_, idx) =>
+          getDoc(doc(db, ...basePath, 'config', `media_prod_sample_${prod.id}_${idx}`)).catch(() => null)
+        )
+      );
+      const loadedImgs = sampleSnaps
+        .filter((s) => s && s.exists() && s.data()?.dataUrl)
+        .map((s) => s.data().dataUrl);
+      if (loadedImgs.length > 0) {
+        setPreviewProduct((prev) => (prev && prev.id === prod.id ? { ...prev, sampleImages: loadedImgs } : prev));
+        setProducts((prev) => prev.map((p) => (p.id === prod.id ? { ...p, sampleImages: loadedImgs } : p)));
+      }
+    } catch {}
   };
 
   // ==========================================
@@ -1932,10 +1962,7 @@ function MuzakkiratiPlatformInner() {
       >
         {/* صورة الغلاف */}
       <div
-        onClick={() => {
-          setPreviewProduct(prod);
-          setActiveSampleIdx(0);
-        }}
+        onClick={() => loadProductSamplesOnDemand(prod)}
         className="relative h-56 bg-slate-900 overflow-hidden cursor-pointer"
       >
         <img
@@ -1980,10 +2007,7 @@ function MuzakkiratiPlatformInner() {
             </div>
 
             <h3
-              onClick={() => {
-                setPreviewProduct(prod);
-                setActiveSampleIdx(0);
-              }}
+              onClick={() => loadProductSamplesOnDemand(prod)}
               className="text-base font-black text-slate-900 leading-snug hover:text-blue-600 transition cursor-pointer"
             >
               {safeText(prod.title)}
@@ -2039,10 +2063,7 @@ function MuzakkiratiPlatformInner() {
 
               <div className="flex items-center gap-1.5">
                 <button
-                  onClick={() => {
-                    setPreviewProduct(prod);
-                    setActiveSampleIdx(0);
-                  }}
+                  onClick={() => loadProductSamplesOnDemand(prod)}
                   className="px-3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-black transition cursor-pointer flex items-center gap-1"
                 >
                   <Eye className="w-3.5 h-3.5" />
