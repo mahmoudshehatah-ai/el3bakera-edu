@@ -1207,10 +1207,13 @@ function MuzakkiratiPlatformContent() {
         getDocs(collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebooks'))
       ]);
 
+      let cloudMainSettings = null;
       const assetsMap = {};
       const samplesByProduct = {};
       configSnap.forEach((d) => {
-        if (d.id.startsWith('media_')) {
+        if (d.id === 'main') {
+          cloudMainSettings = d.data();
+        } else if (d.id.startsWith('media_')) {
           const data = d.data();
           const key = data.assetId || d.id.replace('media_', '');
           if (data.dataUrl) {
@@ -1223,6 +1226,38 @@ function MuzakkiratiPlatformContent() {
           }
         }
       });
+
+      if (cloudMainSettings) {
+        setSettings((prev) => {
+          const updatedCategories = (cloudMainSettings.categories || prev.categories || []).map((c) => ({
+            ...c,
+            coverImage:
+              assetsMap[`cat_${c.id}`] !== undefined
+                ? assetsMap[`cat_${c.id}`]
+                : (c.coverImage || '')
+          }));
+          const merged = {
+            ...prev,
+            ...cloudMainSettings,
+            logoImage:
+              assetsMap.logoImage !== undefined
+                ? assetsMap.logoImage
+                : (cloudMainSettings.logoImage || prev.logoImage || ''),
+            heroImage:
+              assetsMap.heroImage !== undefined
+                ? assetsMap.heroImage
+                : (cloudMainSettings.heroImage || prev.heroImage || ''),
+            heroBgImage:
+              assetsMap.heroBgImage !== undefined
+                ? assetsMap.heroBgImage
+                : (cloudMainSettings.heroBgImage || prev.heroBgImage || ''),
+            categories: updatedCategories
+          };
+          idbSet('settings_v5', merged);
+          safeLocalSet('el3bakera_settings_v5', merged);
+          return merged;
+        });
+      }
 
       samplesSnap.forEach((d) => {
         const data = d.data();
@@ -1253,10 +1288,80 @@ function MuzakkiratiPlatformContent() {
       setProducts(syncedProducts);
       await idbSet('products_v5', syncedProducts);
       safeLocalSet('el3bakera_products_v5', stripHeavyProductMedia(syncedProducts));
-      showToast('✓ تم تحديث ومزامنة جميع الصور والعينات من السحابة بنجاح!');
+      showToast('✓ تم تحديث ومزامنة جميع الإعدادات والصور من السحابة بنجاح!');
     } catch (err) {
       showToast(`تعذر السحب من السحابة: ${err?.message || 'تحقق من الاتصال'}`, 'error');
     }
+  };
+
+  useEffect(() => {
+    const onPopState = (event) => {
+      if (previewProduct || isSampleFullscreen) {
+        setPreviewProduct(null);
+        setIsSampleFullscreen(false);
+        return;
+      }
+      if (isCartOpen) {
+        setIsCartOpen(false);
+        return;
+      }
+      if (isContactModalOpen) {
+        setIsContactModalOpen(false);
+        return;
+      }
+      const targetTab = event.state?.tab || 'home';
+      setActiveTab(targetTab);
+      try {
+        localStorage.setItem('el3bakera_active_tab', targetTab);
+      } catch {}
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [previewProduct, isSampleFullscreen, isCartOpen, isContactModalOpen]);
+
+  const navigateToTab = (newTab) => {
+    if (newTab === activeTab) return;
+    setTabHistory((prev) => [...prev, newTab]);
+    setActiveTab(newTab);
+    try {
+      localStorage.setItem('el3bakera_active_tab', newTab);
+      window.history.pushState({ tab: newTab }, '', newTab === 'admin' ? '#admin' : `#${newTab}`);
+    } catch {}
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleGoBack = (e) => {
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
+    if (previewProduct || isSampleFullscreen) {
+      setPreviewProduct(null);
+      setIsSampleFullscreen(false);
+      return;
+    }
+    if (isCartOpen) {
+      setIsCartOpen(false);
+      return;
+    }
+    if (isContactModalOpen) {
+      setIsContactModalOpen(false);
+      return;
+    }
+    setTabHistory((prev) => {
+      if (prev.length > 1) {
+        const nextHistory = prev.slice(0, -1);
+        const prevTab = nextHistory[nextHistory.length - 1] || 'home';
+        setActiveTab(prevTab);
+        try {
+          localStorage.setItem('el3bakera_active_tab', prevTab);
+        } catch {}
+        return nextHistory;
+      }
+      setActiveTab('home');
+      try {
+        localStorage.setItem('el3bakera_active_tab', 'home');
+      } catch {}
+      return ['home'];
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const saveSettings = async (updatedSettings) => {
@@ -1971,14 +2076,14 @@ function MuzakkiratiPlatformContent() {
 
       {/* زر الرجوع للخلف */}
       {activeTab !== 'home' && (
-        <div className="max-w-7xl mx-auto w-full px-3 sm:px-6 lg:px-8 pt-4">
+        <div className="max-w-7xl mx-auto w-full px-3 sm:px-6 lg:px-8 pt-4 relative z-30">
           <button
             type="button"
             onClick={handleGoBack}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-slate-200 active:bg-slate-200 hover:bg-slate-100 text-slate-800 text-xs sm:text-sm font-black shadow-2xs transition cursor-pointer touch-manipulation"
+            className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-white border border-slate-300 active:bg-slate-200 hover:bg-slate-100 text-slate-900 text-xs sm:text-sm font-black shadow-sm transition cursor-pointer touch-manipulation select-none"
           >
-            <ArrowRight className="w-4 h-4" />
-            <span>رجوع للخلف</span>
+            <ArrowRight className="w-4 h-4 pointer-events-none" />
+            <span className="pointer-events-none">رجوع للخلف</span>
           </button>
         </div>
       )}
@@ -2908,36 +3013,214 @@ function MuzakkiratiPlatformContent() {
 
             {/* تبويب 1: إدارة المذكرات */}
             {adminSubTab === 'products' && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <form
-                  onSubmit={handleSaveProduct}
-                  className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 p-6 space-y-4 h-fit"
-                >
-                  <h3 className="text-base font-black text-slate-900">
-                    {editingProductId ? 'تعديل بيانات المذكرة' : 'إضافة مذكرة جديدة'}
-                  </h3>
-
-                  <div className="space-y-3 text-xs">
+              <div className="space-y-6">
+                {/* قسم التحكم في التنبيه العام والتنبيه الخاص بكل مذكرة */}
+                <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-2xs space-y-5 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100">
                     <div>
-                      <label className="block font-bold text-slate-600 mb-1">عنوان المذكرة *</label>
-                      <input
-                        type="text"
-                        required
-                        value={productForm.title}
-                        onChange={(e) => setProductForm({ ...productForm, title: e.target.value })}
-                        placeholder="مثال: بنك مراجعة الصف الثالث الإعدادي"
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
-                      />
+                      <h3 className="text-base font-black text-slate-900">
+                        إعدادات التنبيه العام والتنبيه الخاص بالمذكرات
+                      </h3>
+                      <p className="text-[11px] text-slate-500">
+                        تحكم في نص وألوان ومكان ظهور التنبيه العام في المعاينة والتنبيه الخاص بكل مذكرة
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSaveAllAdminChanges}
+                      className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black cursor-pointer shadow-sm"
+                    >
+                      حفظ ونشر تعديلات التنبيهات
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* 1. التحكم في التنبيه العام */}
+                    <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-black text-slate-900">1. التحكم في التنبيه العام (في نافذة المعاينة فقط)</h4>
+                        <label className="flex items-center gap-1.5 font-bold text-blue-600 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={settings.generalNoticeEnabled !== false}
+                            onChange={(e) =>
+                              setSettings({ ...settings, generalNoticeEnabled: e.target.checked })
+                            }
+                          />
+                          <span>إظهار التنبيه العام</span>
+                        </label>
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-slate-600 mb-1">عنوان التنبيه العام</label>
+                        <input
+                          type="text"
+                          value={settings.generalNoticeTitle ?? 'تنبيه هام للمعلمين قبل تأكيد الطلب:'}
+                          onChange={(e) =>
+                            setSettings({ ...settings, generalNoticeTitle: e.target.value })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-slate-600 mb-1">نص التنبيه العام</label>
+                        <textarea
+                          rows={3}
+                          value={settings.generalNoticeText ?? DEFAULT_SETTINGS.generalNoticeText}
+                          onChange={(e) =>
+                            setSettings({ ...settings, generalNoticeText: e.target.value })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-4 gap-2">
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">المكان</label>
+                          <select
+                            value={settings.generalNoticePosition || 'bottom'}
+                            onChange={(e) =>
+                              setSettings({ ...settings, generalNoticePosition: e.target.value })
+                            }
+                            className="w-full px-2 py-2 rounded-xl border border-slate-200 bg-white"
+                          >
+                            <option value="top">أعلى التفاصيل</option>
+                            <option value="bottom">أسفل التفاصيل</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">لون الخلفية</label>
+                          <input
+                            type="color"
+                            value={settings.generalNoticeBg || '#f8fafc'}
+                            onChange={(e) =>
+                              setSettings({ ...settings, generalNoticeBg: e.target.value })
+                            }
+                            className="w-full h-9 rounded-xl border border-slate-200"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">لون النص</label>
+                          <input
+                            type="color"
+                            value={settings.generalNoticeTextColor || '#334155'}
+                            onChange={(e) =>
+                              setSettings({ ...settings, generalNoticeTextColor: e.target.value })
+                            }
+                            className="w-full h-9 rounded-xl border border-slate-200"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">لون الإطار</label>
+                          <input
+                            type="color"
+                            value={settings.generalNoticeBorder || '#cbd5e1'}
+                            onChange={(e) =>
+                              setSettings({ ...settings, generalNoticeBorder: e.target.value })
+                            }
+                            className="w-full h-9 rounded-xl border border-slate-200"
+                          />
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">المرحلة</label>
-                        <select
-                          value={productForm.stageId}
-                          onChange={(e) => setProductForm({ ...productForm, stageId: e.target.value })}
-                          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
-                        >
+                    {/* 2. التحكم في التنبيه الخاص بكل مذكرة */}
+                    <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-3 flex flex-col justify-between">
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h4 className="font-black text-slate-900">2. التحكم في التنبيه الخاص بكل مذكرة (صندوق منفصل)</h4>
+                          <div className="flex items-center gap-3">
+                            <label className="flex items-center gap-1.5 font-bold text-emerald-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={settings.tipNoticeEnabled !== false}
+                                onChange={(e) =>
+                                  setSettings({ ...settings, tipNoticeEnabled: e.target.checked })
+                                }
+                              />
+                              <span>إظهار بالمعاينة</span>
+                            </label>
+                            <label className="flex items-center gap-1.5 font-bold text-blue-600 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={settings.tipShowOnCard !== false}
+                                onChange={(e) =>
+                                  setSettings({ ...settings, tipShowOnCard: e.target.checked })
+                                }
+                              />
+                              <span>إظهار بالبطاقة</span>
+                            </label>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-4 gap-2">
+                          <div>
+                            <label className="block font-bold text-slate-600 mb-1">مكان الظهور</label>
+                            <select
+                              value={settings.tipNoticePosition || 'below-desc'}
+                              onChange={(e) =>
+                                setSettings({ ...settings, tipNoticePosition: e.target.value })
+                              }
+                              className="w-full px-2 py-2 rounded-xl border border-slate-200 bg-white"
+                            >
+                              <option value="above-desc">أعلى الوصف</option>
+                              <option value="below-desc">أسفل الوصف</option>
+                              <option value="before-actions">قبل أزرار الطلب</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block font-bold text-slate-600 mb-1">لون الخلفية</label>
+                            <input
+                              type="color"
+                              value={settings.tipNoticeBg || '#fffbeb'}
+                              onChange={(e) =>
+                                setSettings({ ...settings, tipNoticeBg: e.target.value })
+                              }
+                              className="w-full h-9 rounded-xl border border-slate-200"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-bold text-slate-600 mb-1">لون النص</label>
+                            <input
+                              type="color"
+                              value={settings.tipNoticeTextColor || '#78350f'}
+                              onChange={(e) =>
+                                setSettings({ ...settings, tipNoticeTextColor: e.target.value })
+                              }
+                              className="w-full h-9 rounded-xl border border-slate-200"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-bold text-slate-600 mb-1">لون الإطار</label>
+                            <input
+                              type="color"
+                              value={settings.tipNoticeBorder || '#fde68a'}
+                              onChange={(e) =>
+                                setSettings({ ...settings, tipNoticeBorder: e.target.value })
+                              }
+                              className="w-full h-9 rounded-xl border border-slate-200"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleSaveAllAdminChanges}
+                        className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-md cursor-pointer"
+                      >
+                        حفظ ونشر تعديلات التنبيهات
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                  <form
+                    onSubmit={handleSaveProduct}
+                    className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 p-6 space-y-4 h-fit"
+                  >
                           {normalizedStages.map((s) => (
                             <option key={s.id} value={s.id}>
                               {s.name}
@@ -3228,155 +3511,6 @@ function MuzakkiratiPlatformContent() {
                   ))}
                 </div>
               </div>
-            )}
-
-            {/* تبويب 2: إدارة الباقات */}
-            {adminSubTab === 'bundles' && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
-                  <h3 className="text-base font-black text-slate-900">إضافة باقة مخفضة جديدة</h3>
-                  <div className="space-y-3 text-xs">
-                    <input
-                      type="text"
-                      placeholder="اسم الباقة"
-                      value={newBundleForm.title}
-                      onChange={(e) => setNewBundleForm({ ...newBundleForm, title: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                    />
-                    <input
-                      type="text"
-                      placeholder="وصف الباقة"
-                      value={newBundleForm.subtitle}
-                      onChange={(e) => setNewBundleForm({ ...newBundleForm, subtitle: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="number"
-                        placeholder="سعر الباقة"
-                        value={newBundleForm.price}
-                        onChange={(e) => setNewBundleForm({ ...newBundleForm, price: Number(e.target.value) })}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                      />
-                      <input
-                        type="number"
-                        placeholder="السعر الأصلي"
-                        value={newBundleForm.originalPrice}
-                        onChange={(e) =>
-                          setNewBundleForm({ ...newBundleForm, originalPrice: Number(e.target.value) })
-                        }
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                      />
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="شارة التوفير (مثال: وفر 150 ج.م)"
-                      value={newBundleForm.badge}
-                      onChange={(e) => setNewBundleForm({ ...newBundleForm, badge: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                    />
-                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                      <div className="font-black text-slate-800">
-                        اختر المذكرات المشمولة داخل الباقة ({newBundleForm.productIds.length}):
-                      </div>
-                      <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1">
-                        {products.map((prod) => {
-                          const isChecked = newBundleForm.productIds.includes(prod.id);
-                          return (
-                            <label
-                              key={prod.id}
-                              className={`flex items-center justify-between gap-2 p-2 rounded-xl border cursor-pointer transition ${
-                                isChecked
-                                  ? 'bg-blue-50 border-blue-300 text-blue-900 font-bold'
-                                  : 'bg-white border-slate-200 text-slate-700'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2 truncate">
-                                <input
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  onChange={() => {
-                                    setNewBundleForm((prev) => ({
-                                      ...prev,
-                                      productIds: isChecked
-                                        ? prev.productIds.filter((id) => id !== prod.id)
-                                        : [...prev.productIds, prod.id]
-                                    }));
-                                  }}
-                                />
-                                <span className="truncate">{prod.title}</span>
-                              </div>
-                              <span className="text-[11px] font-bold shrink-0">{prod.price} ج.م</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    <button
-                      onClick={async () => {
-                        if (!newBundleForm.title.trim()) {
-                          showToast('يرجى إدخال اسم الباقة أولاً', 'error');
-                          return;
-                        }
-                        const bObj = { ...newBundleForm, id: `bnd_${Date.now()}` };
-                        const next = [bObj, ...bundles];
-                        setBundles(next);
-                        await idbSet('bundles_v5', next);
-                        if (db) {
-                          await setDoc(
-                            doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles', bObj.id),
-                            bObj
-                          );
-                        }
-                        setNewBundleForm({
-                          title: '',
-                          subtitle: '',
-                          price: 499,
-                          originalPrice: 650,
-                          badge: 'عرض خاص',
-                          productIds: [],
-                          coverImage: ''
-                        });
-                        showToast('تمت إضافة الباقة وحفظها بنجاح');
-                      }}
-                      className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm cursor-pointer"
-                    >
-                      حفظ الباقة
-                    </button>
-                  </div>
-                </div>
-
-                <div className="lg:col-span-7 space-y-3">
-                  {bundles.map((b) => (
-                    <div
-                      key={b.id}
-                      className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center justify-between gap-3"
-                    >
-                      <div className="space-y-1">
-                        <h4 className="font-black text-sm">{b.title}</h4>
-                        <p className="text-xs text-slate-500">
-                          {b.price} ج.م (بدلاً من {b.originalPrice} ج.م) • تشمل {(b.productIds || []).length} مذكرات
-                        </p>
-                      </div>
-                      <button
-                        onClick={async () => {
-                          const next = bundles.filter((x) => x.id !== b.id);
-                          setBundles(next);
-                          await idbSet('bundles_v5', next);
-                          if (db) {
-                            await deleteDoc(
-                              doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles', b.id)
-                            );
-                          }
-                          showToast('تم حذف الباقة');
-                        }}
-                        className="p-2 rounded-xl bg-rose-50 text-rose-600 cursor-pointer"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
               </div>
             )}
 
@@ -3793,12 +3927,12 @@ function MuzakkiratiPlatformContent() {
               </div>
             )}
 
-            {/* تبويب 6: الهوية والتنبيهات المنفصلة والروابط */}
+            {/* تبويب 6: الهوية والروابط */}
             {adminSubTab === 'settings' && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs">
                 <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-5">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-base font-black text-slate-900">الهوية والشعار والتحكم في التنبيهات</h3>
+                    <h3 className="text-base font-black text-slate-900">الهوية والشعار وخلفية الرئيسية</h3>
                     <button
                       onClick={handleSaveAllAdminChanges}
                       className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black cursor-pointer shadow-sm"
@@ -3904,181 +4038,12 @@ function MuzakkiratiPlatformContent() {
                     </div>
                   </div>
 
-                  {/* 1. قسم التحكم الكامل في التنبيه العام (يظهر حصراً في نافذة المعاينة) */}
-                  <div className="pt-4 border-t border-slate-200 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-black text-slate-900">1. التحكم في التنبيه العام (في نافذة المعاينة فقط)</h4>
-                      <label className="flex items-center gap-1.5 font-bold text-blue-600 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={settings.generalNoticeEnabled !== false}
-                          onChange={(e) =>
-                            setSettings({ ...settings, generalNoticeEnabled: e.target.checked })
-                          }
-                        />
-                        <span>إظهار التنبيه العام</span>
-                      </label>
-                    </div>
-
-                    <div>
-                      <label className="block font-bold text-slate-600 mb-1">عنوان التنبيه العام</label>
-                      <input
-                        type="text"
-                        value={settings.generalNoticeTitle ?? 'تنبيه هام للمعلمين قبل تأكيد الطلب:'}
-                        onChange={(e) =>
-                          setSettings({ ...settings, generalNoticeTitle: e.target.value })
-                        }
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block font-bold text-slate-600 mb-1">نص التنبيه العام</label>
-                      <textarea
-                        rows={3}
-                        value={settings.generalNoticeText ?? DEFAULT_SETTINGS.generalNoticeText}
-                        onChange={(e) =>
-                          setSettings({ ...settings, generalNoticeText: e.target.value })
-                        }
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-4 gap-2">
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">المكان</label>
-                        <select
-                          value={settings.generalNoticePosition || 'bottom'}
-                          onChange={(e) =>
-                            setSettings({ ...settings, generalNoticePosition: e.target.value })
-                          }
-                          className="w-full px-2 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                        >
-                          <option value="top">أعلى التفاصيل</option>
-                          <option value="bottom">أسفل التفاصيل</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">لون الخلفية</label>
-                        <input
-                          type="color"
-                          value={settings.generalNoticeBg || '#f8fafc'}
-                          onChange={(e) =>
-                            setSettings({ ...settings, generalNoticeBg: e.target.value })
-                          }
-                          className="w-full h-9 rounded-xl border border-slate-200"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">لون النص</label>
-                        <input
-                          type="color"
-                          value={settings.generalNoticeTextColor || '#334155'}
-                          onChange={(e) =>
-                            setSettings({ ...settings, generalNoticeTextColor: e.target.value })
-                          }
-                          className="w-full h-9 rounded-xl border border-slate-200"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">لون الإطار</label>
-                        <input
-                          type="color"
-                          value={settings.generalNoticeBorder || '#cbd5e1'}
-                          onChange={(e) =>
-                            setSettings({ ...settings, generalNoticeBorder: e.target.value })
-                          }
-                          className="w-full h-9 rounded-xl border border-slate-200"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 2. قسم مستقل تماماً للتحكم في التنبيه الخاص بكل مذكرة */}
-                  <div className="pt-4 border-t border-slate-200 space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h4 className="font-black text-slate-900">2. التحكم في التنبيه الخاص بكل مذكرة (صندوق منفصل)</h4>
-                      <div className="flex items-center gap-3">
-                        <label className="flex items-center gap-1.5 font-bold text-emerald-700 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={settings.tipNoticeEnabled !== false}
-                            onChange={(e) =>
-                              setSettings({ ...settings, tipNoticeEnabled: e.target.checked })
-                            }
-                          />
-                          <span>إظهار بالمعاينة</span>
-                        </label>
-                        <label className="flex items-center gap-1.5 font-bold text-blue-600 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={settings.tipShowOnCard !== false}
-                            onChange={(e) =>
-                              setSettings({ ...settings, tipShowOnCard: e.target.checked })
-                            }
-                          />
-                          <span>إظهار بالبطاقة</span>
-                        </label>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-4 gap-2">
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">مكان الظهور</label>
-                        <select
-                          value={settings.tipNoticePosition || 'below-desc'}
-                          onChange={(e) =>
-                            setSettings({ ...settings, tipNoticePosition: e.target.value })
-                          }
-                          className="w-full px-2 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                        >
-                          <option value="above-desc">أعلى الوصف</option>
-                          <option value="below-desc">أسفل الوصف</option>
-                          <option value="before-actions">قبل أزرار الطلب</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">لون الخلفية</label>
-                        <input
-                          type="color"
-                          value={settings.tipNoticeBg || '#fffbeb'}
-                          onChange={(e) =>
-                            setSettings({ ...settings, tipNoticeBg: e.target.value })
-                          }
-                          className="w-full h-9 rounded-xl border border-slate-200"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">لون النص</label>
-                        <input
-                          type="color"
-                          value={settings.tipNoticeTextColor || '#78350f'}
-                          onChange={(e) =>
-                            setSettings({ ...settings, tipNoticeTextColor: e.target.value })
-                          }
-                          className="w-full h-9 rounded-xl border border-slate-200"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">لون الإطار</label>
-                        <input
-                          type="color"
-                          value={settings.tipNoticeBorder || '#fde68a'}
-                          onChange={(e) =>
-                            setSettings({ ...settings, tipNoticeBorder: e.target.value })
-                          }
-                          className="w-full h-9 rounded-xl border border-slate-200"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
                   <button
                     type="button"
                     onClick={handleSaveAllAdminChanges}
                     className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-md cursor-pointer"
                   >
-                    حفظ ونشر تعديلات الهوية والشعار والتنبيهات
+                    حفظ ونشر تعديلات الهوية والشعار
                   </button>
                 </div>
 
