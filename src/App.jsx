@@ -1482,19 +1482,36 @@ function MuzakkiratiPlatformContent() {
   };
 
   const handleSaveAllAdminChanges = async () => {
-    showToast('جاري حفظ ونشر جميع التعديلات...');
+    showToast('جاري حفظ ونشر جميع التعديلات وصور العينات...');
     const ok = await saveSettings({
       ...settings,
       stages: normalizedStages,
       grades: normalizedGrades,
       categories: normalizedCategories
     });
-    await idbSet('products_v5', products);
+    const idbProds = await idbGet('products_v5');
+    const sourceProducts = Array.isArray(idbProds) && idbProds.length > 0
+      ? products.map((p) => {
+          const fromIdb = idbProds.find((ip) => ip.id === p.id);
+          const pSamples = Array.isArray(p.sampleImages) ? p.sampleImages : [];
+          const idbSamples = Array.isArray(fromIdb?.sampleImages) ? fromIdb.sampleImages : [];
+          return {
+            ...p,
+            coverImage: p.coverImage || fromIdb?.coverImage || '',
+            sampleImages: pSamples.length >= idbSamples.length ? pSamples : idbSamples
+          };
+        })
+      : products;
+
+    setProducts(sourceProducts);
+    await idbSet('products_v5', sourceProducts);
     await idbSet('bundles_v5', bundles);
     await idbSet('coupons_v5', coupons);
     if (db && ok) {
       try {
-        for (const prod of products) {
+        for (let i = 0; i < sourceProducts.length; i++) {
+          const prod = sourceProducts[i];
+          showToast(`جاري رفع عينات (${i + 1}/${sourceProducts.length}): ${prod.title}...`);
           await saveProductToCloud(prod);
         }
         for (const cp of coupons) {
@@ -1504,7 +1521,7 @@ function MuzakkiratiPlatformContent() {
             { merge: true }
           );
         }
-        showToast('✓ تم حفظ ونشر جميع التعديلات للعملاء بنجاح!');
+        showToast('✓ تم رفع وحفظ جميع التعديلات وصور العينات للعملاء بنجاح!');
       } catch (err) {
         showToast(`تم حفظ الإعدادات وتعذرت مزامنة بعض العناصر: ${err?.code || ''}`, 'error');
       }
