@@ -210,6 +210,12 @@ const DEFAULT_SETTINGS = {
   tipNoticePosition: 'below-desc',
   tipNoticeBg: '#fffbeb',
   tipNoticeTextColor: '#78350f',
+  // إعدادات التحكم في المذكرات الظاهرة على الشاشة الرئيسية
+  homeProductsTitle: 'أحدث المذكرات المضافة',
+  homeProductsSubtitle: 'اختر المذكرة لمعاينة صفحات العينة وطلبها مخصصة باسمك وشعارك',
+  homeProductsMode: 'auto', // 'auto' | 'custom'
+  homeProductsCount: 6,
+  homeFeaturedProductIds: [],
   // عروض الحصول على أكثر من مذكرة
   multiOffers: DEFAULT_MULTI_OFFERS,
   promoEnabled: true,
@@ -983,6 +989,21 @@ function MuzakkiratiPlatformContent() {
     () => (Array.isArray(products) ? products : DEFAULT_PRODUCTS).filter((p) => p && !p.hidden),
     [products]
   );
+
+  // المذكرات التي تظهر على الشاشة الرئيسية وفق تحكم المدير
+  const homeDisplayedProducts = useMemo(() => {
+    const mode = settings.homeProductsMode || 'auto';
+    if (mode === 'custom') {
+      const selectedIds = Array.isArray(settings.homeFeaturedProductIds)
+        ? settings.homeFeaturedProductIds
+        : [];
+      return selectedIds
+        .map((id) => visibleProducts.find((p) => p.id === id))
+        .filter(Boolean);
+    }
+    const maxCount = Math.max(1, Number(settings.homeProductsCount || 6));
+    return visibleProducts.slice(0, maxCount);
+  }, [visibleProducts, settings.homeProductsMode, settings.homeFeaturedProductIds, settings.homeProductsCount]);
 
   // فتح الإدارة عبر #admin أو 5 نقرات على الشعار
   useEffect(() => {
@@ -2601,9 +2622,14 @@ function MuzakkiratiPlatformContent() {
             <section className="space-y-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-xl sm:text-2xl font-black text-slate-900">أحدث المذكرات المضافة</h3>
+                  <h3 className="text-xl sm:text-2xl font-black text-slate-900">
+                    {safeText(settings.homeProductsTitle, 'أحدث المذكرات المضافة')}
+                  </h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    اختر المذكرة لمعاينة صفحات العينة وطلبها مخصصة باسمك وشعارك
+                    {safeText(
+                      settings.homeProductsSubtitle,
+                      'اختر المذكرة لمعاينة صفحات العينة وطلبها مخصصة باسمك وشعارك'
+                    )}
                   </p>
                 </div>
                 <button
@@ -2614,113 +2640,119 @@ function MuzakkiratiPlatformContent() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {visibleProducts.slice(0, 6).map((product) => {
-                  const gradeObj = normalizedGrades.find((g) => g.id === product.gradeId);
-                  const catObj = normalizedCategories.find((c) => c.id === product.categoryId);
+              {homeDisplayedProducts.length === 0 ? (
+                <div className="bg-white rounded-3xl border border-slate-200 p-8 text-center text-xs text-slate-500 font-bold">
+                  لم يتم تحديد مذكرات للعرض في الشاشة الرئيسية حالياً.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {homeDisplayedProducts.map((product) => {
+                    const gradeObj = normalizedGrades.find((g) => g.id === product.gradeId);
+                    const catObj = normalizedCategories.find((c) => c.id === product.categoryId);
 
-                  return (
-                    <div
-                      key={product.id}
-                      className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-sm hover:shadow-xl transition-all flex flex-col"
-                    >
+                    return (
                       <div
-                        onClick={() => {
-                          setPreviewProduct(product);
-                          setActiveSampleIndex(0);
-                        }}
-                        className="relative aspect-[4/3] w-full bg-gradient-to-br from-[#0f1f44] to-[#1e3a8a] cursor-pointer overflow-hidden group"
+                        key={product.id}
+                        className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-sm hover:shadow-xl transition-all flex flex-col"
                       >
-                        {product.coverImage ? (
-                          <img
-                            src={product.coverImage}
-                            alt={safeText(product.title)}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          />
-                        ) : (
-                          <div className="w-full h-full p-6 flex flex-col items-center justify-center text-center text-white">
-                            <FileText className="w-12 h-12 text-amber-400 mb-3" />
-                            <span className="font-black text-lg">{safeText(product.title)}</span>
-                          </div>
-                        )}
+                        <div
+                          onClick={() => {
+                            setPreviewProduct(product);
+                            setActiveSampleIndex(0);
+                          }}
+                          className="relative aspect-[4/3] w-full bg-gradient-to-br from-[#0f1f44] to-[#1e3a8a] cursor-pointer overflow-hidden group"
+                        >
+                          {product.coverImage ? (
+                            <img
+                              src={product.coverImage}
+                              alt={safeText(product.title)}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            />
+                          ) : (
+                            <div className="w-full h-full p-6 flex flex-col items-center justify-center text-center text-white">
+                              <FileText className="w-12 h-12 text-amber-400 mb-3" />
+                              <span className="font-black text-lg">{safeText(product.title)}</span>
+                            </div>
+                          )}
 
-                        {renderDiscountBadge(product)}
+                          {renderDiscountBadge(product)}
 
-                        {product.badgeText && (
-                          <span className="absolute bottom-3 right-3 max-w-[85%] truncate bg-amber-400 text-slate-950 text-[11px] font-black px-3 py-1 rounded-full shadow-md">
-                            {safeText(product.badgeText)}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2 text-xs text-slate-500 font-semibold">
-                            <span>{gradeObj?.name || 'جميع الصفوف'}</span>
-                            <span>•</span>
-                            <span>{catObj?.name || 'مذكرة'}</span>
-                          </div>
-
-                          <h4
-                            onClick={() => {
-                              setPreviewProduct(product);
-                              setActiveSampleIndex(0);
-                            }}
-                            className="text-lg font-black text-slate-900 hover:text-blue-600 cursor-pointer line-clamp-1"
-                          >
-                            {safeText(product.title)}
-                          </h4>
-
-                          <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">
-                            {safeText(product.description)}
-                          </p>
-
-                          {renderProductTipBox(product.tipText, true)}
+                          {product.badgeText && (
+                            <span className="absolute bottom-3 right-3 max-w-[85%] truncate bg-amber-400 text-slate-950 text-[11px] font-black px-3 py-1 rounded-full shadow-md">
+                              {safeText(product.badgeText)}
+                            </span>
+                          )}
                         </div>
 
-                        <div className="space-y-2.5 pt-2 border-t border-slate-100">
-                          <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-xl">
-                            <span>📄 {product.pagesCount || 0} صفحة PDF</span>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPreviewProduct(product);
-                                setActiveSampleIndex(0);
-                                setIsSampleFullscreen(false);
-                              }}
-                              className="text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer touch-manipulation py-1 px-2"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>التفاصيل والعينة</span>
-                            </button>
-                          </div>
-
-                          {renderDriveSampleButton(product.driveSampleUrl, true)}
-
-                          <div className="flex items-center justify-between pt-1">
-                            <div>
-                              <span className="text-xl font-black text-blue-600">{product.price} ج.م</span>
-                              {Number(product.oldPrice) > Number(product.price) && (
-                                <span className="text-xs text-slate-400 line-through mr-2">
-                                  {product.oldPrice} ج.م
-                                </span>
-                              )}
+                        <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-xs text-slate-500 font-semibold">
+                              <span>{gradeObj?.name || 'جميع الصفوف'}</span>
+                              <span>•</span>
+                              <span>{catObj?.name || 'مذكرة'}</span>
                             </div>
 
-                            <button
-                              onClick={() => addToCart(product, 'product')}
-                              className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-sm transition cursor-pointer"
+                            <h4
+                              onClick={() => {
+                                setPreviewProduct(product);
+                                setActiveSampleIndex(0);
+                              }}
+                              className="text-lg font-black text-slate-900 hover:text-blue-600 cursor-pointer line-clamp-1"
                             >
-                              أضف للسلة للتخصيص
-                            </button>
+                              {safeText(product.title)}
+                            </h4>
+
+                            <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">
+                              {safeText(product.description)}
+                            </p>
+
+                            {renderProductTipBox(product.tipText, true)}
+                          </div>
+
+                          <div className="space-y-3 pt-2 border-t border-slate-100">
+                            <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-xl">
+                              <span>📄 {product.pagesCount || 0} صفحة PDF</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPreviewProduct(product);
+                                  setActiveSampleIndex(0);
+                                  setIsSampleFullscreen(false);
+                                }}
+                                className="text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer touch-manipulation py-1 px-2"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>التفاصيل والعينة</span>
+                              </button>
+                            </div>
+
+                            {renderDriveSampleButton(product.driveSampleUrl, true)}
+
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <span className="text-xl font-black text-blue-600">{product.price} ج.م</span>
+                                {Number(product.oldPrice) > Number(product.price) && (
+                                  <span className="text-xs text-slate-400 line-through mr-2">
+                                    {product.oldPrice} ج.م
+                                  </span>
+                                )}
+                              </div>
+
+                              <button
+                                onClick={() => addToCart(product, 'product')}
+                                className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-sm transition cursor-pointer"
+                              >
+                                أضف للسلة للتخصيص
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </section>
 
             {/* الإصدارات القادمة (أسفل أحدث المذكرات المضافة) */}
@@ -3079,7 +3111,7 @@ function MuzakkiratiPlatformContent() {
                           {renderProductTipBox(product.tipText, true)}
                         </div>
 
-                        <div className="space-y-2.5 pt-2 border-t border-slate-100">
+                        <div className="space-y-3 pt-2 border-t border-slate-100">
                           <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-xl">
                             <span>📄 {product.pagesCount} صفحة PDF</span>
                             <button
@@ -3099,7 +3131,7 @@ function MuzakkiratiPlatformContent() {
 
                           {renderDriveSampleButton(product.driveSampleUrl, true)}
 
-                          <div className="flex items-center justify-between pt-1">
+                          <div className="flex items-center justify-between">
                             <div>
                               <span className="text-xl font-black text-blue-600">{product.price} ج.م</span>
                               {product.oldPrice > product.price && (
@@ -3128,130 +3160,61 @@ function MuzakkiratiPlatformContent() {
 
         {/* 3. العروض والباقات */}
         {activeTab === 'bundles' && (
-          <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8">
-            <div className="relative overflow-hidden bg-gradient-to-bl from-[#081229] via-[#0f2454] to-[#1d4ed8] rounded-3xl p-6 sm:p-10 text-white shadow-2xl border border-blue-800/60">
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-7 items-center">
-                <div className="lg:col-span-7 space-y-4">
-                  <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-xs font-black">
-                    <Sparkles className="w-4 h-4" />
-                    <span>باقات التوفير الحصرية للمعلمين</span>
-                  </span>
-                  <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black leading-tight">
-                    باقات شاملة بأسعار مخفضة وتخصيص كامل باسمك وشعارك
-                  </h2>
-                  <p className="text-xs sm:text-sm text-blue-100 leading-relaxed max-w-2xl">
-                    وفر أكثر عند حجز باقة متكاملة من المذكرات وبنوك الأسئلة، أو استفد من عروض الحصول على أكثر من مذكرة بخصومات تلقائية فورية في السلة.
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
+            <div className="bg-gradient-to-bl from-[#081229] via-[#0e224d] to-[#1d4ed8] rounded-3xl p-6 sm:p-8 text-white shadow-xl border border-slate-800 space-y-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/20 border border-amber-300/30 text-amber-300 text-xs font-black mb-2">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>باقات توفير حصرية للمعلمين</span>
+                  </div>
+                  <h2 className="text-2xl sm:text-3xl font-black">باقات التوفير والعروض الحصرية للمعلمين</h2>
+                  <p className="text-xs sm:text-sm text-blue-100 mt-1.5 max-w-2xl leading-relaxed">
+                    احصل على مجموعات متكاملة من المذكرات وبنوك الأسئلة بخصومات كبيرة + تخصيص كامل باسمك ورقم هاتفك وشعارك على كل مذكرة.
                   </p>
+                </div>
+                <span className="px-4 py-2.5 rounded-2xl bg-amber-400 text-slate-950 font-black text-xs shrink-0 shadow">
+                  تخصيص كامل باسمك وشعارك
+                </span>
+              </div>
 
-                  <div className="flex flex-wrap items-center gap-3 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => navigateToTab('library')}
-                      className="px-6 py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-amber-400/20 transition cursor-pointer"
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 border-t border-white/15">
+                {[
+                  {
+                    icon: Package,
+                    title: 'توفير حتى 30%',
+                    desc: 'أسعار مخفضة للباقات الشاملة مقارنة بالطلب الفردي',
+                    tone: 'bg-amber-400/20 text-amber-300 border-amber-300/30'
+                  },
+                  {
+                    icon: UserCheck,
+                    title: 'تخصيص كل مذكرة باسمك',
+                    desc: 'إضافة اسمك ورقم هاتفك وشعارك على جميع مذكرات الباقة',
+                    tone: 'bg-emerald-400/20 text-emerald-300 border-emerald-300/30'
+                  },
+                  {
+                    icon: ShieldCheck,
+                    title: 'ملفات PDF عالية الدقة',
+                    desc: 'جاهزة للطباعة الفورية ومُراجعة لغوياً وفنياً بالكامل',
+                    tone: 'bg-sky-400/20 text-sky-300 border-sky-300/30'
+                  }
+                ].map((item, i) => {
+                  const ItemIcon = item.icon;
+                  return (
+                    <div
+                      key={i}
+                      className="rounded-2xl bg-white/10 border border-white/10 px-4 py-3 flex items-start gap-3"
                     >
-                      تصفح جميع المذكرات
-                    </button>
-                  </div>
-
-                  {/* بطاقات إحصائيات الباقات والتوفير بتدرجات بصرية فاخرة */}
-                  <div className="grid grid-cols-3 gap-2.5 sm:gap-4 pt-5 border-t border-white/15">
-                    <div className="rounded-2xl bg-gradient-to-br from-white/15 to-white/5 backdrop-blur-xs border border-white/15 p-3 sm:p-4 flex items-center gap-2.5 shadow-lg">
-                      <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-amber-400/25 border border-amber-300/40 text-amber-300 flex items-center justify-center shrink-0">
-                        <Package className="w-4 h-4 sm:w-5 sm:h-5" />
+                      <div className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 mt-0.5 ${item.tone}`}>
+                        <ItemIcon className="w-4 h-4" />
                       </div>
                       <div>
-                        <div className="text-base sm:text-xl font-black text-amber-300 leading-none">
-                          {bundles.length}
-                        </div>
-                        <div className="text-[10px] sm:text-xs text-slate-200 mt-1 font-bold">
-                          باقات متكاملة
-                        </div>
+                        <div className="text-xs sm:text-sm font-black text-white">{item.title}</div>
+                        <div className="text-[11px] text-slate-200 mt-0.5 leading-relaxed">{item.desc}</div>
                       </div>
                     </div>
-
-                    <div className="rounded-2xl bg-gradient-to-br from-white/15 to-white/5 backdrop-blur-xs border border-white/15 p-3 sm:p-4 flex items-center gap-2.5 shadow-lg">
-                      <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-emerald-400/25 border border-emerald-300/40 text-emerald-300 flex items-center justify-center shrink-0">
-                        <Tag className="w-4 h-4 sm:w-5 sm:h-5" />
-                      </div>
-                      <div>
-                        <div className="text-base sm:text-xl font-black text-emerald-300 leading-none">
-                          حتى 30%
-                        </div>
-                        <div className="text-[10px] sm:text-xs text-slate-200 mt-1 font-bold">
-                          توفير فوري
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl bg-gradient-to-br from-white/15 to-white/5 backdrop-blur-xs border border-white/15 p-3 sm:p-4 flex items-center gap-2.5 shadow-lg">
-                      <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-sky-400/25 border border-sky-300/40 text-sky-300 flex items-center justify-center shrink-0">
-                        <UserCheck className="w-4 h-4 sm:w-5 sm:h-5" />
-                      </div>
-                      <div>
-                        <div className="text-base sm:text-xl font-black text-sky-300 leading-none">
-                          100%
-                        </div>
-                        <div className="text-[10px] sm:text-xs text-slate-200 mt-1 font-bold">
-                          باسمك وشعارك
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ركن مزايا وثقة الباقات للمعلمين */}
-                <div className="lg:col-span-5">
-                  <div className="rounded-3xl bg-slate-950/70 backdrop-blur-md border border-white/15 p-5 sm:p-6 shadow-2xl space-y-3.5">
-                    <div className="flex items-center gap-3 pb-3 border-b border-white/10">
-                      <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-slate-950 flex items-center justify-center shrink-0 shadow-lg">
-                        <ShieldCheck className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <h3 className="text-base font-black text-white">مميزات حجز الباقات الشاملة</h3>
-                        <p className="text-[11px] text-amber-300 font-bold">أعلى قيمة تعليمية وأقل تكلفة للمعلم</p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2.5">
-                      {[
-                        {
-                          title: 'تخصيص موحّد لجميع مذكرات الباقة',
-                          desc: 'يُطبع اسمك ورقم هاتفك وشعار سلسلتك على أغلفة وصفحات كل مذكرة في الباقة.',
-                          icon: Sparkles,
-                          tone: 'bg-amber-400/20 text-amber-300 border-amber-400/30'
-                        },
-                        {
-                          title: 'توفير مالي مضاعف مقارنة بالطلب الفردي',
-                          desc: 'خصومات حصرية على الباقات المجمعة مع إمكانية تطبيق كوبونات الخصم.',
-                          icon: Tag,
-                          tone: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30'
-                        },
-                        {
-                          title: 'جاهزة للطباعة الفورية بصيغة PDF',
-                          desc: 'تنسيق احترافي عالي الدقة ومُراجع بالكامل لتسليمه لطلابك فوراً.',
-                          icon: CheckCircle2,
-                          tone: 'bg-sky-500/20 text-sky-300 border-sky-400/30'
-                        }
-                      ].map((item, i) => {
-                        const ItemIcon = item.icon;
-                        return (
-                          <div
-                            key={i}
-                            className="rounded-2xl bg-white/10 border border-white/10 px-4 py-3 flex items-start gap-3"
-                          >
-                            <div className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 mt-0.5 ${item.tone}`}>
-                              <ItemIcon className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <div className="text-xs sm:text-sm font-black text-white">{item.title}</div>
-                              <div className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">{item.desc}</div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -3547,6 +3510,231 @@ function MuzakkiratiPlatformContent() {
             {/* تبويب 1: إدارة المذكرات + إعدادات زر Google Drive والتنبيهات */}
             {adminSubTab === 'products' && (
               <div className="space-y-6">
+                {/* بطاقة التحكم الكامل في المذكرات الظاهرة على الشاشة الرئيسية */}
+                <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 space-y-4 text-xs shadow-2xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Star className="w-5 h-5 text-amber-500 fill-amber-400" />
+                      <div>
+                        <h3 className="text-base font-black text-slate-900">
+                          التحكم الكامل في المذكرات التي تظهر على الشاشة الرئيسية
+                        </h3>
+                        <p className="text-slate-500 mt-0.5">
+                          تحكم في عنوان القسم، طريقة العرض (تلقائي أو اختيار يدوي لمذكرات محددة)، وترتيب ظهورها
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSaveAllAdminChanges}
+                      className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black cursor-pointer shadow-sm"
+                    >
+                      حفظ ونشر إعدادات الرئيسية
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                    <div className="sm:col-span-4">
+                      <label className="block font-bold text-slate-600 mb-1">عنوان القسم في الرئيسية</label>
+                      <input
+                        type="text"
+                        value={settings.homeProductsTitle ?? 'أحدث المذكرات المضافة'}
+                        onChange={(e) =>
+                          setSettings({ ...settings, homeProductsTitle: e.target.value })
+                        }
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold"
+                      />
+                    </div>
+                    <div className="sm:col-span-5">
+                      <label className="block font-bold text-slate-600 mb-1">الوصف أسفل العنوان</label>
+                      <input
+                        type="text"
+                        value={
+                          settings.homeProductsSubtitle ??
+                          'اختر المذكرة لمعاينة صفحات العينة وطلبها مخصصة باسمك وشعارك'
+                        }
+                        onChange={(e) =>
+                          setSettings({ ...settings, homeProductsSubtitle: e.target.value })
+                        }
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
+                      />
+                    </div>
+                    <div className="sm:col-span-3">
+                      <label className="block font-bold text-slate-600 mb-1">طريقة عرض المذكرات</label>
+                      <select
+                        value={settings.homeProductsMode || 'auto'}
+                        onChange={(e) => {
+                          const nextMode = e.target.value;
+                          const currentIds = Array.isArray(settings.homeFeaturedProductIds)
+                            ? settings.homeFeaturedProductIds
+                            : [];
+                          setSettings({
+                            ...settings,
+                            homeProductsMode: nextMode,
+                            homeFeaturedProductIds:
+                              nextMode === 'custom' && currentIds.length === 0
+                                ? visibleProducts.slice(0, 6).map((p) => p.id)
+                                : currentIds
+                          });
+                        }}
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-black text-blue-700"
+                      >
+                        <option value="auto">تلقائي (عرض أحدث المذكرات)</option>
+                        <option value="custom">يدوي (اختيار وترتيب مذكرات محددة)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {(settings.homeProductsMode || 'auto') === 'auto' ? (
+                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                      <span className="font-bold text-slate-700">
+                        الوضع التلقائي يعرض أحدث المذكرات غير المخفية بالترتيب. حدد العدد الأقصى للعرض:
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={1}
+                          max={30}
+                          value={settings.homeProductsCount ?? 6}
+                          onChange={(e) =>
+                            setSettings({
+                              ...settings,
+                              homeProductsCount: Math.max(1, Number(e.target.value || 6))
+                            })
+                          }
+                          className="w-24 px-3 py-2 rounded-xl border border-slate-200 bg-white font-black text-center"
+                        />
+                        <span className="font-bold text-slate-600">مذكرة</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 pt-1">
+                      <div className="lg:col-span-6 p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                        <div className="font-black text-slate-800">
+                          1. اختر المذكرات التي تريد إظهارها في الشاشة الرئيسية:
+                        </div>
+                        <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
+                          {products.map((prod) => {
+                            const selectedIds = Array.isArray(settings.homeFeaturedProductIds)
+                              ? settings.homeFeaturedProductIds
+                              : [];
+                            const isChecked = selectedIds.includes(prod.id);
+                            return (
+                              <label
+                                key={prod.id}
+                                className={`flex items-center justify-between gap-2 p-2 rounded-xl border cursor-pointer transition ${
+                                  isChecked
+                                    ? 'bg-amber-50 border-amber-300 text-amber-950 font-black'
+                                    : 'bg-white border-slate-200 text-slate-700'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() => {
+                                      const nextIds = isChecked
+                                        ? selectedIds.filter((id) => id !== prod.id)
+                                        : [...selectedIds, prod.id];
+                                      setSettings({
+                                        ...settings,
+                                        homeFeaturedProductIds: nextIds
+                                      });
+                                    }}
+                                  />
+                                  <span className="truncate">{prod.title}</span>
+                                </div>
+                                {prod.hidden && (
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-bold shrink-0">
+                                    مخفية
+                                  </span>
+                                )}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="lg:col-span-6 p-3.5 rounded-2xl bg-blue-50/60 border border-blue-200 space-y-2">
+                        <div className="font-black text-blue-950">
+                          2. ترتيب ظهور المذكرات المختارة في الرئيسية (
+                          {(settings.homeFeaturedProductIds || []).length}):
+                        </div>
+                        {(settings.homeFeaturedProductIds || []).length === 0 ? (
+                          <div className="p-6 text-center text-slate-500 font-bold">
+                            حدد المذكرات من القائمة المجاورة لتظهر هنا وتتمكن من ترتيبها.
+                          </div>
+                        ) : (
+                          <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
+                            {(settings.homeFeaturedProductIds || []).map((fid, idx, arr) => {
+                              const fProd = products.find((p) => p.id === fid);
+                              if (!fProd) return null;
+                              return (
+                                <div
+                                  key={fid}
+                                  className="p-2 rounded-xl bg-white border border-blue-200 flex items-center justify-between gap-2"
+                                >
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="w-6 h-6 rounded-lg bg-blue-600 text-white font-black text-[11px] flex items-center justify-center shrink-0">
+                                      {idx + 1}
+                                    </span>
+                                    <span className="font-bold text-slate-900 truncate">
+                                      {fProd.title}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <button
+                                      type="button"
+                                      disabled={idx === 0}
+                                      onClick={() => {
+                                        if (idx === 0) return;
+                                        const copy = [...arr];
+                                        [copy[idx - 1], copy[idx]] = [copy[idx], copy[idx - 1]];
+                                        setSettings({ ...settings, homeFeaturedProductIds: copy });
+                                      }}
+                                      className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40 font-black cursor-pointer"
+                                      title="تقديم للأعلى"
+                                    >
+                                      ↑
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={idx === arr.length - 1}
+                                      onClick={() => {
+                                        if (idx === arr.length - 1) return;
+                                        const copy = [...arr];
+                                        [copy[idx + 1], copy[idx]] = [copy[idx], copy[idx + 1]];
+                                        setSettings({ ...settings, homeFeaturedProductIds: copy });
+                                      }}
+                                      className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40 font-black cursor-pointer"
+                                      title="تأخير للأسفل"
+                                    >
+                                      ↓
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSettings({
+                                          ...settings,
+                                          homeFeaturedProductIds: arr.filter((id) => id !== fid)
+                                        });
+                                      }}
+                                      className="p-1 rounded-lg bg-rose-50 text-rose-600 cursor-pointer"
+                                      title="إزالة من الرئيسية"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* بطاقة التحكم في زر معاينة Google Drive */}
                 <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 space-y-4 text-xs shadow-2xs">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -4124,72 +4312,120 @@ function MuzakkiratiPlatformContent() {
                   </form>
 
                   <div className="lg:col-span-7 space-y-3">
-                    {products.map((prod) => (
-                      <div
-                        key={prod.id}
-                        className={`bg-white rounded-2xl border p-4 flex items-center justify-between gap-4 shadow-2xs transition ${
-                          prod.hidden ? 'border-amber-300 bg-amber-50/30 opacity-75' : 'border-slate-200'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3.5">
-                          <img
-                            src={prod.coverImage || resolvedLogo}
-                            alt={prod.title}
-                            className="w-16 h-16 rounded-xl object-cover border border-slate-200 shrink-0"
-                          />
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-black text-sm text-slate-900">{prod.title}</h4>
-                              {prod.hidden && (
-                                <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-950 text-[10px] font-black">
-                                  مخفية
+                    {products.map((prod) => {
+                      const isFeaturedOnHome =
+                        (settings.homeProductsMode || 'auto') === 'custom' &&
+                        Array.isArray(settings.homeFeaturedProductIds) &&
+                        settings.homeFeaturedProductIds.includes(prod.id);
+
+                      return (
+                        <div
+                          key={prod.id}
+                          className={`bg-white rounded-2xl border p-4 flex items-center justify-between gap-4 shadow-2xs transition ${
+                            prod.hidden ? 'border-amber-300 bg-amber-50/30 opacity-75' : 'border-slate-200'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3.5">
+                            <img
+                              src={prod.coverImage || resolvedLogo}
+                              alt={prod.title}
+                              className="w-16 h-16 rounded-xl object-cover border border-slate-200 shrink-0"
+                            />
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h4 className="font-black text-sm text-slate-900">{prod.title}</h4>
+                                {isFeaturedOnHome && (
+                                  <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-black">
+                                    معروضة بالرئيسية
+                                  </span>
+                                )}
+                                {prod.hidden && (
+                                  <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-950 text-[10px] font-black">
+                                    مخفية
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-slate-500 mt-1">
+                                {prod.price} ج.م • {prod.pagesCount} صفحة •{' '}
+                                <span className="text-emerald-600 font-bold">
+                                  {(prod.sampleImages || []).length} عينة
                                 </span>
-                              )}
-                            </div>
-                            <div className="text-xs text-slate-500 mt-1">
-                              {prod.price} ج.م • {prod.pagesCount} صفحة •{' '}
-                              <span className="text-emerald-600 font-bold">
-                                {(prod.sampleImages || []).length} عينة
-                              </span>
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            onClick={() => handleToggleProductVisibility(prod)}
-                            title={prod.hidden ? 'إظهار المذكرة' : 'إخفاء المذكرة'}
-                            className={`p-2 rounded-xl transition cursor-pointer ${
-                              prod.hidden
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-slate-100 text-slate-600'
-                            }`}
-                          >
-                            {prod.hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                          </button>
-                          <button
-                            onClick={() => {
-                              setEditingProductId(prod.id);
-                              setProductForm({
-                                ...prod,
-                                badgeText: prod.badgeText || '',
-                                tipText: prod.tipText || '',
-                                sampleImages: prod.sampleImages || []
-                              });
-                            }}
-                            className="p-2 rounded-xl bg-blue-50 text-blue-600 cursor-pointer"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteProduct(prod.id)}
-                            className="p-2 rounded-xl bg-rose-50 text-rose-600 cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const currentIds = Array.isArray(settings.homeFeaturedProductIds)
+                                  ? settings.homeFeaturedProductIds
+                                  : visibleProducts.slice(0, 6).map((p) => p.id);
+                                const exists = currentIds.includes(prod.id);
+                                const nextIds = exists
+                                  ? currentIds.filter((id) => id !== prod.id)
+                                  : [...currentIds, prod.id];
+                                setSettings({
+                                  ...settings,
+                                  homeProductsMode: 'custom',
+                                  homeFeaturedProductIds: nextIds
+                                });
+                                showToast(
+                                  exists
+                                    ? 'تمت إزالة المذكرة من الشاشة الرئيسية — اضغط حفظ لنشر التعديل'
+                                    : 'تم تثبيت المذكرة في الشاشة الرئيسية — اضغط حفظ لنشر التعديل'
+                                );
+                              }}
+                              title={
+                                isFeaturedOnHome
+                                  ? 'إزالة من الشاشة الرئيسية'
+                                  : 'تثبيت في الشاشة الرئيسية'
+                              }
+                              className={`p-2 rounded-xl transition cursor-pointer ${
+                                isFeaturedOnHome
+                                  ? 'bg-amber-100 text-amber-600'
+                                  : 'bg-slate-100 text-slate-400 hover:text-amber-500'
+                              }`}
+                            >
+                              <Star
+                                className={`w-4 h-4 ${isFeaturedOnHome ? 'fill-amber-500' : ''}`}
+                              />
+                            </button>
+                            <button
+                              onClick={() => handleToggleProductVisibility(prod)}
+                              title={prod.hidden ? 'إظهار المذكرة' : 'إخفاء المذكرة'}
+                              className={`p-2 rounded-xl transition cursor-pointer ${
+                                prod.hidden
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-slate-100 text-slate-600'
+                              }`}
+                            >
+                              {prod.hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditingProductId(prod.id);
+                                setProductForm({
+                                  ...prod,
+                                  badgeText: prod.badgeText || '',
+                                  tipText: prod.tipText || '',
+                                  sampleImages: prod.sampleImages || []
+                                });
+                              }}
+                              className="p-2 rounded-xl bg-blue-50 text-blue-600 cursor-pointer"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteProduct(prod.id)}
+                              className="p-2 rounded-xl bg-rose-50 text-rose-600 cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>
