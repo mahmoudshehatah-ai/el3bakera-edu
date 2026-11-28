@@ -1178,6 +1178,7 @@ function MuzakkiratiPlatformInner() {
       (snap) => {
         const list = snap.docs
           .map((d) => ({ id: d.id, ...d.data() }))
+          .filter((item) => !String(item.id).includes('_logo_'))
           .sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
         setOrders(list);
       },
@@ -1631,6 +1632,13 @@ function MuzakkiratiPlatformInner() {
       showToast('يرجى إدخال اسم المعلم ورقم الهاتف الأساسي', 'error');
       return;
     }
+    if (
+      customerForm.hasLogo === 'رفع صورة الشعار الآن بالجودة الكاملة' &&
+      !customerForm.logoDataUrl
+    ) {
+      showToast('يرجى اختيار ملف صورة الشعار أولاً أو تغيير خيار الشعار', 'error');
+      return;
+    }
 
     const orderId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
     const newOrder = {
@@ -1654,11 +1662,16 @@ function MuzakkiratiPlatformInner() {
     };
 
     try {
-      const { db } = firebaseServices;
+      const { db, auth } = firebaseServices;
+      if (auth && !auth.currentUser) {
+        try {
+          await signInAnonymously(auth);
+        } catch {}
+      }
       if (db) {
         const basePath = ['artifacts', 'el3bakera-edu', 'public', 'data'];
         const { logoDataUrl, ...orderMeta } = newOrder;
-        const chunkSize = 700000;
+        const chunkSize = 450000;
         const chunks = [];
         if (logoDataUrl) {
           for (let i = 0; i < logoDataUrl.length; i += chunkSize) {
@@ -1672,19 +1685,21 @@ function MuzakkiratiPlatformInner() {
           logoDataUrl: chunks.length === 1 ? chunks[0] : ''
         });
         if (chunks.length > 1) {
-          await Promise.all(
-            chunks.map((chunkStr, idx) =>
-              setDoc(doc(db, ...basePath, 'orders', `${orderId}_logo_${idx}`), {
-                orderId,
-                chunkIndex: idx,
-                dataUrl: chunkStr,
-                updatedAt: serverTimestamp()
-              })
-            )
-          );
+          for (let idx = 0; idx < chunks.length; idx++) {
+            await setDoc(doc(db, ...basePath, 'orders', `${orderId}_logo_${idx}`), {
+              orderId,
+              chunkIndex: idx,
+              dataUrl: chunks[idx],
+              updatedAt: serverTimestamp()
+            });
+          }
         }
       }
-    } catch {}
+    } catch (err) {
+      if (customerForm.logoDataUrl) {
+        showToast('تعذر رفع الشعار للسحابة؛ يرجى إرساله على واتساب مع الطلب', 'error');
+      }
+    }
 
     setOrders((prev) => [newOrder, ...prev]);
 
@@ -4980,12 +4995,9 @@ function MuzakkiratiPlatformInner() {
                         </div>
 
                         <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
-                          <span>
-                            الشعار: <strong>{safeText(ord.hasLogo)}</strong>
-                            {ord.notes ? ` • ملاحظات: ${ord.notes}` : ''}
-                          </span>
+                          <span>الشعار: {safeText(ord.hasLogo)}</span>
 
-                          {(ord.logoDataUrl || ord.hasUploadedLogo) && (
+                          {(ord.logoDataUrl || ord.hasUploadedLogo || ord.hasLogo === 'رفع صورة الشعار الآن بالجودة الكاملة') && (
                             <button
                               type="button"
                               onClick={async () => {
@@ -5007,6 +5019,16 @@ function MuzakkiratiPlatformInner() {
                                   }
                                   if (!finalLogoUrl) {
                                     try {
+                                      const freshOrderSnap = await getDoc(
+                                        doc(firebaseServices.db, ...basePath, 'orders', ord.id)
+                                      );
+                                      if (freshOrderSnap.exists() && freshOrderSnap.data()?.logoDataUrl) {
+                                        finalLogoUrl = freshOrderSnap.data().logoDataUrl;
+                                      }
+                                    } catch {}
+                                  }
+                                  if (!finalLogoUrl) {
+                                    try {
                                       const snap = await getDoc(
                                         doc(firebaseServices.db, ...basePath, 'config', `order_logo_${ord.id}`)
                                       );
@@ -5015,7 +5037,7 @@ function MuzakkiratiPlatformInner() {
                                   }
                                 }
                                 if (!finalLogoUrl) {
-                                  showToast('ملف الشعار غير متوفر لهذا الطلب القديم', 'error');
+                                  showToast('لم يقم العميل بإرفاق ملف الشعار في هذا الطلب', 'error');
                                   return;
                                 }
                                 const a = document.createElement('a');
