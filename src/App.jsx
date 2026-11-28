@@ -32,7 +32,9 @@ import {
   Truck,
   Database,
   Star,
-  UserCheck
+  UserCheck,
+  RefreshCw,
+  LogIn
 } from 'lucide-react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
@@ -56,11 +58,8 @@ import {
 // ============================================================================
 // تهيئة Firebase الآمنة المربوطة بمشروع el3bakera-edu
 // ============================================================================
-const ADMIN_EMAILS = ['mahmoudelzaaty7@gmail.com', 'mahmoudshehatahmohamed@gmail.com'];
-const isAuthorizedAdminEmail = (email) =>
-  Boolean(email && ADMIN_EMAILS.includes(String(email).toLowerCase()));
-
 const PRIMARY_APP_ID = 'el3bakera-edu';
+const ADMIN_EMAILS = ['mahmoudelzaaty7@gmail.com', 'mahmoudshehatahmohamed@gmail.com'];
 
 const DEFAULT_FIREBASE_CONFIG = {
   apiKey: "AIzaSyD_du5VY8nJGDJ169Fof9EAlI9x2W2d-14",
@@ -185,6 +184,18 @@ const DEFAULT_SETTINGS = {
   tipNoticeBg: '#fffbeb',
   tipNoticeTextColor: '#78350f',
   tipNoticeBorder: '#fde68a',
+  driveBtnEnabled: true,
+  driveBtnShowOnCard: true,
+  driveBtnLabel: 'عينة Google Drive',
+  driveBtnBg: '#059669',
+  driveBtnText: '#ffffff',
+  multiOfferEnabled: true,
+  multiOfferBadge: '🔥 عرض خاص عند طلب أكثر من مذكرة',
+  multiOfferTitle: 'احصل على خصم تلقائي {percent}% عند اختيار {min} مذكرات أو أكثر!',
+  multiOfferSubtitle:
+    'اجمع أي مذكرات أو بوكليتات من مختلف الصفوف والمراحل في سلة واحدة وسيتم تطبيق الخصم تلقائياً بحد أقصى {max} ج.م.',
+  multiOfferBg: '#0f172a',
+  multiOfferAccent: '#facc15',
   promoEnabled: true,
   promoText: 'عرض خاص للمعلمين: خصم 15% على جميع المذكرات بمناسبة إطلاق المنصة',
   promoCouponCode: 'M20',
@@ -428,7 +439,7 @@ const DEFAULT_COUPONS = [
 ];
 
 // ============================================================================
-// دوال المساعدة والتخزين
+// دوال المساعدة والتخزين والضغط
 // ============================================================================
 function safeText(val, fallback = '') {
   if (val === null || val === undefined) return fallback;
@@ -454,7 +465,7 @@ function normalizeItems(rawList, fallbackList, prefix) {
   });
 }
 
-function compressImageFile(file, maxWidth = 550, quality = 0.65) {
+function compressImageFile(file, maxWidth = 700, quality = 0.72) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -481,9 +492,9 @@ function compressImageFile(file, maxWidth = 550, quality = 0.65) {
   });
 }
 
-function recompressDataUrl(dataUrl, maxWidth = 850, quality = 0.72) {
+function recompressDataUrl(dataUrl, maxWidth = 650, quality = 0.65) {
   return new Promise((resolve) => {
-    if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image')) {
+    if (!dataUrl || typeof dataUrl !== 'string' || dataUrl.length <= 580000) {
       resolve(dataUrl);
       return;
     }
@@ -500,7 +511,11 @@ function recompressDataUrl(dataUrl, maxWidth = 850, quality = 0.72) {
       canvas.height = height;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL('image/jpeg', quality));
+      let out = canvas.toDataURL('image/jpeg', quality);
+      if (out.length > 650000) {
+        out = canvas.toDataURL('image/jpeg', 0.5);
+      }
+      resolve(out);
     };
     img.onerror = () => resolve(dataUrl);
     img.src = dataUrl;
@@ -517,16 +532,13 @@ async function saveMediaAssetToCloud(dbInstance, appId, assetId, dataUrl) {
     } catch {}
     return;
   }
-  let finalDataUrl = dataUrl;
-  if (finalDataUrl.length > 650000) {
-    finalDataUrl = await recompressDataUrl(finalDataUrl, 850, 0.7);
-  }
-  if (finalDataUrl.length > 750000) {
-    finalDataUrl = await recompressDataUrl(finalDataUrl, 680, 0.6);
+  const safeDataUrl = await recompressDataUrl(dataUrl, 680, 0.68);
+  if (safeDataUrl.length > 820000) {
+    throw new Error('حجم الصورة كبير جداً');
   }
   await setDoc(doc(mediaCol, docId), {
     assetId,
-    dataUrl: finalDataUrl,
+    dataUrl: safeDataUrl,
     updatedAt: Date.now()
   });
 }
@@ -595,40 +607,60 @@ function stripHeavyProductMedia(list) {
   }));
 }
 
+function renderSocialIcon(label = '', url = '') {
+  const txt = `${label} ${url}`.toLowerCase();
+  if (txt.includes('face') || txt.includes('فيس')) {
+    return (
+      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H8v-3h2V9.5C10 7.57 11.57 6 13.5 6H16v3h-2c-.55 0-1 .45-1 1v2h3v3h-3v6.95c5.05-.5 9-4.76 9-9.95z" />
+      </svg>
+    );
+  }
+  if (txt.includes('t.me') || txt.includes('tele') || txt.includes('تيليجرام') || txt.includes('تليجرام')) {
+    return (
+      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
+      </svg>
+    );
+  }
+  if (txt.includes('whats') || txt.includes('واتس')) {
+    return (
+      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.006c.106.005.249-.04.39.298.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.86s.274.072.376-.043c.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.045.072.045.419-.1.824zM12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z" />
+      </svg>
+    );
+  }
+  return <ExternalLink className="w-4 h-4 shrink-0" />;
+}
+
 // ============================================================================
 // المكون الرئيسي للمنصة
 // ============================================================================
 function MuzakkiratiPlatformContent() {
   const [user, setUser] = useState(null);
+  const [adminGoogleUser, setAdminGoogleUser] = useState(null);
 
   const [activeTab, setActiveTab] = useState(() => {
     try {
-      return localStorage.getItem('el3bakera_active_tab') || 'home';
+      const isAuth = localStorage.getItem('el3bakera_admin_auth') === 'true';
+      const savedTab = localStorage.getItem('el3bakera_active_tab') || 'home';
+      if (savedTab === 'admin' && !isAuth) return 'home';
+      return savedTab;
     } catch {
       return 'home';
     }
   });
   const [tabHistory, setTabHistory] = useState(() => {
     try {
+      const isAuth = localStorage.getItem('el3bakera_admin_auth') === 'true';
       const initial = localStorage.getItem('el3bakera_active_tab') || 'home';
+      if (initial === 'admin' && !isAuth) return ['home'];
       return initial === 'home' ? ['home'] : ['home', initial];
     } catch {
       return ['home'];
     }
   });
   const [selectedCategory, setSelectedCategory] = useState('all');
-
-  useEffect(() => {
-    const onPopState = (event) => {
-      const targetTab = event.state?.tab || 'home';
-      setActiveTab(targetTab);
-      try {
-        localStorage.setItem('el3bakera_active_tab', targetTab);
-      } catch {}
-    };
-    window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
-  }, []);
 
   const navigateToTab = (newTab) => {
     if (newTab === activeTab) return;
@@ -642,6 +674,23 @@ function MuzakkiratiPlatformContent() {
   };
 
   const handleGoBack = () => {
+    if (previewProduct || isSampleFullscreen) {
+      setPreviewProduct(null);
+      setIsSampleFullscreen(false);
+      return;
+    }
+    if (isCartOpen) {
+      setIsCartOpen(false);
+      return;
+    }
+    if (isContactModalOpen) {
+      setIsContactModalOpen(false);
+      return;
+    }
+    if (isAdminModalOpen) {
+      setIsAdminModalOpen(false);
+      return;
+    }
     if (tabHistory.length > 1) {
       const nextHistory = tabHistory.slice(0, -1);
       const prevTab = nextHistory[nextHistory.length - 1] || 'home';
@@ -662,7 +711,9 @@ function MuzakkiratiPlatformContent() {
 
   const [settings, setSettings] = useState(() => {
     try {
-      const saved = localStorage.getItem('el3bakera_settings_v5');
+      const saved =
+        localStorage.getItem('el3bakera_settings_v6') ||
+        localStorage.getItem('el3bakera_settings_v5');
       return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
     } catch {
       return DEFAULT_SETTINGS;
@@ -726,6 +777,7 @@ function MuzakkiratiPlatformContent() {
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(() => {
     try {
+      if (localStorage.getItem('el3bakera_manual_logout') === 'true') return false;
       return localStorage.getItem('el3bakera_admin_auth') === 'true';
     } catch {
       return false;
@@ -738,11 +790,45 @@ function MuzakkiratiPlatformContent() {
   const logoTapTimerRef = useRef(null);
   const isSavingRef = useRef(false);
 
+  // ربط زر الرجوع الفعلي في الهاتف والمتصفح
+  useEffect(() => {
+    try {
+      window.history.replaceState({ tab: activeTab }, '', activeTab === 'admin' ? '#admin' : `#${activeTab}`);
+    } catch {}
+    const onPopState = (event) => {
+      if (previewProduct || isSampleFullscreen) {
+        setPreviewProduct(null);
+        setIsSampleFullscreen(false);
+        return;
+      }
+      if (isCartOpen) {
+        setIsCartOpen(false);
+        return;
+      }
+      if (isContactModalOpen) {
+        setIsContactModalOpen(false);
+        return;
+      }
+      if (isAdminModalOpen) {
+        setIsAdminModalOpen(false);
+        return;
+      }
+      const targetTab = event.state?.tab || 'home';
+      setActiveTab(targetTab);
+      try {
+        localStorage.setItem('el3bakera_active_tab', targetTab);
+      } catch {}
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [previewProduct, isSampleFullscreen, isCartOpen, isContactModalOpen, isAdminModalOpen]);
+
+  // تحميل البيانات من IndexedDB
   useEffect(() => {
     let mounted = true;
     (async () => {
       const [idbSettings, idbProducts, idbBundles, idbCoupons] = await Promise.all([
-        idbGet('settings_v5'),
+        idbGet('settings_v6'),
         idbGet('products_v5'),
         idbGet('bundles_v5'),
         idbGet('coupons_v5')
@@ -786,6 +872,7 @@ function MuzakkiratiPlatformContent() {
     productIds: [],
     coverImage: ''
   });
+  const [editingBundleId, setEditingBundleId] = useState(null);
 
   const [newCouponForm, setNewCouponForm] = useState({
     code: '',
@@ -807,8 +894,13 @@ function MuzakkiratiPlatformContent() {
     status: 'جاري التجهيز والتنسيق',
     expectedDate: 'قريباً'
   });
+  const [newTestimonialForm, setNewTestimonialForm] = useState({
+    teacherName: '',
+    role: '',
+    text: '',
+    image: ''
+  });
   const [cloudSyncStatus, setCloudSyncStatus] = useState('checking');
-
   const [toast, setToast] = useState(null);
   const [copiedCode, setCopiedCode] = useState(false);
 
@@ -851,10 +943,40 @@ function MuzakkiratiPlatformContent() {
     [products]
   );
 
+  // تسجيل الدخول للإدارة بحساب جوجل الرسمي
+  const handleAdminGoogleSignIn = async () => {
+    if (!auth) {
+      showToast('خدمة المصادقة غير مهيأة حالياً', 'error');
+      return;
+    }
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      const res = await signInWithPopup(auth, provider);
+      const email = (res.user?.email || '').toLowerCase();
+      if (!ADMIN_EMAILS.includes(email)) {
+        await signOut(auth);
+        await signInAnonymously(auth).catch(() => {});
+        showToast('عذراً، هذا الحساب غير مصرح له بإدارة المنصة', 'error');
+        return;
+      }
+      localStorage.removeItem('el3bakera_manual_logout');
+      setAdminGoogleUser(res.user);
+      setIsAdminAuthenticated(true);
+      localStorage.setItem('el3bakera_admin_auth', 'true');
+      setIsAdminModalOpen(false);
+      navigateToTab('admin');
+      showToast(`✓ تم ربط حساب المدير (${email}) بنجاح!`);
+    } catch (err) {
+      showToast(`تعذر تسجيل الدخول بجوجل (${err?.code || 'خطأ'})`, 'error');
+    }
+  };
+
   useEffect(() => {
     const checkAdminHash = () => {
       if (window.location.hash === '#admin') {
-        if (isAdminAuthenticated) {
+        const manualOut = localStorage.getItem('el3bakera_manual_logout') === 'true';
+        if (isAdminAuthenticated && !manualOut) {
           navigateToTab('admin');
         } else {
           setIsAdminModalOpen(true);
@@ -867,21 +989,26 @@ function MuzakkiratiPlatformContent() {
   }, [isAdminAuthenticated]);
 
   const handleAdminLogout = async () => {
-    setIsAdminAuthenticated(false);
-    setIsAdminModalOpen(false);
     try {
+      localStorage.setItem('el3bakera_manual_logout', 'true');
       localStorage.removeItem('el3bakera_admin_auth');
       localStorage.setItem('el3bakera_active_tab', 'home');
       if (window.location.hash === '#admin') {
         window.history.replaceState({ tab: 'home' }, '', window.location.pathname + window.location.search);
       }
-      if (auth) {
-        await signOut(auth);
-      }
     } catch {}
+    setIsAdminAuthenticated(false);
+    setAdminGoogleUser(null);
+    setIsAdminModalOpen(false);
     setTabHistory(['home']);
     setActiveTab('home');
-    showToast('تم تسجيل الخروج من لوحة الإدارة وحساب المدير بأمان');
+    if (auth) {
+      try {
+        await signOut(auth);
+        await signInAnonymously(auth).catch(() => {});
+      } catch {}
+    }
+    showToast('تم تسجيل الخروج من لوحة الإدارة بأمان');
   };
 
   const handleLogoSecretTap = () => {
@@ -894,7 +1021,8 @@ function MuzakkiratiPlatformContent() {
 
     if (logoTapCountRef.current >= 5) {
       logoTapCountRef.current = 0;
-      if (isAdminAuthenticated) {
+      const manualOut = localStorage.getItem('el3bakera_manual_logout') === 'true';
+      if (isAdminAuthenticated && !manualOut) {
         navigateToTab('admin');
       } else {
         setIsAdminModalOpen(true);
@@ -902,72 +1030,35 @@ function MuzakkiratiPlatformContent() {
     }
   };
 
+  // ربط Firebase Auth
   useEffect(() => {
     if (!auth) {
       setCloudSyncStatus('local-only');
       return;
     }
-    const unsub = onAuthStateChanged(auth, (u) => {
+    const unsubAuth = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      if (u && isAuthorizedAdminEmail(u.email)) {
-        setCloudSyncStatus('admin-connected');
-        const wasLoggedOut = sessionStorage.getItem('el3bakera_manual_logout') === 'true';
-        if (!wasLoggedOut) {
-          setIsAdminAuthenticated(true);
-          try {
-            localStorage.setItem('el3bakera_admin_auth', 'true');
-          } catch {}
-        }
-      } else if (u) {
-        setCloudSyncStatus('connected');
-      } else {
-        signInAnonymously(auth)
-          .then(() => setCloudSyncStatus('connected'))
-          .catch(() => setCloudSyncStatus('error'));
-      }
-    });
-    return () => unsub();
-  }, []);
-
-  const handleGoogleAdminSignIn = async () => {
-    if (!auth) {
-      showToast('خدمة المصادقة غير مهيأة', 'error');
-      return;
-    }
-    try {
-      sessionStorage.removeItem('el3bakera_manual_logout');
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: 'select_account' });
-      const result = await signInWithPopup(auth, provider);
-      if (isAuthorizedAdminEmail(result.user?.email)) {
+      const email = (u?.email || '').toLowerCase();
+      const manualOut = localStorage.getItem('el3bakera_manual_logout') === 'true';
+      if (ADMIN_EMAILS.includes(email) && !manualOut) {
+        setAdminGoogleUser(u);
         setIsAdminAuthenticated(true);
         try {
           localStorage.setItem('el3bakera_admin_auth', 'true');
         } catch {}
-        setIsAdminModalOpen(false);
-        navigateToTab('admin');
-        setCloudSyncStatus('admin-connected');
-        showToast('تم ربط حساب المدير الرسمي بنجاح — جميع التعديلات ستُحفظ في السحابة فوراً ✓');
-      } else {
-        showToast(
-          `تم تسجيل الدخول بـ (${result.user?.email})، لكن قواعد Firebase تتطلب حساب المدير للكتابة`,
-          'error'
-        );
+      } else if (!u) {
+        signInAnonymously(auth).catch(() => {});
       }
-    } catch (err) {
-      console.error('Google Sign-In error:', err);
-      showToast(
-        `تعذر تسجيل الدخول بجوجل (${err?.code || 'تأكد من تفعيل Google Sign-In في Firebase Authentication'})`,
-        'error'
-      );
-    }
-  };
+    });
+    return () => unsubAuth();
+  }, []);
 
+  // استماع لحظي لجميع مجموعات Firestore
   useEffect(() => {
     if (!db) return;
 
-    const settingsRef = doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'main');
-    const fastSettingsRef = doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'settings', 'main');
+    const settingsFastRef = doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'settings', 'main');
+    const settingsLegacyRef = doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'main');
     const configCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config');
 
     const applyCloudSettingsSnapshot = (cloudData) => {
@@ -987,26 +1078,28 @@ function MuzakkiratiPlatformContent() {
           heroImage: cloudData.heroImage || prev.heroImage || '',
           heroBgImage: cloudData.heroBgImage || prev.heroBgImage || ''
         };
-        idbSet('settings_v5', merged);
-        safeLocalSet('el3bakera_settings_v5', merged);
+        idbSet('settings_v6', merged);
+        safeLocalSet('el3bakera_settings_v6', merged);
         return merged;
       });
     };
 
     const unsubFastSettings = onSnapshot(
-      fastSettingsRef,
+      settingsFastRef,
       (snap) => {
+        setCloudSyncStatus('connected');
         if (snap.exists()) applyCloudSettingsSnapshot(snap.data());
       },
       () => {}
     );
 
     const unsubSettings = onSnapshot(
-      settingsRef,
+      settingsLegacyRef,
       (snap) => {
+        setCloudSyncStatus('connected');
         if (snap.exists()) applyCloudSettingsSnapshot(snap.data());
       },
-      () => {}
+      () => setCloudSyncStatus('error')
     );
 
     const unsubMediaAssets = onSnapshot(
@@ -1014,7 +1107,7 @@ function MuzakkiratiPlatformContent() {
       (snapshot) => {
         if (snapshot.empty || isSavingRef.current) return;
         const assetsMap = {};
-        const samplesByProduct = {};
+        const samplesMap = {};
 
         snapshot.forEach((d) => {
           if (d.id.startsWith('media_')) {
@@ -1026,8 +1119,8 @@ function MuzakkiratiPlatformContent() {
               if (sampleMatch) {
                 const prodId = sampleMatch[1];
                 const idx = Number(sampleMatch[2]);
-                if (!samplesByProduct[prodId]) samplesByProduct[prodId] = [];
-                samplesByProduct[prodId][idx] = data.dataUrl;
+                if (!samplesMap[prodId]) samplesMap[prodId] = [];
+                samplesMap[prodId][idx] = data.dataUrl;
               }
             }
           }
@@ -1036,17 +1129,19 @@ function MuzakkiratiPlatformContent() {
         setSettings((prev) => {
           const updatedCategories = (prev.categories || []).map((c) => ({
             ...c,
-            coverImage: assetsMap[`cat_${c.id}`] !== undefined ? assetsMap[`cat_${c.id}`] : (c.coverImage || '')
+            coverImage:
+              assetsMap[`cat_${c.id}`] !== undefined ? assetsMap[`cat_${c.id}`] : c.coverImage || ''
           }));
           const merged = {
             ...prev,
-            logoImage: assetsMap.logoImage !== undefined ? assetsMap.logoImage : (prev.logoImage || ''),
-            heroImage: assetsMap.heroImage !== undefined ? assetsMap.heroImage : (prev.heroImage || ''),
-            heroBgImage: assetsMap.heroBgImage !== undefined ? assetsMap.heroBgImage : (prev.heroBgImage || ''),
+            logoImage: assetsMap.logoImage !== undefined ? assetsMap.logoImage : prev.logoImage || '',
+            heroImage: assetsMap.heroImage !== undefined ? assetsMap.heroImage : prev.heroImage || '',
+            heroBgImage:
+              assetsMap.heroBgImage !== undefined ? assetsMap.heroBgImage : prev.heroBgImage || '',
             categories: updatedCategories
           };
-          idbSet('settings_v5', merged);
-          safeLocalSet('el3bakera_settings_v5', merged);
+          idbSet('settings_v6', merged);
+          safeLocalSet('el3bakera_settings_v6', merged);
           return merged;
         });
 
@@ -1054,25 +1149,18 @@ function MuzakkiratiPlatformContent() {
           let changed = false;
           const updated = prev.map((p) => {
             const cloudCover = assetsMap[`prod_cover_${p.id}`];
-            const cloudSamples = samplesByProduct[p.id]
-              ? samplesByProduct[p.id].filter(Boolean)
-              : null;
-            let nextProd = p;
-            if (cloudCover && cloudCover !== p.coverImage) {
+            const cloudSamples = samplesMap[p.id] ? samplesMap[p.id].filter(Boolean) : null;
+            const nextCover = cloudCover || p.coverImage || '';
+            const nextSamples =
+              cloudSamples && cloudSamples.length > 0 ? cloudSamples : p.sampleImages || [];
+            if (
+              nextCover !== (p.coverImage || '') ||
+              nextSamples.length !== (p.sampleImages || []).length
+            ) {
               changed = true;
-              nextProd = { ...nextProd, coverImage: cloudCover };
+              return { ...p, coverImage: nextCover, sampleImages: nextSamples };
             }
-            if (cloudSamples && cloudSamples.length > 0) {
-              const currentSamples = Array.isArray(nextProd.sampleImages) ? nextProd.sampleImages : [];
-              if (
-                cloudSamples.length !== currentSamples.length ||
-                cloudSamples[0] !== currentSamples[0]
-              ) {
-                changed = true;
-                nextProd = { ...nextProd, sampleImages: cloudSamples };
-              }
-            }
-            return nextProd;
+            return p;
           });
           if (changed) {
             idbSet('products_v5', updated);
@@ -1080,55 +1168,20 @@ function MuzakkiratiPlatformContent() {
           }
           return updated;
         });
-      },
-      () => {}
-    );
 
-    const samplesCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebook_samples');
-    const unsubLegacySamples = onSnapshot(
-      samplesCol,
-      (snapshot) => {
-        if (snapshot.empty || isSavingRef.current) return;
-        const legacyMap = {};
-        snapshot.forEach((d) => {
-          const data = d.data();
-          const targetId = data.notebookId || d.id;
-          let extracted = [];
-          if (Array.isArray(data.images) && data.images.length > 0) {
-            extracted = data.images;
-          } else if (Array.isArray(data.sampleImages) && data.sampleImages.length > 0) {
-            extracted = data.sampleImages;
-          } else if (Array.isArray(data.pages) && data.pages.length > 0) {
-            extracted = data.pages;
-          } else {
-            Object.keys(data)
-              .filter((k) => typeof data[k] === 'string' && data[k].startsWith('data:image'))
-              .sort()
-              .forEach((k) => extracted.push(data[k]));
-          }
-          if (extracted.length > 0) {
-            legacyMap[targetId] = extracted;
-          }
-        });
-
-        if (Object.keys(legacyMap).length > 0) {
-          setProducts((prev) => {
-            let changed = false;
-            const updated = prev.map((p) => {
-              const found = legacyMap[p.id];
-              const current = Array.isArray(p.sampleImages) ? p.sampleImages : [];
-              if (found && found.length > current.length) {
-                changed = true;
-                return { ...p, sampleImages: found };
-              }
-              return p;
-            });
-            if (changed) {
-              idbSet('products_v5', updated);
+        setBundles((prev) => {
+          let changed = false;
+          const updated = prev.map((b) => {
+            const cloudCover = assetsMap[`bnd_cover_${b.id}`];
+            if (cloudCover && cloudCover !== b.coverImage) {
+              changed = true;
+              return { ...b, coverImage: cloudCover };
             }
-            return updated;
+            return b;
           });
-        }
+          if (changed) idbSet('bundles_v5', updated);
+          return updated;
+        });
       },
       () => {}
     );
@@ -1142,12 +1195,13 @@ function MuzakkiratiPlatformContent() {
           setProducts((prev) => {
             const merged = cloudList.map((item) => {
               const existing = prev.find((p) => p.id === item.id);
-              const existingSamples = Array.isArray(existing?.sampleImages) ? existing.sampleImages : [];
-              const itemSamples = Array.isArray(item.sampleImages) ? item.sampleImages : [];
               return {
                 ...item,
                 coverImage: existing?.coverImage || item.coverImage || '',
-                sampleImages: existingSamples.length >= itemSamples.length ? existingSamples : itemSamples
+                sampleImages:
+                  Array.isArray(item.sampleImages) && item.sampleImages.length > 0
+                    ? item.sampleImages
+                    : existing?.sampleImages || []
               };
             });
             idbSet('products_v5', merged);
@@ -1177,9 +1231,15 @@ function MuzakkiratiPlatformContent() {
       bundlesCol,
       (snap) => {
         if (!snap.empty && !isSavingRef.current) {
-          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-          setBundles(list);
-          idbSet('bundles_v5', list);
+          setBundles((prev) => {
+            const list = snap.docs.map((d) => {
+              const data = { id: d.id, ...d.data() };
+              const prevB = prev.find((pb) => pb.id === d.id);
+              return { ...data, coverImage: data.coverImage || prevB?.coverImage || '' };
+            });
+            idbSet('bundles_v5', list);
+            return list;
+          });
         }
       },
       () => {}
@@ -1202,7 +1262,6 @@ function MuzakkiratiPlatformContent() {
       unsubFastSettings();
       unsubSettings();
       unsubMediaAssets();
-      unsubLegacySamples();
       unsubProducts();
       unsubOrders();
       unsubBundles();
@@ -1212,105 +1271,48 @@ function MuzakkiratiPlatformContent() {
 
   const handleForcePullFromCloud = async () => {
     if (!db) {
-      showToast('قاعدة البيانات السحابية غير متصلة', 'error');
+      showToast('السحابة غير متصلة', 'error');
       return;
     }
-    showToast('جاري سحب أحدث البيانات والصور من السحابة...');
+    showToast('جاري سحب وتحديث كافة البيانات والصور من السحابة...');
     try {
-      const [fastSnap, configSnap, samplesSnap, productsSnap] = await Promise.all([
-        getDocs(collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'settings')),
+      const [configSnap, notebooksSnap] = await Promise.all([
         getDocs(collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config')),
-        getDocs(collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebook_samples')),
         getDocs(collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebooks'))
       ]);
-
-      let cloudMainSettings = null;
-      fastSnap.forEach((d) => {
-        if (d.id === 'main') cloudMainSettings = d.data();
-      });
       const assetsMap = {};
-      const samplesByProduct = {};
+      const samplesMap = {};
       configSnap.forEach((d) => {
-        if (d.id === 'main' && !cloudMainSettings) {
-          cloudMainSettings = d.data();
-        } else if (d.id.startsWith('media_')) {
+        if (d.id.startsWith('media_')) {
           const data = d.data();
           const key = data.assetId || d.id.replace('media_', '');
           if (data.dataUrl) {
             assetsMap[key] = data.dataUrl;
             const m = key.match(/^prod_sample_(.+)_(\d+)$/);
             if (m) {
-              if (!samplesByProduct[m[1]]) samplesByProduct[m[1]] = [];
-              samplesByProduct[m[1]][Number(m[2])] = data.dataUrl;
+              if (!samplesMap[m[1]]) samplesMap[m[1]] = [];
+              samplesMap[m[1]][Number(m[2])] = data.dataUrl;
             }
           }
         }
       });
-
-      if (cloudMainSettings) {
-        setSettings((prev) => {
-          const updatedCategories = (cloudMainSettings.categories || prev.categories || []).map((c) => ({
-            ...c,
-            coverImage:
-              assetsMap[`cat_${c.id}`] !== undefined
-                ? assetsMap[`cat_${c.id}`]
-                : (c.coverImage || '')
-          }));
-          const merged = {
-            ...prev,
-            ...cloudMainSettings,
-            logoImage:
-              assetsMap.logoImage !== undefined
-                ? assetsMap.logoImage
-                : (cloudMainSettings.logoImage || prev.logoImage || ''),
-            heroImage:
-              assetsMap.heroImage !== undefined
-                ? assetsMap.heroImage
-                : (cloudMainSettings.heroImage || prev.heroImage || ''),
-            heroBgImage:
-              assetsMap.heroBgImage !== undefined
-                ? assetsMap.heroBgImage
-                : (cloudMainSettings.heroBgImage || prev.heroBgImage || ''),
-            categories: updatedCategories
+      if (!notebooksSnap.empty) {
+        const pulled = notebooksSnap.docs.map((d) => {
+          const base = { id: d.id, ...d.data() };
+          const cloudSamples = samplesMap[d.id] ? samplesMap[d.id].filter(Boolean) : [];
+          return {
+            ...base,
+            coverImage: assetsMap[`prod_cover_${d.id}`] || base.coverImage || '',
+            sampleImages: cloudSamples.length > 0 ? cloudSamples : base.sampleImages || []
           };
-          idbSet('settings_v5', merged);
-          safeLocalSet('el3bakera_settings_v5', merged);
-          return merged;
         });
+        setProducts(pulled);
+        await idbSet('products_v5', pulled);
+        safeLocalSet('el3bakera_products_v5', stripHeavyProductMedia(pulled));
       }
-
-      samplesSnap.forEach((d) => {
-        const data = d.data();
-        const targetId = data.notebookId || d.id;
-        const arr = Array.isArray(data.images)
-          ? data.images
-          : Array.isArray(data.sampleImages)
-          ? data.sampleImages
-          : [];
-        if (arr.length > 0 && (!samplesByProduct[targetId] || arr.length > samplesByProduct[targetId].filter(Boolean).length)) {
-          samplesByProduct[targetId] = arr;
-        }
-      });
-
-      const baseList = !productsSnap.empty
-        ? productsSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
-        : products;
-
-      const syncedProducts = baseList.map((p) => {
-        const cloudSamples = samplesByProduct[p.id] ? samplesByProduct[p.id].filter(Boolean) : [];
-        return {
-          ...p,
-          coverImage: assetsMap[`prod_cover_${p.id}`] || p.coverImage || '',
-          sampleImages: cloudSamples.length > 0 ? cloudSamples : (p.sampleImages || [])
-        };
-      });
-
-      setProducts(syncedProducts);
-      await idbSet('products_v5', syncedProducts);
-      safeLocalSet('el3bakera_products_v5', stripHeavyProductMedia(syncedProducts));
-      showToast('✓ تم تحديث ومزامنة جميع الإعدادات والصور من السحابة بنجاح!');
+      showToast('✓ تم سحب وتحديث جميع البيانات والصور بنجاح!');
     } catch (err) {
-      showToast(`تعذر السحب من السحابة: ${err?.message || 'تحقق من الاتصال'}`, 'error');
+      showToast(`تعذر السحب من السحابة: ${err?.code || ''}`, 'error');
     }
   };
 
@@ -1323,25 +1325,28 @@ function MuzakkiratiPlatformContent() {
       categories: updatedSettings.categories || normalizedCategories
     };
     setSettings(cleanSettings);
-    await idbSet('settings_v5', cleanSettings);
-    safeLocalSet('el3bakera_settings_v5', cleanSettings);
+    await idbSet('settings_v6', cleanSettings);
+    safeLocalSet('el3bakera_settings_v6', cleanSettings);
     let cloudSaved = false;
     if (db) {
       try {
         const lightCategories = (cleanSettings.categories || []).map(({ coverImage, ...rest }) => rest);
         const { logoImage, heroImage, heroBgImage, ...lightSettings } = cleanSettings;
         lightSettings.categories = lightCategories;
+        lightSettings.updatedAt = Date.now();
 
-        await setDoc(
-          doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'main'),
-          lightSettings,
-          { merge: true }
-        );
-        await setDoc(
-          doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'settings', 'main'),
-          lightSettings,
-          { merge: true }
-        );
+        await Promise.all([
+          setDoc(
+            doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'settings', 'main'),
+            lightSettings,
+            { merge: true }
+          ),
+          setDoc(
+            doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'main'),
+            lightSettings,
+            { merge: true }
+          )
+        ]);
 
         await saveMediaAssetToCloud(db, PRIMARY_APP_ID, 'logoImage', logoImage || '');
         await saveMediaAssetToCloud(db, PRIMARY_APP_ID, 'heroImage', heroImage || '');
@@ -1350,13 +1355,13 @@ function MuzakkiratiPlatformContent() {
           await saveMediaAssetToCloud(db, PRIMARY_APP_ID, `cat_${cat.id}`, cat.coverImage || '');
         }
 
+        setCloudSyncStatus('connected');
         cloudSaved = true;
       } catch (e) {
         console.error('Firebase save error:', e);
+        setCloudSyncStatus('error');
         showToast(
-          e?.code === 'permission-denied'
-            ? 'يرجى الضغط على زر "ربط حساب جوجل للإدارة" في الأعلى ليسمح Firebase بحفظ التعديلات للعملاء'
-            : `تم الحفظ محلياً، وتعذر النشر للسحابة: ${e?.code || 'خطأ في الصلاحيات'}`,
+          `يرجى ربط حساب جوجل للإدارة أولاً ليسمح Firebase بالحفظ (${e?.code || 'permission-denied'})`,
           'error'
         );
       }
@@ -1397,12 +1402,7 @@ function MuzakkiratiPlatformContent() {
       );
     } catch (e) {
       console.error('Product cloud save error:', e);
-      showToast(
-        e?.code === 'permission-denied'
-          ? 'يرجى الضغط على زر "ربط حساب جوجل للإدارة" ليتم نشر المذكرة وصورها للعملاء'
-          : `تعذر رفع صور المذكرة للسحابة: ${e?.code || e?.message || 'خطأ في الاتصال'}`,
-        'error'
-      );
+      showToast(`تعذر رفع صور المذكرة للسحابة: ${e?.code || e?.message || 'خطأ'}`, 'error');
     }
     setTimeout(() => {
       isSavingRef.current = false;
@@ -1451,10 +1451,7 @@ function MuzakkiratiPlatformContent() {
     }
 
     let bulkDiscount = 0;
-    if (
-      settings.bulkDiscountEnabled &&
-      cart.length >= Number(settings.bulkDiscountMinItems || 2)
-    ) {
+    if (settings.bulkDiscountEnabled && cart.length >= Number(settings.bulkDiscountMinItems || 2)) {
       const rawBulk = Math.round((subtotal * Number(settings.bulkDiscountPercent || 15)) / 100);
       bulkDiscount = settings.bulkDiscountMaxAmount
         ? Math.min(rawBulk, Number(settings.bulkDiscountMaxAmount))
@@ -1557,7 +1554,7 @@ function MuzakkiratiPlatformContent() {
       showToast('رمز المرور غير صحيح', 'error');
       return;
     }
-    sessionStorage.removeItem('el3bakera_manual_logout');
+    localStorage.removeItem('el3bakera_manual_logout');
     setIsAdminAuthenticated(true);
     try {
       localStorage.setItem('el3bakera_admin_auth', 'true');
@@ -1639,37 +1636,45 @@ function MuzakkiratiPlatformContent() {
   };
 
   const handleSaveAllAdminChanges = async () => {
-    showToast('جاري حفظ ونشر جميع التعديلات وصور العينات...');
+    showToast('جاري حفظ ونشر جميع التعديلات...');
     const ok = await saveSettings({
       ...settings,
       stages: normalizedStages,
       grades: normalizedGrades,
       categories: normalizedCategories
     });
-    const idbProds = await idbGet('products_v5');
-    const sourceProducts = Array.isArray(idbProds) && idbProds.length > 0
-      ? products.map((p) => {
-          const fromIdb = idbProds.find((ip) => ip.id === p.id);
-          const pSamples = Array.isArray(p.sampleImages) ? p.sampleImages : [];
-          const idbSamples = Array.isArray(fromIdb?.sampleImages) ? fromIdb.sampleImages : [];
-          return {
-            ...p,
-            coverImage: p.coverImage || fromIdb?.coverImage || '',
-            sampleImages: pSamples.length >= idbSamples.length ? pSamples : idbSamples
-          };
-        })
-      : products;
+    const storedProducts = await idbGet('products_v5');
+    const latestProducts =
+      Array.isArray(storedProducts) && storedProducts.length > 0
+        ? products.map((p) => {
+            const sp = storedProducts.find((item) => item.id === p.id);
+            return {
+              ...p,
+              coverImage: p.coverImage || sp?.coverImage || '',
+              sampleImages:
+                Array.isArray(p.sampleImages) && p.sampleImages.length > 0
+                  ? p.sampleImages
+                  : sp?.sampleImages || []
+            };
+          })
+        : products;
 
-    setProducts(sourceProducts);
-    await idbSet('products_v5', sourceProducts);
+    await idbSet('products_v5', latestProducts);
     await idbSet('bundles_v5', bundles);
     await idbSet('coupons_v5', coupons);
     if (db && ok) {
       try {
-        for (let i = 0; i < sourceProducts.length; i++) {
-          const prod = sourceProducts[i];
-          showToast(`جاري رفع عينات (${i + 1}/${sourceProducts.length}): ${prod.title}...`);
+        for (const prod of latestProducts) {
           await saveProductToCloud(prod);
+        }
+        for (const b of bundles) {
+          const { coverImage, ...lightBundle } = b;
+          await setDoc(
+            doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles', b.id),
+            lightBundle,
+            { merge: true }
+          );
+          await saveMediaAssetToCloud(db, PRIMARY_APP_ID, `bnd_cover_${b.id}`, coverImage || '');
         }
         for (const cp of coupons) {
           await setDoc(
@@ -1678,7 +1683,7 @@ function MuzakkiratiPlatformContent() {
             { merge: true }
           );
         }
-        showToast('✓ تم رفع وحفظ جميع التعديلات وصور العينات للعملاء بنجاح!');
+        showToast('✓ تم حفظ ونشر جميع التعديلات والصور للعملاء بنجاح!');
       } catch (err) {
         showToast(`تم حفظ الإعدادات وتعذرت مزامنة بعض العناصر: ${err?.code || ''}`, 'error');
       }
@@ -1787,10 +1792,7 @@ function MuzakkiratiPlatformContent() {
 
   const renderGeneralNoticeBox = () => {
     if (settings.generalNoticeEnabled === false) return null;
-    const noticeLines = safeText(
-      settings.generalNoticeText,
-      DEFAULT_SETTINGS.generalNoticeText
-    )
+    const noticeLines = safeText(settings.generalNoticeText, DEFAULT_SETTINGS.generalNoticeText)
       .split('\n')
       .filter((l) => l.trim());
     if (noticeLines.length === 0 && !settings.generalNoticeTitle) return null;
@@ -1842,6 +1844,7 @@ function MuzakkiratiPlatformContent() {
 
   return (
     <div dir="rtl" className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#f4f6fa] text-slate-900 font-sans flex flex-col">
+      {/* إشعار Toast عائم */}
       {toast && (
         <div
           className={`fixed bottom-5 right-4 left-4 sm:left-auto sm:right-5 z-[100] flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl text-white text-xs sm:text-sm font-black transition-all border ${
@@ -1862,7 +1865,7 @@ function MuzakkiratiPlatformContent() {
             backgroundColor: safeText(settings.promoBgColor, '#0654d0'),
             color: safeText(settings.promoTextColor, '#fde047')
           }}
-          className="w-full py-2 px-3 text-center text-[11px] sm:text-sm font-bold flex flex-wrap items-center justify-center gap-1.5 sm:gap-2.5 shadow-sm"
+          className="w-full py-2 px-3 text-center text-[11px] sm:text-sm font-bold flex flex-wrap items-center justify-center gap-2 shadow-sm"
         >
           <Sparkles className="w-3.5 h-3.5 shrink-0" />
           <span className="leading-snug">{safeText(settings.promoText)}</span>
@@ -1879,7 +1882,7 @@ function MuzakkiratiPlatformContent() {
         </div>
       )}
 
-      {/* الهيدر الرئيسي المتجاوب بالكامل مع الهاتف */}
+      {/* الهيدر الرئيسي المتجاوب بالكامل */}
       <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur border-b border-slate-200/80">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-2">
           <div
@@ -1943,16 +1946,24 @@ function MuzakkiratiPlatformContent() {
               تتبع طلبك
             </button>
             {isAdminAuthenticated && (
-              <button
-                onClick={() => navigateToTab('admin')}
-                className={`px-4 py-2 rounded-xl text-sm font-bold transition ${
-                  activeTab === 'admin'
-                    ? 'bg-slate-900 text-amber-400 shadow-sm'
-                    : 'bg-amber-100 text-amber-900'
-                }`}
-              >
-                لوحة الإدارة
-              </button>
+              <>
+                <button
+                  onClick={() => navigateToTab('admin')}
+                  className={`px-4 py-2 rounded-xl text-sm font-bold transition ${
+                    activeTab === 'admin'
+                      ? 'bg-slate-900 text-amber-400 shadow-sm'
+                      : 'bg-amber-100 text-amber-900'
+                  }`}
+                >
+                  لوحة الإدارة
+                </button>
+                <button
+                  onClick={handleAdminLogout}
+                  className="px-3 py-2 rounded-xl text-xs font-bold bg-rose-50 text-rose-600 hover:bg-rose-100 transition cursor-pointer"
+                >
+                  تسجيل خروج
+                </button>
+              </>
             )}
           </nav>
 
@@ -2030,14 +2041,14 @@ function MuzakkiratiPlatformContent() {
 
       {/* زر الرجوع للخلف */}
       {activeTab !== 'home' && (
-        <div className="max-w-7xl mx-auto w-full px-3 sm:px-6 lg:px-8 pt-4 relative z-30">
+        <div className="max-w-7xl mx-auto w-full px-3 sm:px-6 lg:px-8 pt-4">
           <button
             type="button"
             onClick={handleGoBack}
-            className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-white border border-slate-300 active:bg-slate-200 hover:bg-slate-100 text-slate-900 text-xs sm:text-sm font-black shadow-sm transition cursor-pointer touch-manipulation select-none"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-slate-200 active:bg-slate-200 hover:bg-slate-100 text-slate-800 text-xs sm:text-sm font-black shadow-2xs transition cursor-pointer touch-manipulation"
           >
-            <ArrowRight className="w-4 h-4 pointer-events-none" />
-            <span className="pointer-events-none">رجوع للخلف</span>
+            <ArrowRight className="w-4 h-4" />
+            <span>رجوع للخلف</span>
           </button>
         </div>
       )}
@@ -2065,47 +2076,47 @@ function MuzakkiratiPlatformContent() {
                   />
                 </>
               )}
-              <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-                <div className="lg:col-span-7 space-y-6 text-right">
-                  <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-400/15 border border-amber-400/30 text-amber-300 text-xs font-bold">
+              <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-center">
+                <div className="lg:col-span-7 space-y-4 sm:space-y-6 text-right">
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-400/15 border border-amber-400/30 text-amber-300 text-[11px] sm:text-xs font-bold">
                     <span>{safeText(settings.heroBadge)}</span>
                   </div>
 
-                  <h2 className="text-2xl sm:text-4xl lg:text-[40px] font-black leading-tight text-white">
+                  <h2 className="text-xl sm:text-4xl lg:text-[40px] font-black leading-snug sm:leading-tight text-white">
                     {safeText(settings.heroTitle)}
                   </h2>
 
-                  <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-2xl">
+                  <p className="text-xs sm:text-base text-slate-300 leading-relaxed max-w-2xl">
                     {safeText(settings.heroSubtitle)}
                   </p>
 
-                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 pt-1">
                     <button
                       onClick={() => navigateToTab('library')}
-                      className="px-6 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-sm shadow-lg shadow-blue-600/30 transition cursor-pointer"
+                      className="px-5 py-3 sm:px-6 sm:py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs sm:text-sm shadow-lg shadow-blue-600/30 transition cursor-pointer"
                     >
                       استعراض جميع المذكرات
                     </button>
                     <button
                       onClick={() => navigateToTab('bundles')}
-                      className="px-6 py-3.5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 text-white font-bold text-sm transition cursor-pointer"
+                      className="px-5 py-3 sm:px-6 sm:py-3.5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 text-white font-bold text-xs sm:text-sm transition cursor-pointer"
                     >
                       باقات التوفير والعروض
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-4 pt-6 border-t border-white/10 max-w-lg">
+                  <div className="grid grid-cols-3 gap-2 sm:gap-4 pt-5 border-t border-white/10 max-w-lg">
                     <div>
-                      <div className="text-xl sm:text-2xl font-black text-amber-400">+50</div>
-                      <div className="text-xs text-slate-300 mt-0.5">مذكرة وبنك أسئلة</div>
+                      <div className="text-lg sm:text-2xl font-black text-amber-400">+50</div>
+                      <div className="text-[11px] sm:text-xs text-slate-300 mt-0.5">مذكرة وبنك أسئلة</div>
                     </div>
                     <div>
-                      <div className="text-xl sm:text-2xl font-black text-emerald-400">+500</div>
-                      <div className="text-xs text-slate-300 mt-0.5">معلم يثق بنا</div>
+                      <div className="text-lg sm:text-2xl font-black text-emerald-400">+500</div>
+                      <div className="text-[11px] sm:text-xs text-slate-300 mt-0.5">معلم يثق بنا</div>
                     </div>
                     <div>
-                      <div className="text-xl sm:text-2xl font-black text-sky-400">100%</div>
-                      <div className="text-xs text-slate-300 mt-0.5">تخصيص باسمك وشعارك</div>
+                      <div className="text-lg sm:text-2xl font-black text-sky-400">100%</div>
+                      <div className="text-[11px] sm:text-xs text-slate-300 mt-0.5">تخصيص باسمك وشعارك</div>
                     </div>
                   </div>
                 </div>
@@ -2148,7 +2159,7 @@ function MuzakkiratiPlatformContent() {
             {/* الأقسام الدراسية */}
             <section className="space-y-5">
               <div className="flex items-center justify-between">
-                <h3 className="text-xl sm:text-2xl font-black text-slate-900">الأقسام الدراسية</h3>
+                <h3 className="text-lg sm:text-2xl font-black text-slate-900">الأقسام الدراسية</h3>
                 <button
                   onClick={() => {
                     setSelectedCategory('all');
@@ -2156,7 +2167,7 @@ function MuzakkiratiPlatformContent() {
                     setSelectedGrade('all');
                     navigateToTab('library');
                   }}
-                  className="text-sm font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
+                  className="text-xs sm:text-sm font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
                 >
                   عرض الكل ({visibleProducts.length})
                 </button>
@@ -2212,14 +2223,14 @@ function MuzakkiratiPlatformContent() {
             <section className="space-y-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-xl sm:text-2xl font-black text-slate-900">أحدث المذكرات المضافة</h3>
+                  <h3 className="text-lg sm:text-2xl font-black text-slate-900">أحدث المذكرات المضافة</h3>
                   <p className="text-xs text-slate-500 mt-1">
                     اختر المذكرة لمعاينة صفحات العينة وطلبها مخصصة باسمك وشعارك
                   </p>
                 </div>
                 <button
                   onClick={() => navigateToTab('library')}
-                  className="text-sm font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
+                  className="text-xs sm:text-sm font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
                 >
                   تصفح كل المذكرات ({visibleProducts.length})
                 </button>
@@ -2292,21 +2303,41 @@ function MuzakkiratiPlatformContent() {
                         </div>
 
                         <div className="space-y-3 pt-2 border-t border-slate-100">
-                          <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-xl">
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-xl">
                             <span>📄 {product.pagesCount || 0} صفحة PDF</span>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPreviewProduct(product);
-                                setActiveSampleIndex(0);
-                                setIsSampleFullscreen(false);
-                              }}
-                              className="text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer touch-manipulation py-1 px-2"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>التفاصيل والعينة</span>
-                            </button>
+                            <div className="flex items-center gap-2">
+                              {settings.driveBtnEnabled !== false &&
+                                settings.driveBtnShowOnCard !== false &&
+                                product.driveSampleUrl && (
+                                  <a
+                                    href={product.driveSampleUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{
+                                      backgroundColor: settings.driveBtnBg || '#059669',
+                                      color: settings.driveBtnText || '#ffffff'
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg font-black text-[11px] inline-flex items-center gap-1 shadow-2xs hover:opacity-90 transition"
+                                  >
+                                    <span>{safeText(settings.driveBtnLabel, 'عينة Drive')}</span>
+                                    <ExternalLink className="w-3 h-3" />
+                                  </a>
+                                )}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPreviewProduct(product);
+                                  setActiveSampleIndex(0);
+                                  setIsSampleFullscreen(false);
+                                }}
+                                className="text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer touch-manipulation py-1 px-1.5"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>التفاصيل والعينة</span>
+                              </button>
+                            </div>
                           </div>
 
                           <div className="flex items-center justify-between">
@@ -2334,17 +2365,68 @@ function MuzakkiratiPlatformContent() {
               </div>
             </section>
 
-            {/* الإصدارات القادمة (أسفل أحدث المذكرات المضافة) */}
+            {/* عرض الحصول على أكثر من مذكرة */}
+            {settings.multiOfferEnabled !== false && settings.bulkDiscountEnabled !== false && (
+              <section
+                style={{ backgroundColor: settings.multiOfferBg || '#0f172a' }}
+                className="rounded-3xl p-6 sm:p-8 text-white shadow-xl border border-white/10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6"
+              >
+                <div className="space-y-2.5 max-w-2xl">
+                  <span
+                    style={{
+                      backgroundColor: settings.multiOfferAccent || '#facc15',
+                      color: '#0f172a'
+                    }}
+                    className="inline-block px-3.5 py-1 rounded-full text-xs font-black"
+                  >
+                    {safeText(settings.multiOfferBadge, '🔥 عرض خاص عند طلب أكثر من مذكرة')}
+                  </span>
+                  <h3 className="text-xl sm:text-2xl font-black leading-snug">
+                    {safeText(
+                      settings.multiOfferTitle,
+                      'احصل على خصم تلقائي {percent}% عند اختيار {min} مذكرات أو أكثر!'
+                    )
+                      .replace('{percent}', String(settings.bulkDiscountPercent || 15))
+                      .replace('{min}', String(settings.bulkDiscountMinItems || 2))
+                      .replace('{max}', String(settings.bulkDiscountMaxAmount || 150))}
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                    {safeText(
+                      settings.multiOfferSubtitle,
+                      'اجمع أي مذكرات أو بوكليتات من مختلف الصفوف والمراحل في سلة واحدة وسيتم تطبيق الخصم تلقائياً بحد أقصى {max} ج.م.'
+                    )
+                      .replace('{percent}', String(settings.bulkDiscountPercent || 15))
+                      .replace('{min}', String(settings.bulkDiscountMinItems || 2))
+                      .replace('{max}', String(settings.bulkDiscountMaxAmount || 150))}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => navigateToTab('library')}
+                    style={{
+                      backgroundColor: settings.multiOfferAccent || '#facc15',
+                      color: '#0f172a'
+                    }}
+                    className="px-6 py-3.5 rounded-2xl font-black text-xs sm:text-sm shadow-lg hover:opacity-95 transition cursor-pointer"
+                  >
+                    اختر مذكراتك الآن واستفد بالخصم
+                  </button>
+                </div>
+              </section>
+            )}
+
+            {/* الإصدارات القادمة */}
             {safeUpcoming.length > 0 && (
-              <section className="bg-gradient-to-l from-slate-900 via-[#0f2347] to-slate-900 rounded-2xl sm:rounded-3xl p-5 sm:p-8 text-white border border-slate-800 shadow-lg space-y-5">
+              <section className="bg-gradient-to-l from-slate-900 via-[#0f2347] to-slate-900 rounded-3xl p-6 sm:p-8 text-white border border-slate-800 shadow-lg space-y-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-amber-400/20 border border-amber-400/30 text-amber-300 flex items-center justify-center shrink-0">
-                      <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" />
+                    <div className="w-11 h-11 rounded-2xl bg-amber-400/20 border border-amber-400/30 text-amber-300 flex items-center justify-center">
+                      <Sparkles className="w-6 h-6" />
                     </div>
                     <div>
-                      <h3 className="text-base sm:text-xl font-black text-white">
-                        مذكرات وبنوك أسئلة قيد التجهيز والإصدار قريباً
+                      <h3 className="text-lg sm:text-xl font-black text-white">
+                        قريباً على المنصة — مذكرات وبنوك أسئلة قيد التجهيز
                       </h3>
                       <p className="text-xs text-slate-300">
                         نعمل حالياً على إعداد وتنسيق هذه الإصدارات لتكون متاحة للحجز والتخصيص قريباً
@@ -2388,7 +2470,7 @@ function MuzakkiratiPlatformContent() {
               <section className="space-y-5">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-xl sm:text-2xl font-black text-slate-900">
+                    <h3 className="text-lg sm:text-2xl font-black text-slate-900">
                       {safeText(settings.testimonialsTitle, 'آراء وتقييمات المعلمين في مذكراتنا')}
                     </h3>
                     <p className="text-xs text-slate-500 mt-1">
@@ -2458,7 +2540,7 @@ function MuzakkiratiPlatformContent() {
           </div>
         )}
 
-        {/* 2. مكتبة المذكرات والأقسام والمراحل */}
+        {/* 2. مكتبة المذكرات */}
         {activeTab === 'library' && (
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
             <div className="space-y-3">
@@ -2690,21 +2772,41 @@ function MuzakkiratiPlatformContent() {
                         </div>
 
                         <div className="space-y-3 pt-2 border-t border-slate-100">
-                          <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-xl">
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-xl">
                             <span>📄 {product.pagesCount} صفحة PDF</span>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPreviewProduct(product);
-                                setActiveSampleIndex(0);
-                                setIsSampleFullscreen(false);
-                              }}
-                              className="text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer touch-manipulation py-1 px-2"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>التفاصيل والعينة</span>
-                            </button>
+                            <div className="flex items-center gap-2">
+                              {settings.driveBtnEnabled !== false &&
+                                settings.driveBtnShowOnCard !== false &&
+                                product.driveSampleUrl && (
+                                  <a
+                                    href={product.driveSampleUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{
+                                      backgroundColor: settings.driveBtnBg || '#059669',
+                                      color: settings.driveBtnText || '#ffffff'
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg font-black text-[11px] inline-flex items-center gap-1 shadow-2xs hover:opacity-90 transition"
+                                  >
+                                    <span>{safeText(settings.driveBtnLabel, 'عينة Drive')}</span>
+                                    <ExternalLink className="w-3 h-3" />
+                                  </a>
+                                )}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPreviewProduct(product);
+                                  setActiveSampleIndex(0);
+                                  setIsSampleFullscreen(false);
+                                }}
+                                className="text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer touch-manipulation py-1 px-1.5"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>التفاصيل والعينة</span>
+                              </button>
+                            </div>
                           </div>
 
                           <div className="flex items-center justify-between">
@@ -2736,69 +2838,204 @@ function MuzakkiratiPlatformContent() {
 
         {/* 3. العروض والباقات */}
         {activeTab === 'bundles' && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-            <div className="bg-gradient-to-l from-blue-900 to-slate-900 rounded-3xl p-6 sm:p-8 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-black">باقات التوفير والعروض الحصرية للمعلمين</h2>
-                <p className="text-sm text-slate-300 mt-1">
-                  احصل على مجموعات كاملة من المذكرات بخصومات كبيرة + خصم تلقائي {settings.bulkDiscountPercent}% عند اختيار مذكرتين فأكثر.
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+            <div className="bg-gradient-to-l from-[#0b1938] via-[#132c63] to-[#1d4ed8] rounded-3xl p-6 sm:p-9 text-white flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 shadow-xl border border-blue-800/60">
+              <div className="space-y-2 max-w-2xl">
+                <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-xs font-black">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>باقات التوفير الحصرية للمعلمين</span>
+                </span>
+                <h2 className="text-2xl sm:text-3xl font-black leading-tight">
+                  باقات شاملة بأسعار مخفضة وتخصيص كامل باسمك وشعارك
+                </h2>
+                <p className="text-xs sm:text-sm text-blue-100 leading-relaxed">
+                  وفر أكثر عند حجز باقة متكاملة من المذكرات وبنوك الأسئلة، أو استفد من عرض الحصول على أكثر من مذكرة بخصم تلقائي {settings.bulkDiscountPercent}% في السلة.
                 </p>
               </div>
-              <span className="px-4 py-2 rounded-2xl bg-amber-400 text-slate-950 font-black text-xs shrink-0">
-                تخصيص كامل باسمك وشعارك
-              </span>
+              <div className="flex flex-col sm:flex-row gap-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => navigateToTab('library')}
+                  className="px-5 py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm shadow-lg transition cursor-pointer"
+                >
+                  تصفح جميع المذكرات الفردية
+                </button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {bundles.map((bundle) => (
-                <div
-                  key={bundle.id}
-                  className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-md flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="bg-gradient-to-l from-[#0f1f44] to-[#1d4ed8] p-6 text-white relative">
-                      {bundle.badge && (
-                        <span className="inline-block bg-amber-400 text-slate-950 text-xs font-black px-3 py-1 rounded-full mb-3">
-                          {bundle.badge}
-                        </span>
-                      )}
-                      <h3 className="text-xl font-black">{bundle.title}</h3>
-                      <p className="text-xs text-blue-100 mt-2 leading-relaxed">{bundle.subtitle}</p>
-                    </div>
-
-                    <div className="p-6 space-y-2.5">
-                      <div className="text-xs font-black text-slate-500">محتويات الباقة:</div>
-                      {(bundle.productIds || []).map((pid) => {
-                        const prod = products.find((p) => p.id === pid);
-                        return prod ? (
-                          <div key={pid} className="flex items-center gap-2 text-sm text-slate-700 font-semibold">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                            <span>{prod.title}</span>
-                          </div>
-                        ) : null;
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="p-6 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                    <div>
-                      <div className="text-2xl font-black text-blue-600">{bundle.price} ج.م</div>
-                      {bundle.originalPrice > bundle.price && (
-                        <div className="text-xs text-slate-400 line-through">
-                          بدلاً من {bundle.originalPrice} ج.م
-                        </div>
-                      )}
-                    </div>
-
-                    <button
-                      onClick={() => addToCart(bundle, 'bundle')}
-                      className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow transition cursor-pointer"
-                    >
-                      اطلب الباقة الآن
-                    </button>
-                  </div>
+            {settings.multiOfferEnabled !== false && settings.bulkDiscountEnabled !== false && (
+              <div
+                style={{ backgroundColor: settings.multiOfferBg || '#0f172a' }}
+                className="rounded-3xl p-6 sm:p-7 text-white shadow-lg border border-white/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-5"
+              >
+                <div className="space-y-1.5">
+                  <span
+                    style={{
+                      backgroundColor: settings.multiOfferAccent || '#facc15',
+                      color: '#0f172a'
+                    }}
+                    className="inline-block px-3 py-0.5 rounded-full text-[11px] font-black"
+                  >
+                    {safeText(settings.multiOfferBadge, '🔥 عرض خاص عند طلب أكثر من مذكرة')}
+                  </span>
+                  <h3 className="text-lg sm:text-xl font-black">
+                    {safeText(
+                      settings.multiOfferTitle,
+                      'احصل على خصم تلقائي {percent}% عند اختيار {min} مذكرات أو أكثر!'
+                    )
+                      .replace('{percent}', String(settings.bulkDiscountPercent || 15))
+                      .replace('{min}', String(settings.bulkDiscountMinItems || 2))
+                      .replace('{max}', String(settings.bulkDiscountMaxAmount || 150))}
+                  </h3>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    {safeText(
+                      settings.multiOfferSubtitle,
+                      'اجمع أي مذكرات أو بوكليتات من مختلف الصفوف والمراحل في سلة واحدة وسيتم تطبيق الخصم تلقائياً بحد أقصى {max} ج.م.'
+                    )
+                      .replace('{percent}', String(settings.bulkDiscountPercent || 15))
+                      .replace('{min}', String(settings.bulkDiscountMinItems || 2))
+                      .replace('{max}', String(settings.bulkDiscountMaxAmount || 150))}
+                  </p>
                 </div>
-              ))}
+                <button
+                  type="button"
+                  onClick={() => navigateToTab('library')}
+                  style={{
+                    backgroundColor: settings.multiOfferAccent || '#facc15',
+                    color: '#0f172a'
+                  }}
+                  className="px-5 py-3 rounded-2xl font-black text-xs shadow shrink-0 cursor-pointer"
+                >
+                  كوّن مجموعتك الآن
+                </button>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-7">
+              {bundles.map((bundle) => {
+                const includedProducts = (bundle.productIds || [])
+                  .map((pid) => products.find((p) => p.id === pid))
+                  .filter(Boolean);
+                const savedAmount =
+                  Number(bundle.originalPrice || 0) > Number(bundle.price || 0)
+                    ? Number(bundle.originalPrice) - Number(bundle.price)
+                    : 0;
+                const savedPercent =
+                  savedAmount > 0
+                    ? Math.round((savedAmount / Number(bundle.originalPrice)) * 100)
+                    : 0;
+
+                return (
+                  <div
+                    key={bundle.id}
+                    className="group bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-md hover:shadow-2xl transition-all flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="relative bg-gradient-to-bl from-[#0b1938] via-[#132b5e] to-[#1d4ed8] p-6 sm:p-7 text-white overflow-hidden">
+                        {bundle.coverImage && (
+                          <>
+                            <img
+                              src={bundle.coverImage}
+                              alt={safeText(bundle.title)}
+                              className="absolute inset-0 w-full h-full object-cover opacity-30 group-hover:scale-105 transition-transform duration-500"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/60 to-slate-950/40" />
+                          </>
+                        )}
+                        <div className="relative z-10 space-y-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="inline-flex items-center gap-1.5 bg-amber-400 text-slate-950 text-xs font-black px-3.5 py-1 rounded-full shadow">
+                              <Package className="w-3.5 h-3.5" />
+                              <span>
+                                {bundle.badge || (savedAmount > 0 ? `وفر ${savedAmount} ج.م` : 'باقة مميزة')}
+                              </span>
+                            </span>
+                            {savedPercent > 0 && (
+                              <span className="px-3 py-1 rounded-full bg-emerald-500 text-white text-xs font-black shadow">
+                                خصم {savedPercent}%
+                              </span>
+                            )}
+                          </div>
+                          <h3 className="text-xl sm:text-2xl font-black leading-snug">
+                            {safeText(bundle.title)}
+                          </h3>
+                          <p className="text-xs sm:text-sm text-blue-100 leading-relaxed">
+                            {safeText(bundle.subtitle)}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="p-6 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black text-slate-700">
+                            محتويات الباقة ({includedProducts.length} مذكرات):
+                          </span>
+                          <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full">
+                            شاملة التخصيص والطباعة
+                          </span>
+                        </div>
+
+                        <div className="space-y-2">
+                          {includedProducts.map((prod) => (
+                            <div
+                              key={prod.id}
+                              onClick={() => {
+                                setPreviewProduct(prod);
+                                setActiveSampleIndex(0);
+                                setIsSampleFullscreen(false);
+                              }}
+                              className="p-2.5 rounded-2xl bg-slate-50 hover:bg-blue-50/70 border border-slate-200/80 flex items-center justify-between gap-3 cursor-pointer transition"
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <img
+                                  src={prod.coverImage || resolvedLogo}
+                                  alt={safeText(prod.title)}
+                                  className="w-10 h-10 rounded-xl object-cover border border-slate-200 shrink-0"
+                                />
+                                <div className="min-w-0">
+                                  <div className="text-xs sm:text-sm font-black text-slate-900 truncate">
+                                    {safeText(prod.title)}
+                                  </div>
+                                  <div className="text-[11px] text-slate-500">
+                                    {prod.pagesCount || 0} صفحة • قيمة فردية {prod.price} ج.م
+                                  </div>
+                                </div>
+                              </div>
+                              <span className="text-[11px] font-bold text-blue-600 shrink-0 flex items-center gap-1">
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>معاينة</span>
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-6 bg-slate-50 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-4">
+                      <div>
+                        <div className="text-[11px] font-bold text-slate-500">سعر الباقة بالكامل:</div>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-2xl sm:text-3xl font-black text-blue-600">
+                            {bundle.price} ج.م
+                          </span>
+                          {Number(bundle.originalPrice) > Number(bundle.price) && (
+                            <span className="text-xs sm:text-sm text-slate-400 line-through font-bold">
+                              {bundle.originalPrice} ج.م
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => addToCart(bundle, 'bundle')}
+                        className="px-6 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs sm:text-sm shadow-lg shadow-blue-600/20 transition cursor-pointer"
+                      >
+                        أضف الباقة للسلة للتخصيص
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -2880,33 +3117,43 @@ function MuzakkiratiPlatformContent() {
 
         {/* 5. لوحة الإدارة المتكاملة */}
         {activeTab === 'admin' && isAdminAuthenticated && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
             <div className="bg-slate-900 text-white rounded-3xl p-5 sm:p-6 flex flex-wrap items-center justify-between gap-4 shadow-lg">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center font-black">
+                <div className="w-11 h-11 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center font-black shrink-0">
                   <ShieldCheck className="w-6 h-6" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-black">لوحة إدارة منصة العباقرة</h2>
-                  <p className="text-xs text-slate-400">
-                    {isAuthorizedAdminEmail(user?.email)
-                      ? `متصل بحساب المدير الرسمي (${user?.email}) ✓ — جميع التعديلات تُحفظ وتُعرض للعملاء فوراً`
-                      : `تنبيه: يجب ربط حساب جوجل للإدارة ليسمح Firebase بحفظ التعديلات للعملاء`}
+                  <h2 className="text-base sm:text-lg font-black">لوحة إدارة منصة العباقرة</h2>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    {adminGoogleUser
+                      ? `متصل بحساب المدير الرسمي (${adminGoogleUser.email}) ✓ — جميع التعديلات تُحفظ وتُعرض للعملاء فوراً`
+                      : 'تنبيه: اضغط "ربط حساب جوجل للإدارة" ليسمح Firebase بحفظ التعديلات للعملاء'}
                   </p>
                 </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                {!isAuthorizedAdminEmail(user?.email) && (
+                {!adminGoogleUser && (
                   <button
-                    onClick={handleGoogleAdminSignIn}
+                    type="button"
+                    onClick={handleAdminGoogleSignIn}
                     className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow cursor-pointer"
                   >
-                    <ShieldCheck className="w-4 h-4" />
+                    <LogIn className="w-4 h-4" />
                     <span>ربط حساب جوجل للإدارة (مطلوب للحفظ)</span>
                   </button>
                 )}
                 <button
+                  type="button"
+                  onClick={handleForcePullFromCloud}
+                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sky-300 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>سحب الصور من السحابة</span>
+                </button>
+                <button
+                  type="button"
                   onClick={handleSaveAllAdminChanges}
                   className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black flex items-center gap-1.5 shadow cursor-pointer"
                 >
@@ -2914,13 +3161,7 @@ function MuzakkiratiPlatformContent() {
                   <span>حفظ ونشر جميع التعديلات للعملاء</span>
                 </button>
                 <button
-                  onClick={handleForcePullFromCloud}
-                  className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Database className="w-4 h-4" />
-                  <span>سحب الصور من السحابة</span>
-                </button>
-                <button
+                  type="button"
                   onClick={handleExportBackup}
                   className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                 >
@@ -2928,6 +3169,7 @@ function MuzakkiratiPlatformContent() {
                   <span>تصدير نسخة احتياطية</span>
                 </button>
                 <button
+                  type="button"
                   onClick={handleAdminLogout}
                   className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black flex items-center gap-1.5 shadow cursor-pointer"
                 >
@@ -2944,7 +3186,7 @@ function MuzakkiratiPlatformContent() {
                 { id: 'taxonomy', label: 'المراحل والصفوف والأقسام', icon: Layers },
                 { id: 'coupons', label: `الكوبونات والعروض (${coupons.length})`, icon: Tag },
                 { id: 'orders', label: `الطلبات (${orders.length})`, icon: ShoppingCart },
-                { id: 'settings', label: 'الهوية والتنبيهات والروابط', icon: Sliders },
+                { id: 'settings', label: 'الهوية والشعار والروابط', icon: Sliders },
                 { id: 'backup', label: 'النسخ الاحتياطي JSON', icon: Database }
               ].map((tab) => {
                 const Icon = tab.icon;
@@ -2965,18 +3207,17 @@ function MuzakkiratiPlatformContent() {
               })}
             </div>
 
-            {/* تبويب 1: إدارة المذكرات */}
+            {/* تبويب 1: المذكرات والعينات */}
             {adminSubTab === 'products' && (
               <div className="space-y-6">
-                {/* قسم التحكم المطور والمبسط في التنبيه العام والتنبيه الخاص بكل مذكرة */}
-                <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-2xs space-y-5 text-xs">
-                  <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100">
+                <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 space-y-5 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <h3 className="text-base font-black text-slate-900">
-                        تخصيص التنبيهات (العام والخاص بكل مذكرة)
+                        إعدادات التنبيهات وزر Google Drive الخاصة بالمذكرات
                       </h3>
                       <p className="text-[11px] text-slate-500">
-                        اختر لوناً جاهزاً بضغطة واحدة أو خصص الألوان وشاهد المعاينة الفورية قبل النشر
+                        تحكم في التنبيه العام، والتنبيه الخاص بكل مذكرة، وزر عينة Google Drive بسهولة
                       </p>
                     </div>
                     <button
@@ -2984,236 +3225,224 @@ function MuzakkiratiPlatformContent() {
                       onClick={handleSaveAllAdminChanges}
                       className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black cursor-pointer shadow-sm"
                     >
-                      حفظ ونشر تعديلات التنبيهات
+                      حفظ ونشر الإعدادات
                     </button>
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* 1. التحكم في التنبيه العام */}
-                    <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-4 flex flex-col justify-between">
-                      <div className="space-y-3.5">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-black text-sm text-slate-900">1. التنبيه العام (في نافذة المعاينة)</h4>
-                          <label className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-slate-200 font-bold text-blue-600 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={settings.generalNoticeEnabled !== false}
-                              onChange={(e) =>
-                                setSettings({ ...settings, generalNoticeEnabled: e.target.checked })
-                              }
-                            />
-                            <span>مفعّل</span>
-                          </label>
-                        </div>
-
-                        <div>
-                          <label className="block font-bold text-slate-600 mb-1">عنوان التنبيه</label>
+                    {/* 1. التنبيه العام */}
+                    <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/80 border border-slate-200/80 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-black text-sm text-slate-900">
+                          1. التنبيه العام (في نافذة المعاينة فقط)
+                        </h4>
+                        <label className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-slate-200 font-bold text-blue-600 cursor-pointer">
                           <input
-                            type="text"
-                            value={settings.generalNoticeTitle ?? 'تنبيه هام للمعلمين قبل تأكيد الطلب:'}
+                            type="checkbox"
+                            checked={settings.generalNoticeEnabled !== false}
                             onChange={(e) =>
-                              setSettings({ ...settings, generalNoticeTitle: e.target.value })
+                              setSettings({ ...settings, generalNoticeEnabled: e.target.checked })
                             }
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-bold"
                           />
-                        </div>
+                          <span>مفعّل</span>
+                        </label>
+                      </div>
 
-                        <div>
-                          <label className="block font-bold text-slate-600 mb-1">نص التنبيه</label>
-                          <textarea
-                            rows={3}
-                            value={settings.generalNoticeText ?? DEFAULT_SETTINGS.generalNoticeText}
-                            onChange={(e) =>
-                              setSettings({ ...settings, generalNoticeText: e.target.value })
-                            }
-                            className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white leading-relaxed"
-                          />
-                        </div>
+                      <div>
+                        <label className="block font-bold text-slate-600 mb-1">عنوان التنبيه العام</label>
+                        <input
+                          type="text"
+                          value={settings.generalNoticeTitle ?? 'تنبيه هام للمعلمين قبل تأكيد الطلب:'}
+                          onChange={(e) =>
+                            setSettings({ ...settings, generalNoticeTitle: e.target.value })
+                          }
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-bold"
+                        />
+                      </div>
 
-                        <div className="space-y-1.5">
-                          <span className="block font-bold text-slate-600">قوالب ألوان جاهزة:</span>
-                          <div className="flex flex-wrap gap-2">
-                            {[
-                              { label: 'رمادي هادئ', bg: '#f8fafc', text: '#334155' },
-                              { label: 'أزرق سماوي', bg: '#eff6ff', text: '#1e3a8a' },
-                              { label: 'ذهبي دافئ', bg: '#fffbeb', text: '#78350f' },
-                              { label: 'أخضر نعناعي', bg: '#ecfdf5', text: '#065f46' },
-                              { label: 'كحلي داكن', bg: '#0f172a', text: '#f8fafc' }
-                            ].map((preset) => (
-                              <button
-                                key={preset.label}
-                                type="button"
-                                onClick={() =>
-                                  setSettings({
-                                    ...settings,
-                                    generalNoticeBg: preset.bg,
-                                    generalNoticeTextColor: preset.text
-                                  })
-                                }
-                                style={{ backgroundColor: preset.bg, color: preset.text }}
-                                className="px-3 py-1.5 rounded-xl border border-black/15 font-black text-[11px] shadow-2xs hover:scale-105 transition cursor-pointer"
-                              >
-                                {preset.label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
+                      <div>
+                        <label className="block font-bold text-slate-600 mb-1">نص التنبيه العام</label>
+                        <textarea
+                          rows={3}
+                          value={settings.generalNoticeText ?? DEFAULT_SETTINGS.generalNoticeText}
+                          onChange={(e) =>
+                            setSettings({ ...settings, generalNoticeText: e.target.value })
+                          }
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white leading-relaxed"
+                        />
+                      </div>
 
-                        <div className="grid grid-cols-3 gap-2.5">
-                          <div>
-                            <label className="block font-bold text-slate-600 mb-1">مكان الظهور</label>
-                            <select
-                              value={settings.generalNoticePosition || 'bottom'}
-                              onChange={(e) =>
-                                setSettings({ ...settings, generalNoticePosition: e.target.value })
+                      <div>
+                        <label className="block font-bold text-slate-600 mb-1.5">قوالب ألوان جاهزة:</label>
+                        <div className="flex flex-wrap gap-2">
+                          {[
+                            { name: 'رمادي هادئ', bg: '#f8fafc', text: '#334155' },
+                            { name: 'أزرق سماوي', bg: '#eff6ff', text: '#1e3a8a' },
+                            { name: 'ذهبي دافئ', bg: '#fffbeb', text: '#78350f' },
+                            { name: 'أخضر نعناعي', bg: '#ecfdf5', text: '#065f46' },
+                            { name: 'كحلي داكن', bg: '#0f172a', text: '#f8fafc' }
+                          ].map((preset) => (
+                            <button
+                              key={preset.name}
+                              type="button"
+                              onClick={() =>
+                                setSettings({
+                                  ...settings,
+                                  generalNoticeBg: preset.bg,
+                                  generalNoticeTextColor: preset.text
+                                })
                               }
-                              className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-white font-bold"
+                              style={{ backgroundColor: preset.bg, color: preset.text }}
+                              className="px-3 py-1.5 rounded-xl border border-black/15 font-black text-[11px] shadow-2xs hover:scale-105 transition cursor-pointer"
                             >
-                              <option value="top">أعلى التفاصيل</option>
-                              <option value="bottom">أسفل التفاصيل</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block font-bold text-slate-600 mb-1">لون الخلفية</label>
-                            <input
-                              type="color"
-                              value={settings.generalNoticeBg || '#f8fafc'}
-                              onChange={(e) =>
-                                setSettings({ ...settings, generalNoticeBg: e.target.value })
-                              }
-                              className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
-                            />
-                          </div>
-                          <div>
-                            <label className="block font-bold text-slate-600 mb-1">لون النص</label>
-                            <input
-                              type="color"
-                              value={settings.generalNoticeTextColor || '#334155'}
-                              onChange={(e) =>
-                                setSettings({ ...settings, generalNoticeTextColor: e.target.value })
-                              }
-                              className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
-                            />
-                          </div>
+                              {preset.name}
+                            </button>
+                          ))}
                         </div>
                       </div>
 
-                      {/* معاينة حية للتنبيه العام */}
-                      <div className="pt-3 border-t border-slate-200/80 space-y-1.5">
-                        <span className="text-[11px] font-bold text-slate-500">معاينة مباشرة للشكل:</span>
-                        {settings.generalNoticeEnabled !== false ? (
-                          renderGeneralNoticeBox()
-                        ) : (
-                          <div className="p-3 rounded-xl bg-slate-200/60 text-slate-500 text-center font-bold">
-                            التنبيه العام مخفي حالياً
-                          </div>
-                        )}
+                      <div className="grid grid-cols-3 gap-2.5">
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">مكان الظهور</label>
+                          <select
+                            value={settings.generalNoticePosition || 'bottom'}
+                            onChange={(e) =>
+                              setSettings({ ...settings, generalNoticePosition: e.target.value })
+                            }
+                            className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-white font-bold"
+                          >
+                            <option value="top">أعلى التفاصيل</option>
+                            <option value="bottom">أسفل التفاصيل</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">لون الخلفية</label>
+                          <input
+                            type="color"
+                            value={settings.generalNoticeBg || '#f8fafc'}
+                            onChange={(e) =>
+                              setSettings({ ...settings, generalNoticeBg: e.target.value })
+                            }
+                            className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">لون النص</label>
+                          <input
+                            type="color"
+                            value={settings.generalNoticeTextColor || '#334155'}
+                            onChange={(e) =>
+                              setSettings({ ...settings, generalNoticeTextColor: e.target.value })
+                            }
+                            className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-200/80 space-y-1.5">
+                        <span className="text-[11px] font-bold text-slate-500">معاينة مباشرة:</span>
+                        {renderGeneralNoticeBox()}
                       </div>
                     </div>
 
-                    {/* 2. التحكم في التنبيه الخاص بكل مذكرة */}
-                    <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-4 flex flex-col justify-between">
-                      <div className="space-y-3.5">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h4 className="font-black text-sm text-slate-900">2. التنبيه الخاص بكل مذكرة</h4>
-                          <div className="flex items-center gap-2">
-                            <label className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white border border-slate-200 font-bold text-emerald-700 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={settings.tipNoticeEnabled !== false}
-                                onChange={(e) =>
-                                  setSettings({ ...settings, tipNoticeEnabled: e.target.checked })
-                                }
-                              />
-                              <span>بالمعاينة</span>
-                            </label>
-                            <label className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white border border-slate-200 font-bold text-blue-600 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={settings.tipShowOnCard !== false}
-                                onChange={(e) =>
-                                  setSettings({ ...settings, tipShowOnCard: e.target.checked })
-                                }
-                              />
-                              <span>بالبطاقة</span>
-                            </label>
-                          </div>
-                        </div>
-
-                        <p className="text-[11px] text-slate-500 leading-relaxed">
-                          يتم كتابة نص هذا التنبيه داخل بيانات كل مذكرة من النموذج بالأسفل، ويظهر بالتنسيق المحدد هنا:
-                        </p>
-
-                        <div className="space-y-1.5">
-                          <span className="block font-bold text-slate-600">قوالب ألوان جاهزة:</span>
-                          <div className="flex flex-wrap gap-2">
-                            {[
-                              { label: 'ذهبي مميز', bg: '#fffbeb', text: '#78350f' },
-                              { label: 'أزرق ملكي', bg: '#1d4ed8', text: '#ffffff' },
-                              { label: 'أزرق فاتح', bg: '#eff6ff', text: '#1e40af' },
-                              { label: 'أخضر زمردي', bg: '#ecfdf5', text: '#065f46' },
-                              { label: 'وردي تنبيهي', bg: '#fff1f2', text: '#9f1239' }
-                            ].map((preset) => (
-                              <button
-                                key={preset.label}
-                                type="button"
-                                onClick={() =>
-                                  setSettings({
-                                    ...settings,
-                                    tipNoticeBg: preset.bg,
-                                    tipNoticeTextColor: preset.text
-                                  })
-                                }
-                                style={{ backgroundColor: preset.bg, color: preset.text }}
-                                className="px-3 py-1.5 rounded-xl border border-black/15 font-black text-[11px] shadow-2xs hover:scale-105 transition cursor-pointer"
-                              >
-                                {preset.label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2.5">
-                          <div>
-                            <label className="block font-bold text-slate-600 mb-1">مكان الظهور</label>
-                            <select
-                              value={settings.tipNoticePosition || 'below-desc'}
-                              onChange={(e) =>
-                                setSettings({ ...settings, tipNoticePosition: e.target.value })
-                              }
-                              className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-white font-bold"
-                            >
-                              <option value="above-desc">أعلى الوصف</option>
-                              <option value="below-desc">أسفل الوصف</option>
-                              <option value="before-actions">قبل أزرار الطلب</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block font-bold text-slate-600 mb-1">لون الخلفية</label>
+                    {/* 2. التنبيه الخاص بكل مذكرة */}
+                    <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/80 border border-slate-200/80 space-y-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h4 className="font-black text-sm text-slate-900">
+                          2. التنبيه الخاص بكل مذكرة (صندوق منفصل)
+                        </h4>
+                        <div className="flex items-center gap-2">
+                          <label className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-slate-200 font-bold text-emerald-700 cursor-pointer">
                             <input
-                              type="color"
-                              value={settings.tipNoticeBg || '#fffbeb'}
+                              type="checkbox"
+                              checked={settings.tipNoticeEnabled !== false}
                               onChange={(e) =>
-                                setSettings({ ...settings, tipNoticeBg: e.target.value })
+                                setSettings({ ...settings, tipNoticeEnabled: e.target.checked })
                               }
-                              className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
                             />
-                          </div>
-                          <div>
-                            <label className="block font-bold text-slate-600 mb-1">لون النص</label>
+                            <span>بالمعاينة</span>
+                          </label>
+                          <label className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-slate-200 font-bold text-blue-600 cursor-pointer">
                             <input
-                              type="color"
-                              value={settings.tipNoticeTextColor || '#78350f'}
+                              type="checkbox"
+                              checked={settings.tipShowOnCard !== false}
                               onChange={(e) =>
-                                setSettings({ ...settings, tipNoticeTextColor: e.target.value })
+                                setSettings({ ...settings, tipShowOnCard: e.target.checked })
                               }
-                              className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
                             />
-                          </div>
+                            <span>بالبطاقة</span>
+                          </label>
                         </div>
                       </div>
 
-                      {/* معاينة حية للتنبيه الخاص */}
+                      <div>
+                        <label className="block font-bold text-slate-600 mb-1.5">قوالب ألوان جاهزة:</label>
+                        <div className="flex flex-wrap gap-2">
+                          {[
+                            { name: 'ذهبي دافئ', bg: '#fffbeb', text: '#78350f' },
+                            { name: 'أزرق ملكي', bg: '#1d4ed8', text: '#ffffff' },
+                            { name: 'أخضر زمردي', bg: '#059669', text: '#ffffff' },
+                            { name: 'أزرق فاتح', bg: '#eff6ff', text: '#1e40af' },
+                            { name: 'وردي تنبيهي', bg: '#fff1f2', text: '#9f1239' }
+                          ].map((preset) => (
+                            <button
+                              key={preset.name}
+                              type="button"
+                              onClick={() =>
+                                setSettings({
+                                  ...settings,
+                                  tipNoticeBg: preset.bg,
+                                  tipNoticeTextColor: preset.text
+                                })
+                              }
+                              style={{ backgroundColor: preset.bg, color: preset.text }}
+                              className="px-3 py-1.5 rounded-xl border border-black/15 font-black text-[11px] shadow-2xs hover:scale-105 transition cursor-pointer"
+                            >
+                              {preset.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2.5">
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">مكان الظهور</label>
+                          <select
+                            value={settings.tipNoticePosition || 'below-desc'}
+                            onChange={(e) =>
+                              setSettings({ ...settings, tipNoticePosition: e.target.value })
+                            }
+                            className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-white font-bold"
+                          >
+                            <option value="above-desc">أعلى الوصف</option>
+                            <option value="below-desc">أسفل الوصف</option>
+                            <option value="before-actions">قبل أزرار الطلب</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">لون الخلفية</label>
+                          <input
+                            type="color"
+                            value={settings.tipNoticeBg || '#fffbeb'}
+                            onChange={(e) =>
+                              setSettings({ ...settings, tipNoticeBg: e.target.value })
+                            }
+                            className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">لون النص</label>
+                          <input
+                            type="color"
+                            value={settings.tipNoticeTextColor || '#78350f'}
+                            onChange={(e) =>
+                              setSettings({ ...settings, tipNoticeTextColor: e.target.value })
+                            }
+                            className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
+                          />
+                        </div>
+                      </div>
+
                       <div className="pt-3 border-t border-slate-200/80 space-y-2">
                         <span className="text-[11px] font-bold text-slate-500">معاينة مباشرة للتنبيه الخاص:</span>
                         {renderProductTipBox('ملاحظة: للمراجعة المُثلى اطلبها مع بوكليت الاختبارات', false)}
@@ -3227,8 +3456,94 @@ function MuzakkiratiPlatformContent() {
                       </div>
                     </div>
                   </div>
+
+                  {/* 3. التحكم الكامل في زر معاينة Google Drive */}
+                  <div className="p-4 sm:p-5 rounded-2xl bg-emerald-50/50 border border-emerald-200 space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h4 className="font-black text-sm text-slate-900">
+                          3. التحكم في زر معاينة Google Drive للعملاء
+                        </h4>
+                        <p className="text-[11px] text-slate-500">
+                          تحكم في إظهار الزر على بطاقة المذكرة وفي نافذة التفاصيل، مع تخصيص نصه وألوانه
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-slate-200 font-bold text-emerald-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={settings.driveBtnEnabled !== false}
+                            onChange={(e) =>
+                              setSettings({ ...settings, driveBtnEnabled: e.target.checked })
+                            }
+                          />
+                          <span>تفعيل الزر</span>
+                        </label>
+                        <label className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-slate-200 font-bold text-blue-600 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={settings.driveBtnShowOnCard !== false}
+                            onChange={(e) =>
+                              setSettings({ ...settings, driveBtnShowOnCard: e.target.checked })
+                            }
+                          />
+                          <span>إظهاره على البطاقة</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                      <div className="sm:col-span-4">
+                        <label className="block font-bold text-slate-600 mb-1">نص الزر</label>
+                        <input
+                          type="text"
+                          value={settings.driveBtnLabel ?? 'عينة Google Drive'}
+                          onChange={(e) =>
+                            setSettings({ ...settings, driveBtnLabel: e.target.value })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-bold"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block font-bold text-slate-600 mb-1">لون الزر</label>
+                        <input
+                          type="color"
+                          value={settings.driveBtnBg || '#059669'}
+                          onChange={(e) =>
+                            setSettings({ ...settings, driveBtnBg: e.target.value })
+                          }
+                          className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block font-bold text-slate-600 mb-1">لون النص</label>
+                        <input
+                          type="color"
+                          value={settings.driveBtnText || '#ffffff'}
+                          onChange={(e) =>
+                            setSettings({ ...settings, driveBtnText: e.target.value })
+                          }
+                          className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
+                        />
+                      </div>
+                      <div className="sm:col-span-4 flex items-center justify-between gap-2 bg-white p-2.5 rounded-xl border border-slate-200">
+                        <span className="text-[11px] font-bold text-slate-500">معاينة:</span>
+                        <span
+                          style={{
+                            backgroundColor: settings.driveBtnBg || '#059669',
+                            color: settings.driveBtnText || '#ffffff'
+                          }}
+                          className="px-3 py-1.5 rounded-xl font-black text-xs inline-flex items-center gap-1.5 shadow-2xs"
+                        >
+                          <span>{safeText(settings.driveBtnLabel, 'عينة Google Drive')}</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
+                {/* نموذج إضافة/تعديل المذكرة وقائمة المذكرات */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                   <form
                     onSubmit={handleSaveProduct}
@@ -3555,53 +3870,107 @@ function MuzakkiratiPlatformContent() {
             {/* تبويب 2: إدارة الباقات */}
             {adminSubTab === 'bundles' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
-                  <h3 className="text-base font-black text-slate-900">إضافة باقة مخفضة جديدة</h3>
+                <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 p-6 space-y-4 h-fit">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-base font-black text-slate-900">
+                      {editingBundleId ? 'تعديل بيانات الباقة' : 'إضافة باقة مخفضة جديدة'}
+                    </h3>
+                    {editingBundleId && (
+                      <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 text-[11px] font-black">
+                        وضع التعديل
+                      </span>
+                    )}
+                  </div>
                   <div className="space-y-3 text-xs">
-                    <input
-                      type="text"
-                      placeholder="اسم الباقة"
-                      value={newBundleForm.title}
-                      onChange={(e) => setNewBundleForm({ ...newBundleForm, title: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                    />
-                    <input
-                      type="text"
-                      placeholder="وصف الباقة"
-                      value={newBundleForm.subtitle}
-                      onChange={(e) => setNewBundleForm({ ...newBundleForm, subtitle: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block font-bold text-slate-600 mb-1">اسم الباقة *</label>
                       <input
-                        type="number"
-                        placeholder="سعر الباقة"
-                        value={newBundleForm.price}
-                        onChange={(e) => setNewBundleForm({ ...newBundleForm, price: Number(e.target.value) })}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
+                        type="text"
+                        placeholder="مثال: باقة مراجعات المرحلة الإعدادية"
+                        value={newBundleForm.title}
+                        onChange={(e) => setNewBundleForm({ ...newBundleForm, title: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold"
                       />
-                      <input
-                        type="number"
-                        placeholder="السعر الأصلي"
-                        value={newBundleForm.originalPrice}
-                        onChange={(e) =>
-                          setNewBundleForm({ ...newBundleForm, originalPrice: Number(e.target.value) })
-                        }
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-600 mb-1">وصف الباقة</label>
+                      <textarea
+                        rows={2}
+                        placeholder="وصف مختصر لمميزات الباقة..."
+                        value={newBundleForm.subtitle}
+                        onChange={(e) => setNewBundleForm({ ...newBundleForm, subtitle: e.target.value })}
                         className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
                       />
                     </div>
-                    <input
-                      type="text"
-                      placeholder="شارة التوفير (مثال: وفر 150 ج.م)"
-                      value={newBundleForm.badge}
-                      onChange={(e) => setNewBundleForm({ ...newBundleForm, badge: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block font-bold text-slate-600 mb-1">سعر الباقة (ج.م)</label>
+                        <input
+                          type="number"
+                          placeholder="سعر الباقة"
+                          value={newBundleForm.price}
+                          onChange={(e) => setNewBundleForm({ ...newBundleForm, price: Number(e.target.value) })}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-600 mb-1">السعر الأصلي (ج.م)</label>
+                        <input
+                          type="number"
+                          placeholder="السعر الأصلي"
+                          value={newBundleForm.originalPrice}
+                          onChange={(e) =>
+                            setNewBundleForm({ ...newBundleForm, originalPrice: Number(e.target.value) })
+                          }
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-600 mb-1">شارة التوفير</label>
+                      <input
+                        type="text"
+                        placeholder="مثال: وفر 246 ج.م"
+                        value={newBundleForm.badge}
+                        onChange={(e) => setNewBundleForm({ ...newBundleForm, badge: e.target.value })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
+                      />
+                    </div>
+                    <div className="p-3 rounded-2xl bg-blue-50/60 border border-blue-200 space-y-2">
+                      <label className="block font-black text-blue-900">صورة غلاف الباقة (اختياري)</label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0];
+                          if (!f) return;
+                          const img = await compressImageFile(f, 800, 0.82);
+                          setNewBundleForm((prev) => ({ ...prev, coverImage: img }));
+                        }}
+                        className="block w-full text-xs"
+                      />
+                      {newBundleForm.coverImage && (
+                        <div className="flex items-center gap-2">
+                          <img
+                            src={newBundleForm.coverImage}
+                            alt=""
+                            className="h-16 w-24 rounded-xl object-cover border"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setNewBundleForm((prev) => ({ ...prev, coverImage: '' }))}
+                            className="text-rose-600 font-bold hover:underline"
+                          >
+                            إزالة الصورة
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
                       <div className="font-black text-slate-800">
                         اختر المذكرات المشمولة داخل الباقة ({newBundleForm.productIds.length}):
                       </div>
-                      <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1">
+                      <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
                         {products.map((prod) => {
                           const isChecked = newBundleForm.productIds.includes(prod.id);
                           return (
@@ -3634,37 +4003,71 @@ function MuzakkiratiPlatformContent() {
                         })}
                       </div>
                     </div>
-                    <button
-                      onClick={async () => {
-                        if (!newBundleForm.title.trim()) {
-                          showToast('يرجى إدخال اسم الباقة أولاً', 'error');
-                          return;
-                        }
-                        const bObj = { ...newBundleForm, id: `bnd_${Date.now()}` };
-                        const next = [bObj, ...bundles];
-                        setBundles(next);
-                        await idbSet('bundles_v5', next);
-                        if (db) {
-                          await setDoc(
-                            doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles', bObj.id),
-                            bObj
-                          );
-                        }
-                        setNewBundleForm({
-                          title: '',
-                          subtitle: '',
-                          price: 499,
-                          originalPrice: 650,
-                          badge: 'عرض خاص',
-                          productIds: [],
-                          coverImage: ''
-                        });
-                        showToast('تمت إضافة الباقة وحفظها بنجاح');
-                      }}
-                      className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm cursor-pointer"
-                    >
-                      حفظ الباقة
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!newBundleForm.title.trim()) {
+                            showToast('يرجى إدخال اسم الباقة أولاً', 'error');
+                            return;
+                          }
+                          const bObj = {
+                            ...newBundleForm,
+                            id: editingBundleId || `bnd_${Date.now()}`,
+                            price: Number(newBundleForm.price || 0),
+                            originalPrice: Number(newBundleForm.originalPrice || 0)
+                          };
+                          const next = editingBundleId
+                            ? bundles.map((x) => (x.id === editingBundleId ? bObj : x))
+                            : [bObj, ...bundles];
+                          setBundles(next);
+                          await idbSet('bundles_v5', next);
+                          if (db) {
+                            const { coverImage, ...lightBundle } = bObj;
+                            await setDoc(
+                              doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles', bObj.id),
+                              lightBundle,
+                              { merge: true }
+                            );
+                            await saveMediaAssetToCloud(db, PRIMARY_APP_ID, `bnd_cover_${bObj.id}`, coverImage || '');
+                          }
+                          setEditingBundleId(null);
+                          setNewBundleForm({
+                            title: '',
+                            subtitle: '',
+                            price: 499,
+                            originalPrice: 650,
+                            badge: 'وفر 150 ج.م',
+                            productIds: [],
+                            coverImage: ''
+                          });
+                          showToast(editingBundleId ? '✓ تم حفظ تعديلات الباقة بنجاح' : '✓ تمت إضافة الباقة وحفظها بنجاح');
+                        }}
+                        className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm cursor-pointer"
+                      >
+                        {editingBundleId ? 'حفظ تعديلات الباقة' : 'حفظ الباقة'}
+                      </button>
+                      {editingBundleId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingBundleId(null);
+                            setNewBundleForm({
+                              title: '',
+                              subtitle: '',
+                              price: 499,
+                              originalPrice: 650,
+                              badge: 'وفر 150 ج.م',
+                              productIds: [],
+                              coverImage: ''
+                            });
+                          }}
+                          className="px-4 py-3 rounded-xl bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
+                        >
+                          إلغاء
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -3672,30 +4075,63 @@ function MuzakkiratiPlatformContent() {
                   {bundles.map((b) => (
                     <div
                       key={b.id}
-                      className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center justify-between gap-3"
+                      className={`bg-white rounded-2xl border p-4 flex items-center justify-between gap-3 ${
+                        editingBundleId === b.id ? 'border-blue-500 ring-2 ring-blue-100' : 'border-slate-200'
+                      }`}
                     >
                       <div className="space-y-1">
-                        <h4 className="font-black text-sm">{b.title}</h4>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-black text-sm">{b.title}</h4>
+                          {b.badge && (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[10px] font-black">
+                              {b.badge}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-slate-500">
                           {b.price} ج.م (بدلاً من {b.originalPrice} ج.م) • تشمل {(b.productIds || []).length} مذكرات
                         </p>
                       </div>
-                      <button
-                        onClick={async () => {
-                          const next = bundles.filter((x) => x.id !== b.id);
-                          setBundles(next);
-                          await idbSet('bundles_v5', next);
-                          if (db) {
-                            await deleteDoc(
-                              doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles', b.id)
-                            );
-                          }
-                          showToast('تم حذف الباقة');
-                        }}
-                        className="p-2 rounded-xl bg-rose-50 text-rose-600 cursor-pointer"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingBundleId(b.id);
+                            setNewBundleForm({
+                              title: b.title || '',
+                              subtitle: b.subtitle || '',
+                              price: Number(b.price || 0),
+                              originalPrice: Number(b.originalPrice || 0),
+                              badge: b.badge || '',
+                              productIds: Array.isArray(b.productIds) ? b.productIds : [],
+                              coverImage: b.coverImage || ''
+                            });
+                          }}
+                          title="تعديل الباقة"
+                          className="p-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 cursor-pointer"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const next = bundles.filter((x) => x.id !== b.id);
+                            setBundles(next);
+                            await idbSet('bundles_v5', next);
+                            if (db) {
+                              await deleteDoc(
+                                doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles', b.id)
+                              );
+                            }
+                            if (editingBundleId === b.id) setEditingBundleId(null);
+                            showToast('تم حذف الباقة');
+                          }}
+                          title="حذف الباقة"
+                          className="p-2 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -3964,14 +4400,14 @@ function MuzakkiratiPlatformContent() {
               </div>
             )}
 
-            {/* تبويب 4: إدارة الكوبونات والعروض */}
+            {/* تبويب 4: الكوبونات والعروض */}
             {adminSubTab === 'coupons' && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs">
-                  {/* التحكم في الشريط الترويجي العلوي */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 text-xs">
+                <div className="lg:col-span-6 space-y-6">
+                  {/* الشريط الترويجي العلوي */}
                   <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-base font-black text-slate-900">الشريط الترويجي العلوي في الموقع</h3>
+                      <h3 className="text-base font-black text-slate-900">الشريط الترويجي العلوي</h3>
                       <label className="inline-flex items-center gap-1.5 font-bold text-blue-600 cursor-pointer">
                         <input
                           type="checkbox"
@@ -3992,14 +4428,14 @@ function MuzakkiratiPlatformContent() {
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       <div>
-                        <label className="block font-bold text-slate-600 mb-1">كود النسخ السريع</label>
+                        <label className="block font-bold text-slate-600 mb-1">كود الخصم المعروض</label>
                         <input
                           type="text"
                           value={settings.promoCouponCode || ''}
                           onChange={(e) =>
                             setSettings({ ...settings, promoCouponCode: e.target.value.toUpperCase() })
                           }
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 uppercase font-bold"
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-black uppercase"
                         />
                       </div>
                       <div>
@@ -4030,20 +4466,34 @@ function MuzakkiratiPlatformContent() {
                     </button>
                   </div>
 
-                  {/* التحكم في خصم الكميات التلقائي */}
+                  {/* التحكم في عرض الحصول على أكثر من مذكرة */}
                   <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-base font-black text-slate-900">خصم الكميات التلقائي بالسلة</h3>
-                      <label className="inline-flex items-center gap-1.5 font-bold text-emerald-600 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={settings.bulkDiscountEnabled !== false}
-                          onChange={(e) =>
-                            setSettings({ ...settings, bulkDiscountEnabled: e.target.checked })
-                          }
-                        />
-                        <span>تفعيل الخصم</span>
-                      </label>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="text-base font-black text-slate-900">
+                        عرض الحصول على أكثر من مذكرة (خصم الكميات)
+                      </h3>
+                      <div className="flex items-center gap-3">
+                        <label className="inline-flex items-center gap-1.5 font-bold text-emerald-600 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={settings.bulkDiscountEnabled !== false}
+                            onChange={(e) =>
+                              setSettings({ ...settings, bulkDiscountEnabled: e.target.checked })
+                            }
+                          />
+                          <span>تفعيل الخصم</span>
+                        </label>
+                        <label className="inline-flex items-center gap-1.5 font-bold text-blue-600 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={settings.multiOfferEnabled !== false}
+                            onChange={(e) =>
+                              setSettings({ ...settings, multiOfferEnabled: e.target.checked })
+                            }
+                          />
+                          <span>إظهار بطاقة العرض</span>
+                        </label>
+                      </div>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       <div>
@@ -4080,109 +4530,205 @@ function MuzakkiratiPlatformContent() {
                         />
                       </div>
                     </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block font-bold text-slate-600 mb-1">شارة العرض</label>
+                        <input
+                          type="text"
+                          value={settings.multiOfferBadge ?? '🔥 عرض خاص عند طلب أكثر من مذكرة'}
+                          onChange={(e) =>
+                            setSettings({ ...settings, multiOfferBadge: e.target.value })
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">لون الخلفية</label>
+                          <input
+                            type="color"
+                            value={settings.multiOfferBg || '#0f172a'}
+                            onChange={(e) =>
+                              setSettings({ ...settings, multiOfferBg: e.target.value })
+                            }
+                            className="w-full h-9 rounded-xl border border-slate-200"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">لون الزر والشارة</label>
+                          <input
+                            type="color"
+                            value={settings.multiOfferAccent || '#facc15'}
+                            onChange={(e) =>
+                              setSettings({ ...settings, multiOfferAccent: e.target.value })
+                            }
+                            className="w-full h-9 rounded-xl border border-slate-200"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-600 mb-1">
+                        عنوان العرض (استخدم {'{percent}'} للنسبة و {'{min}'} للعدد)
+                      </label>
+                      <input
+                        type="text"
+                        value={
+                          settings.multiOfferTitle ??
+                          'احصل على خصم تلقائي {percent}% عند اختيار {min} مذكرات أو أكثر!'
+                        }
+                        onChange={(e) =>
+                          setSettings({ ...settings, multiOfferTitle: e.target.value })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-600 mb-1">وصف العرض</label>
+                      <textarea
+                        rows={2}
+                        value={
+                          settings.multiOfferSubtitle ??
+                          'اجمع أي مذكرات أو بوكليتات من مختلف الصفوف والمراحل في سلة واحدة وسيتم تطبيق الخصم تلقائياً بحد أقصى {max} ج.م.'
+                        }
+                        onChange={(e) =>
+                          setSettings({ ...settings, multiOfferSubtitle: e.target.value })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                      />
+                    </div>
                     <button
                       type="button"
                       onClick={handleSaveAllAdminChanges}
                       className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black cursor-pointer"
                     >
-                      حفظ إعدادات خصم الكميات
+                      حفظ ونشر عرض الحصول على أكثر من مذكرة
                     </button>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                  <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
-                    <h3 className="text-base font-black text-slate-900">إضافة كوبون خصم جديد</h3>
-                    <div className="space-y-3 text-xs">
-                      <input
-                        type="text"
-                        placeholder="كود الخصم (مثال: SUMMER25)"
-                        value={newCouponForm.code}
-                        onChange={(e) =>
-                          setNewCouponForm({ ...newCouponForm, code: e.target.value.toUpperCase() })
+                {/* إضافة وإدارة كوبونات الخصم */}
+                <div className="lg:col-span-6 bg-white rounded-3xl border border-slate-200 p-6 space-y-4 h-fit">
+                  <h3 className="text-base font-black text-slate-900">إضافة وإدارة كوبونات الخصم</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                    <input
+                      type="text"
+                      placeholder="كود الكوبون (مثال: SAVE20)"
+                      value={newCouponForm.code}
+                      onChange={(e) =>
+                        setNewCouponForm({ ...newCouponForm, code: e.target.value.toUpperCase() })
+                      }
+                      className="sm:col-span-4 px-3 py-2 rounded-xl border border-slate-200 bg-white font-black uppercase"
+                    />
+                    <input
+                      type="number"
+                      placeholder="نسبة الخصم %"
+                      value={newCouponForm.discountPercent}
+                      onChange={(e) =>
+                        setNewCouponForm({
+                          ...newCouponForm,
+                          discountPercent: Number(e.target.value)
+                        })
+                      }
+                      className="sm:col-span-3 px-3 py-2 rounded-xl border border-slate-200 bg-white"
+                    />
+                    <input
+                      type="number"
+                      placeholder="أقصى خصم ج.م"
+                      value={newCouponForm.maxDiscount}
+                      onChange={(e) =>
+                        setNewCouponForm({ ...newCouponForm, maxDiscount: Number(e.target.value) })
+                      }
+                      className="sm:col-span-3 px-3 py-2 rounded-xl border border-slate-200 bg-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const cleanCode = newCouponForm.code.trim().toUpperCase();
+                        if (!cleanCode) {
+                          showToast('يرجى إدخال كود الكوبون أولاً', 'error');
+                          return;
                         }
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 uppercase"
-                      />
-                      <div className="grid grid-cols-2 gap-2">
-                        <input
-                          type="number"
-                          placeholder="نسبة الخصم %"
-                          value={newCouponForm.discountPercent}
-                          onChange={(e) =>
-                            setNewCouponForm({ ...newCouponForm, discountPercent: Number(e.target.value) })
-                          }
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                        />
-                        <input
-                          type="number"
-                          placeholder="أقصى مبلغ خصم (ج.م)"
-                          value={newCouponForm.maxDiscount}
-                          onChange={(e) =>
-                            setNewCouponForm({ ...newCouponForm, maxDiscount: Number(e.target.value) })
-                          }
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (!newCouponForm.code.trim()) {
-                            showToast('يرجى إدخال كود الخصم', 'error');
-                            return;
-                          }
-                          const cpObj = {
-                            ...newCouponForm,
-                            id: `cp_${Date.now()}`,
-                            code: newCouponForm.code.trim().toUpperCase()
-                          };
-                          const next = [cpObj, ...coupons];
-                          setCoupons(next);
-                          await idbSet('coupons_v5', next);
-                          if (db) {
-                            await setDoc(
-                              doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cpObj.id),
-                              cpObj
-                            );
-                          }
-                          setNewCouponForm({ code: '', discountPercent: 15, maxDiscount: 200, active: true });
-                          showToast('تمت إضافة الكوبون بنجاح');
-                        }}
-                        className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm cursor-pointer"
-                      >
-                        حفظ الكوبون
-                      </button>
-                    </div>
+                        const cpObj = {
+                          id: `cp_${Date.now()}`,
+                          code: cleanCode,
+                          discountPercent: Number(newCouponForm.discountPercent || 10),
+                          maxDiscount: Number(newCouponForm.maxDiscount || 200),
+                          active: true
+                        };
+                        const next = [cpObj, ...coupons];
+                        setCoupons(next);
+                        await idbSet('coupons_v5', next);
+                        if (db) {
+                          await setDoc(
+                            doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cpObj.id),
+                            cpObj
+                          );
+                        }
+                        setNewCouponForm({ code: '', discountPercent: 15, maxDiscount: 200, active: true });
+                        showToast(`تمت إضافة كوبون ${cleanCode} بنجاح`);
+                      }}
+                      className="sm:col-span-2 py-2 rounded-xl bg-blue-600 text-white font-black cursor-pointer"
+                    >
+                      + إضافة
+                    </button>
                   </div>
 
-                  <div className="lg:col-span-7 space-y-3">
+                  <div className="space-y-2">
                     {coupons.map((cp) => (
                       <div
                         key={cp.id}
-                        className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center justify-between gap-3"
+                        className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 border border-slate-200"
                       >
                         <div>
-                          <div className="font-black text-sm text-slate-900">{cp.code}</div>
-                          <div className="text-xs text-slate-500">
-                            خصم {cp.discountPercent}% • بحد أقصى {cp.maxDiscount} ج.م
-                          </div>
+                          <span className="font-black text-sm text-slate-900">{cp.code}</span>
+                          <span className="text-slate-500 mr-2">
+                            • خصم {cp.discountPercent}% (بحد أقصى {cp.maxDiscount} ج.م)
+                          </span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const next = coupons.filter((x) => x.id !== cp.id);
-                            setCoupons(next);
-                            await idbSet('coupons_v5', next);
-                            if (db) {
-                              await deleteDoc(
-                                doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cp.id)
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const next = coupons.map((c) =>
+                                c.id === cp.id ? { ...c, active: c.active === false } : c
                               );
-                            }
-                            showToast('تم حذف الكوبون');
-                          }}
-                          className="p-2 rounded-xl bg-rose-50 text-rose-600 cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                              setCoupons(next);
+                              await idbSet('coupons_v5', next);
+                              if (db) {
+                                await setDoc(
+                                  doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cp.id),
+                                  { active: cp.active === false },
+                                  { merge: true }
+                                );
+                              }
+                            }}
+                            className={`px-3 py-1 rounded-xl font-bold cursor-pointer ${
+                              cp.active !== false
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-slate-200 text-slate-600'
+                            }`}
+                          >
+                            {cp.active !== false ? 'مفعّل' : 'معطّل'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const next = coupons.filter((c) => c.id !== cp.id);
+                              setCoupons(next);
+                              await idbSet('coupons_v5', next);
+                              if (db) {
+                                await deleteDoc(
+                                  doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cp.id)
+                                );
+                              }
+                              showToast('تم حذف الكوبون');
+                            }}
+                            className="p-2 rounded-xl bg-rose-50 text-rose-600 cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -4242,7 +4788,7 @@ function MuzakkiratiPlatformContent() {
               </div>
             )}
 
-            {/* تبويب 6: الهوية والروابط */}
+            {/* تبويب 6: الهوية والشعار والروابط */}
             {adminSubTab === 'settings' && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs">
                 <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-5">
@@ -4305,6 +4851,24 @@ function MuzakkiratiPlatformContent() {
                           showToast('تم تجهيز صورة الخلفية — اضغط على زر "حفظ التعديلات" لاعتمادها');
                         }}
                       />
+                      <div className="pt-1">
+                        <label className="block text-[11px] font-bold text-slate-600">
+                          درجة التعتيم: {settings.heroOverlayOpacity ?? 75}%
+                        </label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="95"
+                          value={settings.heroOverlayOpacity ?? 75}
+                          onChange={(e) =>
+                            setSettings((prev) => ({
+                              ...prev,
+                              heroOverlayOpacity: Number(e.target.value)
+                            }))
+                          }
+                          className="w-full"
+                        />
+                      </div>
                       {settings.heroBgImage && (
                         <button
                           type="button"
@@ -4353,6 +4917,16 @@ function MuzakkiratiPlatformContent() {
                     </div>
                   </div>
 
+                  <div>
+                    <label className="block font-bold text-slate-600 mb-1">رمز دخول الإدارة</label>
+                    <input
+                      type="text"
+                      value={settings.adminPin}
+                      onChange={(e) => setSettings({ ...settings, adminPin: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
+                    />
+                  </div>
+
                   <button
                     type="button"
                     onClick={handleSaveAllAdminChanges}
@@ -4362,120 +4936,122 @@ function MuzakkiratiPlatformContent() {
                   </button>
                 </div>
 
+                {/* إدارة روابط التواصل والإصدارات القادمة */}
                 <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-5">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="font-black text-slate-900">التحكم في روابط التواصل الاجتماعي</h4>
+                      <h4 className="font-black text-base text-slate-900">إدارة روابط التواصل الاجتماعي</h4>
                       <p className="text-[11px] text-slate-500">
-                        أضف أو عدّل اسم الرابط وعنوان URL مباشرة ليظهر في نافذة (تواصل معنا) وأسفل الصفحة
+                        عدّل اسم أي رابط أو عنوانه مباشرة وسيُحفظ للعملاء فوراً
                       </p>
                     </div>
                     <button
                       type="button"
                       onClick={handleSaveAllAdminChanges}
-                      className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black cursor-pointer shadow-sm"
+                      className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black cursor-pointer"
                     >
-                      حفظ ونشر الروابط
+                      حفظ التعديلات
                     </button>
                   </div>
+
                   <div className="space-y-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 p-3 rounded-2xl bg-slate-50 border border-slate-200">
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-200">
                       <input
                         type="text"
-                        placeholder="اسم الرابط (مثلاً: قناة اليوتيوب)"
+                        placeholder="اسم الرابط (مثلاً: قناة التيليجرام)"
                         value={newSocialLabel}
                         onChange={(e) => setNewSocialLabel(e.target.value)}
-                        className="sm:col-span-5 px-3 py-2 rounded-xl border border-slate-200 bg-white font-bold"
+                        className="sm:col-span-5 px-3 py-2 rounded-xl border border-slate-200 bg-white"
                       />
                       <input
                         type="url"
                         placeholder="https://..."
                         value={newSocialUrl}
                         onChange={(e) => setNewSocialUrl(e.target.value)}
-                        className="sm:col-span-5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-left"
+                        className="sm:col-span-5 px-3 py-2 rounded-xl border border-slate-200 bg-white"
                         dir="ltr"
                       />
                       <button
                         type="button"
                         onClick={async () => {
-                          if (!newSocialLabel.trim() || !newSocialUrl.trim()) {
-                            showToast('يرجى إدخال اسم الرابط وعنوان الرابط كاملًا', 'error');
-                            return;
-                          }
-                          const formattedUrl = /^https?:\/\//i.test(newSocialUrl.trim())
-                            ? newSocialUrl.trim()
-                            : `https://${newSocialUrl.trim()}`;
+                          if (!newSocialLabel.trim() || !newSocialUrl.trim()) return;
                           const next = [
-                            ...safeSocialLinks,
+                            ...(settings.socialLinks || []),
                             {
                               id: `soc_${Date.now()}`,
                               label: newSocialLabel.trim(),
-                              url: formattedUrl
+                              url: newSocialUrl.trim()
                             }
                           ];
+                          const updated = { ...settings, socialLinks: next };
                           setNewSocialLabel('');
                           setNewSocialUrl('');
-                          await saveSettings({ ...settings, socialLinks: next });
+                          await saveSettings(updated);
                           showToast('✓ تمت إضافة الرابط وحفظه للعملاء');
                         }}
-                        className="sm:col-span-2 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black cursor-pointer"
+                        className="sm:col-span-2 py-2 rounded-xl bg-slate-900 text-white font-bold cursor-pointer"
                       >
                         + إضافة
                       </button>
                     </div>
+
                     <div className="space-y-2">
-                      {safeSocialLinks.map((soc) => (
+                      {(settings.socialLinks || []).map((soc) => (
                         <div
                           key={soc.id}
-                          className="p-3 rounded-2xl bg-slate-50 border border-slate-200 grid grid-cols-1 sm:grid-cols-12 gap-2 items-center"
+                          className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2"
                         >
-                          <input
-                            type="text"
-                            value={safeText(soc.label)}
-                            onChange={(e) => {
-                              const next = safeSocialLinks.map((s) =>
-                                s.id === soc.id ? { ...s, label: e.target.value } : s
-                              );
-                              setSettings({ ...settings, socialLinks: next });
-                            }}
-                            placeholder="اسم الرابط"
-                            className="sm:col-span-4 px-3 py-2 rounded-xl border border-slate-200 bg-white font-bold"
-                          />
-                          <input
-                            type="url"
-                            value={safeText(soc.url)}
-                            onChange={(e) => {
-                              const next = safeSocialLinks.map((s) =>
-                                s.id === soc.id ? { ...s, url: e.target.value } : s
-                              );
-                              setSettings({ ...settings, socialLinks: next });
-                            }}
-                            placeholder="https://..."
-                            className="sm:col-span-6 px-3 py-2 rounded-xl border border-slate-200 bg-white text-left"
-                            dir="ltr"
-                          />
-                          <div className="sm:col-span-2 flex items-center justify-end gap-1.5">
-                            <a
-                              href={soc.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              title="تجربة فتح الرابط"
-                              className="p-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100"
-                            >
-                              <ExternalLink className="w-4 h-4" />
-                            </a>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                const next = safeSocialLinks.filter((s) => s.id !== soc.id);
-                                await saveSettings({ ...settings, socialLinks: next });
-                                showToast('✓ تم حذف الرابط وحفظ التعديل');
+                          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                            <input
+                              type="text"
+                              value={soc.label || ''}
+                              onChange={(e) => {
+                                const next = (settings.socialLinks || []).map((s) =>
+                                  s.id === soc.id ? { ...s, label: e.target.value } : s
+                                );
+                                setSettings({ ...settings, socialLinks: next });
                               }}
-                              title="حذف الرابط"
-                              className="p-2 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 cursor-pointer"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                              placeholder="اسم الرابط"
+                              className="sm:col-span-4 px-3 py-2 rounded-xl border border-slate-200 bg-white font-bold"
+                            />
+                            <input
+                              type="url"
+                              value={soc.url || ''}
+                              onChange={(e) => {
+                                const next = (settings.socialLinks || []).map((s) =>
+                                  s.id === soc.id ? { ...s, url: e.target.value } : s
+                                );
+                                setSettings({ ...settings, socialLinks: next });
+                              }}
+                              placeholder="https://..."
+                              dir="ltr"
+                              className="sm:col-span-6 px-3 py-2 rounded-xl border border-slate-200 bg-white text-left"
+                            />
+                            <div className="sm:col-span-2 flex items-center justify-end gap-1.5">
+                              {soc.url && (
+                                <a
+                                  href={soc.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  title="تجربة فتح الرابط"
+                                  className="p-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100"
+                                >
+                                  <ExternalLink className="w-4 h-4" />
+                                </a>
+                              )}
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const next = (settings.socialLinks || []).filter((s) => s.id !== soc.id);
+                                  await saveSettings({ ...settings, socialLinks: next });
+                                  showToast('✓ تم حذف الرابط وحفظ التغيير');
+                                }}
+                                title="حذف الرابط"
+                                className="p-2 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 cursor-pointer"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -4484,7 +5060,7 @@ function MuzakkiratiPlatformContent() {
 
                   {/* إدارة الإصدارات القادمة */}
                   <div className="pt-4 border-t border-slate-100 space-y-2.5">
-                    <h4 className="font-black text-slate-900">إدارة ركن المذكرات قيد التجهيز (أسفل المذكرات)</h4>
+                    <h4 className="font-black text-slate-900">إدارة ركن قريباً على المنصة</h4>
                     <div className="grid grid-cols-2 gap-2">
                       <input
                         type="text"
@@ -4515,20 +5091,20 @@ function MuzakkiratiPlatformContent() {
                       />
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
                           if (!newUpcomingForm.title.trim()) return;
                           const next = [
                             ...(settings.upcomingNotebooks || []),
                             { id: `up_${Date.now()}`, ...newUpcomingForm }
                           ];
-                          setSettings({ ...settings, upcomingNotebooks: next });
                           setNewUpcomingForm({
                             title: '',
                             stage: 'المرحلة الإعدادية',
                             status: 'جاري التجهيز والتنسيق',
                             expectedDate: 'قريباً'
                           });
-                          showToast('تمت الإضافة — اضغط حفظ التعديلات لاعتمادها');
+                          await saveSettings({ ...settings, upcomingNotebooks: next });
+                          showToast('✓ تمت الإضافة والحفظ للعملاء');
                         }}
                         className="py-2 rounded-xl bg-slate-900 text-white font-bold cursor-pointer"
                       >
@@ -4544,12 +5120,105 @@ function MuzakkiratiPlatformContent() {
                           <span className="font-bold truncate">{up.title}</span>
                           <button
                             type="button"
-                            onClick={() => {
+                            onClick={async () => {
                               const next = (settings.upcomingNotebooks || []).filter(
                                 (u) => u.id !== up.id
                               );
-                              setSettings({ ...settings, upcomingNotebooks: next });
-                              showToast('تم الحذف — اضغط حفظ التعديلات لاعتماده');
+                              await saveSettings({ ...settings, upcomingNotebooks: next });
+                              showToast('✓ تم الحذف والحفظ');
+                            }}
+                            className="text-rose-600 cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* إدارة آراء وتقييمات المعلمين */}
+                  <div className="pt-4 border-t border-slate-100 space-y-2.5">
+                    <h4 className="font-black text-slate-900">إدارة آراء وتقييمات المعلمين</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        placeholder="اسم المعلم (اختياري)"
+                        value={newTestimonialForm.teacherName}
+                        onChange={(e) =>
+                          setNewTestimonialForm({ ...newTestimonialForm, teacherName: e.target.value })
+                        }
+                        className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                      />
+                      <input
+                        type="text"
+                        placeholder="الصفة / المادة (اختياري)"
+                        value={newTestimonialForm.role}
+                        onChange={(e) =>
+                          setNewTestimonialForm({ ...newTestimonialForm, role: e.target.value })
+                        }
+                        className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                      />
+                    </div>
+                    <textarea
+                      rows={2}
+                      placeholder="نص التقييم (اختياري في حال رفع صورة تقييم)..."
+                      value={newTestimonialForm.text}
+                      onChange={(e) =>
+                        setNewTestimonialForm({ ...newTestimonialForm, text: e.target.value })
+                      }
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                    />
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <label className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 font-bold cursor-pointer inline-flex items-center gap-1.5">
+                        <ImageIcon className="w-4 h-4 text-blue-600" />
+                        <span>{newTestimonialForm.image ? 'تم إرفاق صورة ✓' : 'إرفاق صورة تقييم'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const f = e.target.files?.[0];
+                            if (!f) return;
+                            const img = await compressImageFile(f, 750, 0.8);
+                            setNewTestimonialForm((prev) => ({ ...prev, image: img }));
+                          }}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!newTestimonialForm.text.trim() && !newTestimonialForm.image) {
+                            showToast('يرجى كتابة نص التقييم أو إرفاق صورة', 'error');
+                            return;
+                          }
+                          const next = [
+                            ...(settings.testimonials || []),
+                            { id: `rev_${Date.now()}`, ...newTestimonialForm }
+                          ];
+                          setNewTestimonialForm({ teacherName: '', role: '', text: '', image: '' });
+                          await saveSettings({ ...settings, testimonials: next });
+                          showToast('✓ تمت إضافة التقييم ونشره للعملاء');
+                        }}
+                        className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold cursor-pointer"
+                      >
+                        + نشر التقييم
+                      </button>
+                    </div>
+                    <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                      {(settings.testimonials || []).map((rev) => (
+                        <div
+                          key={rev.id}
+                          className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200"
+                        >
+                          <span className="font-bold truncate">
+                            {rev.teacherName || rev.text || 'تقييم مصور'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const next = (settings.testimonials || []).filter((r) => r.id !== rev.id);
+                              await saveSettings({ ...settings, testimonials: next });
+                              showToast('✓ تم حذف التقييم');
                             }}
                             className="text-rose-600 cursor-pointer"
                           >
@@ -4565,7 +5234,7 @@ function MuzakkiratiPlatformContent() {
                     onClick={handleSaveAllAdminChanges}
                     className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-md cursor-pointer"
                   >
-                    حفظ ونشر تعديلات الروابط والإصدارات القادمة
+                    حفظ ونشر جميع التعديلات للعملاء الآن
                   </button>
                 </div>
               </div>
@@ -4612,46 +5281,19 @@ function MuzakkiratiPlatformContent() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 text-xs font-bold">
-            <a
-              href={`https://wa.me/${settings.whatsappNumber.replace(/\D/g, '')}`}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600/20 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-600 hover:text-white transition"
-            >
-              <MessageCircle className="w-4 h-4" />
-              <span>واتساب</span>
-            </a>
-            {safeSocialLinks.map((soc) => {
-              const lower = `${safeText(soc.label)} ${safeText(soc.url)}`.toLowerCase();
-              const isFb = lower.includes('facebook') || lower.includes('فيس');
-              const isTg = lower.includes('t.me') || lower.includes('تيلي');
-              const isWa = lower.includes('whatsapp') || lower.includes('واتس');
-              return (
-                <a
-                  key={soc.id}
-                  href={soc.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-amber-400 text-slate-200 hover:text-slate-950 transition"
-                >
-                  {isFb ? (
-                    <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                      <path d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H8v-3h2V9.5C10 7.57 11.57 6 13.5 6H16v3h-2c-.55 0-1 .45-1 1v2h3v3h-3v6.95c5.05-.5 9-4.76 9-9.95z" />
-                    </svg>
-                  ) : isTg ? (
-                    <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z" />
-                    </svg>
-                  ) : isWa ? (
-                    <MessageCircle className="w-4 h-4" />
-                  ) : (
-                    <ExternalLink className="w-4 h-4" />
-                  )}
-                  <span>{safeText(soc.label)}</span>
-                </a>
-              );
-            })}
+          <div className="flex flex-wrap items-center gap-3 text-xs font-bold">
+            {safeSocialLinks.map((soc) => (
+              <a
+                key={soc.id}
+                href={soc.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-200 hover:text-amber-400 transition"
+              >
+                {renderSocialIcon(soc.label, soc.url)}
+                <span>{safeText(soc.label)}</span>
+              </a>
+            ))}
           </div>
         </div>
       </footer>
@@ -4842,45 +5484,27 @@ function MuzakkiratiPlatformContent() {
                 <ExternalLink className="w-4 h-4" />
               </a>
 
-              {safeSocialLinks.map((soc) => {
-                const lower = `${safeText(soc.label)} ${safeText(soc.url)}`.toLowerCase();
-                const isFb = lower.includes('facebook') || lower.includes('فيس');
-                const isTg = lower.includes('t.me') || lower.includes('تيلي');
-                const isWa = lower.includes('whatsapp') || lower.includes('واتس');
-                return (
-                  <a
-                    key={soc.id}
-                    href={soc.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="w-full p-3.5 rounded-2xl bg-slate-50 hover:bg-blue-50 border border-slate-200 text-slate-800 hover:text-blue-700 font-bold text-xs sm:text-sm flex items-center justify-between transition"
-                  >
-                    <span className="flex items-center gap-2.5">
-                      {isFb ? (
-                        <svg className="w-4 h-4 fill-blue-600 shrink-0" viewBox="0 0 24 24">
-                          <path d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H8v-3h2V9.5C10 7.57 11.57 6 13.5 6H16v3h-2c-.55 0-1 .45-1 1v2h3v3h-3v6.95c5.05-.5 9-4.76 9-9.95z" />
-                        </svg>
-                      ) : isTg ? (
-                        <svg className="w-4 h-4 fill-sky-500 shrink-0" viewBox="0 0 24 24">
-                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z" />
-                        </svg>
-                      ) : isWa ? (
-                        <MessageCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                      ) : (
-                        <ExternalLink className="w-4 h-4 text-blue-600 shrink-0" />
-                      )}
-                      <span>{safeText(soc.label)}</span>
-                    </span>
-                    <ExternalLink className="w-4 h-4 text-slate-400" />
-                  </a>
-                );
-              })}
+              {safeSocialLinks.map((soc) => (
+                <a
+                  key={soc.id}
+                  href={soc.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full p-3.5 rounded-2xl bg-slate-50 hover:bg-blue-50 border border-slate-200 text-slate-800 hover:text-blue-700 font-bold text-xs sm:text-sm flex items-center justify-between transition"
+                >
+                  <span className="flex items-center gap-2.5">
+                    {renderSocialIcon(soc.label, soc.url)}
+                    <span>{safeText(soc.label)}</span>
+                  </span>
+                  <ExternalLink className="w-4 h-4 text-slate-400" />
+                </a>
+              ))}
             </div>
           </div>
         </div>
       )}
 
-      {/* نافذة تسجيل دخول الإدارة الآمنة مع زر إظهار الرقم السري والدخول بجوجل */}
+      {/* نافذة تسجيل دخول الإدارة */}
       {isAdminModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-200 space-y-5">
@@ -4907,12 +5531,18 @@ function MuzakkiratiPlatformContent() {
 
             <button
               type="button"
-              onClick={handleGoogleAdminSignIn}
-              className="w-full py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-amber-300 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow cursor-pointer"
+              onClick={handleAdminGoogleSignIn}
+              className="w-full py-3.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-amber-400 font-black text-sm shadow flex items-center justify-center gap-2 cursor-pointer"
             >
-              <ShieldCheck className="w-4 h-4" />
-              <span>تسجيل الدخول بحساب جوجل للمدير (موصى به)</span>
+              <LogIn className="w-4 h-4" />
+              <span>تسجيل الدخول بحساب المدير الرسمي (Google)</span>
             </button>
+
+            <div className="relative flex py-1 items-center">
+              <div className="flex-grow border-t border-slate-200"></div>
+              <span className="flex-shrink mx-3 text-[11px] text-slate-400 font-bold">أو برمز المرور</span>
+              <div className="flex-grow border-t border-slate-200"></div>
+            </div>
 
             <form onSubmit={handleAdminLogin} className="space-y-4">
               <div className="relative">
@@ -4944,7 +5574,7 @@ function MuzakkiratiPlatformContent() {
         </div>
       )}
 
-      {/* معاينة المذكرة وعارض العينات بملء الشاشة للهاتف والكمبيوتر */}
+      {/* معاينة المذكرة وعارض العينات */}
       {previewProduct && (
         <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
           <div
@@ -5084,14 +5714,18 @@ function MuzakkiratiPlatformContent() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2.5">
-                  {previewProduct.driveSampleUrl && (
+                  {settings.driveBtnEnabled !== false && previewProduct.driveSampleUrl && (
                     <a
                       href={previewProduct.driveSampleUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="px-4 py-3 rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-black inline-flex items-center gap-1.5 hover:bg-emerald-100"
+                      style={{
+                        backgroundColor: settings.driveBtnBg || '#059669',
+                        color: settings.driveBtnText || '#ffffff'
+                      }}
+                      className="px-4 py-3 rounded-2xl text-xs font-black inline-flex items-center gap-1.5 shadow hover:opacity-95 transition"
                     >
-                      <span>معاينة Google Drive</span>
+                      <span>{safeText(settings.driveBtnLabel, 'معاينة Google Drive')}</span>
                       <ExternalLink className="w-4 h-4" />
                     </a>
                   )}
