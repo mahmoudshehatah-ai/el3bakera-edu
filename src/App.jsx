@@ -1773,10 +1773,9 @@ function MuzakkiratiPlatformContent() {
       <div
         style={{
           backgroundColor: settings.generalNoticeBg || '#f8fafc',
-          color: settings.generalNoticeTextColor || '#334155',
-          borderColor: settings.generalNoticeBorder || '#cbd5e1'
+          color: settings.generalNoticeTextColor || '#334155'
         }}
-        className="p-4 rounded-2xl border-2 text-xs space-y-1.5 shadow-2xs"
+        className="p-4 rounded-2xl border border-black/10 text-xs space-y-1.5 shadow-2xs"
       >
         {settings.generalNoticeTitle && (
           <div className="font-black flex items-center gap-1.5 text-sm">
@@ -1803,12 +1802,11 @@ function MuzakkiratiPlatformContent() {
       <div
         style={{
           backgroundColor: settings.tipNoticeBg || '#fffbeb',
-          color: settings.tipNoticeTextColor || '#78350f',
-          borderColor: settings.tipNoticeBorder || '#fde68a'
+          color: settings.tipNoticeTextColor || '#78350f'
         }}
         className={`${
           compact ? 'px-2.5 py-1.5 rounded-xl text-[11px]' : 'p-3.5 rounded-2xl text-xs'
-        } border-2 font-bold flex items-start gap-2 shadow-2xs`}
+        } border border-black/10 font-bold flex items-start gap-2 shadow-2xs`}
       >
         <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5" />
         <span className="leading-relaxed">{text}</span>
@@ -2944,15 +2942,15 @@ function MuzakkiratiPlatformContent() {
             {/* تبويب 1: إدارة المذكرات */}
             {adminSubTab === 'products' && (
               <div className="space-y-6">
-                {/* قسم التحكم في التنبيه العام والتنبيه الخاص بكل مذكرة */}
+                {/* قسم التحكم المطور والمبسط في التنبيه العام والتنبيه الخاص بكل مذكرة */}
                 <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-2xs space-y-5 text-xs">
                   <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100">
                     <div>
                       <h3 className="text-base font-black text-slate-900">
-                        إعدادات التنبيه العام والتنبيه الخاص بالمذكرات
+                        تخصيص التنبيهات (العام والخاص بكل مذكرة)
                       </h3>
                       <p className="text-[11px] text-slate-500">
-                        تحكم في نص وألوان ومكان ظهور التنبيه العام في المعاينة والتنبيه الخاص بكل مذكرة
+                        اختر لوناً جاهزاً بضغطة واحدة أو خصص الألوان وشاهد المعاينة الفورية قبل النشر
                       </p>
                     </div>
                     <button
@@ -2966,102 +2964,134 @@ function MuzakkiratiPlatformContent() {
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* 1. التحكم في التنبيه العام */}
-                    <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-black text-slate-900">1. التحكم في التنبيه العام (في نافذة المعاينة فقط)</h4>
-                        <label className="flex items-center gap-1.5 font-bold text-blue-600 cursor-pointer">
+                    <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-4 flex flex-col justify-between">
+                      <div className="space-y-3.5">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-black text-sm text-slate-900">1. التنبيه العام (في نافذة المعاينة)</h4>
+                          <label className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-slate-200 font-bold text-blue-600 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={settings.generalNoticeEnabled !== false}
+                              onChange={(e) =>
+                                setSettings({ ...settings, generalNoticeEnabled: e.target.checked })
+                              }
+                            />
+                            <span>مفعّل</span>
+                          </label>
+                        </div>
+
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">عنوان التنبيه</label>
                           <input
-                            type="checkbox"
-                            checked={settings.generalNoticeEnabled !== false}
+                            type="text"
+                            value={settings.generalNoticeTitle ?? 'تنبيه هام للمعلمين قبل تأكيد الطلب:'}
                             onChange={(e) =>
-                              setSettings({ ...settings, generalNoticeEnabled: e.target.checked })
+                              setSettings({ ...settings, generalNoticeTitle: e.target.value })
                             }
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-bold"
                           />
-                          <span>إظهار التنبيه العام</span>
-                        </label>
+                        </div>
+
+                        <div>
+                          <label className="block font-bold text-slate-600 mb-1">نص التنبيه</label>
+                          <textarea
+                            rows={3}
+                            value={settings.generalNoticeText ?? DEFAULT_SETTINGS.generalNoticeText}
+                            onChange={(e) =>
+                              setSettings({ ...settings, generalNoticeText: e.target.value })
+                            }
+                            className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white leading-relaxed"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <span className="block font-bold text-slate-600">قوالب ألوان جاهزة:</span>
+                          <div className="flex flex-wrap gap-2">
+                            {[
+                              { label: 'رمادي هادئ', bg: '#f8fafc', text: '#334155' },
+                              { label: 'أزرق سماوي', bg: '#eff6ff', text: '#1e3a8a' },
+                              { label: 'ذهبي دافئ', bg: '#fffbeb', text: '#78350f' },
+                              { label: 'أخضر نعناعي', bg: '#ecfdf5', text: '#065f46' },
+                              { label: 'كحلي داكن', bg: '#0f172a', text: '#f8fafc' }
+                            ].map((preset) => (
+                              <button
+                                key={preset.label}
+                                type="button"
+                                onClick={() =>
+                                  setSettings({
+                                    ...settings,
+                                    generalNoticeBg: preset.bg,
+                                    generalNoticeTextColor: preset.text
+                                  })
+                                }
+                                style={{ backgroundColor: preset.bg, color: preset.text }}
+                                className="px-3 py-1.5 rounded-xl border border-black/15 font-black text-[11px] shadow-2xs hover:scale-105 transition cursor-pointer"
+                              >
+                                {preset.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2.5">
+                          <div>
+                            <label className="block font-bold text-slate-600 mb-1">مكان الظهور</label>
+                            <select
+                              value={settings.generalNoticePosition || 'bottom'}
+                              onChange={(e) =>
+                                setSettings({ ...settings, generalNoticePosition: e.target.value })
+                              }
+                              className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-white font-bold"
+                            >
+                              <option value="top">أعلى التفاصيل</option>
+                              <option value="bottom">أسفل التفاصيل</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block font-bold text-slate-600 mb-1">لون الخلفية</label>
+                            <input
+                              type="color"
+                              value={settings.generalNoticeBg || '#f8fafc'}
+                              onChange={(e) =>
+                                setSettings({ ...settings, generalNoticeBg: e.target.value })
+                              }
+                              className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-bold text-slate-600 mb-1">لون النص</label>
+                            <input
+                              type="color"
+                              value={settings.generalNoticeTextColor || '#334155'}
+                              onChange={(e) =>
+                                setSettings({ ...settings, generalNoticeTextColor: e.target.value })
+                              }
+                              className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
+                            />
+                          </div>
+                        </div>
                       </div>
 
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">عنوان التنبيه العام</label>
-                        <input
-                          type="text"
-                          value={settings.generalNoticeTitle ?? 'تنبيه هام للمعلمين قبل تأكيد الطلب:'}
-                          onChange={(e) =>
-                            setSettings({ ...settings, generalNoticeTitle: e.target.value })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">نص التنبيه العام</label>
-                        <textarea
-                          rows={3}
-                          value={settings.generalNoticeText ?? DEFAULT_SETTINGS.generalNoticeText}
-                          onChange={(e) =>
-                            setSettings({ ...settings, generalNoticeText: e.target.value })
-                          }
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-4 gap-2">
-                        <div>
-                          <label className="block font-bold text-slate-600 mb-1">المكان</label>
-                          <select
-                            value={settings.generalNoticePosition || 'bottom'}
-                            onChange={(e) =>
-                              setSettings({ ...settings, generalNoticePosition: e.target.value })
-                            }
-                            className="w-full px-2 py-2 rounded-xl border border-slate-200 bg-white"
-                          >
-                            <option value="top">أعلى التفاصيل</option>
-                            <option value="bottom">أسفل التفاصيل</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block font-bold text-slate-600 mb-1">لون الخلفية</label>
-                          <input
-                            type="color"
-                            value={settings.generalNoticeBg || '#f8fafc'}
-                            onChange={(e) =>
-                              setSettings({ ...settings, generalNoticeBg: e.target.value })
-                            }
-                            className="w-full h-9 rounded-xl border border-slate-200"
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-bold text-slate-600 mb-1">لون النص</label>
-                          <input
-                            type="color"
-                            value={settings.generalNoticeTextColor || '#334155'}
-                            onChange={(e) =>
-                              setSettings({ ...settings, generalNoticeTextColor: e.target.value })
-                            }
-                            className="w-full h-9 rounded-xl border border-slate-200"
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-bold text-slate-600 mb-1">لون الإطار</label>
-                          <input
-                            type="color"
-                            value={settings.generalNoticeBorder || '#cbd5e1'}
-                            onChange={(e) =>
-                              setSettings({ ...settings, generalNoticeBorder: e.target.value })
-                            }
-                            className="w-full h-9 rounded-xl border border-slate-200"
-                          />
-                        </div>
+                      {/* معاينة حية للتنبيه العام */}
+                      <div className="pt-3 border-t border-slate-200/80 space-y-1.5">
+                        <span className="text-[11px] font-bold text-slate-500">معاينة مباشرة للشكل:</span>
+                        {settings.generalNoticeEnabled !== false ? (
+                          renderGeneralNoticeBox()
+                        ) : (
+                          <div className="p-3 rounded-xl bg-slate-200/60 text-slate-500 text-center font-bold">
+                            التنبيه العام مخفي حالياً
+                          </div>
+                        )}
                       </div>
                     </div>
 
                     {/* 2. التحكم في التنبيه الخاص بكل مذكرة */}
-                    <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-3 flex flex-col justify-between">
-                      <div className="space-y-3">
+                    <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-4 flex flex-col justify-between">
+                      <div className="space-y-3.5">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h4 className="font-black text-slate-900">2. التحكم في التنبيه الخاص بكل مذكرة (صندوق منفصل)</h4>
-                          <div className="flex items-center gap-3">
-                            <label className="flex items-center gap-1.5 font-bold text-emerald-700 cursor-pointer">
+                          <h4 className="font-black text-sm text-slate-900">2. التنبيه الخاص بكل مذكرة</h4>
+                          <div className="flex items-center gap-2">
+                            <label className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white border border-slate-200 font-bold text-emerald-700 cursor-pointer">
                               <input
                                 type="checkbox"
                                 checked={settings.tipNoticeEnabled !== false}
@@ -3069,9 +3099,9 @@ function MuzakkiratiPlatformContent() {
                                   setSettings({ ...settings, tipNoticeEnabled: e.target.checked })
                                 }
                               />
-                              <span>إظهار بالمعاينة</span>
+                              <span>بالمعاينة</span>
                             </label>
-                            <label className="flex items-center gap-1.5 font-bold text-blue-600 cursor-pointer">
+                            <label className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white border border-slate-200 font-bold text-blue-600 cursor-pointer">
                               <input
                                 type="checkbox"
                                 checked={settings.tipShowOnCard !== false}
@@ -3079,12 +3109,45 @@ function MuzakkiratiPlatformContent() {
                                   setSettings({ ...settings, tipShowOnCard: e.target.checked })
                                 }
                               />
-                              <span>إظهار بالبطاقة</span>
+                              <span>بالبطاقة</span>
                             </label>
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-4 gap-2">
+                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                          يتم كتابة نص هذا التنبيه داخل بيانات كل مذكرة من النموذج بالأسفل، ويظهر بالتنسيق المحدد هنا:
+                        </p>
+
+                        <div className="space-y-1.5">
+                          <span className="block font-bold text-slate-600">قوالب ألوان جاهزة:</span>
+                          <div className="flex flex-wrap gap-2">
+                            {[
+                              { label: 'ذهبي مميز', bg: '#fffbeb', text: '#78350f' },
+                              { label: 'أزرق ملكي', bg: '#1d4ed8', text: '#ffffff' },
+                              { label: 'أزرق فاتح', bg: '#eff6ff', text: '#1e40af' },
+                              { label: 'أخضر زمردي', bg: '#ecfdf5', text: '#065f46' },
+                              { label: 'وردي تنبيهي', bg: '#fff1f2', text: '#9f1239' }
+                            ].map((preset) => (
+                              <button
+                                key={preset.label}
+                                type="button"
+                                onClick={() =>
+                                  setSettings({
+                                    ...settings,
+                                    tipNoticeBg: preset.bg,
+                                    tipNoticeTextColor: preset.text
+                                  })
+                                }
+                                style={{ backgroundColor: preset.bg, color: preset.text }}
+                                className="px-3 py-1.5 rounded-xl border border-black/15 font-black text-[11px] shadow-2xs hover:scale-105 transition cursor-pointer"
+                              >
+                                {preset.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2.5">
                           <div>
                             <label className="block font-bold text-slate-600 mb-1">مكان الظهور</label>
                             <select
@@ -3092,7 +3155,7 @@ function MuzakkiratiPlatformContent() {
                               onChange={(e) =>
                                 setSettings({ ...settings, tipNoticePosition: e.target.value })
                               }
-                              className="w-full px-2 py-2 rounded-xl border border-slate-200 bg-white"
+                              className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-white font-bold"
                             >
                               <option value="above-desc">أعلى الوصف</option>
                               <option value="below-desc">أسفل الوصف</option>
@@ -3107,7 +3170,7 @@ function MuzakkiratiPlatformContent() {
                               onChange={(e) =>
                                 setSettings({ ...settings, tipNoticeBg: e.target.value })
                               }
-                              className="w-full h-9 rounded-xl border border-slate-200"
+                              className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
                             />
                           </div>
                           <div>
@@ -3118,30 +3181,24 @@ function MuzakkiratiPlatformContent() {
                               onChange={(e) =>
                                 setSettings({ ...settings, tipNoticeTextColor: e.target.value })
                               }
-                              className="w-full h-9 rounded-xl border border-slate-200"
-                            />
-                          </div>
-                          <div>
-                            <label className="block font-bold text-slate-600 mb-1">لون الإطار</label>
-                            <input
-                              type="color"
-                              value={settings.tipNoticeBorder || '#fde68a'}
-                              onChange={(e) =>
-                                setSettings({ ...settings, tipNoticeBorder: e.target.value })
-                              }
-                              className="w-full h-9 rounded-xl border border-slate-200"
+                              className="w-full h-9 rounded-xl border border-slate-200 cursor-pointer"
                             />
                           </div>
                         </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={handleSaveAllAdminChanges}
-                        className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-md cursor-pointer"
-                      >
-                        حفظ ونشر تعديلات التنبيهات
-                      </button>
+                      {/* معاينة حية للتنبيه الخاص */}
+                      <div className="pt-3 border-t border-slate-200/80 space-y-2">
+                        <span className="text-[11px] font-bold text-slate-500">معاينة مباشرة للتنبيه الخاص:</span>
+                        {renderProductTipBox('ملاحظة: للمراجعة المُثلى اطلبها مع بوكليت الاختبارات', false)}
+                        <button
+                          type="button"
+                          onClick={handleSaveAllAdminChanges}
+                          className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs shadow-sm cursor-pointer"
+                        >
+                          حفظ ونشر تعديلات التنبيهات
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
