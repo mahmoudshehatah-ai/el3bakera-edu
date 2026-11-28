@@ -1657,20 +1657,31 @@ function MuzakkiratiPlatformInner() {
       const { db } = firebaseServices;
       if (db) {
         const basePath = ['artifacts', 'el3bakera-edu', 'public', 'data'];
-        // حفظ بيانات الطلب الأساسية (وإذا كان الشعار كبيراً يُحفظ في مستند مستقل بالجودة الكاملة)
         const { logoDataUrl, ...orderMeta } = newOrder;
+        const chunkSize = 700000;
+        const chunks = [];
+        if (logoDataUrl) {
+          for (let i = 0; i < logoDataUrl.length; i += chunkSize) {
+            chunks.push(logoDataUrl.slice(i, i + chunkSize));
+          }
+        }
         await setDoc(doc(db, ...basePath, 'orders', orderId), {
           ...orderMeta,
-          hasUploadedLogo: Boolean(logoDataUrl),
-          logoDataUrl: logoDataUrl && logoDataUrl.length <= 850000 ? logoDataUrl : ''
+          hasUploadedLogo: chunks.length > 0,
+          logoChunksCount: chunks.length,
+          logoDataUrl: chunks.length === 1 ? chunks[0] : ''
         });
-        if (logoDataUrl && logoDataUrl.length > 850000) {
-          await setDoc(doc(db, ...basePath, 'config', `order_logo_${orderId}`), {
-            orderId,
-            logoFileName: newOrder.logoFileName,
-            dataUrl: logoDataUrl,
-            updatedAt: serverTimestamp()
-          });
+        if (chunks.length > 1) {
+          await Promise.all(
+            chunks.map((chunkStr, idx) =>
+              setDoc(doc(db, ...basePath, 'orders', `${orderId}_logo_${idx}`), {
+                orderId,
+                chunkIndex: idx,
+                dataUrl: chunkStr,
+                updatedAt: serverTimestamp()
+              })
+            )
+          );
         }
       }
     } catch {}
@@ -1936,12 +1947,17 @@ function MuzakkiratiPlatformInner() {
         ? 'top-3 left-3'
         : badgeCfg.position === 'bottom-right'
         ? 'bottom-3 right-3'
+        : badgeCfg.position === 'bottom-left'
+        ? 'bottom-3 left-3'
         : 'top-3 right-3';
 
     return (
       <span
-        style={{ backgroundColor: badgeCfg.bgColor || '#059669', color: badgeCfg.textColor || '#ffffff' }}
-        className={`absolute ${posClass} z-10 px-2.5 py-1 rounded-xl text-[11px] font-black shadow-md`}
+        style={{
+          backgroundColor: badgeCfg.bgColor || '#059669',
+          color: badgeCfg.textColor || '#ffffff'
+        }}
+        className={`absolute ${posClass} px-3 py-1 rounded-xl text-[11px] font-black shadow-lg z-10`}
       >
         {parts.join(' • ')}
       </span>
@@ -4975,23 +4991,31 @@ function MuzakkiratiPlatformInner() {
                               onClick={async () => {
                                 let finalLogoUrl = ord.logoDataUrl;
                                 if (!finalLogoUrl && firebaseServices.db) {
-                                  try {
-                                    const snap = await getDoc(
-                                      doc(
-                                        firebaseServices.db,
-                                        'artifacts',
-                                        'el3bakera-edu',
-                                        'public',
-                                        'data',
-                                        'config',
-                                        `order_logo_${ord.id}`
+                                  const basePath = ['artifacts', 'el3bakera-edu', 'public', 'data'];
+                                  const count = Number(ord.logoChunksCount || 0);
+                                  if (count > 1) {
+                                    const chunkSnaps = await Promise.all(
+                                      Array.from({ length: count }, (_, idx) =>
+                                        getDoc(doc(firebaseServices.db, ...basePath, 'orders', `${ord.id}_logo_${idx}`)).catch(() => null)
                                       )
                                     );
-                                    if (snap.exists()) finalLogoUrl = snap.data()?.dataUrl;
-                                  } catch {}
+                                    const assembled = chunkSnaps
+                                      .filter((s) => s && s.exists())
+                                      .map((s) => s.data()?.dataUrl || '')
+                                      .join('');
+                                    if (assembled) finalLogoUrl = assembled;
+                                  }
+                                  if (!finalLogoUrl) {
+                                    try {
+                                      const snap = await getDoc(
+                                        doc(firebaseServices.db, ...basePath, 'config', `order_logo_${ord.id}`)
+                                      );
+                                      if (snap.exists()) finalLogoUrl = snap.data()?.dataUrl;
+                                    } catch {}
+                                  }
                                 }
                                 if (!finalLogoUrl) {
-                                  showToast('ملف الشعار غير متوفر', 'error');
+                                  showToast('ملف الشعار غير متوفر لهذا الطلب القديم', 'error');
                                   return;
                                 }
                                 const a = document.createElement('a');
