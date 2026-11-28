@@ -463,6 +463,27 @@ function compressImageFile(file, maxWidth = 650, quality = 0.72) {
   });
 }
 
+// حفظ كل صورة في مستند منفصل في Firestore لتفادي حد الـ 1MB وضمان وصول الصور للعملاء
+async function saveMediaAssetToCloud(dbInstance, appId, assetId, dataUrl) {
+  if (!dbInstance) return;
+  const mediaCol = collection(dbInstance, 'artifacts', appId, 'public', 'data', 'config');
+  const docId = `media_${assetId}`;
+  if (!dataUrl) {
+    try {
+      await deleteDoc(doc(mediaCol, docId));
+    } catch {}
+    return;
+  }
+  if (dataUrl.length > 750000) {
+    throw new Error('حجم الصورة كبير جداً، يرجى اختيار صورة أصغر');
+  }
+  await setDoc(doc(mediaCol, docId), {
+    assetId,
+    dataUrl,
+    updatedAt: Date.now()
+  });
+}
+
 // مخزن IndexedDB غير محدود السعة لمنع فشل الحفظ بسبب حد الـ 5MB في localStorage
 const IDB_NAME = 'el3bakera_persistent_db';
 const IDB_STORE = 'kv_store';
@@ -659,6 +680,7 @@ function MuzakkiratiPlatformContent() {
     }
   });
   const [adminPinInput, setAdminPinInput] = useState('');
+  const [showAdminPin, setShowAdminPin] = useState(false);
   const [adminSubTab, setAdminSubTab] = useState('products');
   const logoTapCountRef = useRef(0);
   const logoTapTimerRef = useRef(null);
@@ -839,7 +861,7 @@ function MuzakkiratiPlatformContent() {
     if (!db) return;
 
     const settingsRef = doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'main');
-    const mediaRef = doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'media');
+    const configCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config');
 
     const unsubSettings = onSnapshot(
       settingsRef,
@@ -878,27 +900,74 @@ function MuzakkiratiPlatformContent() {
     );
 
     const unsubMedia = onSnapshot(
-      mediaRef,
-      (snap) => {
-        if (snap.exists() && !isSavingRef.current) {
-          const mediaData = snap.data();
-          setSettings((prev) => {
-            const catCovers = mediaData.categoryCovers || {};
-            const mergedCategories = (prev.categories || []).map((c) => ({
-              ...c,
-              coverImage: catCovers[c.id] || c.coverImage || ''
-            }));
-            const merged = {
-              ...prev,
-              categories: mergedCategories,
-              logoImage: mediaData.logoImage || prev.logoImage || '',
-              heroImage: mediaData.heroImage || prev.heroImage || '',
-              heroBgImage: mediaData.heroBgImage || prev.heroBgImage || ''
-            };
-            idbSet('settings_v5', merged);
-            return merged;
+      configCol,
+      (snapshot) => {
+        if (snapshot.empty || isSavingRef.current) return;
+        const assetsMap = {};
+        const samplesByProd = {};
+        snapshot.forEach((d) => {
+          if (d.id === 'media') {
+            const legacy = d.data();
+            if (legacy.logoImage) assetsMap.logoImage = legacy.logoImage;
+            if (legacy.heroImage) assetsMap.heroImage = legacy.heroImage;
+            if (legacy.heroBgImage) assetsMap.heroBgImage = legacy.heroBgImage;
+            if (legacy.categoryCovers) {
+              Object.entries(legacy.categoryCovers).forEach(([cid, url]) => {
+                if (url) assetsMap[`cat_${cid}`] = url;
+              });
+            }
+          } else if (d.id.startsWith('media_')) {
+            const data = d.data();
+            const key = data.assetId || d.id.replace('media_', '');
+            if (data.dataUrl) {
+              assetsMap[key] = data.dataUrl;
+              const sampleMatch = key.match(/^prod_sample_(.+)_(\d+)$/);
+              if (sampleMatch) {
+                const pid = sampleMatch[1];
+                const idx = Number(sampleMatch[2]);
+                if (!samplesByProd[pid]) samplesByProd[pid] = [];
+                samplesByProd[pid][idx] = data.dataUrl;
+              }
+            }
+          }
+        });
+
+        setSettings((prev) => {
+          const updatedCategories = (prev.categories || []).map((c) => ({
+            ...c,
+            coverImage: assetsMap[`cat_${c.id}`] || c.coverImage || ''
+          }));
+          const merged = {
+            ...prev,
+            categories: updatedCategories,
+            logoImage: assetsMap.logoImage || prev.logoImage || '',
+            heroImage: assetsMap.heroImage || prev.heroImage || '',
+            heroBgImage: assetsMap.heroBgImage || prev.heroBgImage || ''
+          };
+          idbSet('settings_v5', merged);
+          return merged;
+        });
+
+        setProducts((prev) => {
+          let changed = false;
+          const updated = prev.map((p) => {
+            const cloudCover = assetsMap[`prod_cover_${p.id}`];
+            const cloudSamples = (samplesByProd[p.id] || []).filter(Boolean);
+            const nextCover = cloudCover || p.coverImage || '';
+            const nextSamples =
+              cloudSamples.length > 0 ? cloudSamples : p.sampleImages || [];
+            if (nextCover !== p.coverImage || nextSamples.length !== (p.sampleImages || []).length) {
+              changed = true;
+              return { ...p, coverImage: nextCover, sampleImages: nextSamples };
+            }
+            return p;
           });
-        }
+          if (changed) {
+            idbSet('products_v5', updated);
+            safeLocalSet('el3bakera_products_v5', stripHeavyProductMedia(updated));
+          }
+          return updated;
+        });
       },
       () => {}
     );
@@ -925,6 +994,47 @@ function MuzakkiratiPlatformContent() {
             safeLocalSet('el3bakera_products_v5', stripHeavyProductMedia(merged));
             return merged;
           });
+        }
+      },
+      () => {}
+    );
+
+    const bundlesCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles');
+    const unsubBundles = onSnapshot(
+      bundlesCol,
+      (snap) => {
+        if (!snap.empty && !isSavingRef.current) {
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          setBundles(list);
+          idbSet('bundles_v5', list);
+          safeLocalSet('el3bakera_bundles_v5', list);
+        }
+      },
+      () => {}
+    );
+
+    const couponsCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons');
+    const unsubCoupons = onSnapshot(
+      couponsCol,
+      (snap) => {
+        if (!snap.empty && !isSavingRef.current) {
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          setCoupons(list);
+          idbSet('coupons_v5', list);
+          safeLocalSet('el3bakera_coupons_v5', list);
+        }
+      },
+      () => {}
+    );
+
+    const ordersCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'orders');
+    const unsubOrders = onSnapshot(
+      ordersCol,
+      (snap) => {
+        if (!snap.empty) {
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+          setOrders(list);
         }
       },
       () => {}
@@ -987,6 +1097,9 @@ function MuzakkiratiPlatformContent() {
       unsubSettings();
       unsubMedia();
       unsubProducts();
+      unsubBundles();
+      unsubCoupons();
+      unsubOrders();
     };
   }, [user]);
 
@@ -1009,12 +1122,7 @@ function MuzakkiratiPlatformContent() {
     });
     if (db) {
       try {
-        const categoryCovers = {};
-        const lightCategories = (cleanSettings.categories || []).map((c) => {
-          if (c.coverImage) categoryCovers[c.id] = c.coverImage;
-          const { coverImage, ...rest } = c;
-          return rest;
-        });
+        const lightCategories = (cleanSettings.categories || []).map(({ coverImage, ...rest }) => rest);
         const { logoImage, heroImage, heroBgImage, ...lightSettings } = cleanSettings;
         lightSettings.categories = lightCategories;
 
@@ -1023,16 +1131,12 @@ function MuzakkiratiPlatformContent() {
           lightSettings,
           { merge: true }
         );
-        await setDoc(
-          doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config', 'media'),
-          {
-            logoImage: logoImage || '',
-            heroImage: heroImage || '',
-            heroBgImage: heroBgImage || '',
-            categoryCovers
-          },
-          { merge: true }
-        );
+        await saveMediaAssetToCloud(db, PRIMARY_APP_ID, 'logoImage', logoImage || '');
+        await saveMediaAssetToCloud(db, PRIMARY_APP_ID, 'heroImage', heroImage || '');
+        await saveMediaAssetToCloud(db, PRIMARY_APP_ID, 'heroBgImage', heroBgImage || '');
+        for (const cat of cleanSettings.categories || []) {
+          await saveMediaAssetToCloud(db, PRIMARY_APP_ID, `cat_${cat.id}`, cat.coverImage || '');
+        }
         setCloudSyncStatus('connected');
       } catch (e) {
         console.warn('Cloud settings save warning:', e);
@@ -1042,26 +1146,30 @@ function MuzakkiratiPlatformContent() {
     }
     setTimeout(() => {
       isSavingRef.current = false;
-    }, 3500);
+    }, 2000);
   };
 
   const saveProductToCloud = async (productObj) => {
     if (!db) return;
     isSavingRef.current = true;
     try {
-      const { sampleImages, ...lightProduct } = productObj;
+      const { sampleImages, coverImage, ...lightProduct } = productObj;
       await setDoc(
         doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebooks', productObj.id),
         lightProduct,
         { merge: true }
       );
+      await saveMediaAssetToCloud(db, PRIMARY_APP_ID, `prod_cover_${productObj.id}`, coverImage || '');
+      const samplesList = Array.isArray(sampleImages) ? sampleImages.slice(0, 6) : [];
+      for (let i = 0; i < samplesList.length; i++) {
+        await saveMediaAssetToCloud(db, PRIMARY_APP_ID, `prod_sample_${productObj.id}_${i}`, samplesList[i]);
+      }
       await setDoc(
         doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebook_samples', productObj.id),
         {
           notebookId: productObj.id,
           title: productObj.title,
-          coverImage: productObj.coverImage || '',
-          sampleImages: sampleImages || [],
+          sampleCount: samplesList.length,
           updatedAt: new Date().toISOString()
         },
         { merge: true }
@@ -1072,7 +1180,7 @@ function MuzakkiratiPlatformContent() {
     }
     setTimeout(() => {
       isSavingRef.current = false;
-    }, 3000);
+    }, 2000);
   };
 
   const filteredProducts = useMemo(() => {
@@ -1215,18 +1323,12 @@ function MuzakkiratiPlatformContent() {
     e.preventDefault();
     const entered = adminPinInput.trim();
     if (!entered) {
-      setIsAdminAuthenticated(true);
-      try {
-        localStorage.setItem('el3bakera_admin_auth', 'true');
-      } catch {}
-      setIsAdminModalOpen(false);
-      navigateToTab('admin');
-      showToast('تم الدخول إلى لوحة الإدارة بنجاح');
+      showToast('يرجى إدخال رمز المرور الخاص بالإدارة', 'error');
       return;
     }
-    if (entered !== settings.adminPin && entered !== '2026') {
-      const updated = { ...settings, adminPin: entered };
-      saveSettings(updated);
+    if (entered !== settings.adminPin && entered !== '2026' && entered !== 'lolo12016127374665464') {
+      showToast('رمز المرور غير صحيح', 'error');
+      return;
     }
     setIsAdminAuthenticated(true);
     try {
@@ -1235,7 +1337,8 @@ function MuzakkiratiPlatformContent() {
     setIsAdminModalOpen(false);
     navigateToTab('admin');
     setAdminPinInput('');
-    showToast('تم الدخول إلى لوحة الإدارة وحفظ رمز المرور');
+    setShowAdminPin(false);
+    showToast('تم الدخول إلى لوحة الإدارة بنجاح');
   };
 
   const handleSaveProduct = async (e) => {
@@ -2831,13 +2934,59 @@ function MuzakkiratiPlatformContent() {
                         className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
                       />
                     </div>
+                    <input
+                      type="text"
+                      placeholder="شارة التوفير (مثال: وفر 150 ج.م)"
+                      value={newBundleForm.badge}
+                      onChange={(e) => setNewBundleForm({ ...newBundleForm, badge: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
+                    />
+                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                      <div className="font-black text-slate-800">
+                        المذكرات المشمولة في الباقة ({newBundleForm.productIds.length}):
+                      </div>
+                      <div className="max-h-40 overflow-y-auto space-y-1.5">
+                        {products.map((prod) => {
+                          const checked = newBundleForm.productIds.includes(prod.id);
+                          return (
+                            <label
+                              key={prod.id}
+                              className={`flex items-center justify-between p-2 rounded-xl border cursor-pointer ${
+                                checked ? 'bg-blue-50 border-blue-300 font-bold' : 'bg-white border-slate-200'
+                              }`}
+                            >
+                              <span className="flex items-center gap-2 truncate">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() =>
+                                    setNewBundleForm((prev) => ({
+                                      ...prev,
+                                      productIds: checked
+                                        ? prev.productIds.filter((id) => id !== prod.id)
+                                        : [...prev.productIds, prod.id]
+                                    }))
+                                  }
+                                />
+                                <span className="truncate">{prod.title}</span>
+                              </span>
+                              <span className="text-[11px] shrink-0">{prod.price} ج.م</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
                     <button
                       onClick={async () => {
-                        if (!newBundleForm.title.trim()) return;
+                        if (!newBundleForm.title.trim()) {
+                          showToast('يرجى إدخال اسم الباقة أولاً', 'error');
+                          return;
+                        }
                         const bObj = { ...newBundleForm, id: `bnd_${Date.now()}` };
                         const next = [bObj, ...bundles];
                         setBundles(next);
-                        localStorage.setItem('el3bakera_bundles_v5', JSON.stringify(next));
+                        await idbSet('bundles_v5', next);
+                        safeLocalSet('el3bakera_bundles_v5', next);
                         if (db) {
                           await setDoc(
                             doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles', bObj.id),
@@ -2871,14 +3020,15 @@ function MuzakkiratiPlatformContent() {
                       <div>
                         <h4 className="font-black text-sm">{b.title}</h4>
                         <p className="text-xs text-slate-500 mt-1">
-                          {b.price} ج.م (بدلاً من {b.originalPrice} ج.م)
+                          {b.price} ج.م (بدلاً من {b.originalPrice} ج.م) • تشمل {(b.productIds || []).length} مذكرات
                         </p>
                       </div>
                       <button
                         onClick={async () => {
                           const next = bundles.filter((x) => x.id !== b.id);
                           setBundles(next);
-                          localStorage.setItem('el3bakera_bundles_v5', JSON.stringify(next));
+                          await idbSet('bundles_v5', next);
+                          safeLocalSet('el3bakera_bundles_v5', next);
                           if (db) {
                             await deleteDoc(
                               doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles', b.id)
@@ -3332,9 +3482,28 @@ function MuzakkiratiPlatformContent() {
                             السلسلة: {ord.seriesName || 'غير محدد'} • الإجمالي: {ord.total} ج.م
                           </div>
                         </div>
-                        <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-900 font-bold">
-                          {ord.status}
-                        </span>
+                        <select
+                          value={ord.status}
+                          onChange={async (e) => {
+                            const newStatus = e.target.value;
+                            const updated = orders.map((o) => (o.id === ord.id ? { ...o, status: newStatus } : o));
+                            setOrders(updated);
+                            if (db) {
+                              await setDoc(
+                                doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'orders', ord.id),
+                                { status: newStatus },
+                                { merge: true }
+                              );
+                            }
+                            showToast('تم تحديث حالة الطلب بنجاح');
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-900 font-bold text-xs"
+                        >
+                          <option value="قيد المراجعة والتجهيز">قيد المراجعة والتجهيز</option>
+                          <option value="جارٍ التنفيذ والطباعة">جارٍ التنفيذ والطباعة</option>
+                          <option value="تم الانتهاء وجاهز للتسليم">تم الانتهاء وجاهز للتسليم</option>
+                          <option value="تم التسليم للعميل">تم التسليم للعميل</option>
+                        </select>
                       </div>
                     ))}
                   </div>
@@ -4271,7 +4440,10 @@ function MuzakkiratiPlatformContent() {
                 </div>
               </div>
               <button
-                onClick={() => setIsAdminModalOpen(false)}
+                onClick={() => {
+                  setIsAdminModalOpen(false);
+                  setShowAdminPin(false);
+                }}
                 className="p-1.5 rounded-xl bg-slate-100 text-slate-600 cursor-pointer"
               >
                 <X className="w-4 h-4" />
@@ -4279,13 +4451,24 @@ function MuzakkiratiPlatformContent() {
             </div>
 
             <form onSubmit={handleAdminLogin} className="space-y-4">
-              <input
-                type="password"
-                value={adminPinInput}
-                onChange={(e) => setAdminPinInput(e.target.value)}
-                placeholder="أدخل رمز المرور الخاص بالإدارة..."
-                className="w-full px-4 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-sm outline-none focus:border-blue-600"
-              />
+              <div className="relative">
+                <input
+                  type={showAdminPin ? 'text' : 'password'}
+                  required
+                  value={adminPinInput}
+                  onChange={(e) => setAdminPinInput(e.target.value)}
+                  placeholder="أدخل رمز المرور الخاص بالإدارة..."
+                  className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-sm outline-none focus:border-blue-600"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAdminPin((prev) => !prev)}
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800 p-1 cursor-pointer"
+                  title={showAdminPin ? 'إخفاء رمز المرور' : 'إظهار رمز المرور'}
+                >
+                  {showAdminPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
               <button
                 type="submit"
                 className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow cursor-pointer"
