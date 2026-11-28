@@ -1012,9 +1012,12 @@ function MuzakkiratiPlatformContent() {
               changed = true;
               nextProd = { ...nextProd, coverImage: cloudCover };
             }
-            if (cloudSamples && cloudSamples.length > 0 && (!p.sampleImages || p.sampleImages.length === 0)) {
-              changed = true;
-              nextProd = { ...nextProd, sampleImages: cloudSamples };
+            if (cloudSamples && cloudSamples.length > 0) {
+              const currentSamples = Array.isArray(nextProd.sampleImages) ? nextProd.sampleImages : [];
+              if (cloudSamples.length >= currentSamples.length && cloudSamples[0] !== currentSamples[0]) {
+                changed = true;
+                nextProd = { ...nextProd, sampleImages: cloudSamples };
+              }
             }
             return nextProd;
           });
@@ -1028,6 +1031,55 @@ function MuzakkiratiPlatformContent() {
       () => {}
     );
 
+    const samplesCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebook_samples');
+    const unsubLegacySamples = onSnapshot(
+      samplesCol,
+      (snapshot) => {
+        if (snapshot.empty || isSavingRef.current) return;
+        const legacyMap = {};
+        snapshot.forEach((d) => {
+          const data = d.data();
+          const targetId = data.notebookId || d.id;
+          let extracted = [];
+          if (Array.isArray(data.images) && data.images.length > 0) {
+            extracted = data.images;
+          } else if (Array.isArray(data.sampleImages) && data.sampleImages.length > 0) {
+            extracted = data.sampleImages;
+          } else if (Array.isArray(data.pages) && data.pages.length > 0) {
+            extracted = data.pages;
+          } else {
+            Object.keys(data)
+              .filter((k) => typeof data[k] === 'string' && data[k].startsWith('data:image'))
+              .sort()
+              .forEach((k) => extracted.push(data[k]));
+          }
+          if (extracted.length > 0) {
+            legacyMap[targetId] = extracted;
+          }
+        });
+
+        if (Object.keys(legacyMap).length > 0) {
+          setProducts((prev) => {
+            let changed = false;
+            const updated = prev.map((p) => {
+              const found = legacyMap[p.id];
+              const current = Array.isArray(p.sampleImages) ? p.sampleImages : [];
+              if (found && found.length > current.length) {
+                changed = true;
+                return { ...p, sampleImages: found };
+              }
+              return p;
+            });
+            if (changed) {
+              idbSet('products_v5', updated);
+            }
+            return updated;
+          });
+        }
+      },
+      () => {}
+    );
+
     const productsCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebooks');
     const unsubProducts = onSnapshot(
       productsCol,
@@ -1037,13 +1089,12 @@ function MuzakkiratiPlatformContent() {
           setProducts((prev) => {
             const merged = cloudList.map((item) => {
               const existing = prev.find((p) => p.id === item.id);
+              const existingSamples = Array.isArray(existing?.sampleImages) ? existing.sampleImages : [];
+              const itemSamples = Array.isArray(item.sampleImages) ? item.sampleImages : [];
               return {
                 ...item,
                 coverImage: existing?.coverImage || item.coverImage || '',
-                sampleImages:
-                  Array.isArray(item.sampleImages) && item.sampleImages.length > 0
-                    ? item.sampleImages
-                    : existing?.sampleImages || []
+                sampleImages: existingSamples.length >= itemSamples.length ? existingSamples : itemSamples
               };
             });
             idbSet('products_v5', merged);
@@ -1097,6 +1148,7 @@ function MuzakkiratiPlatformContent() {
     return () => {
       unsubSettings();
       unsubMediaAssets();
+      unsubLegacySamples();
       unsubProducts();
       unsubOrders();
       unsubBundles();
