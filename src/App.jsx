@@ -37,7 +37,14 @@ import {
   UserCheck
 } from 'lucide-react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import {
+  getAuth,
+  signInAnonymously,
+  onAuthStateChanged,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut
+} from 'firebase/auth';
 import {
   getFirestore,
   collection,
@@ -850,12 +857,57 @@ function MuzakkiratiPlatformContent() {
       setCloudSyncStatus('local-only');
       return;
     }
-    signInAnonymously(auth)
-      .then(() => setCloudSyncStatus('connected'))
-      .catch(() => setCloudSyncStatus('error'));
-    const unsub = onAuthStateChanged(auth, (u) => setUser(u));
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      if (u && u.email === 'mahmoudelzaaty7@gmail.com') {
+        setCloudSyncStatus('admin-connected');
+        setIsAdminAuthenticated(true);
+        try {
+          localStorage.setItem('el3bakera_admin_auth', 'true');
+        } catch {}
+      } else if (u) {
+        setCloudSyncStatus('connected');
+      } else {
+        signInAnonymously(auth)
+          .then(() => setCloudSyncStatus('connected'))
+          .catch(() => setCloudSyncStatus('error'));
+      }
+    });
     return () => unsub();
   }, []);
+
+  const handleGoogleAdminSignIn = async () => {
+    if (!auth) {
+      showToast('خدمة المصادقة غير مهيأة', 'error');
+      return;
+    }
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      const result = await signInWithPopup(auth, provider);
+      if (result.user?.email === 'mahmoudelzaaty7@gmail.com') {
+        setIsAdminAuthenticated(true);
+        try {
+          localStorage.setItem('el3bakera_admin_auth', 'true');
+        } catch {}
+        setIsAdminModalOpen(false);
+        navigateToTab('admin');
+        setCloudSyncStatus('admin-connected');
+        showToast('تم ربط حساب المدير الرسمي بنجاح — جميع التعديلات ستُحفظ في السحابة فوراً ✓');
+      } else {
+        showToast(
+          `تم تسجيل الدخول بـ (${result.user?.email})، لكن قواعد Firebase تتطلب حساب mahmoudelzaaty7@gmail.com للكتابة`,
+          'error'
+        );
+      }
+    } catch (err) {
+      console.error('Google Sign-In error:', err);
+      showToast(
+        `تعذر تسجيل الدخول بجوجل (${err?.code || 'تأكد من تفعيل Google Sign-In في Firebase Authentication'})`,
+        'error'
+      );
+    }
+  };
 
   useEffect(() => {
     if (!db) return;
@@ -866,7 +918,7 @@ function MuzakkiratiPlatformContent() {
     const unsubSettings = onSnapshot(
       settingsRef,
       (snap) => {
-        setCloudSyncStatus('connected');
+        setCloudSyncStatus(auth?.currentUser?.email === 'mahmoudelzaaty7@gmail.com' ? 'admin-connected' : 'connected');
         if (snap.exists() && !isSavingRef.current) {
           const cloudData = snap.data();
           setSettings((prev) => {
@@ -1137,11 +1189,16 @@ function MuzakkiratiPlatformContent() {
         for (const cat of cleanSettings.categories || []) {
           await saveMediaAssetToCloud(db, PRIMARY_APP_ID, `cat_${cat.id}`, cat.coverImage || '');
         }
-        setCloudSyncStatus('connected');
+        setCloudSyncStatus(auth?.currentUser?.email === 'mahmoudelzaaty7@gmail.com' ? 'admin-connected' : 'connected');
       } catch (e) {
         console.warn('Cloud settings save warning:', e);
         setCloudSyncStatus('error');
-        showToast('تعذر الحفظ في السحابة — تأكد من إعدادات ربط Firebase', 'error');
+        showToast(
+          e?.code === 'permission-denied'
+            ? 'السحابة رفضت الحفظ! اضغط على "ربط حساب جوجل للإدارة" في الأعلى أولاً'
+            : `تعذر الحفظ في السحابة (${e?.code || 'خطأ اتصال'})`,
+          'error'
+        );
       }
     }
     setTimeout(() => {
@@ -1176,7 +1233,12 @@ function MuzakkiratiPlatformContent() {
       );
     } catch (e) {
       console.warn('Cloud product save warning:', e);
-      showToast('تعذر مزامنة المذكرة مع السحابة — تم الحفظ في ذاكرة المتصفح', 'error');
+      showToast(
+        e?.code === 'permission-denied'
+          ? 'السحابة رفضت حفظ المذكرة! سجل الدخول بحساب جوجل (mahmoudelzaaty7@gmail.com) في شريط الإدارة'
+          : 'تعذر مزامنة المذكرة مع السحابة — تم الحفظ في ذاكرة المتصفح',
+        'error'
+      );
     }
     setTimeout(() => {
       isSavingRef.current = false;
@@ -1655,6 +1717,9 @@ function MuzakkiratiPlatformContent() {
                     try {
                       localStorage.removeItem('el3bakera_admin_auth');
                     } catch {}
+                    if (auth) {
+                      signOut(auth).catch(() => {});
+                    }
                     navigateToTab('home');
                     showToast('تم تسجيل الخروج من لوحة الإدارة');
                   }}
@@ -2500,17 +2565,24 @@ function MuzakkiratiPlatformContent() {
                   <h2 className="text-lg font-black">لوحة إدارة منصة العباقرة</h2>
                   <p className="text-xs text-slate-400 flex items-center gap-2">
                     <span>
-                      {cloudSyncStatus === 'connected'
-                        ? `متصل بقاعدة البيانات السحابية (${PRIMARY_APP_ID}) ✓`
-                        : cloudSyncStatus === 'error'
-                        ? 'تعذر الاتصال بالسحابة — يتم الحفظ في ذاكرة المتصفح فقط (تحقق من إعدادات Firebase)'
-                        : 'وضع التخزين المحلي — الصق إعدادات Firebase في تبويب الهوية والروابط للمزامنة السحابية'}
+                      {user?.email === 'mahmoudelzaaty7@gmail.com'
+                        ? `متصل بصلاحية المدير (${user.email}) — الحفظ السحابي مفعّل ✓`
+                        : 'تنبيه: يجب ربط حساب جوجل (mahmoudelzaaty7@gmail.com) ليسمح Firebase بحفظ التعديلات للعملاء'}
                     </span>
                   </p>
                 </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
+                {user?.email !== 'mahmoudelzaaty7@gmail.com' && (
+                  <button
+                    onClick={handleGoogleAdminSignIn}
+                    className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow cursor-pointer animate-pulse"
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>ربط حساب جوجل للإدارة (مطلوب للحفظ)</span>
+                  </button>
+                )}
                 <button
                   onClick={handleSaveAllAdminChanges}
                   className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black flex items-center gap-1.5 shadow cursor-pointer"
@@ -4451,6 +4523,20 @@ function MuzakkiratiPlatformContent() {
             </div>
 
             <form onSubmit={handleAdminLogin} className="space-y-4">
+              <button
+                type="button"
+                onClick={handleGoogleAdminSignIn}
+                className="w-full py-3.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-amber-400 font-black text-sm shadow flex items-center justify-center gap-2 cursor-pointer border border-slate-700"
+              >
+                <ShieldCheck className="w-5 h-5" />
+                <span>الدخول بحساب Google للمدير (موصى به للحفظ السحابي)</span>
+              </button>
+
+              <div className="relative flex items-center justify-center text-[11px] text-slate-400">
+                <span className="bg-white px-3 z-10">أو الدخول برمز المرور السريع</span>
+                <div className="absolute inset-x-0 border-t border-slate-200" />
+              </div>
+
               <div className="relative">
                 <input
                   type={showAdminPin ? 'text' : 'password'}
