@@ -147,6 +147,7 @@ const DEFAULT_MULTI_OFFERS = [
     discountValue: 15,
     discountPercent: 15,
     maxDiscount: 150,
+    allowCouponStacking: false,
     productIds: [],
     bgColor: '#0f172a',
     textColor: '#ffffff'
@@ -430,6 +431,7 @@ const DEFAULT_BUNDLES = [
     originalPrice: 895,
     badge: 'وفر 246 ج.م دفعة واحدة',
     driveSampleUrl: 'https://drive.google.com/',
+    allowCoupon: false,
     productIds: ['prod_m3_bank', 'prod_m2_bank', 'prod_m2_booklet', 'prod_m1_bank', 'prod_m3_booklet']
   }
 ];
@@ -1427,9 +1429,20 @@ function MuzakkiratiPlatformInner() {
   const cartTotals = useMemo(() => {
     const subtotal = cart.reduce((sum, item) => sum + Number(item.price || 0), 0);
 
+    // العناصر المسموح بتطبيق كوبون الخصم عليها (تُستثنى الباقات إلا إذا سمح المدير بذلك للباقة)
+    const couponEligibleSubtotal = cart.reduce((sum, item) => {
+      if (item.type === 'bundle') {
+        const bndObj = bundles.find((b) => b.id === item.id);
+        const isAllowed = bndObj ? Boolean(bndObj.allowCoupon) : Boolean(item.allowCoupon);
+        return isAllowed ? sum + Number(item.price || 0) : sum;
+      }
+      return sum + Number(item.price || 0);
+    }, 0);
+
     // حساب أفضل عرض من عروض الحصول على أكثر من مذكرة
     let bestOfferDiscount = 0;
     let bestOfferTitle = '';
+    let bestOfferAllowStacking = false;
 
     for (const offer of safeMultiOffers) {
       if (offer.active === false) continue;
@@ -1456,6 +1469,7 @@ function MuzakkiratiPlatformInner() {
 
         if (calculatedOffer > bestOfferDiscount) {
           bestOfferDiscount = calculatedOffer;
+          bestOfferAllowStacking = Boolean(offer.allowCouponStacking);
           bestOfferTitle =
             type === 'fixed'
               ? `${safeText(offer.title, 'عرض التجميع')} (خصم ${val} ج.م)`
@@ -1464,26 +1478,49 @@ function MuzakkiratiPlatformInner() {
       }
     }
 
-    // حساب خصم الكوبون إن وُجد
+    // حساب خصم الكوبون إن وُجد (مع قراءة كافة مسميات الحقل الممكنة)
     let couponDiscount = 0;
-    if (appliedCoupon && subtotal > 0) {
-      couponDiscount = Math.round((subtotal * Number(appliedCoupon.discountPercent || 0)) / 100);
+    const couponPct = Number(
+      appliedCoupon?.discountPercent ?? appliedCoupon?.discount ?? appliedCoupon?.value ?? 0
+    );
+    if (appliedCoupon && couponEligibleSubtotal > 0 && couponPct > 0) {
+      couponDiscount = Math.round((couponEligibleSubtotal * couponPct) / 100);
     }
 
-    // اختيار الخصم الأعلى للعميل
+    // منطق دمج أو مقارنة الخصم بين الكوبون وعرض أكثر من مذكرة
     let finalDiscount = 0;
     let discountReason = '';
-    if (couponDiscount > bestOfferDiscount && couponDiscount > 0) {
+
+    if (bestOfferDiscount > 0 && couponDiscount > 0) {
+      if (bestOfferAllowStacking) {
+        finalDiscount = Math.min(subtotal, bestOfferDiscount + couponDiscount);
+        discountReason = `${bestOfferTitle} + كوبون (${appliedCoupon.code} - ${couponPct}%)`;
+      } else if (couponDiscount >= bestOfferDiscount) {
+        finalDiscount = couponDiscount;
+        discountReason = `كوبون خصم (${appliedCoupon.code} - ${couponPct}%)`;
+      } else {
+        finalDiscount = bestOfferDiscount;
+        discountReason = bestOfferTitle;
+      }
+    } else if (couponDiscount > 0) {
       finalDiscount = couponDiscount;
-      discountReason = `كوبون خصم (${appliedCoupon.code} - ${appliedCoupon.discountPercent}%)`;
+      discountReason = `كوبون خصم (${appliedCoupon.code} - ${couponPct}%)`;
     } else if (bestOfferDiscount > 0) {
       finalDiscount = bestOfferDiscount;
       discountReason = bestOfferTitle;
     }
 
     const total = Math.max(0, subtotal - finalDiscount);
-    return { subtotal, finalDiscount, discountReason, total };
-  }, [cart, safeMultiOffers, appliedCoupon]);
+    return {
+      subtotal,
+      couponEligibleSubtotal,
+      couponDiscount,
+      bestOfferDiscount,
+      finalDiscount,
+      discountReason,
+      total
+    };
+  }, [cart, bundles, safeMultiOffers, appliedCoupon]);
 
   const handleApplyCoupon = () => {
     const code = couponInput.trim().toUpperCase();
@@ -1497,8 +1534,24 @@ function MuzakkiratiPlatformInner() {
       showToast('تم استنفاد الحد الأقصى لاستخدام هذا الكوبون', 'error');
       return;
     }
-    setAppliedCoupon(found);
-    showToast(`تم تطبيق كوبون الخصم (${found.code}) بنسبة ${found.discountPercent}%`);
+    const eligibleSum = cart.reduce((sum, item) => {
+      if (item.type === 'bundle') {
+        const bndObj = bundles.find((b) => b.id === item.id);
+        const isAllowed = bndObj ? Boolean(bndObj.allowCoupon) : Boolean(item.allowCoupon);
+        return isAllowed ? sum + Number(item.price || 0) : sum;
+      }
+      return sum + Number(item.price || 0);
+    }, 0);
+
+    if (eligibleSum <= 0) {
+      showToast('الباقات المخفضة في السلة مستثناة من كوبونات الخصم الإضافية', 'error');
+      return;
+    }
+
+    const pct = Number(found.discountPercent ?? found.discount ?? found.value ?? 15);
+    const normalizedCoupon = { ...found, discountPercent: pct };
+    setAppliedCoupon(normalizedCoupon);
+    showToast(`تم تطبيق كوبون الخصم (${normalizedCoupon.code}) بنسبة ${pct}%`);
   };
 
   const handleConfirmOrder = async (e) => {
@@ -1688,6 +1741,7 @@ function MuzakkiratiPlatformInner() {
     originalPrice: 650,
     badge: 'وفر 150 ج.م',
     driveSampleUrl: 'https://drive.google.com/',
+    allowCoupon: false,
     productIds: []
   });
 
@@ -1701,6 +1755,7 @@ function MuzakkiratiPlatformInner() {
     discountValue: 15,
     discountPercent: 15,
     maxDiscount: 150,
+    allowCouponStacking: false,
     productIds: [],
     bgColor: '#0f172a',
     textColor: '#ffffff',
@@ -3796,6 +3851,21 @@ function MuzakkiratiPlatformInner() {
                     </div>
                   </div>
 
+                  <label className="flex items-center justify-between p-3 rounded-2xl bg-amber-50 border border-amber-200 cursor-pointer">
+                    <div>
+                      <div className="font-black text-amber-950">السماح بتطبيق كوبونات الخصم على هذه الباقة</div>
+                      <div className="text-[11px] text-amber-800 font-medium">
+                        عند إلغاء التفعيل تُستثنى الباقة من كوبونات الخصم في السلة
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(bundleForm.allowCoupon)}
+                      onChange={(e) => setBundleForm({ ...bundleForm, allowCoupon: e.target.checked })}
+                      className="w-4 h-4 accent-blue-600"
+                    />
+                  </label>
+
                   <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
                     <div className="flex items-center justify-between font-black text-slate-800">
                       <span>اختر المذكرات المشمولة ({bundleForm.productIds.length}):</span>
@@ -3872,6 +3942,7 @@ function MuzakkiratiPlatformInner() {
                           originalPrice: 650,
                           badge: 'وفر 150 ج.م',
                           driveSampleUrl: 'https://drive.google.com/',
+                          allowCoupon: false,
                           productIds: []
                         });
                         showToast(editingBundleId ? 'تم تحديث الباقة وحفظها' : 'تم حفظ الباقة الجديدة');
@@ -3892,6 +3963,7 @@ function MuzakkiratiPlatformInner() {
                             originalPrice: 650,
                             badge: 'وفر 150 ج.م',
                             driveSampleUrl: 'https://drive.google.com/',
+                            allowCoupon: false,
                             productIds: []
                           });
                         }}
@@ -3910,7 +3982,18 @@ function MuzakkiratiPlatformInner() {
                       className="p-4 rounded-2xl bg-white border border-slate-200 flex items-center justify-between gap-3"
                     >
                       <div>
-                        <h4 className="font-black text-sm text-slate-900">{bnd.title}</h4>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="font-black text-sm text-slate-900">{bnd.title}</h4>
+                          <span
+                            className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${
+                              bnd.allowCoupon
+                                ? 'bg-emerald-50 text-emerald-700'
+                                : 'bg-amber-50 text-amber-800'
+                            }`}
+                          >
+                            {bnd.allowCoupon ? 'تقبل الكوبونات' : 'مستثناة من الكوبونات'}
+                          </span>
+                        </div>
                         <div className="text-xs text-slate-500 font-bold mt-0.5">
                           {bnd.price} ج.م (بدلاً من {bnd.originalPrice} ج.م) • {(bnd.productIds || []).length} مذكرات
                         </div>
@@ -3927,6 +4010,7 @@ function MuzakkiratiPlatformInner() {
                               originalPrice: bnd.originalPrice || 650,
                               badge: bnd.badge || '',
                               driveSampleUrl: bnd.driveSampleUrl || 'https://drive.google.com/',
+                              allowCoupon: Boolean(bnd.allowCoupon),
                               productIds: Array.isArray(bnd.productIds) ? bnd.productIds : []
                             });
                           }}
@@ -4279,6 +4363,23 @@ function MuzakkiratiPlatformInner() {
                         </div>
                       </div>
 
+                      <label className="flex items-center justify-between p-3 rounded-2xl bg-amber-50 border border-amber-200 cursor-pointer">
+                        <div>
+                          <div className="font-black text-amber-950">السماح بدمج كوبونات الخصم مع هذا العرض</div>
+                          <div className="text-[11px] text-amber-800 font-medium">
+                            عند إلغاء التفعيل يُطبَّق الخصم الأعلى فقط (العرض أو الكوبون) ولا يُجمعان معاً
+                          </div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(multiOfferForm.allowCouponStacking)}
+                          onChange={(e) =>
+                            setMultiOfferForm({ ...multiOfferForm, allowCouponStacking: e.target.checked })
+                          }
+                          className="w-4 h-4 accent-blue-600"
+                        />
+                      </label>
+
                       <div className="p-3 rounded-2xl bg-white border border-slate-200 space-y-2">
                         <div className="flex flex-wrap items-center justify-between gap-2 font-black text-slate-800">
                           <span>
@@ -4363,6 +4464,7 @@ function MuzakkiratiPlatformInner() {
                               discountValue: 15,
                               discountPercent: 15,
                               maxDiscount: 150,
+                              allowCouponStacking: false,
                               productIds: [],
                               bgColor: '#0f172a',
                               textColor: '#ffffff',
@@ -4388,6 +4490,7 @@ function MuzakkiratiPlatformInner() {
                                 discountValue: 15,
                                 discountPercent: 15,
                                 maxDiscount: 150,
+                                allowCouponStacking: false,
                                 productIds: [],
                                 bgColor: '#0f172a',
                                 textColor: '#ffffff',
@@ -4429,10 +4532,21 @@ function MuzakkiratiPlatformInner() {
                                 <h4 className="font-black text-sm text-slate-900 truncate">{off.title}</h4>
                               </div>
                               <p className="text-slate-500 truncate">{off.subtitle}</p>
-                              <div className="text-[11px] font-bold text-blue-600">
-                                {Array.isArray(off.productIds) && off.productIds.length > 0
-                                  ? `يسري على ${off.productIds.length} مذكرات محددة`
-                                  : 'شامل لجميع مذكرات المنصة'}
+                              <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold">
+                                <span className="text-blue-600">
+                                  {Array.isArray(off.productIds) && off.productIds.length > 0
+                                    ? `يسري على ${off.productIds.length} مذكرات محددة`
+                                    : 'شامل لجميع مذكرات المنصة'}
+                                </span>
+                                <span
+                                  className={`px-2 py-0.5 rounded-md ${
+                                    off.allowCouponStacking
+                                      ? 'bg-emerald-50 text-emerald-700'
+                                      : 'bg-amber-50 text-amber-800'
+                                  }`}
+                                >
+                                  {off.allowCouponStacking ? 'يُدمج مع الكوبون' : 'لا يُدمج مع الكوبون'}
+                                </span>
                               </div>
                             </div>
 
@@ -4467,6 +4581,7 @@ function MuzakkiratiPlatformInner() {
                                     discountValue: Number(off.discountValue ?? off.discountPercent ?? 15),
                                     discountPercent: Number(off.discountValue ?? off.discountPercent ?? 15),
                                     maxDiscount: Number(off.maxDiscount || 150),
+                                    allowCouponStacking: Boolean(off.allowCouponStacking),
                                     productIds: Array.isArray(off.productIds) ? off.productIds : [],
                                     bgColor: off.bgColor || '#0f172a',
                                     textColor: off.textColor || '#ffffff',
@@ -4927,24 +5042,80 @@ function MuzakkiratiPlatformInner() {
             {adminTab === 'backup' && (
               <div className="bg-white rounded-3xl p-6 border border-slate-200 space-y-4 text-xs">
                 <h3 className="text-base font-black text-slate-900">تصدير واستيراد نسخة احتياطية JSON</h3>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const payload = JSON.stringify({ settings, products, bundles, coupons }, null, 2);
-                    const blob = new Blob([payload], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `el3bakera_backup_${new Date().toISOString().slice(0, 10)}.json`;
-                    a.click();
-                  }}
-                  className="px-5 py-3 rounded-xl bg-emerald-600 text-white font-black cursor-pointer"
-                >
-                  تحميل ملف النسخة الاحتياطية الآن
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        showToast('جاري تجهيز ملف النسخة الاحتياطية الكاملة...');
+                        const [dbSettings, dbProducts, dbBundles, dbCoupons] = await Promise.all([
+                          idbGet('settings_v7'),
+                          idbGet('products_v6'),
+                          idbGet('bundles_v6'),
+                          idbGet('coupons_v6')
+                        ]);
+                        const payloadObj = {
+                          exportedAt: new Date().toISOString(),
+                          settings: dbSettings || settings,
+                          products: Array.isArray(dbProducts) && dbProducts.length > 0 ? dbProducts : products,
+                          bundles: Array.isArray(dbBundles) && dbBundles.length > 0 ? dbBundles : bundles,
+                          coupons: Array.isArray(dbCoupons) && dbCoupons.length > 0 ? dbCoupons : coupons
+                        };
+                        const jsonStr = JSON.stringify(payloadObj, null, 2);
+                        const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.style.display = 'none';
+                        a.href = url;
+                        a.download = `el3bakera_backup_${new Date().toISOString().slice(0, 10)}.json`;
+                        document.body.appendChild(a);
+                        a.click();
+                        setTimeout(() => {
+                          document.body.removeChild(a);
+                          URL.revokeObjectURL(url);
+                        }, 1500);
+                        showToast('تم تحميل ملف النسخة الاحتياطية بنجاح!');
+                      } catch (err) {
+                        showToast(`تعذر تحميل الملف: ${err?.message || ''}`, 'error');
+                      }
+                    }}
+                    className="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black cursor-pointer flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>تحميل ملف النسخة الاحتياطية الآن</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const [dbSettings, dbProducts, dbBundles, dbCoupons] = await Promise.all([
+                        idbGet('settings_v7'),
+                        idbGet('products_v6'),
+                        idbGet('bundles_v6'),
+                        idbGet('coupons_v6')
+                      ]);
+                      const jsonStr = JSON.stringify(
+                        {
+                          settings: dbSettings || settings,
+                          products: Array.isArray(dbProducts) && dbProducts.length > 0 ? dbProducts : products,
+                          bundles: Array.isArray(dbBundles) && dbBundles.length > 0 ? dbBundles : bundles,
+                          coupons: Array.isArray(dbCoupons) && dbCoupons.length > 0 ? dbCoupons : coupons
+                        },
+                        null,
+                        2
+                      );
+                      setJsonBackupText(jsonStr);
+                      showToast('تم عرض بيانات النسخة الاحتياطية في الصندوق بالأسفل');
+                    }}
+                    className="px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-black cursor-pointer"
+                  >
+                    عرض البيانات كنص
+                  </button>
+                </div>
+
                 <textarea
-                  rows={5}
-                  placeholder="الصق محتوى ملف JSON هنا لاستعادته..."
+                  rows={6}
+                  placeholder="الصق محتوى ملف JSON هنا لاستعادته أو اضغط عرض البيانات كنص..."
                   value={jsonBackupText}
                   onChange={(e) => setJsonBackupText(e.target.value)}
                   className="w-full p-3 rounded-2xl border border-slate-200 font-mono text-[11px]"
@@ -5273,21 +5444,46 @@ function MuzakkiratiPlatformInner() {
                   </div>
 
                   {/* كود الكوبون */}
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="هل لديك كود خصم؟ (مثال: M20)"
-                      value={couponInput}
-                      onChange={(e) => setCouponInput(e.target.value)}
-                      className="flex-1 px-3 py-2.5 rounded-xl border border-slate-200 font-black uppercase"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleApplyCoupon}
-                      className="px-4 py-2.5 rounded-xl bg-slate-900 text-white font-black cursor-pointer"
-                    >
-                      تطبيق
-                    </button>
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="هل لديك كود خصم؟ (مثال: M20)"
+                        value={couponInput}
+                        onChange={(e) => setCouponInput(e.target.value)}
+                        className="flex-1 px-3 py-2.5 rounded-xl border border-slate-200 font-black uppercase"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleApplyCoupon}
+                        className="px-4 py-2.5 rounded-xl bg-slate-900 text-white font-black cursor-pointer"
+                      >
+                        تطبيق
+                      </button>
+                    </div>
+
+                    {appliedCoupon && (
+                      <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 font-black">
+                        <span>
+                          الكوبون المفعّل: {appliedCoupon.code} (خصم{' '}
+                          {Number(
+                            appliedCoupon.discountPercent ?? appliedCoupon.discount ?? appliedCoupon.value ?? 0
+                          )}
+                          %)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAppliedCoupon(null);
+                            setCouponInput('');
+                            showToast('تم إلغاء الكوبون');
+                          }}
+                          className="text-rose-600 hover:underline cursor-pointer"
+                        >
+                          إزالة
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* ملخص الأسعار */}
@@ -5300,6 +5496,11 @@ function MuzakkiratiPlatformInner() {
                       <div className="flex justify-between font-black text-emerald-700">
                         <span>{cartTotals.discountReason}:</span>
                         <span>-{cartTotals.finalDiscount} ج.م</span>
+                      </div>
+                    )}
+                    {appliedCoupon && cartTotals.couponEligibleSubtotal < cartTotals.subtotal && (
+                      <div className="text-[11px] text-amber-800 font-bold">
+                        * الباقات المخفضة مستثناة من كوبون الخصم الإضافي.
                       </div>
                     )}
                     <div className="flex justify-between text-base font-black text-slate-900 pt-1.5 border-t border-blue-200">
