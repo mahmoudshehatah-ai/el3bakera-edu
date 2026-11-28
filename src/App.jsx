@@ -49,7 +49,8 @@ import {
   doc,
   setDoc,
   deleteDoc,
-  onSnapshot
+  onSnapshot,
+  getDocs
 } from 'firebase/firestore';
 
 // ============================================================================
@@ -480,6 +481,32 @@ function compressImageFile(file, maxWidth = 550, quality = 0.65) {
   });
 }
 
+function recompressDataUrl(dataUrl, maxWidth = 850, quality = 0.72) {
+  return new Promise((resolve) => {
+    if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image')) {
+      resolve(dataUrl);
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
+      }
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
 async function saveMediaAssetToCloud(dbInstance, appId, assetId, dataUrl) {
   if (!dbInstance) return;
   const mediaCol = collection(dbInstance, 'artifacts', appId, 'public', 'data', 'config');
@@ -490,12 +517,16 @@ async function saveMediaAssetToCloud(dbInstance, appId, assetId, dataUrl) {
     } catch {}
     return;
   }
-  if (dataUrl.length > 750000) {
-    throw new Error('حجم الصورة كبير جداً، اختر صورة أصغر حجماً');
+  let finalDataUrl = dataUrl;
+  if (finalDataUrl.length > 650000) {
+    finalDataUrl = await recompressDataUrl(finalDataUrl, 850, 0.7);
+  }
+  if (finalDataUrl.length > 750000) {
+    finalDataUrl = await recompressDataUrl(finalDataUrl, 680, 0.6);
   }
   await setDoc(doc(mediaCol, docId), {
     assetId,
-    dataUrl,
+    dataUrl: finalDataUrl,
     updatedAt: Date.now()
   });
 }
@@ -1162,6 +1193,71 @@ function MuzakkiratiPlatformContent() {
       unsubCoupons();
     };
   }, [user]);
+
+  const handleForcePullFromCloud = async () => {
+    if (!db) {
+      showToast('قاعدة البيانات السحابية غير متصلة', 'error');
+      return;
+    }
+    showToast('جاري سحب أحدث البيانات والصور من السحابة...');
+    try {
+      const [configSnap, samplesSnap, productsSnap] = await Promise.all([
+        getDocs(collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'config')),
+        getDocs(collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebook_samples')),
+        getDocs(collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebooks'))
+      ]);
+
+      const assetsMap = {};
+      const samplesByProduct = {};
+      configSnap.forEach((d) => {
+        if (d.id.startsWith('media_')) {
+          const data = d.data();
+          const key = data.assetId || d.id.replace('media_', '');
+          if (data.dataUrl) {
+            assetsMap[key] = data.dataUrl;
+            const m = key.match(/^prod_sample_(.+)_(\d+)$/);
+            if (m) {
+              if (!samplesByProduct[m[1]]) samplesByProduct[m[1]] = [];
+              samplesByProduct[m[1]][Number(m[2])] = data.dataUrl;
+            }
+          }
+        }
+      });
+
+      samplesSnap.forEach((d) => {
+        const data = d.data();
+        const targetId = data.notebookId || d.id;
+        const arr = Array.isArray(data.images)
+          ? data.images
+          : Array.isArray(data.sampleImages)
+          ? data.sampleImages
+          : [];
+        if (arr.length > 0 && (!samplesByProduct[targetId] || arr.length > samplesByProduct[targetId].filter(Boolean).length)) {
+          samplesByProduct[targetId] = arr;
+        }
+      });
+
+      const baseList = !productsSnap.empty
+        ? productsSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
+        : products;
+
+      const syncedProducts = baseList.map((p) => {
+        const cloudSamples = samplesByProduct[p.id] ? samplesByProduct[p.id].filter(Boolean) : [];
+        return {
+          ...p,
+          coverImage: assetsMap[`prod_cover_${p.id}`] || p.coverImage || '',
+          sampleImages: cloudSamples.length > 0 ? cloudSamples : (p.sampleImages || [])
+        };
+      });
+
+      setProducts(syncedProducts);
+      await idbSet('products_v5', syncedProducts);
+      safeLocalSet('el3bakera_products_v5', stripHeavyProductMedia(syncedProducts));
+      showToast('✓ تم تحديث ومزامنة جميع الصور والعينات من السحابة بنجاح!');
+    } catch (err) {
+      showToast(`تعذر السحب من السحابة: ${err?.message || 'تحقق من الاتصال'}`, 'error');
+    }
+  };
 
   const saveSettings = async (updatedSettings) => {
     isSavingRef.current = true;
@@ -2757,6 +2853,13 @@ function MuzakkiratiPlatformContent() {
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   <span>حفظ ونشر جميع التعديلات للعملاء</span>
+                </button>
+                <button
+                  onClick={handleForcePullFromCloud}
+                  className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Database className="w-4 h-4" />
+                  <span>سحب الصور من السحابة</span>
                 </button>
                 <button
                   onClick={handleExportBackup}
