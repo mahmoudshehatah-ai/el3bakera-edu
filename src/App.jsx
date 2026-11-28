@@ -1065,7 +1065,7 @@ function MuzakkiratiPlatformInner() {
               }
               return p;
             });
-            idbSet('products_v6', updated);
+            setTimeout(() => idbSet('products_v6', updated), 300);
             return updated;
           });
         }
@@ -1073,10 +1073,11 @@ function MuzakkiratiPlatformInner() {
       () => {}
     );
 
-    const unsubMediaAssets = onSnapshot(
-      configColRef,
-      (snap) => {
-        if (snap.empty) return;
+    // جلب الصور لمرة واحدة فقط (بدلاً من onSnapshot المستمر الثقيل الذي يسبب البطء)
+    let cancelledMedia = false;
+    getDocs(configColRef)
+      .then((snap) => {
+        if (cancelledMedia || snap.empty) return;
         const mediaMap = {};
         snap.docs.forEach((d) => {
           if (d.id.startsWith('media_')) {
@@ -1109,7 +1110,7 @@ function MuzakkiratiPlatformInner() {
             if (changed) next.categories = nextCats;
           }
           if (changed) {
-            idbSet('settings_v7', next);
+            setTimeout(() => idbSet('settings_v7', next), 400);
             return next;
           }
           return prev;
@@ -1142,14 +1143,13 @@ function MuzakkiratiPlatformInner() {
             };
           });
           if (changed) {
-            idbSet('products_v6', nextProds);
+            setTimeout(() => idbSet('products_v6', nextProds), 500);
             return nextProds;
           }
           return prev;
         });
-      },
-      () => {}
-    );
+      })
+      .catch(() => {});
 
     const unsubBundles = onSnapshot(
       bundlesColRef,
@@ -1185,11 +1185,11 @@ function MuzakkiratiPlatformInner() {
     );
 
     return () => {
+      cancelledMedia = true;
       unsubSettings();
       unsubConfigMain();
       unsubProducts();
       unsubLegacySamples();
-      unsubMediaAssets();
       unsubBundles();
       unsubCoupons();
       unsubOrders();
@@ -1385,6 +1385,41 @@ function MuzakkiratiPlatformInner() {
       showToast(`تعذر السحب من السحابة: ${err?.message || ''}`, 'error');
     } finally {
       setIsSyncingCloud(false);
+    }
+  };
+
+  const handleDownloadBackupFile = async () => {
+    try {
+      showToast('جاري تجهيز ملف النسخة الاحتياطية الكاملة...');
+      const [dbSettings, dbProducts, dbBundles, dbCoupons] = await Promise.all([
+        idbGet('settings_v7'),
+        idbGet('products_v6'),
+        idbGet('bundles_v6'),
+        idbGet('coupons_v6')
+      ]);
+      const payloadObj = {
+        exportedAt: new Date().toISOString(),
+        settings: dbSettings || settings,
+        products: Array.isArray(dbProducts) && dbProducts.length > 0 ? dbProducts : products,
+        bundles: Array.isArray(dbBundles) && dbBundles.length > 0 ? dbBundles : bundles,
+        coupons: Array.isArray(dbCoupons) && dbCoupons.length > 0 ? dbCoupons : coupons
+      };
+      const jsonStr = JSON.stringify(payloadObj);
+      const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `el3bakera_backup_${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        if (document.body.contains(a)) document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 2000);
+      showToast('تم تحميل ملف النسخة الاحتياطية على جهازك بنجاح!');
+    } catch (err) {
+      showToast(`تعذر تحميل الملف: ${err?.message || ''}`, 'error');
     }
   };
 
@@ -1868,19 +1903,21 @@ function MuzakkiratiPlatformInner() {
         className="group bg-white rounded-3xl border border-slate-200/90 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col"
       >
         {/* صورة الغلاف */}
-        <div
-          onClick={() => {
-            setPreviewProduct(prod);
-            setActiveSampleIdx(0);
-          }}
-          className="relative h-56 bg-slate-900 overflow-hidden cursor-pointer"
-        >
-          <img
-            src={prod.coverImage || makeCoverSvg(prod.title, '', '#1e293b', '#2563eb')}
-            alt={safeText(prod.title)}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-          />
-          {renderDiscountBadge(prod.price, prod.originalPrice)}
+      <div
+        onClick={() => {
+          setPreviewProduct(prod);
+          setActiveSampleIdx(0);
+        }}
+        className="relative h-56 bg-slate-900 overflow-hidden cursor-pointer"
+      >
+        <img
+          src={prod.coverImage || makeCoverSvg(prod.title, '', '#1e293b', '#2563eb')}
+          alt={safeText(prod.title)}
+          loading="lazy"
+          decoding="async"
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+        />
+        {renderDiscountBadge(prod.price, prod.originalPrice)}
           {Array.isArray(prod.sampleImages) && prod.sampleImages.length > 0 && (
             <span className="absolute bottom-3 left-3 px-2.5 py-1 rounded-xl bg-slate-950/80 backdrop-blur-md text-white text-[10px] font-black flex items-center gap-1">
               <Eye className="w-3 h-3 text-amber-400" />
@@ -2933,6 +2970,14 @@ function MuzakkiratiPlatformInner() {
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isSyncingCloud ? 'animate-spin' : ''}`} />
                   <span>حفظ ونشر جميع التعديلات للعملاء</span>
+                </button>
+
+                <button
+                  onClick={handleDownloadBackupFile}
+                  className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black cursor-pointer flex items-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>تحميل نسخة احتياطية</span>
                 </button>
 
                 <button
@@ -5045,40 +5090,7 @@ function MuzakkiratiPlatformInner() {
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={async () => {
-                      try {
-                        showToast('جاري تجهيز ملف النسخة الاحتياطية الكاملة...');
-                        const [dbSettings, dbProducts, dbBundles, dbCoupons] = await Promise.all([
-                          idbGet('settings_v7'),
-                          idbGet('products_v6'),
-                          idbGet('bundles_v6'),
-                          idbGet('coupons_v6')
-                        ]);
-                        const payloadObj = {
-                          exportedAt: new Date().toISOString(),
-                          settings: dbSettings || settings,
-                          products: Array.isArray(dbProducts) && dbProducts.length > 0 ? dbProducts : products,
-                          bundles: Array.isArray(dbBundles) && dbBundles.length > 0 ? dbBundles : bundles,
-                          coupons: Array.isArray(dbCoupons) && dbCoupons.length > 0 ? dbCoupons : coupons
-                        };
-                        const jsonStr = JSON.stringify(payloadObj, null, 2);
-                        const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.style.display = 'none';
-                        a.href = url;
-                        a.download = `el3bakera_backup_${new Date().toISOString().slice(0, 10)}.json`;
-                        document.body.appendChild(a);
-                        a.click();
-                        setTimeout(() => {
-                          document.body.removeChild(a);
-                          URL.revokeObjectURL(url);
-                        }, 1500);
-                        showToast('تم تحميل ملف النسخة الاحتياطية بنجاح!');
-                      } catch (err) {
-                        showToast(`تعذر تحميل الملف: ${err?.message || ''}`, 'error');
-                      }
-                    }}
+                    onClick={handleDownloadBackupFile}
                     className="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black cursor-pointer flex items-center gap-2"
                   >
                     <Download className="w-4 h-4" />
