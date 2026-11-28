@@ -7,8 +7,6 @@ import {
   ChevronRight,
   CheckCircle2,
   X,
-  Plus,
-  Minus,
   Trash2,
   Edit3,
   Copy,
@@ -42,8 +40,7 @@ import {
   signInAnonymously,
   onAuthStateChanged,
   GoogleAuthProvider,
-  signInWithPopup,
-  signOut
+  signInWithPopup
 } from 'firebase/auth';
 import {
   getFirestore,
@@ -51,13 +48,16 @@ import {
   doc,
   setDoc,
   deleteDoc,
-  onSnapshot,
-  getDocs
+  onSnapshot
 } from 'firebase/firestore';
 
 // ============================================================================
-// تهيئة Firebase الآمنة المربوطة مباشرة بمشروع el3bakera-edu لجميع العملاء
+// تهيئة Firebase الآمنة المربوطة بمشروع el3bakera-edu
 // ============================================================================
+const ADMIN_EMAILS = ['mahmoudelzaaty7@gmail.com', 'mahmoudshehatahmohamed@gmail.com'];
+const isAuthorizedAdminEmail = (email) =>
+  Boolean(email && ADMIN_EMAILS.includes(String(email).toLowerCase()));
+
 const PRIMARY_APP_ID = 'el3bakera-edu';
 
 const DEFAULT_FIREBASE_CONFIG = {
@@ -98,7 +98,7 @@ if (activeFirebaseConfig && activeFirebaseConfig.apiKey) {
 }
 
 // ============================================================================
-// غلاف حماية من الأخطاء يمنع الشاشة البيضاء تماماً
+// غلاف حماية لمنع الشاشة البيضاء
 // ============================================================================
 class PlatformErrorBoundary extends React.Component {
   constructor(props) {
@@ -118,12 +118,7 @@ class PlatformErrorBoundary extends React.Component {
           <div className="bg-white rounded-3xl border border-slate-200 p-8 max-w-md w-full text-center space-y-4 shadow-xl">
             <AlertCircle className="w-12 h-12 text-amber-500 mx-auto" />
             <h2 className="text-xl font-black text-slate-900">حدث تعارض مؤقت في البيانات المخزنة</h2>
-            <p className="text-sm text-slate-600">اضغط على الزر بالأسفل لإعادة ضبط الذاكرة المؤقتة وتشغيل المنصة فوراً.</p>
-            {this.state.errorMessage && (
-              <div className="p-2.5 rounded-xl bg-slate-100 text-[11px] text-slate-600 font-mono break-all" dir="ltr">
-                {this.state.errorMessage}
-              </div>
-            )}
+            <p className="text-sm text-slate-600">اضغط على الزر بالأسفل لإعادة تشغيل المنصة فوراً.</p>
             <button
               onClick={() => {
                 try {
@@ -145,7 +140,7 @@ class PlatformErrorBoundary extends React.Component {
 }
 
 // ============================================================================
-// البيانات والإعدادات الافتراضية المعتمدة لمنصة العباقرة للمذكرات التعليمية
+// البيانات والإعدادات الافتراضية لمنصة العباقرة
 // ============================================================================
 const DEFAULT_LOGO_SVG = `data:image/svg+xml;utf8,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
@@ -174,6 +169,20 @@ const DEFAULT_SETTINGS = {
   discountBadgePosition: 'top-left',
   discountBadgeBg: '#10b981',
   discountBadgeText: '#ffffff',
+  generalNoticeEnabled: true,
+  generalNoticeTitle: 'تنبيه هام للمعلمين قبل تأكيد الطلب:',
+  generalNoticeText:
+    '• يتم تسليم المذكرة بصيغة PDF عالية الدقة جاهزة للطباعة ببيانات المعلم الخاصة دون أي بيانات تخصنا.\n• تُوضع العلامة المائية باسم المعلم أو اسم السلسلة الخاص به على كافة الصفحات، وغير متاح إرسال المذكرات بدونها.',
+  generalNoticePosition: 'bottom',
+  generalNoticeBg: '#f8fafc',
+  generalNoticeTextColor: '#334155',
+  generalNoticeBorder: '#cbd5e1',
+  tipNoticeEnabled: true,
+  tipShowOnCard: true,
+  tipNoticePosition: 'below-desc',
+  tipNoticeBg: '#fffbeb',
+  tipNoticeTextColor: '#78350f',
+  tipNoticeBorder: '#fde68a',
   promoEnabled: true,
   promoText: 'عرض خاص للمعلمين: خصم 15% على جميع المذكرات بمناسبة إطلاق المنصة',
   promoCouponCode: 'M20',
@@ -377,7 +386,7 @@ const DEFAULT_PRODUCTS = [
   },
   {
     id: 'nb_1795789806',
-    title: 'منهج الترم الثاني للصف الثالث الثانوي 2027',
+    title: 'منهج الترم الثاني للصف الثالث الثانوي',
     subject: 'اللغة العربية',
     stageId: 'stg_sec',
     gradeId: 'grd_1795789612785',
@@ -417,7 +426,7 @@ const DEFAULT_COUPONS = [
 ];
 
 // ============================================================================
-// دوال المساعدة وتطبيع البيانات وضغط الصور والتخزين غير المحدود
+// دوال المساعدة والتخزين
 // ============================================================================
 function safeText(val, fallback = '') {
   if (val === null || val === undefined) return fallback;
@@ -443,7 +452,7 @@ function normalizeItems(rawList, fallbackList, prefix) {
   });
 }
 
-function compressImageFile(file, maxWidth = 650, quality = 0.72) {
+function compressImageFile(file, maxWidth = 550, quality = 0.65) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -470,7 +479,6 @@ function compressImageFile(file, maxWidth = 650, quality = 0.72) {
   });
 }
 
-// حفظ كل صورة في مستند منفصل في Firestore لتفادي حد الـ 1MB وضمان وصول الصور للعملاء
 async function saveMediaAssetToCloud(dbInstance, appId, assetId, dataUrl) {
   if (!dbInstance) return;
   const mediaCol = collection(dbInstance, 'artifacts', appId, 'public', 'data', 'config');
@@ -482,7 +490,7 @@ async function saveMediaAssetToCloud(dbInstance, appId, assetId, dataUrl) {
     return;
   }
   if (dataUrl.length > 750000) {
-    throw new Error('حجم الصورة كبير جداً، يرجى اختيار صورة أصغر');
+    throw new Error('حجم الصورة كبير جداً، اختر صورة أصغر حجماً');
   }
   await setDoc(doc(mediaCol, docId), {
     assetId,
@@ -491,7 +499,6 @@ async function saveMediaAssetToCloud(dbInstance, appId, assetId, dataUrl) {
   });
 }
 
-// مخزن IndexedDB غير محدود السعة لمنع فشل الحفظ بسبب حد الـ 5MB في localStorage
 const IDB_NAME = 'el3bakera_persistent_db';
 const IDB_STORE = 'kv_store';
 
@@ -542,9 +549,7 @@ function idbGet(key) {
 function safeLocalSet(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // تجاهل تجاوز سعة localStorage لأن البيانات والصور محفوظة بالكامل في IndexedDB والسحابة
-  }
+  } catch {}
 }
 
 function stripHeavyProductMedia(list) {
@@ -559,7 +564,7 @@ function stripHeavyProductMedia(list) {
 }
 
 // ============================================================================
-// المكون الرئيسي للتطبيق
+// المكون الرئيسي للمنصة
 // ============================================================================
 function MuzakkiratiPlatformContent() {
   const [user, setUser] = useState(null);
@@ -571,8 +576,27 @@ function MuzakkiratiPlatformContent() {
       return 'home';
     }
   });
-  const [tabHistory, setTabHistory] = useState(['home']);
+  const [tabHistory, setTabHistory] = useState(() => {
+    try {
+      const initial = localStorage.getItem('el3bakera_active_tab') || 'home';
+      return initial === 'home' ? ['home'] : ['home', initial];
+    } catch {
+      return ['home'];
+    }
+  });
   const [selectedCategory, setSelectedCategory] = useState('all');
+
+  useEffect(() => {
+    const onPopState = (event) => {
+      const targetTab = event.state?.tab || 'home';
+      setActiveTab(targetTab);
+      try {
+        localStorage.setItem('el3bakera_active_tab', targetTab);
+      } catch {}
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
 
   const navigateToTab = (newTab) => {
     if (newTab === activeTab) return;
@@ -580,7 +604,9 @@ function MuzakkiratiPlatformContent() {
     setActiveTab(newTab);
     try {
       localStorage.setItem('el3bakera_active_tab', newTab);
+      window.history.pushState({ tab: newTab }, '', newTab === 'admin' ? '#admin' : `#${newTab}`);
     } catch {}
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleGoBack = () => {
@@ -593,16 +619,18 @@ function MuzakkiratiPlatformContent() {
         localStorage.setItem('el3bakera_active_tab', prevTab);
       } catch {}
     } else {
-      navigateToTab('home');
+      setActiveTab('home');
+      setTabHistory(['home']);
+      try {
+        localStorage.setItem('el3bakera_active_tab', 'home');
+      } catch {}
     }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const [settings, setSettings] = useState(() => {
     try {
-      const saved =
-        localStorage.getItem('el3bakera_settings_v5') ||
-        localStorage.getItem('el3bakera_settings_v4') ||
-        localStorage.getItem('el3bakera_settings_v3');
+      const saved = localStorage.getItem('el3bakera_settings_v5');
       return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
     } catch {
       return DEFAULT_SETTINGS;
@@ -611,24 +639,8 @@ function MuzakkiratiPlatformContent() {
 
   const [products, setProducts] = useState(() => {
     try {
-      const savedV5 = localStorage.getItem('el3bakera_products_v5');
-      const savedOld =
-        localStorage.getItem('el3bakera_products_v4') ||
-        localStorage.getItem('el3bakera_products_v3');
-      const primaryList = savedV5 ? JSON.parse(savedV5) : DEFAULT_PRODUCTS;
-      const oldList = savedOld ? JSON.parse(savedOld) : [];
-      if (!Array.isArray(primaryList)) return DEFAULT_PRODUCTS;
-      return primaryList.map((p) => {
-        const oldMatch = Array.isArray(oldList) ? oldList.find((o) => o.id === p.id) : null;
-        return {
-          ...p,
-          coverImage: p.coverImage || oldMatch?.coverImage || oldMatch?.image || '',
-          sampleImages:
-            Array.isArray(p.sampleImages) && p.sampleImages.length > 0
-              ? p.sampleImages
-              : oldMatch?.sampleImages || []
-        };
-      });
+      const saved = localStorage.getItem('el3bakera_products_v5');
+      return saved ? JSON.parse(saved) : DEFAULT_PRODUCTS;
     } catch {
       return DEFAULT_PRODUCTS;
     }
@@ -676,6 +688,7 @@ function MuzakkiratiPlatformContent() {
   });
 
   const [trackPhone, setTrackPhone] = useState('');
+  const [trackOrderId, setTrackOrderId] = useState('');
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
 
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
@@ -762,20 +775,7 @@ function MuzakkiratiPlatformContent() {
     status: 'جاري التجهيز والتنسيق',
     expectedDate: 'قريباً'
   });
-  const [newTestimonialForm, setNewTestimonialForm] = useState({
-    teacherName: '',
-    role: '',
-    text: '',
-    image: ''
-  });
   const [cloudSyncStatus, setCloudSyncStatus] = useState('checking');
-  const [customFirebaseText, setCustomFirebaseText] = useState(() => {
-    try {
-      return localStorage.getItem('el3bakera_custom_firebase_config') || '';
-    } catch {
-      return '';
-    }
-  });
 
   const [toast, setToast] = useState(null);
   const [copiedCode, setCopiedCode] = useState(false);
@@ -834,6 +834,21 @@ function MuzakkiratiPlatformContent() {
     return () => window.removeEventListener('hashchange', checkAdminHash);
   }, [isAdminAuthenticated]);
 
+  const handleAdminLogout = () => {
+    setIsAdminAuthenticated(false);
+    setIsAdminModalOpen(false);
+    try {
+      localStorage.removeItem('el3bakera_admin_auth');
+      localStorage.setItem('el3bakera_active_tab', 'home');
+      if (window.location.hash === '#admin') {
+        window.history.replaceState({ tab: 'home' }, '', window.location.pathname + window.location.search);
+      }
+    } catch {}
+    setTabHistory(['home']);
+    setActiveTab('home');
+    showToast('تم تسجيل الخروج من لوحة الإدارة بأمان');
+  };
+
   const handleLogoSecretTap = () => {
     navigateToTab('home');
     logoTapCountRef.current += 1;
@@ -859,7 +874,7 @@ function MuzakkiratiPlatformContent() {
     }
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      if (u && u.email === 'mahmoudelzaaty7@gmail.com') {
+      if (u && isAuthorizedAdminEmail(u.email)) {
         setCloudSyncStatus('admin-connected');
         setIsAdminAuthenticated(true);
         try {
@@ -885,7 +900,7 @@ function MuzakkiratiPlatformContent() {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
       const result = await signInWithPopup(auth, provider);
-      if (result.user?.email === 'mahmoudelzaaty7@gmail.com') {
+      if (isAuthorizedAdminEmail(result.user?.email)) {
         setIsAdminAuthenticated(true);
         try {
           localStorage.setItem('el3bakera_admin_auth', 'true');
@@ -896,7 +911,7 @@ function MuzakkiratiPlatformContent() {
         showToast('تم ربط حساب المدير الرسمي بنجاح — جميع التعديلات ستُحفظ في السحابة فوراً ✓');
       } else {
         showToast(
-          `تم تسجيل الدخول بـ (${result.user?.email})، لكن قواعد Firebase تتطلب حساب mahmoudelzaaty7@gmail.com للكتابة`,
+          `تم تسجيل الدخول بـ (${result.user?.email})، لكن قواعد Firebase تتطلب حساب المدير للكتابة`,
           'error'
         );
       }
@@ -918,7 +933,6 @@ function MuzakkiratiPlatformContent() {
     const unsubSettings = onSnapshot(
       settingsRef,
       (snap) => {
-        setCloudSyncStatus(auth?.currentUser?.email === 'mahmoudelzaaty7@gmail.com' ? 'admin-connected' : 'connected');
         if (snap.exists() && !isSavingRef.current) {
           const cloudData = snap.data();
           setSettings((prev) => {
@@ -937,48 +951,33 @@ function MuzakkiratiPlatformContent() {
               heroBgImage: cloudData.heroBgImage || prev.heroBgImage || ''
             };
             idbSet('settings_v5', merged);
-            safeLocalSet('el3bakera_settings_v5', {
-              ...merged,
-              logoImage: '',
-              heroImage: '',
-              heroBgImage: '',
-              categories: (merged.categories || []).map(({ coverImage, ...c }) => c)
-            });
+            safeLocalSet('el3bakera_settings_v5', merged);
             return merged;
           });
         }
       },
-      () => setCloudSyncStatus('error')
+      () => {}
     );
 
-    const unsubMedia = onSnapshot(
+    const unsubMediaAssets = onSnapshot(
       configCol,
       (snapshot) => {
         if (snapshot.empty || isSavingRef.current) return;
         const assetsMap = {};
-        const samplesByProd = {};
+        const samplesByProduct = {};
+
         snapshot.forEach((d) => {
-          if (d.id === 'media') {
-            const legacy = d.data();
-            if (legacy.logoImage) assetsMap.logoImage = legacy.logoImage;
-            if (legacy.heroImage) assetsMap.heroImage = legacy.heroImage;
-            if (legacy.heroBgImage) assetsMap.heroBgImage = legacy.heroBgImage;
-            if (legacy.categoryCovers) {
-              Object.entries(legacy.categoryCovers).forEach(([cid, url]) => {
-                if (url) assetsMap[`cat_${cid}`] = url;
-              });
-            }
-          } else if (d.id.startsWith('media_')) {
+          if (d.id.startsWith('media_')) {
             const data = d.data();
             const key = data.assetId || d.id.replace('media_', '');
             if (data.dataUrl) {
               assetsMap[key] = data.dataUrl;
               const sampleMatch = key.match(/^prod_sample_(.+)_(\d+)$/);
               if (sampleMatch) {
-                const pid = sampleMatch[1];
+                const prodId = sampleMatch[1];
                 const idx = Number(sampleMatch[2]);
-                if (!samplesByProd[pid]) samplesByProd[pid] = [];
-                samplesByProd[pid][idx] = data.dataUrl;
+                if (!samplesByProduct[prodId]) samplesByProduct[prodId] = [];
+                samplesByProduct[prodId][idx] = data.dataUrl;
               }
             }
           }
@@ -987,16 +986,17 @@ function MuzakkiratiPlatformContent() {
         setSettings((prev) => {
           const updatedCategories = (prev.categories || []).map((c) => ({
             ...c,
-            coverImage: assetsMap[`cat_${c.id}`] || c.coverImage || ''
+            coverImage: assetsMap[`cat_${c.id}`] !== undefined ? assetsMap[`cat_${c.id}`] : (c.coverImage || '')
           }));
           const merged = {
             ...prev,
-            categories: updatedCategories,
-            logoImage: assetsMap.logoImage || prev.logoImage || '',
-            heroImage: assetsMap.heroImage || prev.heroImage || '',
-            heroBgImage: assetsMap.heroBgImage || prev.heroBgImage || ''
+            logoImage: assetsMap.logoImage !== undefined ? assetsMap.logoImage : (prev.logoImage || ''),
+            heroImage: assetsMap.heroImage !== undefined ? assetsMap.heroImage : (prev.heroImage || ''),
+            heroBgImage: assetsMap.heroBgImage !== undefined ? assetsMap.heroBgImage : (prev.heroBgImage || ''),
+            categories: updatedCategories
           };
           idbSet('settings_v5', merged);
+          safeLocalSet('el3bakera_settings_v5', merged);
           return merged;
         });
 
@@ -1004,15 +1004,19 @@ function MuzakkiratiPlatformContent() {
           let changed = false;
           const updated = prev.map((p) => {
             const cloudCover = assetsMap[`prod_cover_${p.id}`];
-            const cloudSamples = (samplesByProd[p.id] || []).filter(Boolean);
-            const nextCover = cloudCover || p.coverImage || '';
-            const nextSamples =
-              cloudSamples.length > 0 ? cloudSamples : p.sampleImages || [];
-            if (nextCover !== p.coverImage || nextSamples.length !== (p.sampleImages || []).length) {
+            const cloudSamples = samplesByProduct[p.id]
+              ? samplesByProduct[p.id].filter(Boolean)
+              : null;
+            let nextProd = p;
+            if (cloudCover && cloudCover !== p.coverImage) {
               changed = true;
-              return { ...p, coverImage: nextCover, sampleImages: nextSamples };
+              nextProd = { ...nextProd, coverImage: cloudCover };
             }
-            return p;
+            if (cloudSamples && cloudSamples.length > 0 && (!p.sampleImages || p.sampleImages.length === 0)) {
+              changed = true;
+              nextProd = { ...nextProd, sampleImages: cloudSamples };
+            }
+            return nextProd;
           });
           if (changed) {
             idbSet('products_v5', updated);
@@ -1035,7 +1039,7 @@ function MuzakkiratiPlatformContent() {
               const existing = prev.find((p) => p.id === item.id);
               return {
                 ...item,
-                coverImage: item.coverImage || existing?.coverImage || '',
+                coverImage: existing?.coverImage || item.coverImage || '',
                 sampleImages:
                   Array.isArray(item.sampleImages) && item.sampleImages.length > 0
                     ? item.sampleImages
@@ -1051,6 +1055,19 @@ function MuzakkiratiPlatformContent() {
       () => {}
     );
 
+    const ordersCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'orders');
+    const unsubOrders = onSnapshot(
+      ordersCol,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const cloudOrders = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+          cloudOrders.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+          setOrders(cloudOrders);
+        }
+      },
+      () => {}
+    );
+
     const bundlesCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles');
     const unsubBundles = onSnapshot(
       bundlesCol,
@@ -1059,7 +1076,6 @@ function MuzakkiratiPlatformContent() {
           const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
           setBundles(list);
           idbSet('bundles_v5', list);
-          safeLocalSet('el3bakera_bundles_v5', list);
         }
       },
       () => {}
@@ -1073,85 +1089,18 @@ function MuzakkiratiPlatformContent() {
           const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
           setCoupons(list);
           idbSet('coupons_v5', list);
-          safeLocalSet('el3bakera_coupons_v5', list);
         }
       },
       () => {}
     );
 
-    const ordersCol = collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'orders');
-    const unsubOrders = onSnapshot(
-      ordersCol,
-      (snap) => {
-        if (!snap.empty) {
-          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-          list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-          setOrders(list);
-        }
-      },
-      () => {}
-    );
-
-    const fetchSamples = async () => {
-      try {
-        const samplesSnap = await getDocs(
-          collection(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'notebook_samples')
-        );
-        if (!samplesSnap.empty) {
-          const mapByNotebook = {};
-          const coverByNotebook = {};
-          samplesSnap.forEach((docSnap) => {
-            const data = docSnap.data();
-            const nbId = data.notebookId || docSnap.id.split('_')[0];
-            if (data.coverImage && nbId) coverByNotebook[nbId] = data.coverImage;
-            const foundImgs = [];
-            if (Array.isArray(data.sampleImages)) foundImgs.push(...data.sampleImages);
-            if (Array.isArray(data.images)) foundImgs.push(...data.images);
-            if (Array.isArray(data.pages)) foundImgs.push(...data.pages);
-            Object.entries(data).forEach(([k, v]) => {
-              if (
-                k !== 'coverImage' &&
-                typeof v === 'string' &&
-                (v.startsWith('data:image') || v.startsWith('http'))
-              ) {
-                foundImgs.push(v);
-              }
-            });
-            if (foundImgs.length > 0 && nbId) {
-              mapByNotebook[nbId] = [...(mapByNotebook[nbId] || []), ...foundImgs];
-            }
-          });
-
-          if (Object.keys(mapByNotebook).length > 0 || Object.keys(coverByNotebook).length > 0) {
-            setProducts((prev) => {
-              const updated = prev.map((p) => {
-                const recoveredSamples = mapByNotebook[p.id];
-                const recoveredCover = coverByNotebook[p.id];
-                return {
-                  ...p,
-                  coverImage: p.coverImage || recoveredCover || '',
-                  sampleImages:
-                    recoveredSamples && recoveredSamples.length > 0
-                      ? Array.from(new Set([...(p.sampleImages || []), ...recoveredSamples]))
-                      : p.sampleImages || []
-                };
-              });
-              idbSet('products_v5', updated);
-              safeLocalSet('el3bakera_products_v5', stripHeavyProductMedia(updated));
-              return updated;
-            });
-          }
-        }
-      } catch {}
-    };
-    fetchSamples();
     return () => {
       unsubSettings();
-      unsubMedia();
+      unsubMediaAssets();
       unsubProducts();
+      unsubOrders();
       unsubBundles();
       unsubCoupons();
-      unsubOrders();
     };
   }, [user]);
 
@@ -1165,13 +1114,8 @@ function MuzakkiratiPlatformContent() {
     };
     setSettings(cleanSettings);
     await idbSet('settings_v5', cleanSettings);
-    safeLocalSet('el3bakera_settings_v5', {
-      ...cleanSettings,
-      logoImage: '',
-      heroImage: '',
-      heroBgImage: '',
-      categories: (cleanSettings.categories || []).map(({ coverImage, ...c }) => c)
-    });
+    safeLocalSet('el3bakera_settings_v5', cleanSettings);
+    let cloudSaved = false;
     if (db) {
       try {
         const lightCategories = (cleanSettings.categories || []).map(({ coverImage, ...rest }) => rest);
@@ -1183,27 +1127,29 @@ function MuzakkiratiPlatformContent() {
           lightSettings,
           { merge: true }
         );
+
         await saveMediaAssetToCloud(db, PRIMARY_APP_ID, 'logoImage', logoImage || '');
         await saveMediaAssetToCloud(db, PRIMARY_APP_ID, 'heroImage', heroImage || '');
         await saveMediaAssetToCloud(db, PRIMARY_APP_ID, 'heroBgImage', heroBgImage || '');
         for (const cat of cleanSettings.categories || []) {
           await saveMediaAssetToCloud(db, PRIMARY_APP_ID, `cat_${cat.id}`, cat.coverImage || '');
         }
-        setCloudSyncStatus(auth?.currentUser?.email === 'mahmoudelzaaty7@gmail.com' ? 'admin-connected' : 'connected');
+
+        cloudSaved = true;
       } catch (e) {
-        console.warn('Cloud settings save warning:', e);
-        setCloudSyncStatus('error');
+        console.error('Firebase save error:', e);
         showToast(
           e?.code === 'permission-denied'
-            ? 'السحابة رفضت الحفظ! اضغط على "ربط حساب جوجل للإدارة" في الأعلى أولاً'
-            : `تعذر الحفظ في السحابة (${e?.code || 'خطأ اتصال'})`,
+            ? 'يرجى الضغط على زر "ربط حساب جوجل للإدارة" في الأعلى ليسمح Firebase بحفظ التعديلات للعملاء'
+            : `تم الحفظ محلياً، وتعذر النشر للسحابة: ${e?.code || 'خطأ في الصلاحيات'}`,
           'error'
         );
       }
     }
     setTimeout(() => {
       isSavingRef.current = false;
-    }, 2000);
+    }, 1500);
+    return cloudSaved;
   };
 
   const saveProductToCloud = async (productObj) => {
@@ -1232,17 +1178,17 @@ function MuzakkiratiPlatformContent() {
         { merge: true }
       );
     } catch (e) {
-      console.warn('Cloud product save warning:', e);
+      console.error('Product cloud save error:', e);
       showToast(
         e?.code === 'permission-denied'
-          ? 'السحابة رفضت حفظ المذكرة! سجل الدخول بحساب جوجل (mahmoudelzaaty7@gmail.com) في شريط الإدارة'
-          : 'تعذر مزامنة المذكرة مع السحابة — تم الحفظ في ذاكرة المتصفح',
+          ? 'يرجى الضغط على زر "ربط حساب جوجل للإدارة" ليتم نشر المذكرة وصورها للعملاء'
+          : `تعذر رفع صور المذكرة للسحابة: ${e?.code || e?.message || 'خطأ في الاتصال'}`,
         'error'
       );
     }
     setTimeout(() => {
       isSavingRef.current = false;
-    }, 2000);
+    }, 1500);
   };
 
   const filteredProducts = useMemo(() => {
@@ -1358,7 +1304,8 @@ function MuzakkiratiPlatformContent() {
     }
 
     const itemsLines = cart.map((i, idx) => `${idx + 1}. ${i.title} (${i.price} ج.م)`).join('\n');
-    const msg = `السلام عليكم، أرغب في طلب المذكرات التالية مخصصة باسمي من *${settings.platformName}*:\n\n` +
+    const msg =
+      `السلام عليكم، أرغب في طلب المذكرات التالية مخصصة باسمي من *${settings.platformName}*:\n\n` +
       `*رقم الطلب:* ${orderId}\n` +
       `*اسم المعلم:* ${customerForm.teacherName}\n` +
       `*اسم السلسلة:* ${customerForm.seriesName || 'غير محدد'}\n` +
@@ -1378,7 +1325,7 @@ function MuzakkiratiPlatformContent() {
     window.open(`https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`, '_blank');
     setCart([]);
     setIsCartOpen(false);
-    showToast('تم تسجيل طلبك وتحويلك إلى واتساب الإدارة لإرسال الشعار وإتمام التجهيز');
+    showToast('تم تسجيل طلبك في النظام وتحويلك إلى واتساب الإدارة لإرسال الشعار وتأكيد التجهيز');
   };
 
   const handleAdminLogin = (e) => {
@@ -1400,7 +1347,7 @@ function MuzakkiratiPlatformContent() {
     navigateToTab('admin');
     setAdminPinInput('');
     setShowAdminPin(false);
-    showToast('تم الدخول إلى لوحة الإدارة بنجاح');
+    showToast('تم تسجيل الدخول إلى لوحة الإدارة بنجاح');
   };
 
   const handleSaveProduct = async (e) => {
@@ -1473,7 +1420,8 @@ function MuzakkiratiPlatformContent() {
   };
 
   const handleSaveAllAdminChanges = async () => {
-    await saveSettings({
+    showToast('جاري حفظ ونشر جميع التعديلات...');
+    const ok = await saveSettings({
       ...settings,
       stages: normalizedStages,
       grades: normalizedGrades,
@@ -1482,7 +1430,7 @@ function MuzakkiratiPlatformContent() {
     await idbSet('products_v5', products);
     await idbSet('bundles_v5', bundles);
     await idbSet('coupons_v5', coupons);
-    if (db) {
+    if (db && ok) {
       try {
         for (const prod of products) {
           await saveProductToCloud(prod);
@@ -1494,9 +1442,13 @@ function MuzakkiratiPlatformContent() {
             { merge: true }
           );
         }
-      } catch {}
+        showToast('✓ تم حفظ ونشر جميع التعديلات للعملاء بنجاح!');
+      } catch (err) {
+        showToast(`تم حفظ الإعدادات وتعذرت مزامنة بعض العناصر: ${err?.code || ''}`, 'error');
+      }
+    } else if (!db) {
+      showToast('✓ تم حفظ التعديلات بنجاح');
     }
-    showToast('تم حفظ جميع الإعدادات والتعديلات ومزامنتها بنجاح!');
   };
 
   const handleExportBackup = () => {
@@ -1538,12 +1490,10 @@ function MuzakkiratiPlatformContent() {
         if (Array.isArray(parsed.bundles)) {
           setBundles(parsed.bundles);
           await idbSet('bundles_v5', parsed.bundles);
-          safeLocalSet('el3bakera_bundles_v5', parsed.bundles);
         }
         if (Array.isArray(parsed.coupons)) {
           setCoupons(parsed.coupons);
           await idbSet('coupons_v5', parsed.coupons);
-          safeLocalSet('el3bakera_coupons_v5', parsed.coupons);
         }
         showToast('تم استيراد النسخة الاحتياطية بالكامل بنجاح!');
       } catch {
@@ -1599,15 +1549,74 @@ function MuzakkiratiPlatformContent() {
     );
   };
 
+  const renderGeneralNoticeBox = () => {
+    if (settings.generalNoticeEnabled === false) return null;
+    const noticeLines = safeText(
+      settings.generalNoticeText,
+      DEFAULT_SETTINGS.generalNoticeText
+    )
+      .split('\n')
+      .filter((l) => l.trim());
+    if (noticeLines.length === 0 && !settings.generalNoticeTitle) return null;
+
+    return (
+      <div
+        style={{
+          backgroundColor: settings.generalNoticeBg || '#f8fafc',
+          color: settings.generalNoticeTextColor || '#334155',
+          borderColor: settings.generalNoticeBorder || '#cbd5e1'
+        }}
+        className="p-4 rounded-2xl border-2 text-xs space-y-1.5 shadow-2xs"
+      >
+        {settings.generalNoticeTitle && (
+          <div className="font-black flex items-center gap-1.5 text-sm">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{safeText(settings.generalNoticeTitle)}</span>
+          </div>
+        )}
+        {noticeLines.map((line, idx) => (
+          <p key={idx} className="leading-relaxed font-semibold">
+            {line}
+          </p>
+        ))}
+      </div>
+    );
+  };
+
+  const renderProductTipBox = (tipText, compact = false) => {
+    if (settings.tipNoticeEnabled === false) return null;
+    if (compact && settings.tipShowOnCard === false) return null;
+    const text = safeText(tipText).trim();
+    if (!text) return null;
+
+    return (
+      <div
+        style={{
+          backgroundColor: settings.tipNoticeBg || '#fffbeb',
+          color: settings.tipNoticeTextColor || '#78350f',
+          borderColor: settings.tipNoticeBorder || '#fde68a'
+        }}
+        className={`${
+          compact ? 'px-2.5 py-1.5 rounded-xl text-[11px]' : 'p-3.5 rounded-2xl text-xs'
+        } border-2 font-bold flex items-start gap-2 shadow-2xs`}
+      >
+        <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+        <span className="leading-relaxed">{text}</span>
+      </div>
+    );
+  };
+
   return (
-    <div dir="rtl" className="min-h-screen bg-[#f4f6fa] text-slate-900 font-sans flex flex-col">
+    <div dir="rtl" className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#f4f6fa] text-slate-900 font-sans flex flex-col">
       {toast && (
         <div
-          className={`fixed bottom-5 right-5 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl text-white text-sm font-bold transition-all ${
-            toast.type === 'error' ? 'bg-rose-600' : 'bg-slate-900'
+          className={`fixed bottom-5 right-4 left-4 sm:left-auto sm:right-5 z-[100] flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl text-white text-xs sm:text-sm font-black transition-all border ${
+            toast.type === 'error'
+              ? 'bg-rose-600 border-rose-400'
+              : 'bg-emerald-600 border-emerald-400'
           }`}
         >
-          <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />
+          <CheckCircle2 className="w-5 h-5 text-white shrink-0" />
           <span>{toast.message}</span>
         </div>
       )}
@@ -1619,46 +1628,46 @@ function MuzakkiratiPlatformContent() {
             backgroundColor: safeText(settings.promoBgColor, '#0654d0'),
             color: safeText(settings.promoTextColor, '#fde047')
           }}
-          className="w-full py-2.5 px-4 text-center text-xs sm:text-sm font-bold flex flex-wrap items-center justify-center gap-2.5 shadow-sm"
+          className="w-full py-2 px-3 text-center text-[11px] sm:text-sm font-bold flex flex-wrap items-center justify-center gap-1.5 sm:gap-2.5 shadow-sm"
         >
-          <Sparkles className="w-4 h-4 shrink-0" />
-          <span>{safeText(settings.promoText)}</span>
+          <Sparkles className="w-3.5 h-3.5 shrink-0" />
+          <span className="leading-snug">{safeText(settings.promoText)}</span>
           {settings.promoCouponCode && (
             <button
               onClick={copyPromoCode}
-              className="inline-flex items-center gap-1.5 bg-amber-300 text-slate-950 px-3 py-0.5 rounded-md font-black text-xs hover:bg-amber-200 transition cursor-pointer"
+              className="inline-flex items-center gap-1 bg-amber-300 text-slate-950 px-2.5 py-0.5 rounded-md font-black text-[11px] hover:bg-amber-200 transition cursor-pointer"
               title="اضغط لنسخ الكود"
             >
               <span>{safeText(settings.promoCouponCode)}</span>
-              {copiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              {copiedCode ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
             </button>
           )}
         </div>
       )}
 
-      {/* الهيدر الرئيسي */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-3">
+      {/* الهيدر الرئيسي المتجاوب بالكامل مع الهاتف */}
+      <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur border-b border-slate-200/80">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-2">
           <div
             onClick={handleLogoSecretTap}
-            className="flex items-center gap-3 cursor-pointer select-none shrink-0"
+            className="flex items-center gap-2 sm:gap-3 cursor-pointer select-none min-w-0 flex-1"
           >
             <img
               src={resolvedLogo}
               alt={safeText(settings.platformName)}
-              className="w-12 h-12 rounded-2xl object-cover shadow-md border border-slate-200"
+              className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl object-cover shadow-sm border border-slate-200 shrink-0"
             />
-            <div>
-              <h1 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+            <div className="min-w-0">
+              <h1 className="text-xs sm:text-lg font-black text-slate-900 leading-tight truncate">
                 {safeText(settings.platformName)}
               </h1>
-              <p className="text-[11px] sm:text-xs text-slate-500 font-medium hidden sm:block">
+              <p className="text-[11px] sm:text-xs text-slate-500 font-medium hidden sm:block truncate">
                 {safeText(settings.platformTagline)}
               </p>
             </div>
           </div>
 
-          <nav className="hidden md:flex items-center gap-2">
+          <nav className="hidden md:flex items-center gap-2 shrink-0">
             <button
               onClick={() => navigateToTab('home')}
               className={`px-4 py-2 rounded-xl text-sm font-bold transition ${
@@ -1700,54 +1709,37 @@ function MuzakkiratiPlatformContent() {
               تتبع طلبك
             </button>
             {isAdminAuthenticated && (
-              <>
-                <button
-                  onClick={() => navigateToTab('admin')}
-                  className={`px-4 py-2 rounded-xl text-sm font-bold transition ${
-                    activeTab === 'admin'
-                      ? 'bg-slate-900 text-amber-400 shadow-sm'
-                      : 'bg-amber-100 text-amber-900'
-                  }`}
-                >
-                  لوحة الإدارة
-                </button>
-                <button
-                  onClick={() => {
-                    setIsAdminAuthenticated(false);
-                    try {
-                      localStorage.removeItem('el3bakera_admin_auth');
-                    } catch {}
-                    if (auth) {
-                      signOut(auth).catch(() => {});
-                    }
-                    navigateToTab('home');
-                    showToast('تم تسجيل الخروج من لوحة الإدارة');
-                  }}
-                  className="px-3 py-2 rounded-xl text-xs font-bold bg-rose-50 text-rose-600 hover:bg-rose-100 transition cursor-pointer"
-                >
-                  تسجيل خروج
-                </button>
-              </>
+              <button
+                onClick={() => navigateToTab('admin')}
+                className={`px-4 py-2 rounded-xl text-sm font-bold transition ${
+                  activeTab === 'admin'
+                    ? 'bg-slate-900 text-amber-400 shadow-sm'
+                    : 'bg-amber-100 text-amber-900'
+                }`}
+              >
+                لوحة الإدارة
+              </button>
             )}
           </nav>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             <button
               onClick={() => setIsContactModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold shadow-sm transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-2.5 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold shadow-sm transition cursor-pointer"
+              title="تواصل معنا"
             >
-              <Phone className="w-4 h-4" />
+              <Phone className="w-4 h-4 shrink-0" />
               <span className="hidden sm:inline">تواصل معنا</span>
             </button>
 
             <button
               onClick={() => setIsCartOpen(true)}
-              className="relative inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold shadow-sm transition cursor-pointer"
+              className="relative inline-flex items-center gap-1.5 px-2.5 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold shadow-sm transition cursor-pointer"
             >
-              <ShoppingCart className="w-4 h-4 text-amber-400" />
+              <ShoppingCart className="w-4 h-4 text-amber-400 shrink-0" />
               <span>السلة</span>
               {cart.length > 0 && (
-                <span className="px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 text-xs font-black">
+                <span className="px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] sm:text-xs font-black">
                   {cart.length}
                 </span>
               )}
@@ -1755,10 +1747,11 @@ function MuzakkiratiPlatformContent() {
           </div>
         </div>
 
-        <div className="flex md:hidden items-center justify-around border-t border-slate-100 py-2 px-2 bg-white">
+        {/* شريط تنقل متجاوب للهواتف المحمولة */}
+        <div className="grid md:hidden grid-flow-col auto-cols-fr border-t border-slate-100 py-1.5 px-2 gap-1 bg-white">
           <button
             onClick={() => navigateToTab('home')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
+            className={`py-1.5 rounded-lg text-[11px] font-bold text-center truncate ${
               activeTab === 'home' ? 'bg-blue-600 text-white' : 'text-slate-600'
             }`}
           >
@@ -1766,7 +1759,7 @@ function MuzakkiratiPlatformContent() {
           </button>
           <button
             onClick={() => navigateToTab('library')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
+            className={`py-1.5 rounded-lg text-[11px] font-bold text-center truncate ${
               activeTab === 'library' ? 'bg-blue-600 text-white' : 'text-slate-600'
             }`}
           >
@@ -1774,7 +1767,7 @@ function MuzakkiratiPlatformContent() {
           </button>
           <button
             onClick={() => navigateToTab('bundles')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
+            className={`py-1.5 rounded-lg text-[11px] font-bold text-center truncate ${
               activeTab === 'bundles' ? 'bg-blue-600 text-white' : 'text-slate-600'
             }`}
           >
@@ -1782,20 +1775,32 @@ function MuzakkiratiPlatformContent() {
           </button>
           <button
             onClick={() => navigateToTab('track')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
+            className={`py-1.5 rounded-lg text-[11px] font-bold text-center truncate ${
               activeTab === 'track' ? 'bg-blue-600 text-white' : 'text-slate-600'
             }`}
           >
             تتبع طلبك
           </button>
+          {isAdminAuthenticated && (
+            <button
+              onClick={() => navigateToTab('admin')}
+              className={`py-1.5 rounded-lg text-[11px] font-bold text-center truncate ${
+                activeTab === 'admin' ? 'bg-slate-900 text-amber-400' : 'bg-amber-100 text-amber-900'
+              }`}
+            >
+              الإدارة
+            </button>
+          )}
         </div>
       </header>
 
+      {/* زر الرجوع للخلف */}
       {activeTab !== 'home' && (
-        <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 pt-5">
+        <div className="max-w-7xl mx-auto w-full px-3 sm:px-6 lg:px-8 pt-4">
           <button
+            type="button"
             onClick={handleGoBack}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs sm:text-sm font-bold shadow-2xs transition cursor-pointer"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-slate-200 active:bg-slate-200 hover:bg-slate-100 text-slate-800 text-xs sm:text-sm font-black shadow-2xs transition cursor-pointer touch-manipulation"
           >
             <ArrowRight className="w-4 h-4" />
             <span>رجوع للخلف</span>
@@ -1803,16 +1808,17 @@ function MuzakkiratiPlatformContent() {
         </div>
       )}
 
-      <main className="flex-1">
+      {/* المحتوى الرئيسي */}
+      <main className="flex-1 w-full">
         {/* 1. الصفحة الرئيسية */}
         {activeTab === 'home' && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-12">
-            <section className="relative overflow-hidden rounded-3xl bg-gradient-to-bl from-[#0b1938] via-[#0e224d] to-[#081229] text-white p-6 sm:p-10 lg:p-12 shadow-xl border border-slate-800">
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-10 sm:space-y-12">
+            <section className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-bl from-[#0b1938] via-[#0e224d] to-[#081229] text-white p-5 sm:p-10 lg:p-12 shadow-xl border border-slate-800">
               {settings.heroBgImage && (
                 <>
                   <img
                     src={settings.heroBgImage}
-                    alt="خلفية الشاشة الرئيسية"
+                    alt="خلفية الشاشة"
                     className="absolute inset-0 w-full h-full object-cover z-0"
                   />
                   <div
@@ -1905,13 +1911,15 @@ function MuzakkiratiPlatformContent() {
               </div>
             </section>
 
-            {/* قسم الأقسام الدراسية */}
+            {/* الأقسام الدراسية */}
             <section className="space-y-5">
               <div className="flex items-center justify-between">
                 <h3 className="text-xl sm:text-2xl font-black text-slate-900">الأقسام الدراسية</h3>
                 <button
                   onClick={() => {
                     setSelectedCategory('all');
+                    setSelectedStage('all');
+                    setSelectedGrade('all');
                     navigateToTab('library');
                   }}
                   className="text-sm font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
@@ -1928,6 +1936,8 @@ function MuzakkiratiPlatformContent() {
                       key={cat.id}
                       onClick={() => {
                         setSelectedCategory(cat.id);
+                        setSelectedStage('all');
+                        setSelectedGrade('all');
                         navigateToTab('library');
                       }}
                       className="group bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-sm hover:shadow-xl transition-all cursor-pointer flex flex-col"
@@ -1964,56 +1974,7 @@ function MuzakkiratiPlatformContent() {
               </div>
             </section>
 
-            {/* ركن الإعلان عن المذكرات قيد التجهيز */}
-            {safeUpcoming.length > 0 && (
-              <section className="bg-gradient-to-l from-slate-900 via-[#0f2347] to-slate-900 rounded-3xl p-6 sm:p-8 text-white border border-slate-800 shadow-lg space-y-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-2xl bg-amber-400/20 border border-amber-400/30 text-amber-300 flex items-center justify-center">
-                      <Sparkles className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg sm:text-xl font-black text-white">
-                        مذكرات وبنوك أسئلة قيد التجهيز والإصدار قريباً
-                      </h3>
-                      <p className="text-xs text-slate-300">
-                        نعمل حالياً على إعداد وتنسيق هذه الإصدارات لتكون متاحة للحجز والتخصيص قريباً
-                      </p>
-                    </div>
-                  </div>
-                  <span className="px-3.5 py-1.5 rounded-full bg-amber-400 text-slate-950 text-xs font-black">
-                    قريباً على المنصة
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {safeUpcoming.map((item) => (
-                    <div
-                      key={item.id}
-                      className="rounded-2xl bg-white/10 border border-white/15 p-4 flex flex-col justify-between gap-3"
-                    >
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between text-[11px]">
-                          <span className="px-2.5 py-0.5 rounded-full bg-sky-400/20 text-sky-200 font-bold">
-                            {safeText(item.stage)}
-                          </span>
-                          <span className="text-amber-300 font-black">{safeText(item.expectedDate)}</span>
-                        </div>
-                        <h4 className="font-black text-sm sm:text-base text-white pt-1">
-                          {safeText(item.title)}
-                        </h4>
-                      </div>
-                      <div className="text-xs text-slate-300 bg-slate-950/40 px-3 py-2 rounded-xl flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                        <span>{safeText(item.status)}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* قسم أحدث المذكرات المضافة */}
+            {/* أحدث المذكرات */}
             <section className="space-y-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -2092,18 +2053,22 @@ function MuzakkiratiPlatformContent() {
                           <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">
                             {safeText(product.description)}
                           </p>
+
+                          {renderProductTipBox(product.tipText, true)}
                         </div>
 
                         <div className="space-y-3 pt-2 border-t border-slate-100">
                           <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-xl">
                             <span>📄 {product.pagesCount || 0} صفحة PDF</span>
                             <button
-                              onClick={() => {
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 setPreviewProduct(product);
                                 setActiveSampleIndex(0);
                                 setIsSampleFullscreen(false);
                               }}
-                              className="text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                              className="text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer touch-manipulation py-1 px-2"
                             >
                               <Eye className="w-3.5 h-3.5" />
                               <span>التفاصيل والعينة</span>
@@ -2135,7 +2100,56 @@ function MuzakkiratiPlatformContent() {
               </div>
             </section>
 
-            {/* ركن آراء وتقييمات المعلمين */}
+            {/* الإصدارات القادمة (أسفل أحدث المذكرات المضافة) */}
+            {safeUpcoming.length > 0 && (
+              <section className="bg-gradient-to-l from-slate-900 via-[#0f2347] to-slate-900 rounded-2xl sm:rounded-3xl p-5 sm:p-8 text-white border border-slate-800 shadow-lg space-y-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-amber-400/20 border border-amber-400/30 text-amber-300 flex items-center justify-center shrink-0">
+                      <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-base sm:text-xl font-black text-white">
+                        مذكرات وبنوك أسئلة قيد التجهيز والإصدار قريباً
+                      </h3>
+                      <p className="text-xs text-slate-300">
+                        نعمل حالياً على إعداد وتنسيق هذه الإصدارات لتكون متاحة للحجز والتخصيص قريباً
+                      </p>
+                    </div>
+                  </div>
+                  <span className="px-3.5 py-1.5 rounded-full bg-amber-400 text-slate-950 text-xs font-black">
+                    قريباً على المنصة
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {safeUpcoming.map((item) => (
+                    <div
+                      key={item.id}
+                      className="rounded-2xl bg-white/10 border border-white/15 p-4 flex flex-col justify-between gap-3"
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="px-2.5 py-0.5 rounded-full bg-sky-400/20 text-sky-200 font-bold">
+                            {safeText(item.stage)}
+                          </span>
+                          <span className="text-amber-300 font-black">{safeText(item.expectedDate)}</span>
+                        </div>
+                        <h4 className="font-black text-sm sm:text-base text-white pt-1">
+                          {safeText(item.title)}
+                        </h4>
+                      </div>
+                      <div className="text-xs text-slate-300 bg-slate-950/40 px-3 py-2 rounded-xl flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                        <span>{safeText(item.status)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* آراء المعلمين */}
             {safeTestimonials.length > 0 && (
               <section className="space-y-5">
                 <div className="flex items-center justify-between">
@@ -2210,15 +2224,75 @@ function MuzakkiratiPlatformContent() {
           </div>
         )}
 
-        {/* 2. صفحة مكتبة المذكرات والفلترة */}
+        {/* 2. مكتبة المذكرات والأقسام والمراحل */}
         {activeTab === 'library' && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-            <div className="p-4 sm:p-5 rounded-3xl bg-amber-50 border border-amber-200 flex items-start gap-3.5 shadow-2xs">
-              <AlertCircle className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
-              <div className="text-xs sm:text-sm text-amber-950 space-y-1">
-                <div className="font-black text-amber-900">تنبيه هام للمعلمين قبل تأكيد الطلب:</div>
-                <p>• يتم تسليم المذكرة بصيغة PDF عالية الدقة جاهزة للطباعة ببيانات المعلم الخاصة دون أي بيانات تخصنا.</p>
-                <p>• تُوضع العلامة المائية باسم المعلم أو اسم السلسلة الخاص به على كافة الصفحات، وغير متاح إرسال المذكرات بدونها.</p>
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base sm:text-lg font-black text-slate-900">اختر المرحلة الدراسية</h3>
+                {selectedStage !== 'all' && (
+                  <button
+                    onClick={() => {
+                      setSelectedStage('all');
+                      setSelectedGrade('all');
+                    }}
+                    className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+                  >
+                    عرض كل المراحل
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <button
+                  onClick={() => {
+                    setSelectedStage('all');
+                    setSelectedGrade('all');
+                  }}
+                  className={`p-3.5 sm:p-4 rounded-2xl border text-right transition cursor-pointer flex items-center justify-between ${
+                    selectedStage === 'all'
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-md'
+                      : 'bg-white text-slate-800 border-slate-200 hover:border-blue-400'
+                  }`}
+                >
+                  <div>
+                    <div className="font-black text-xs sm:text-sm">جميع المراحل</div>
+                    <div className={`text-[11px] mt-0.5 ${selectedStage === 'all' ? 'text-slate-300' : 'text-slate-500'}`}>
+                      {visibleProducts.length} مذكرة
+                    </div>
+                  </div>
+                  <Layers className="w-5 h-5 text-amber-400 shrink-0" />
+                </button>
+
+                {normalizedStages.map((st) => {
+                  const stageCount = visibleProducts.filter(
+                    (p) =>
+                      p.stageId === st.id &&
+                      (selectedCategory === 'all' || p.categoryId === selectedCategory)
+                  ).length;
+                  const isSelected = selectedStage === st.id;
+                  return (
+                    <button
+                      key={st.id}
+                      onClick={() => {
+                        setSelectedStage(st.id);
+                        setSelectedGrade('all');
+                      }}
+                      className={`p-3.5 sm:p-4 rounded-2xl border text-right transition cursor-pointer flex items-center justify-between ${
+                        isSelected
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-md'
+                          : 'bg-white text-slate-800 border-slate-200 hover:border-blue-400'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-black text-xs sm:text-sm">{st.name}</div>
+                        <div className={`text-[11px] mt-0.5 ${isSelected ? 'text-blue-100' : 'text-slate-500'}`}>
+                          {stageCount} مذكرة متاحة
+                        </div>
+                      </div>
+                      <BookOpen className={`w-5 h-5 shrink-0 ${isSelected ? 'text-amber-300' : 'text-blue-600'}`} />
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -2378,23 +2452,21 @@ function MuzakkiratiPlatformContent() {
                             {product.description}
                           </p>
 
-                          {product.tipText && (
-                            <div className="px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200/80 text-amber-900 text-[11px] font-bold">
-                              💡 {product.tipText}
-                            </div>
-                          )}
+                          {renderProductTipBox(product.tipText, true)}
                         </div>
 
                         <div className="space-y-3 pt-2 border-t border-slate-100">
                           <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-xl">
                             <span>📄 {product.pagesCount} صفحة PDF</span>
                             <button
-                              onClick={() => {
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 setPreviewProduct(product);
                                 setActiveSampleIndex(0);
                                 setIsSampleFullscreen(false);
                               }}
-                              className="text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                              className="text-blue-600 font-bold hover:underline flex items-center gap-1 cursor-pointer touch-manipulation py-1 px-2"
                             >
                               <Eye className="w-3.5 h-3.5" />
                               <span>التفاصيل والعينة</span>
@@ -2428,7 +2500,7 @@ function MuzakkiratiPlatformContent() {
           </div>
         )}
 
-        {/* 3. صفحة الباقات والعروض المخفضة */}
+        {/* 3. العروض والباقات */}
         {activeTab === 'bundles' && (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
             <div className="bg-gradient-to-l from-blue-900 to-slate-900 rounded-3xl p-6 sm:p-8 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -2497,7 +2569,7 @@ function MuzakkiratiPlatformContent() {
           </div>
         )}
 
-        {/* 4. صفحة تتبع طلبك */}
+        {/* 4. تتبع طلبك */}
         {activeTab === 'track' && (
           <div className="max-w-2xl mx-auto px-4 sm:px-6 py-12">
             <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-6">
@@ -2508,32 +2580,49 @@ function MuzakkiratiPlatformContent() {
                 <div>
                   <h2 className="text-xl font-black text-slate-900">تتبع حالة طلبك</h2>
                   <p className="text-xs text-slate-500">
-                    أدخل رقم الهاتف المسجل في الطلب لعرض حالة التجهيز والتسليم
+                    أدخل رقم الطلب ورقم الهاتف المسجل للاطلاع على حالة التجهيز والتسليم لحظياً
                   </p>
                 </div>
               </div>
 
-              <input
-                type="text"
-                value={trackPhone}
-                onChange={(e) => setTrackPhone(e.target.value)}
-                placeholder="أدخل رقم الهاتف (مثال: 010...)"
-                className="w-full px-4 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-sm outline-none focus:border-blue-600"
-              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input
+                  type="text"
+                  value={trackOrderId}
+                  onChange={(e) => setTrackOrderId(e.target.value)}
+                  placeholder="رقم الطلب (مثال: ORD-123456)"
+                  className="w-full px-4 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-sm outline-none focus:border-blue-600"
+                />
+                <input
+                  type="text"
+                  value={trackPhone}
+                  onChange={(e) => setTrackPhone(e.target.value)}
+                  placeholder="رقم الهاتف المسجل بالطلب"
+                  className="w-full px-4 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-sm outline-none focus:border-blue-600"
+                />
+              </div>
 
-              {trackPhone.trim().length >= 5 && (
-                <div className="space-y-3">
-                  {orders.filter((o) => (o.phone1 || '').includes(trackPhone.trim())).length === 0 ? (
+              {(trackPhone.trim().length >= 4 || trackOrderId.trim().length >= 3) && (
+                <div className="space-y-3 pt-2">
+                  {orders.filter((o) => {
+                    const matchPhone = !trackPhone.trim() || (o.phone1 || '').includes(trackPhone.trim());
+                    const matchId = !trackOrderId.trim() || (o.id || '').toLowerCase().includes(trackOrderId.trim().toLowerCase());
+                    return matchPhone && matchId;
+                  }).length === 0 ? (
                     <div className="p-4 rounded-2xl bg-slate-50 text-center text-xs text-slate-600 font-semibold">
-                      لم يتم العثور على طلبات مسجلة بهذا الرقم في الجلسة الحالية، يمكنك المتابعة مباشرة عبر واتساب الإدارة.
+                      لم يتم العثور على طلبات مطابقة لرقم الطلب ورقم الهاتف المدخل.
                     </div>
                   ) : (
                     orders
-                      .filter((o) => (o.phone1 || '').includes(trackPhone.trim()))
+                      .filter((o) => {
+                        const matchPhone = !trackPhone.trim() || (o.phone1 || '').includes(trackPhone.trim());
+                        const matchId = !trackOrderId.trim() || (o.id || '').toLowerCase().includes(trackOrderId.trim().toLowerCase());
+                        return matchPhone && matchId;
+                      })
                       .map((ord) => (
                         <div
                           key={ord.id}
-                          className="p-4 rounded-2xl border border-slate-200 bg-slate-50 space-y-2"
+                          className="p-5 rounded-2xl border border-slate-200 bg-slate-50 space-y-3"
                         >
                           <div className="flex items-center justify-between">
                             <span className="font-black text-sm text-slate-900">{ord.id}</span>
@@ -2541,8 +2630,10 @@ function MuzakkiratiPlatformContent() {
                               {ord.status}
                             </span>
                           </div>
-                          <div className="text-xs text-slate-600">
-                            المعلم: {ord.teacherName} • الإجمالي: {ord.total} ج.م
+                          <div className="text-xs text-slate-600 space-y-1">
+                            <div>المعلم: <span className="font-bold text-slate-900">{ord.teacherName}</span></div>
+                            <div>إجمالي الطلب: <span className="font-bold text-blue-600">{ord.total} ج.م</span></div>
+                            <div>تاريخ الطلب: {new Date(ord.createdAt).toLocaleString('ar-EG')}</div>
                           </div>
                         </div>
                       ))
@@ -2563,21 +2654,19 @@ function MuzakkiratiPlatformContent() {
                 </div>
                 <div>
                   <h2 className="text-lg font-black">لوحة إدارة منصة العباقرة</h2>
-                  <p className="text-xs text-slate-400 flex items-center gap-2">
-                    <span>
-                      {user?.email === 'mahmoudelzaaty7@gmail.com'
-                        ? `متصل بصلاحية المدير (${user.email}) — الحفظ السحابي مفعّل ✓`
-                        : 'تنبيه: يجب ربط حساب جوجل (mahmoudelzaaty7@gmail.com) ليسمح Firebase بحفظ التعديلات للعملاء'}
-                    </span>
+                  <p className="text-xs text-slate-400">
+                    {isAuthorizedAdminEmail(user?.email)
+                      ? `متصل بحساب المدير الرسمي (${user?.email}) ✓ — جميع التعديلات تُحفظ وتُعرض للعملاء فوراً`
+                      : `تنبيه: يجب ربط حساب جوجل للإدارة ليسمح Firebase بحفظ التعديلات للعملاء`}
                   </p>
                 </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                {user?.email !== 'mahmoudelzaaty7@gmail.com' && (
+                {!isAuthorizedAdminEmail(user?.email) && (
                   <button
                     onClick={handleGoogleAdminSignIn}
-                    className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow cursor-pointer animate-pulse"
+                    className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow cursor-pointer"
                   >
                     <ShieldCheck className="w-4 h-4" />
                     <span>ربط حساب جوجل للإدارة (مطلوب للحفظ)</span>
@@ -2588,7 +2677,7 @@ function MuzakkiratiPlatformContent() {
                   className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black flex items-center gap-1.5 shadow cursor-pointer"
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>حفظ جميع التعديلات</span>
+                  <span>حفظ ونشر جميع التعديلات للعملاء</span>
                 </button>
                 <button
                   onClick={handleExportBackup}
@@ -2598,18 +2687,11 @@ function MuzakkiratiPlatformContent() {
                   <span>تصدير نسخة احتياطية</span>
                 </button>
                 <button
-                  onClick={() => {
-                    setIsAdminAuthenticated(false);
-                    try {
-                      localStorage.removeItem('el3bakera_admin_auth');
-                    } catch {}
-                    navigateToTab('home');
-                    showToast('تم تسجيل الخروج من لوحة الإدارة');
-                  }}
+                  onClick={handleAdminLogout}
                   className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black flex items-center gap-1.5 shadow cursor-pointer"
                 >
                   <Lock className="w-4 h-4" />
-                  <span>تسجيل الخروج من الإدارة</span>
+                  <span>تسجيل خروج</span>
                 </button>
               </div>
             </div>
@@ -2621,7 +2703,7 @@ function MuzakkiratiPlatformContent() {
                 { id: 'taxonomy', label: 'المراحل والصفوف والأقسام', icon: Layers },
                 { id: 'coupons', label: `الكوبونات والعروض (${coupons.length})`, icon: Tag },
                 { id: 'orders', label: `الطلبات (${orders.length})`, icon: ShoppingCart },
-                { id: 'settings', label: 'الهوية والشعار والروابط', icon: Sliders },
+                { id: 'settings', label: 'الهوية والتنبيهات والروابط', icon: Sliders },
                 { id: 'backup', label: 'النسخ الاحتياطي JSON', icon: Database }
               ].map((tab) => {
                 const Icon = tab.icon;
@@ -2642,7 +2724,7 @@ function MuzakkiratiPlatformContent() {
               })}
             </div>
 
-            {/* تبويب 1: إدارة المذكرات والعينات */}
+            {/* تبويب 1: إدارة المذكرات */}
             {adminSubTab === 'products' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <form
@@ -2752,18 +2834,18 @@ function MuzakkiratiPlatformContent() {
                         type="text"
                         value={productForm.badgeText || ''}
                         onChange={(e) => setProductForm({ ...productForm, badgeText: e.target.value })}
-                        placeholder="مثال: الخيار الأفضل للمراجعة وتهيئة الطالب قبل الامتحان"
+                        placeholder="مثال: الخيار الأفضل للمراجعة"
                         className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
                       />
                     </div>
 
                     <div>
-                      <label className="block font-bold text-slate-600 mb-1">التنبيه الخاص بالمذكرة</label>
+                      <label className="block font-bold text-slate-600 mb-1">التنبيه الخاص بالمذكرة (صندوق مستقل)</label>
                       <input
                         type="text"
                         value={productForm.tipText || ''}
                         onChange={(e) => setProductForm({ ...productForm, tipText: e.target.value })}
-                        placeholder="مثال: ملاحظة: للمراجعة المُثلى اطلبها مع بوكليت الاختبارات"
+                        placeholder="مثال: ملاحظة: للمراجعة المُثلى اطلبها مع البوكليت"
                         className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none"
                       />
                     </div>
@@ -2813,7 +2895,7 @@ function MuzakkiratiPlatformContent() {
 
                     <div className="p-3 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-2">
                       <label className="block font-black text-emerald-900">
-                        صور صفحات العينة الداخلية (يمكنك اختيار عدة صور معاً)
+                        صور صفحات العينة الداخلية
                       </label>
                       <input
                         type="file"
@@ -2914,14 +2996,14 @@ function MuzakkiratiPlatformContent() {
                             <h4 className="font-black text-sm text-slate-900">{prod.title}</h4>
                             {prod.hidden && (
                               <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-950 text-[10px] font-black">
-                                مخفية عن العملاء
+                                مخفية
                               </span>
                             )}
                           </div>
                           <div className="text-xs text-slate-500 mt-1">
                             {prod.price} ج.م • {prod.pagesCount} صفحة •{' '}
                             <span className="text-emerald-600 font-bold">
-                              {(prod.sampleImages || []).length} صفحة عينة مرفوعة
+                              {(prod.sampleImages || []).length} عينة
                             </span>
                           </div>
                         </div>
@@ -2930,11 +3012,11 @@ function MuzakkiratiPlatformContent() {
                       <div className="flex items-center gap-2 shrink-0">
                         <button
                           onClick={() => handleToggleProductVisibility(prod)}
-                          title={prod.hidden ? 'إظهار المذكرة للعملاء' : 'إخفاء المذكرة عن العملاء'}
+                          title={prod.hidden ? 'إظهار المذكرة' : 'إخفاء المذكرة'}
                           className={`p-2 rounded-xl transition cursor-pointer ${
                             prod.hidden
-                              ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
-                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-slate-100 text-slate-600'
                           }`}
                         >
                           {prod.hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -2949,15 +3031,13 @@ function MuzakkiratiPlatformContent() {
                               sampleImages: prod.sampleImages || []
                             });
                           }}
-                          title="تعديل المذكرة"
-                          className="p-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 cursor-pointer"
+                          className="p-2 rounded-xl bg-blue-50 text-blue-600 cursor-pointer"
                         >
                           <Edit3 className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleDeleteProduct(prod.id)}
-                          title="حذف المذكرة"
-                          className="p-2 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 cursor-pointer"
+                          className="p-2 rounded-xl bg-rose-50 text-rose-600 cursor-pointer"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -3015,34 +3095,36 @@ function MuzakkiratiPlatformContent() {
                     />
                     <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
                       <div className="font-black text-slate-800">
-                        المذكرات المشمولة في الباقة ({newBundleForm.productIds.length}):
+                        اختر المذكرات المشمولة داخل الباقة ({newBundleForm.productIds.length}):
                       </div>
-                      <div className="max-h-40 overflow-y-auto space-y-1.5">
+                      <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1">
                         {products.map((prod) => {
-                          const checked = newBundleForm.productIds.includes(prod.id);
+                          const isChecked = newBundleForm.productIds.includes(prod.id);
                           return (
                             <label
                               key={prod.id}
-                              className={`flex items-center justify-between p-2 rounded-xl border cursor-pointer ${
-                                checked ? 'bg-blue-50 border-blue-300 font-bold' : 'bg-white border-slate-200'
+                              className={`flex items-center justify-between gap-2 p-2 rounded-xl border cursor-pointer transition ${
+                                isChecked
+                                  ? 'bg-blue-50 border-blue-300 text-blue-900 font-bold'
+                                  : 'bg-white border-slate-200 text-slate-700'
                               }`}
                             >
-                              <span className="flex items-center gap-2 truncate">
+                              <div className="flex items-center gap-2 truncate">
                                 <input
                                   type="checkbox"
-                                  checked={checked}
-                                  onChange={() =>
+                                  checked={isChecked}
+                                  onChange={() => {
                                     setNewBundleForm((prev) => ({
                                       ...prev,
-                                      productIds: checked
+                                      productIds: isChecked
                                         ? prev.productIds.filter((id) => id !== prod.id)
                                         : [...prev.productIds, prod.id]
-                                    }))
-                                  }
+                                    }));
+                                  }}
                                 />
                                 <span className="truncate">{prod.title}</span>
-                              </span>
-                              <span className="text-[11px] shrink-0">{prod.price} ج.م</span>
+                              </div>
+                              <span className="text-[11px] font-bold shrink-0">{prod.price} ج.م</span>
                             </label>
                           );
                         })}
@@ -3058,7 +3140,6 @@ function MuzakkiratiPlatformContent() {
                         const next = [bObj, ...bundles];
                         setBundles(next);
                         await idbSet('bundles_v5', next);
-                        safeLocalSet('el3bakera_bundles_v5', next);
                         if (db) {
                           await setDoc(
                             doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles', bObj.id),
@@ -3074,9 +3155,9 @@ function MuzakkiratiPlatformContent() {
                           productIds: [],
                           coverImage: ''
                         });
-                        showToast('تمت إضافة الباقة وحفظها');
+                        showToast('تمت إضافة الباقة وحفظها بنجاح');
                       }}
-                      className="w-full py-3 rounded-xl bg-blue-600 text-white font-black text-sm cursor-pointer"
+                      className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm cursor-pointer"
                     >
                       حفظ الباقة
                     </button>
@@ -3087,11 +3168,11 @@ function MuzakkiratiPlatformContent() {
                   {bundles.map((b) => (
                     <div
                       key={b.id}
-                      className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center justify-between"
+                      className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center justify-between gap-3"
                     >
-                      <div>
+                      <div className="space-y-1">
                         <h4 className="font-black text-sm">{b.title}</h4>
-                        <p className="text-xs text-slate-500 mt-1">
+                        <p className="text-xs text-slate-500">
                           {b.price} ج.م (بدلاً من {b.originalPrice} ج.م) • تشمل {(b.productIds || []).length} مذكرات
                         </p>
                       </div>
@@ -3100,7 +3181,6 @@ function MuzakkiratiPlatformContent() {
                           const next = bundles.filter((x) => x.id !== b.id);
                           setBundles(next);
                           await idbSet('bundles_v5', next);
-                          safeLocalSet('el3bakera_bundles_v5', next);
                           if (db) {
                             await deleteDoc(
                               doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'bundles', b.id)
@@ -3118,7 +3198,7 @@ function MuzakkiratiPlatformContent() {
               </div>
             )}
 
-            {/* تبويب 3: إدارة المراحل والصفوف والأقسام وصورها */}
+            {/* تبويب 3: إدارة المراحل والصفوف والأقسام */}
             {adminSubTab === 'taxonomy' && (
               <div className="space-y-6">
                 <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-5">
@@ -3191,10 +3271,11 @@ function MuzakkiratiPlatformContent() {
                               </div>
                             )}
                             <button
+                              type="button"
                               onClick={() => {
                                 const updatedCats = normalizedCategories.filter((c) => c.id !== cat.id);
-                                saveSettings({ ...settings, categories: updatedCats });
-                                showToast('تم حذف القسم');
+                                setSettings({ ...settings, categories: updatedCats });
+                                showToast('تم حذف القسم — اضغط حفظ التعديلات للاعتماد');
                               }}
                               className="absolute top-2 left-2 p-2 rounded-xl bg-rose-600 text-white shadow cursor-pointer"
                             >
@@ -3228,8 +3309,8 @@ function MuzakkiratiPlatformContent() {
                                   const updatedCats = normalizedCategories.map((c) =>
                                     c.id === cat.id ? { ...c, coverImage: img } : c
                                   );
-                                  await saveSettings({ ...settings, categories: updatedCats });
-                                  showToast('تم تحديث وحفظ صورة القسم');
+                                  setSettings({ ...settings, categories: updatedCats });
+                                  showToast('تم تجهيز صورة القسم — اضغط حفظ التعديلات للاعتماد');
                                 }}
                               />
                             </label>
@@ -3252,12 +3333,13 @@ function MuzakkiratiPlatformContent() {
                         className="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs"
                       />
                       <button
+                        type="button"
                         onClick={() => {
                           if (!newStageName.trim()) return;
                           const next = [...normalizedStages, { id: `stg_${Date.now()}`, name: newStageName.trim() }];
-                          saveSettings({ ...settings, stages: next });
+                          setSettings({ ...settings, stages: next });
                           setNewStageName('');
-                          showToast('تمت إضافة المرحلة');
+                          showToast('تمت إضافة المرحلة — اضغط حفظ التعديلات للاعتماد');
                         }}
                         className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold cursor-pointer"
                       >
@@ -3269,12 +3351,13 @@ function MuzakkiratiPlatformContent() {
                         <div key={st.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 text-xs font-bold">
                           <span>{st.name}</span>
                           <button
+                            type="button"
                             onClick={() => {
-                              saveSettings({
+                              setSettings({
                                 ...settings,
                                 stages: normalizedStages.filter((s) => s.id !== st.id)
                               });
-                              showToast('تم حذف المرحلة');
+                              showToast('تم حذف المرحلة — اضغط حفظ التعديلات للاعتماد');
                             }}
                             className="text-rose-600 cursor-pointer"
                           >
@@ -3283,6 +3366,13 @@ function MuzakkiratiPlatformContent() {
                         </div>
                       ))}
                     </div>
+                    <button
+                      type="button"
+                      onClick={handleSaveAllAdminChanges}
+                      className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black cursor-pointer"
+                    >
+                      حفظ تعديلات المراحل
+                    </button>
                   </div>
 
                   <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
@@ -3307,6 +3397,7 @@ function MuzakkiratiPlatformContent() {
                         className="sm:col-span-5 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs"
                       />
                       <button
+                        type="button"
                         onClick={() => {
                           if (!newGradeName.trim()) return;
                           const next = [
@@ -3317,9 +3408,9 @@ function MuzakkiratiPlatformContent() {
                               name: newGradeName.trim()
                             }
                           ];
-                          saveSettings({ ...settings, grades: next });
+                          setSettings({ ...settings, grades: next });
                           setNewGradeName('');
-                          showToast('تمت إضافة الصف الدراسي');
+                          showToast('تمت إضافة الصف — اضغط حفظ التعديلات للاعتماد');
                         }}
                         className="sm:col-span-2 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold cursor-pointer"
                       >
@@ -3341,12 +3432,13 @@ function MuzakkiratiPlatformContent() {
                               )}
                             </div>
                             <button
+                              type="button"
                               onClick={() => {
-                                saveSettings({
+                                setSettings({
                                   ...settings,
                                   grades: normalizedGrades.filter((g) => g.id !== gr.id)
                                 });
-                                showToast('تم حذف الصف');
+                                showToast('تم حذف الصف — اضغط حفظ التعديلات للاعتماد');
                               }}
                               className="text-rose-600 cursor-pointer"
                             >
@@ -3356,6 +3448,13 @@ function MuzakkiratiPlatformContent() {
                         );
                       })}
                     </div>
+                    <button
+                      type="button"
+                      onClick={handleSaveAllAdminChanges}
+                      className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black cursor-pointer"
+                    >
+                      حفظ تعديلات الصفوف
+                    </button>
                   </div>
                 </div>
               </div>
@@ -3363,117 +3462,67 @@ function MuzakkiratiPlatformContent() {
 
             {/* تبويب 4: الكوبونات والعروض */}
             {adminSubTab === 'coupons' && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 text-xs">
+                <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 p-6 space-y-4 h-fit">
                   <h3 className="text-base font-black text-slate-900">إضافة كوبون خصم جديد</h3>
-                  <div className="space-y-3 text-xs">
-                    <input
-                      type="text"
-                      placeholder="كود الخصم (مثال: M20)"
-                      value={newCouponForm.code}
-                      onChange={(e) =>
-                        setNewCouponForm({ ...newCouponForm, code: e.target.value.toUpperCase() })
-                      }
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 uppercase font-bold"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">نسبة الخصم %</label>
-                        <input
-                          type="number"
-                          value={newCouponForm.discountPercent}
-                          onChange={(e) =>
-                            setNewCouponForm({
-                              ...newCouponForm,
-                              discountPercent: Number(e.target.value)
-                            })
-                          }
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-bold text-slate-600 mb-1">الحد الأقصى للخصم (ج.م)</label>
-                        <input
-                          type="number"
-                          value={newCouponForm.maxDiscount}
-                          onChange={(e) =>
-                            setNewCouponForm({ ...newCouponForm, maxDiscount: Number(e.target.value) })
-                          }
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                        />
-                      </div>
-                    </div>
-                    <button
-                      onClick={async () => {
-                        if (!newCouponForm.code.trim()) return;
-                        const cpObj = {
-                          ...newCouponForm,
-                          id: `cp_${Date.now()}`,
-                          code: newCouponForm.code.trim().toUpperCase(),
-                          active: true
-                        };
-                        const next = [cpObj, ...coupons];
-                        setCoupons(next);
-                        await idbSet('coupons_v5', next);
-                        localStorage.setItem('el3bakera_coupons_v5', JSON.stringify(next));
-                        if (db) {
-                          await setDoc(
-                            doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cpObj.id),
-                            cpObj
-                          );
-                        }
-                        setNewCouponForm({ code: '', discountPercent: 15, maxDiscount: 200, active: true });
-                        showToast('تمت إضافة الكوبون وحفظه');
-                      }}
-                      className="w-full py-3 rounded-xl bg-blue-600 text-white font-black text-sm cursor-pointer"
-                    >
-                      إضافة الكوبون
-                    </button>
-                  </div>
-
-                  <div className="pt-4 border-t border-slate-100 space-y-3 text-xs">
-                    <h4 className="font-black text-slate-900">الشريط الترويجي العلوي وخصم الكميات</h4>
-                    <label className="flex items-center gap-2 font-bold">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(settings.promoEnabled)}
-                        onChange={(e) => setSettings({ ...settings, promoEnabled: e.target.checked })}
-                      />
-                      <span>تفعيل الشريط الترويجي العلوي</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={settings.promoText || ''}
-                      onChange={(e) => setSettings({ ...settings, promoText: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="text"
-                        placeholder="كود الإعلان"
-                        value={settings.promoCouponCode || ''}
-                        onChange={(e) =>
-                          setSettings({ ...settings, promoCouponCode: e.target.value.toUpperCase() })
-                        }
-                        className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                      />
+                  <input
+                    type="text"
+                    placeholder="كود الكوبون (مثال: VIP2026)"
+                    value={newCouponForm.code}
+                    onChange={(e) =>
+                      setNewCouponForm({ ...newCouponForm, code: e.target.value.toUpperCase() })
+                    }
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 uppercase"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block font-bold text-slate-600 mb-1">نسبة الخصم %</label>
                       <input
                         type="number"
-                        placeholder="خصم الكميات %"
-                        value={settings.bulkDiscountPercent ?? 15}
+                        value={newCouponForm.discountPercent}
                         onChange={(e) =>
-                          setSettings({ ...settings, bulkDiscountPercent: Number(e.target.value) })
+                          setNewCouponForm({ ...newCouponForm, discountPercent: Number(e.target.value) })
                         }
-                        className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
                       />
                     </div>
-                    <button
-                      onClick={handleSaveAllAdminChanges}
-                      className="w-full py-2.5 rounded-xl bg-slate-900 text-white font-bold cursor-pointer"
-                    >
-                      حفظ إعدادات العروض
-                    </button>
+                    <div>
+                      <label className="block font-bold text-slate-600 mb-1">الحد الأقصى (ج.م)</label>
+                      <input
+                        type="number"
+                        value={newCouponForm.maxDiscount}
+                        onChange={(e) =>
+                          setNewCouponForm({ ...newCouponForm, maxDiscount: Number(e.target.value) })
+                        }
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
+                      />
+                    </div>
                   </div>
+                  <button
+                    onClick={async () => {
+                      if (!newCouponForm.code.trim()) return;
+                      const cpObj = {
+                        ...newCouponForm,
+                        id: `cp_${Date.now()}`,
+                        code: newCouponForm.code.trim().toUpperCase(),
+                        active: true
+                      };
+                      const next = [cpObj, ...coupons];
+                      setCoupons(next);
+                      await idbSet('coupons_v5', next);
+                      if (db) {
+                        await setDoc(
+                          doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cpObj.id),
+                          cpObj
+                        );
+                      }
+                      setNewCouponForm({ code: '', discountPercent: 15, maxDiscount: 200, active: true });
+                      showToast('تمت إضافة الكوبون وحفظه');
+                    }}
+                    className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm cursor-pointer"
+                  >
+                    إضافة الكوبون
+                  </button>
                 </div>
 
                 <div className="lg:col-span-7 space-y-3">
@@ -3483,50 +3532,27 @@ function MuzakkiratiPlatformContent() {
                       className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center justify-between"
                     >
                       <div>
-                        <span className="px-3 py-1 rounded-lg bg-amber-100 text-amber-950 font-black text-xs">
-                          {cp.code}
-                        </span>
-                        <span className="text-xs text-slate-600 font-bold mr-3">
+                        <span className="font-black text-sm text-slate-900">{cp.code}</span>
+                        <span className="text-xs text-slate-500 mr-3">
                           خصم {cp.discountPercent}% (بحد أقصى {cp.maxDiscount} ج.م)
                         </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={async () => {
-                            const next = coupons.map((c) =>
-                              c.id === cp.id ? { ...c, active: c.active === false } : c
+                      <button
+                        onClick={async () => {
+                          const next = coupons.filter((c) => c.id !== cp.id);
+                          setCoupons(next);
+                          await idbSet('coupons_v5', next);
+                          if (db) {
+                            await deleteDoc(
+                              doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cp.id)
                             );
-                            setCoupons(next);
-                            await idbSet('coupons_v5', next);
-                            localStorage.setItem('el3bakera_coupons_v5', JSON.stringify(next));
-                            showToast('تم تحديث حالة الكوبون');
-                          }}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer ${
-                            cp.active === false
-                              ? 'bg-slate-100 text-slate-500'
-                              : 'bg-emerald-50 text-emerald-700'
-                          }`}
-                        >
-                          {cp.active === false ? 'معطّل' : 'مفعّل'}
-                        </button>
-                        <button
-                          onClick={async () => {
-                            const next = coupons.filter((c) => c.id !== cp.id);
-                            setCoupons(next);
-                            await idbSet('coupons_v5', next);
-                            localStorage.setItem('el3bakera_coupons_v5', JSON.stringify(next));
-                            if (db) {
-                              await deleteDoc(
-                                doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'coupons', cp.id)
-                              );
-                            }
-                            showToast('تم حذف الكوبون');
-                          }}
-                          className="p-2 rounded-xl bg-rose-50 text-rose-600 cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                          }
+                          showToast('تم حذف الكوبون');
+                        }}
+                        className="p-2 rounded-xl bg-rose-50 text-rose-600 cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -3536,7 +3562,7 @@ function MuzakkiratiPlatformContent() {
             {/* تبويب 5: الطلبات */}
             {adminSubTab === 'orders' && (
               <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
-                <h3 className="text-base font-black text-slate-900">سجل طلبات المعلمين ({orders.length})</h3>
+                <h3 className="text-base font-black text-slate-900">سجل طلبات المعلمين المحدث سحابياً ({orders.length})</h3>
                 {orders.length === 0 ? (
                   <p className="text-xs text-slate-500">لا توجد طلبات مسجلة حالياً.</p>
                 ) : (
@@ -3551,31 +3577,33 @@ function MuzakkiratiPlatformContent() {
                             {ord.id} — {ord.teacherName} ({ord.phone1})
                           </div>
                           <div className="text-slate-600 mt-1">
-                            السلسلة: {ord.seriesName || 'غير محدد'} • الإجمالي: {ord.total} ج.م
+                            السلسلة: {ord.seriesName || 'غير محدد'} • الإجمالي: {ord.total} ج.م • التاريخ: {new Date(ord.createdAt).toLocaleDateString('ar-EG')}
                           </div>
                         </div>
-                        <select
-                          value={ord.status}
-                          onChange={async (e) => {
-                            const newStatus = e.target.value;
-                            const updated = orders.map((o) => (o.id === ord.id ? { ...o, status: newStatus } : o));
-                            setOrders(updated);
-                            if (db) {
-                              await setDoc(
-                                doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'orders', ord.id),
-                                { status: newStatus },
-                                { merge: true }
-                              );
-                            }
-                            showToast('تم تحديث حالة الطلب بنجاح');
-                          }}
-                          className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-900 font-bold text-xs"
-                        >
-                          <option value="قيد المراجعة والتجهيز">قيد المراجعة والتجهيز</option>
-                          <option value="جارٍ التنفيذ والطباعة">جارٍ التنفيذ والطباعة</option>
-                          <option value="تم الانتهاء وجاهز للتسليم">تم الانتهاء وجاهز للتسليم</option>
-                          <option value="تم التسليم للعميل">تم التسليم للعميل</option>
-                        </select>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={ord.status}
+                            onChange={async (e) => {
+                              const newStatus = e.target.value;
+                              const updated = orders.map((o) => (o.id === ord.id ? { ...o, status: newStatus } : o));
+                              setOrders(updated);
+                              if (db) {
+                                await setDoc(
+                                  doc(db, 'artifacts', PRIMARY_APP_ID, 'public', 'data', 'orders', ord.id),
+                                  { status: newStatus },
+                                  { merge: true }
+                                );
+                              }
+                              showToast('تم تحديث حالة الطلب');
+                            }}
+                            className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-bold text-xs"
+                          >
+                            <option value="قيد المراجعة والتجهيز">قيد المراجعة والتجهيز</option>
+                            <option value="جارٍ التنفيذ والطباعة">جارٍ التنفيذ والطباعة</option>
+                            <option value="تم الانتهاء وجاهز للتسليم">تم الانتهاء وجاهز للتسليم</option>
+                            <option value="تم التسليم للعميل">تم التسليم للعميل</option>
+                          </select>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -3583,15 +3611,15 @@ function MuzakkiratiPlatformContent() {
               </div>
             )}
 
-            {/* تبويب 6: الهوية والشعار والروابط وتقييمات العملاء وشارة الخصم */}
+            {/* تبويب 6: الهوية والتنبيهات المنفصلة والروابط */}
             {adminSubTab === 'settings' && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs">
-                <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4">
+                <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-5">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-base font-black text-slate-900">الهوية والشعار وخلفية الرئيسية</h3>
+                    <h3 className="text-base font-black text-slate-900">الهوية والشعار والتحكم في التنبيهات</h3>
                     <button
                       onClick={handleSaveAllAdminChanges}
-                      className="px-4 py-2 rounded-xl bg-blue-600 text-white font-black cursor-pointer"
+                      className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black cursor-pointer shadow-sm"
                     >
                       حفظ التعديلات
                     </button>
@@ -3608,10 +3636,22 @@ function MuzakkiratiPlatformContent() {
                           const f = e.target.files?.[0];
                           if (!f) return;
                           const img = await compressImageFile(f, 350, 0.85);
-                          await saveSettings({ ...settings, logoImage: img });
-                          showToast('تم حفظ شعار المنصة');
+                          setSettings((prev) => ({ ...prev, logoImage: img }));
+                          showToast('تم تجهيز الشعار — اضغط على زر "حفظ التعديلات" لاعتماده');
                         }}
                       />
+                      {settings.logoImage && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSettings((prev) => ({ ...prev, logoImage: '' }));
+                            showToast('تمت إزالة الشعار — اضغط على "حفظ التعديلات"');
+                          }}
+                          className="text-[11px] text-rose-600 font-bold hover:underline block"
+                        >
+                          حذف الشعار المرفوع
+                        </button>
+                      )}
                     </div>
 
                     <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
@@ -3629,26 +3669,23 @@ function MuzakkiratiPlatformContent() {
                         onChange={async (e) => {
                           const f = e.target.files?.[0];
                           if (!f) return;
-                          const img = await compressImageFile(f, 1100, 0.78);
-                          await saveSettings({ ...settings, heroBgImage: img });
-                          showToast('تم حفظ خلفية الشاشة الرئيسية');
+                          const img = await compressImageFile(f, 1000, 0.72);
+                          setSettings((prev) => ({ ...prev, heroBgImage: img }));
+                          showToast('تم تجهيز صورة الخلفية — اضغط على زر "حفظ التعديلات" لاعتمادها');
                         }}
                       />
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600">
-                          درجة التعتيم: {settings.heroOverlayOpacity ?? 75}%
-                        </label>
-                        <input
-                          type="range"
-                          min="0"
-                          max="95"
-                          value={settings.heroOverlayOpacity ?? 75}
-                          onChange={(e) =>
-                            setSettings({ ...settings, heroOverlayOpacity: Number(e.target.value) })
-                          }
-                          className="w-full"
-                        />
-                      </div>
+                      {settings.heroBgImage && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSettings((prev) => ({ ...prev, heroBgImage: '' }));
+                            showToast('تمت إزالة الخلفية — اضغط على "حفظ التعديلات"');
+                          }}
+                          className="text-[11px] text-rose-600 font-bold hover:underline block"
+                        >
+                          حذف الخلفية المرفوعة
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -3685,73 +3722,67 @@ function MuzakkiratiPlatformContent() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block font-bold text-slate-600 mb-1">رمز دخول الإدارة</label>
-                    <input
-                      type="text"
-                      value={settings.adminPin}
-                      onChange={(e) => setSettings({ ...settings, adminPin: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50"
-                    />
-                  </div>
-
-                  <div className="pt-4 border-t border-slate-100 space-y-3">
-                    <h4 className="font-black text-slate-900">التحكم في شارة الخصم على المذكرات والعينات</h4>
-                    <div className="flex flex-wrap gap-4">
-                      <label className="flex items-center gap-1.5 font-bold">
+                  {/* 1. قسم التحكم الكامل في التنبيه العام (يظهر حصراً في نافذة المعاينة) */}
+                  <div className="pt-4 border-t border-slate-200 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-black text-slate-900">1. التحكم في التنبيه العام (في نافذة المعاينة فقط)</h4>
+                      <label className="flex items-center gap-1.5 font-bold text-blue-600 cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={settings.discountBadgeEnabled !== false}
+                          checked={settings.generalNoticeEnabled !== false}
                           onChange={(e) =>
-                            setSettings({ ...settings, discountBadgeEnabled: e.target.checked })
+                            setSettings({ ...settings, generalNoticeEnabled: e.target.checked })
                           }
                         />
-                        <span>إظهار الشارة</span>
-                      </label>
-                      <label className="flex items-center gap-1.5 font-bold">
-                        <input
-                          type="checkbox"
-                          checked={settings.showDiscountPercent !== false}
-                          onChange={(e) =>
-                            setSettings({ ...settings, showDiscountPercent: e.target.checked })
-                          }
-                        />
-                        <span>النسبة المئوية %</span>
-                      </label>
-                      <label className="flex items-center gap-1.5 font-bold">
-                        <input
-                          type="checkbox"
-                          checked={settings.showDiscountAmount !== false}
-                          onChange={(e) =>
-                            setSettings({ ...settings, showDiscountAmount: e.target.checked })
-                          }
-                        />
-                        <span>مبلغ التوفير ج.م</span>
+                        <span>إظهار التنبيه العام</span>
                       </label>
                     </div>
-                    <div className="grid grid-cols-3 gap-2">
+
+                    <div>
+                      <label className="block font-bold text-slate-600 mb-1">عنوان التنبيه العام</label>
+                      <input
+                        type="text"
+                        value={settings.generalNoticeTitle ?? 'تنبيه هام للمعلمين قبل تأكيد الطلب:'}
+                        onChange={(e) =>
+                          setSettings({ ...settings, generalNoticeTitle: e.target.value })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-600 mb-1">نص التنبيه العام</label>
+                      <textarea
+                        rows={3}
+                        value={settings.generalNoticeText ?? DEFAULT_SETTINGS.generalNoticeText}
+                        onChange={(e) =>
+                          setSettings({ ...settings, generalNoticeText: e.target.value })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-2">
                       <div>
                         <label className="block font-bold text-slate-600 mb-1">المكان</label>
                         <select
-                          value={settings.discountBadgePosition || 'top-left'}
+                          value={settings.generalNoticePosition || 'bottom'}
                           onChange={(e) =>
-                            setSettings({ ...settings, discountBadgePosition: e.target.value })
+                            setSettings({ ...settings, generalNoticePosition: e.target.value })
                           }
-                          className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                          className="w-full px-2 py-2 rounded-xl border border-slate-200 bg-slate-50"
                         >
-                          <option value="top-left">أعلى اليسار</option>
-                          <option value="top-right">أعلى اليمين</option>
-                          <option value="bottom-left">أسفل اليسار</option>
-                          <option value="bottom-right">أسفل اليمين</option>
+                          <option value="top">أعلى التفاصيل</option>
+                          <option value="bottom">أسفل التفاصيل</option>
                         </select>
                       </div>
                       <div>
                         <label className="block font-bold text-slate-600 mb-1">لون الخلفية</label>
                         <input
                           type="color"
-                          value={settings.discountBadgeBg || '#10b981'}
+                          value={settings.generalNoticeBg || '#f8fafc'}
                           onChange={(e) =>
-                            setSettings({ ...settings, discountBadgeBg: e.target.value })
+                            setSettings({ ...settings, generalNoticeBg: e.target.value })
                           }
                           className="w-full h-9 rounded-xl border border-slate-200"
                         />
@@ -3760,24 +3791,131 @@ function MuzakkiratiPlatformContent() {
                         <label className="block font-bold text-slate-600 mb-1">لون النص</label>
                         <input
                           type="color"
-                          value={settings.discountBadgeText || '#ffffff'}
+                          value={settings.generalNoticeTextColor || '#334155'}
                           onChange={(e) =>
-                            setSettings({ ...settings, discountBadgeText: e.target.value })
+                            setSettings({ ...settings, generalNoticeTextColor: e.target.value })
+                          }
+                          className="w-full h-9 rounded-xl border border-slate-200"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-600 mb-1">لون الإطار</label>
+                        <input
+                          type="color"
+                          value={settings.generalNoticeBorder || '#cbd5e1'}
+                          onChange={(e) =>
+                            setSettings({ ...settings, generalNoticeBorder: e.target.value })
                           }
                           className="w-full h-9 rounded-xl border border-slate-200"
                         />
                       </div>
                     </div>
                   </div>
+
+                  {/* 2. قسم مستقل تماماً للتحكم في التنبيه الخاص بكل مذكرة */}
+                  <div className="pt-4 border-t border-slate-200 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h4 className="font-black text-slate-900">2. التحكم في التنبيه الخاص بكل مذكرة (صندوق منفصل)</h4>
+                      <div className="flex items-center gap-3">
+                        <label className="flex items-center gap-1.5 font-bold text-emerald-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={settings.tipNoticeEnabled !== false}
+                            onChange={(e) =>
+                              setSettings({ ...settings, tipNoticeEnabled: e.target.checked })
+                            }
+                          />
+                          <span>إظهار بالمعاينة</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 font-bold text-blue-600 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={settings.tipShowOnCard !== false}
+                            onChange={(e) =>
+                              setSettings({ ...settings, tipShowOnCard: e.target.checked })
+                            }
+                          />
+                          <span>إظهار بالبطاقة</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-2">
+                      <div>
+                        <label className="block font-bold text-slate-600 mb-1">مكان الظهور</label>
+                        <select
+                          value={settings.tipNoticePosition || 'below-desc'}
+                          onChange={(e) =>
+                            setSettings({ ...settings, tipNoticePosition: e.target.value })
+                          }
+                          className="w-full px-2 py-2 rounded-xl border border-slate-200 bg-slate-50"
+                        >
+                          <option value="above-desc">أعلى الوصف</option>
+                          <option value="below-desc">أسفل الوصف</option>
+                          <option value="before-actions">قبل أزرار الطلب</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-600 mb-1">لون الخلفية</label>
+                        <input
+                          type="color"
+                          value={settings.tipNoticeBg || '#fffbeb'}
+                          onChange={(e) =>
+                            setSettings({ ...settings, tipNoticeBg: e.target.value })
+                          }
+                          className="w-full h-9 rounded-xl border border-slate-200"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-600 mb-1">لون النص</label>
+                        <input
+                          type="color"
+                          value={settings.tipNoticeTextColor || '#78350f'}
+                          onChange={(e) =>
+                            setSettings({ ...settings, tipNoticeTextColor: e.target.value })
+                          }
+                          className="w-full h-9 rounded-xl border border-slate-200"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-600 mb-1">لون الإطار</label>
+                        <input
+                          type="color"
+                          value={settings.tipNoticeBorder || '#fde68a'}
+                          onChange={(e) =>
+                            setSettings({ ...settings, tipNoticeBorder: e.target.value })
+                          }
+                          className="w-full h-9 rounded-xl border border-slate-200"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveAllAdminChanges}
+                    className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-md cursor-pointer"
+                  >
+                    حفظ ونشر تعديلات الهوية والشعار والتنبيهات
+                  </button>
                 </div>
 
                 <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-5">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-black text-slate-900">روابط التواصل</h4>
+                    <button
+                      type="button"
+                      onClick={handleSaveAllAdminChanges}
+                      className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black cursor-pointer"
+                    >
+                      حفظ التعديلات
+                    </button>
+                  </div>
                   <div className="space-y-2">
-                    <h4 className="font-black text-slate-900">روابط التواصل (تظهر عند الضغط على تواصل معنا)</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
                       <input
                         type="text"
-                        placeholder="اسم الرابط (مثلاً: قناة التيليجرام)"
+                        placeholder="اسم الرابط"
                         value={newSocialLabel}
                         onChange={(e) => setNewSocialLabel(e.target.value)}
                         className="sm:col-span-5 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
@@ -3792,7 +3930,7 @@ function MuzakkiratiPlatformContent() {
                       />
                       <button
                         type="button"
-                        onClick={async () => {
+                        onClick={() => {
                           if (!newSocialLabel.trim() || !newSocialUrl.trim()) return;
                           const next = [
                             ...(settings.socialLinks || []),
@@ -3802,12 +3940,12 @@ function MuzakkiratiPlatformContent() {
                               url: newSocialUrl.trim()
                             }
                           ];
-                          await saveSettings({ ...settings, socialLinks: next });
+                          setSettings({ ...settings, socialLinks: next });
                           setNewSocialLabel('');
                           setNewSocialUrl('');
-                          showToast('تمت إضافة الرابط');
+                          showToast('تمت إضافة الرابط — اضغط حفظ التعديلات لاعتماده');
                         }}
-                        className="sm:col-span-2 py-2 rounded-xl bg-blue-600 text-white font-bold cursor-pointer"
+                        className="sm:col-span-2 py-2 rounded-xl bg-slate-900 text-white font-bold cursor-pointer"
                       >
                         إضافة
                       </button>
@@ -3821,10 +3959,10 @@ function MuzakkiratiPlatformContent() {
                           <span className="font-bold">{soc.label}</span>
                           <button
                             type="button"
-                            onClick={async () => {
+                            onClick={() => {
                               const next = (settings.socialLinks || []).filter((s) => s.id !== soc.id);
-                              await saveSettings({ ...settings, socialLinks: next });
-                              showToast('تم حذف الرابط');
+                              setSettings({ ...settings, socialLinks: next });
+                              showToast('تم حذف الرابط — اضغط حفظ التعديلات لاعتماده');
                             }}
                             className="text-rose-600 cursor-pointer"
                           >
@@ -3835,8 +3973,9 @@ function MuzakkiratiPlatformContent() {
                     </div>
                   </div>
 
+                  {/* إدارة الإصدارات القادمة */}
                   <div className="pt-4 border-t border-slate-100 space-y-2.5">
-                    <h4 className="font-black text-slate-900">إدارة ركن المذكرات قيد التجهيز</h4>
+                    <h4 className="font-black text-slate-900">إدارة ركن المذكرات قيد التجهيز (أسفل المذكرات)</h4>
                     <div className="grid grid-cols-2 gap-2">
                       <input
                         type="text"
@@ -3867,22 +4006,22 @@ function MuzakkiratiPlatformContent() {
                       />
                       <button
                         type="button"
-                        onClick={async () => {
+                        onClick={() => {
                           if (!newUpcomingForm.title.trim()) return;
                           const next = [
                             ...(settings.upcomingNotebooks || []),
                             { id: `up_${Date.now()}`, ...newUpcomingForm }
                           ];
-                          await saveSettings({ ...settings, upcomingNotebooks: next });
+                          setSettings({ ...settings, upcomingNotebooks: next });
                           setNewUpcomingForm({
                             title: '',
                             stage: 'المرحلة الإعدادية',
                             status: 'جاري التجهيز والتنسيق',
                             expectedDate: 'قريباً'
                           });
-                          showToast('تمت الإضافة لقسم قيد التجهيز');
+                          showToast('تمت الإضافة — اضغط حفظ التعديلات لاعتمادها');
                         }}
-                        className="py-2 rounded-xl bg-blue-600 text-white font-bold cursor-pointer"
+                        className="py-2 rounded-xl bg-slate-900 text-white font-bold cursor-pointer"
                       >
                         + إضافة إعلان
                       </button>
@@ -3896,12 +4035,12 @@ function MuzakkiratiPlatformContent() {
                           <span className="font-bold truncate">{up.title}</span>
                           <button
                             type="button"
-                            onClick={async () => {
+                            onClick={() => {
                               const next = (settings.upcomingNotebooks || []).filter(
                                 (u) => u.id !== up.id
                               );
-                              await saveSettings({ ...settings, upcomingNotebooks: next });
-                              showToast('تم الحذف');
+                              setSettings({ ...settings, upcomingNotebooks: next });
+                              showToast('تم الحذف — اضغط حفظ التعديلات لاعتماده');
                             }}
                             className="text-rose-600 cursor-pointer"
                           >
@@ -3912,158 +4051,13 @@ function MuzakkiratiPlatformContent() {
                     </div>
                   </div>
 
-                  <div className="pt-4 border-t border-slate-100 space-y-3">
-                    <h4 className="font-black text-slate-900">
-                      إدارة ركن تقييمات وآراء العملاء في الرئيسية
-                    </h4>
-                    <div>
-                      <label className="block font-bold text-slate-600 mb-1">تسمية القسم</label>
-                      <input
-                        type="text"
-                        value={settings.testimonialsTitle ?? 'آراء وتقييمات المعلمين في مذكراتنا'}
-                        onChange={(e) =>
-                          setSettings({ ...settings, testimonialsTitle: e.target.value })
-                        }
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
-                      />
-                    </div>
-
-                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
-                      <div className="grid grid-cols-2 gap-2">
-                        <input
-                          type="text"
-                          placeholder="اسم المعلم / العميل (اختياري)"
-                          value={newTestimonialForm.teacherName}
-                          onChange={(e) =>
-                            setNewTestimonialForm({ ...newTestimonialForm, teacherName: e.target.value })
-                          }
-                          className="px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                        />
-                        <input
-                          type="text"
-                          placeholder="الصفة / المادة (اختياري)"
-                          value={newTestimonialForm.role}
-                          onChange={(e) =>
-                            setNewTestimonialForm({ ...newTestimonialForm, role: e.target.value })
-                          }
-                          className="px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                        />
-                      </div>
-                      <textarea
-                        rows={2}
-                        placeholder="نص التقييم (يمكنك إضافة نص أو صورة أو كليهما)..."
-                        value={newTestimonialForm.text}
-                        onChange={(e) =>
-                          setNewTestimonialForm({ ...newTestimonialForm, text: e.target.value })
-                        }
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                      />
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <label className="inline-flex items-center gap-1.5 text-blue-600 font-bold cursor-pointer hover:underline">
-                          <ImageIcon className="w-4 h-4" />
-                          <span>
-                            {newTestimonialForm.image
-                              ? 'تم إرفاق صورة التقييم ✓'
-                              : 'إرفاق صورة تقييم (سكرين شوت)'}
-                          </span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={async (e) => {
-                              const f = e.target.files?.[0];
-                              if (!f) return;
-                              const img = await compressImageFile(f, 800, 0.82);
-                              setNewTestimonialForm((prev) => ({ ...prev, image: img }));
-                            }}
-                          />
-                        </label>
-
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (!newTestimonialForm.text.trim() && !newTestimonialForm.image) {
-                              showToast('أدخل نص التقييم أو ارفع صورة على الأقل', 'error');
-                              return;
-                            }
-                            const next = [
-                              ...(settings.testimonials || []),
-                              { id: `rev_${Date.now()}`, ...newTestimonialForm }
-                            ];
-                            await saveSettings({ ...settings, testimonials: next });
-                            setNewTestimonialForm({ teacherName: '', role: '', text: '', image: '' });
-                            showToast('تمت إضافة التقييم وحفظه في الرئيسية');
-                          }}
-                          className="px-4 py-2 rounded-xl bg-blue-600 text-white font-bold cursor-pointer"
-                        >
-                          + إضافة التقييم
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {(settings.testimonials || []).map((rev) => (
-                        <div
-                          key={rev.id}
-                          className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200"
-                        >
-                          <div className="flex items-center gap-2.5 truncate">
-                            {rev.image && (
-                              <img src={rev.image} alt="" className="w-9 h-9 rounded-lg object-cover shrink-0" />
-                            )}
-                            <div className="truncate">
-                              <div className="font-bold text-slate-900 truncate">
-                                {rev.teacherName || 'تقييم مصور'}
-                              </div>
-                              <div className="text-[11px] text-slate-500 truncate">
-                                {rev.text || 'صورة تقييم عميل'}
-                              </div>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const next = (settings.testimonials || []).filter((x) => x.id !== rev.id);
-                              await saveSettings({ ...settings, testimonials: next });
-                              showToast('تم حذف التقييم');
-                            }}
-                            className="text-rose-600 p-1.5 cursor-pointer shrink-0"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="pt-4 border-t border-slate-100 space-y-2">
-                    <h4 className="font-black text-slate-900">إعدادات ربط السحابة للنشر الخارجي (Vercel)</h4>
-                    <p className="text-slate-500">
-                      إذا كنت تنشر الموقع على Vercel، الصق كود `firebaseConfig` بصيغة JSON هنا لمزامنة البيانات والصور مع السحابة:
-                    </p>
-                    <textarea
-                      rows={3}
-                      value={customFirebaseText}
-                      onChange={(e) => setCustomFirebaseText(e.target.value)}
-                      placeholder='{"apiKey":"...","authDomain":"el3bakera-edu.firebaseapp.com","projectId":"el3bakera-edu",...}'
-                      className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 font-mono text-[11px]"
-                      dir="ltr"
-                    />
-                    <button
-                      onClick={() => {
-                        try {
-                          JSON.parse(customFirebaseText);
-                          localStorage.setItem('el3bakera_custom_firebase_config', customFirebaseText);
-                          showToast('تم حفظ إعدادات Firebase — أعد تحميل الصفحة لتفعيل الاتصال');
-                        } catch {
-                          showToast('صيغة JSON غير صحيحة', 'error');
-                        }
-                      }}
-                      className="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold cursor-pointer"
-                    >
-                      حفظ إعدادات Firebase
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSaveAllAdminChanges}
+                    className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-md cursor-pointer"
+                  >
+                    حفظ ونشر تعديلات الروابط والإصدارات القادمة
+                  </button>
                 </div>
               </div>
             )}
@@ -4073,7 +4067,7 @@ function MuzakkiratiPlatformContent() {
               <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 max-w-2xl space-y-4">
                 <h3 className="text-lg font-black text-slate-900">النسخ الاحتياطي الكامل (JSON)</h3>
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  يمكنك تصدير نسخة احتياطية كاملة تشمل جميع المذكرات والصور والباقات والكوبونات والإعدادات في ملف واحد، أو استيراد ملف نسخة احتياطية سابقة لاستعادة كل شيء فوراً.
+                  يمكنك تصدير نسخة احتياطية كاملة تشمل جميع المذكرات والباقات والكوبونات والإعدادات في ملف واحد، أو استيراد ملف نسخة احتياطية سابقة.
                 </p>
                 <div className="flex flex-wrap gap-3 pt-2">
                   <button
@@ -4125,175 +4119,6 @@ function MuzakkiratiPlatformContent() {
         </div>
       </footer>
 
-      {/* معاينة المذكرة وعارض العينات */}
-      {previewProduct && (
-        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
-          <div
-            className={`bg-white overflow-hidden shadow-2xl border border-slate-200 flex flex-col ${
-              isSampleFullscreen
-                ? 'fixed inset-0 w-full h-full rounded-none z-[60]'
-                : 'rounded-3xl max-w-3xl w-full my-auto max-h-[92vh]'
-            }`}
-          >
-            <div className="bg-slate-900 text-white px-4 sm:px-6 py-3.5 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2 min-w-0">
-                <Eye className="w-5 h-5 text-amber-400 shrink-0" />
-                <h3 className="font-black text-xs sm:text-base truncate">
-                  {safeText(previewProduct.title)}
-                </h3>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setIsSampleFullscreen((prev) => !prev)}
-                  className="px-3 py-1.5 rounded-xl bg-amber-400 text-slate-950 hover:bg-amber-300 text-xs font-black cursor-pointer"
-                >
-                  {isSampleFullscreen ? 'تصغير العرض' : 'ملء الشاشة'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPreviewProduct(null);
-                    setIsSampleFullscreen(false);
-                  }}
-                  className="p-1.5 rounded-xl bg-white/15 text-white cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1">
-              {(() => {
-                const allGallery = [
-                  ...(previewProduct.coverImage ? [previewProduct.coverImage] : []),
-                  ...(Array.isArray(previewProduct.sampleImages) ? previewProduct.sampleImages : [])
-                ];
-                return allGallery.length > 0 ? (
-                  <div className="space-y-3">
-                    <div className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-950 flex items-center justify-center">
-                      <img
-                        src={allGallery[activeSampleIndex] || allGallery[0]}
-                        alt={safeText(previewProduct.title)}
-                        className={`w-full object-contain mx-auto transition-all ${
-                          isSampleFullscreen ? 'max-h-[72vh]' : 'max-h-80 sm:max-h-96'
-                        }`}
-                      />
-                      {renderDiscountBadge(previewProduct)}
-
-                      {allGallery.length > 1 && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setActiveSampleIndex((prev) =>
-                                prev > 0 ? prev - 1 : allGallery.length - 1
-                              )
-                            }
-                            className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 text-slate-900 shadow-lg flex items-center justify-center cursor-pointer"
-                          >
-                            <ChevronRight className="w-5 h-5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setActiveSampleIndex((prev) =>
-                                prev < allGallery.length - 1 ? prev + 1 : 0
-                              )
-                            }
-                            className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 text-slate-900 shadow-lg flex items-center justify-center cursor-pointer"
-                          >
-                            <ChevronLeft className="w-5 h-5" />
-                          </button>
-                          <span className="absolute bottom-3 left-3 px-3 py-1 rounded-full bg-slate-900/80 text-white text-xs font-black">
-                            صفحة {activeSampleIndex + 1} من {allGallery.length}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                    {allGallery.length > 1 && (
-                      <div className="flex gap-2 overflow-x-auto pb-1">
-                        {allGallery.map((img, idx) => (
-                          <button
-                            type="button"
-                            key={idx}
-                            onClick={() => setActiveSampleIndex(idx)}
-                            className={`w-16 h-20 rounded-xl overflow-hidden border-2 shrink-0 cursor-pointer ${
-                              activeSampleIndex === idx ? 'border-blue-600' : 'border-transparent opacity-70'
-                            }`}
-                          >
-                            <img src={img} alt="" className="w-full h-full object-cover" />
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="p-6 rounded-2xl bg-slate-100 border border-slate-200 text-center text-xs text-slate-600 font-bold">
-                    لا توجد صور عينات مرفوعة حالياً — يمكنك معاينة الملف الكامل عبر رابط Google Drive بالأسفل.
-                  </div>
-                );
-              })()}
-
-              <div className="space-y-2">
-                <h4 className="text-lg sm:text-xl font-black text-slate-900">{safeText(previewProduct.title)}</h4>
-                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                  {safeText(previewProduct.description)}
-                </p>
-              </div>
-
-              {previewProduct.tipText && (
-                <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold">
-                  💡 {safeText(previewProduct.tipText)}
-                </div>
-              )}
-
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-1">
-                <div className="font-black text-slate-900">تنبيه هام قبل تأكيد الطلب:</div>
-                <p>- يتم تسليم المذكرة بصيغة PDF عالية الدقة جاهزة للطباعة ببيانات المعلم دون أي بيانات تخصنا.</p>
-                <p>- العلامة المائية باسم المعلم أو اسم السلسلة الخاص به، وغير متاح إرسال المذكرات بدونها.</p>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-slate-100">
-                <div>
-                  <span className="text-2xl font-black text-blue-600">{previewProduct.price} ج.م</span>
-                  {Number(previewProduct.oldPrice) > Number(previewProduct.price) && (
-                    <span className="text-sm text-slate-400 line-through mr-2">
-                      {previewProduct.oldPrice} ج.م
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2.5">
-                  {previewProduct.driveSampleUrl && (
-                    <a
-                      href={previewProduct.driveSampleUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="px-4 py-3 rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-black inline-flex items-center gap-1.5 hover:bg-emerald-100"
-                    >
-                      <span>معاينة Google Drive</span>
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      addToCart(previewProduct, 'product');
-                      setPreviewProduct(null);
-                      setIsSampleFullscreen(false);
-                    }}
-                    className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-black shadow cursor-pointer"
-                  >
-                    اطلبها مخصصة باسمك
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* سلة الطلبات */}
       {isCartOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex justify-end">
@@ -4305,7 +4130,7 @@ function MuzakkiratiPlatformContent() {
               </div>
               <button
                 onClick={() => setIsCartOpen(false)}
-                className="p-1.5 rounded-xl bg-white/10 text-white cursor-pointer"
+                className="p-1.5 rounded-xl bg-white/15 text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -4497,7 +4322,7 @@ function MuzakkiratiPlatformContent() {
         </div>
       )}
 
-      {/* نافذة تسجيل دخول الإدارة السرية */}
+      {/* نافذة تسجيل دخول الإدارة الآمنة مع زر إظهار الرقم السري والدخول بجوجل */}
       {isAdminModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-200 space-y-5">
@@ -4508,7 +4333,7 @@ function MuzakkiratiPlatformContent() {
                 </div>
                 <div>
                   <h3 className="text-base font-black text-slate-900">دخول لوحة الإدارة</h3>
-                  <p className="text-[11px] text-slate-500">مخصص لإدارة المنصة فقط</p>
+                  <p className="text-[11px] text-slate-500">مخصص لمدير المنصة فقط</p>
                 </div>
               </div>
               <button
@@ -4522,21 +4347,16 @@ function MuzakkiratiPlatformContent() {
               </button>
             </div>
 
+            <button
+              type="button"
+              onClick={handleGoogleAdminSignIn}
+              className="w-full py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-amber-300 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow cursor-pointer"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              <span>تسجيل الدخول بحساب جوجل للمدير (موصى به)</span>
+            </button>
+
             <form onSubmit={handleAdminLogin} className="space-y-4">
-              <button
-                type="button"
-                onClick={handleGoogleAdminSignIn}
-                className="w-full py-3.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-amber-400 font-black text-sm shadow flex items-center justify-center gap-2 cursor-pointer border border-slate-700"
-              >
-                <ShieldCheck className="w-5 h-5" />
-                <span>الدخول بحساب Google للمدير (موصى به للحفظ السحابي)</span>
-              </button>
-
-              <div className="relative flex items-center justify-center text-[11px] text-slate-400">
-                <span className="bg-white px-3 z-10">أو الدخول برمز المرور السريع</span>
-                <div className="absolute inset-x-0 border-t border-slate-200" />
-              </div>
-
               <div className="relative">
                 <input
                   type={showAdminPin ? 'text' : 'password'}
@@ -4562,6 +4382,175 @@ function MuzakkiratiPlatformContent() {
                 دخول لوحة التحكم
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* معاينة المذكرة وعارض العينات بملء الشاشة للهاتف والكمبيوتر */}
+      {previewProduct && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div
+            className={`bg-white overflow-hidden shadow-2xl border border-slate-200 flex flex-col ${
+              isSampleFullscreen
+                ? 'fixed inset-0 w-full h-full rounded-none z-[60]'
+                : 'rounded-3xl max-w-3xl w-full my-auto max-h-[92vh]'
+            }`}
+          >
+            <div className="bg-slate-900 text-white px-4 sm:px-6 py-3.5 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <Eye className="w-5 h-5 text-amber-400 shrink-0" />
+                <h3 className="font-black text-xs sm:text-base truncate">
+                  {safeText(previewProduct.title)}
+                </h3>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsSampleFullscreen((prev) => !prev)}
+                  className="px-3 py-1.5 rounded-xl bg-amber-400 text-slate-950 hover:bg-amber-300 text-xs font-black cursor-pointer touch-manipulation"
+                >
+                  {isSampleFullscreen ? 'تصغير العرض' : 'ملء الشاشة'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewProduct(null);
+                    setIsSampleFullscreen(false);
+                  }}
+                  className="p-1.5 rounded-xl bg-white/15 text-white cursor-pointer touch-manipulation"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1">
+              {(() => {
+                const allGallery = [
+                  ...(previewProduct.coverImage ? [previewProduct.coverImage] : []),
+                  ...(Array.isArray(previewProduct.sampleImages) ? previewProduct.sampleImages : [])
+                ];
+                return allGallery.length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-950 flex items-center justify-center">
+                      <img
+                        src={allGallery[activeSampleIndex] || allGallery[0]}
+                        alt={safeText(previewProduct.title)}
+                        className={`w-full object-contain mx-auto transition-all ${
+                          isSampleFullscreen ? 'max-h-[72vh]' : 'max-h-80 sm:max-h-96'
+                        }`}
+                      />
+                      {renderDiscountBadge(previewProduct)}
+
+                      {allGallery.length > 1 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setActiveSampleIndex((prev) =>
+                                prev > 0 ? prev - 1 : allGallery.length - 1
+                              )
+                            }
+                            className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 text-slate-900 shadow-lg flex items-center justify-center cursor-pointer touch-manipulation"
+                          >
+                            <ChevronRight className="w-5 h-5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setActiveSampleIndex((prev) =>
+                                prev < allGallery.length - 1 ? prev + 1 : 0
+                              )
+                            }
+                            className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 text-slate-900 shadow-lg flex items-center justify-center cursor-pointer touch-manipulation"
+                          >
+                            <ChevronLeft className="w-5 h-5" />
+                          </button>
+                          <span className="absolute bottom-3 left-3 px-3 py-1 rounded-full bg-slate-900/80 text-white text-xs font-black">
+                            صفحة {activeSampleIndex + 1} من {allGallery.length}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    {allGallery.length > 1 && (
+                      <div className="flex gap-2 overflow-x-auto pb-1">
+                        {allGallery.map((img, idx) => (
+                          <button
+                            type="button"
+                            key={idx}
+                            onClick={() => setActiveSampleIndex(idx)}
+                            className={`w-16 h-20 rounded-xl overflow-hidden border-2 shrink-0 cursor-pointer touch-manipulation ${
+                              activeSampleIndex === idx ? 'border-blue-600' : 'border-transparent opacity-70'
+                            }`}
+                          >
+                            <img src={img} alt="" className="w-full h-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-6 rounded-2xl bg-slate-100 border border-slate-200 text-center text-xs text-slate-600 font-bold">
+                    لا توجد صور عينات مرفوعة حالياً — يمكنك معاينة الملف الكامل عبر رابط Google Drive بالأسفل.
+                  </div>
+                );
+              })()}
+
+              {settings.generalNoticePosition === 'top' && renderGeneralNoticeBox()}
+              {settings.tipNoticePosition === 'above-desc' && renderProductTipBox(previewProduct.tipText, false)}
+
+              <div className="space-y-2">
+                <h4 className="text-lg sm:text-xl font-black text-slate-900">{safeText(previewProduct.title)}</h4>
+                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                  {safeText(previewProduct.description)}
+                </p>
+              </div>
+
+              {(settings.tipNoticePosition === 'below-desc' || !settings.tipNoticePosition) &&
+                renderProductTipBox(previewProduct.tipText, false)}
+
+              {(settings.generalNoticePosition === 'bottom' || !settings.generalNoticePosition) &&
+                renderGeneralNoticeBox()}
+
+              {settings.tipNoticePosition === 'before-actions' &&
+                renderProductTipBox(previewProduct.tipText, false)}
+
+              <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-slate-100">
+                <div>
+                  <span className="text-2xl font-black text-blue-600">{previewProduct.price} ج.م</span>
+                  {Number(previewProduct.oldPrice) > Number(previewProduct.price) && (
+                    <span className="text-sm text-slate-400 line-through mr-2">
+                      {previewProduct.oldPrice} ج.م
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {previewProduct.driveSampleUrl && (
+                    <a
+                      href={previewProduct.driveSampleUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-4 py-3 rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-black inline-flex items-center gap-1.5 hover:bg-emerald-100"
+                    >
+                      <span>معاينة Google Drive</span>
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      addToCart(previewProduct, 'product');
+                      setPreviewProduct(null);
+                      setIsSampleFullscreen(false);
+                    }}
+                    className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-black shadow cursor-pointer"
+                  >
+                    اطلبها مخصصة باسمك
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
