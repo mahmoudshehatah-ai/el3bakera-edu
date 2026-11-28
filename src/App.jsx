@@ -40,7 +40,8 @@ import {
   signInAnonymously,
   onAuthStateChanged,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  signOut
 } from 'firebase/auth';
 import {
   getFirestore,
@@ -834,7 +835,7 @@ function MuzakkiratiPlatformContent() {
     return () => window.removeEventListener('hashchange', checkAdminHash);
   }, [isAdminAuthenticated]);
 
-  const handleAdminLogout = () => {
+  const handleAdminLogout = async () => {
     setIsAdminAuthenticated(false);
     setIsAdminModalOpen(false);
     try {
@@ -843,10 +844,13 @@ function MuzakkiratiPlatformContent() {
       if (window.location.hash === '#admin') {
         window.history.replaceState({ tab: 'home' }, '', window.location.pathname + window.location.search);
       }
+      if (auth) {
+        await signOut(auth);
+      }
     } catch {}
     setTabHistory(['home']);
     setActiveTab('home');
-    showToast('تم تسجيل الخروج من لوحة الإدارة بأمان');
+    showToast('تم تسجيل الخروج من لوحة الإدارة وحساب المدير بأمان');
   };
 
   const handleLogoSecretTap = () => {
@@ -1222,7 +1226,6 @@ function MuzakkiratiPlatformContent() {
       for (let i = 0; i < samplesList.length; i++) {
         await saveMediaAssetToCloud(db, PRIMARY_APP_ID, `prod_sample_${productObj.id}_${i}`, samplesList[i]);
       }
-      // تنظيف أي صور زائدة في السحابة إذا قام المدير بحذف بعض العينات
       for (let j = samplesList.length; j < 25; j++) {
         await saveMediaAssetToCloud(db, PRIMARY_APP_ID, `prod_sample_${productObj.id}_${j}`, '');
       }
